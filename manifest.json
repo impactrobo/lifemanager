@@ -1,0 +1,15 @@
+{
+  "name": "LIFEMan.EXE",
+  "short_name": "LIFEMan",
+  "description": "Personal life tracker: exercise, schedule, hobbies, health/diet, notes, budget.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#15171a",
+  "theme_color": "#15171a",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
