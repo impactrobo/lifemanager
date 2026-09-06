@@ -72,6 +72,23 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   const modalClosedHtml = await page.evaluate(() => renderCloudSyncModal());
   if (modalClosedHtml !== '') throw new Error('Expected renderCloudSyncModal() to return empty string when closed');
 
+  // 5b. Regression check: the modal must stay reachable even with a drastically shrunk visible
+  //     viewport (simulating an on-screen keyboard covering the bottom of the screen) — it was
+  //     previously anchored as a bottom sheet, which put its own button under where a keyboard
+  //     would sit. It's now anchored near the top instead.
+  await page.evaluate(() => openCloudSyncModal());
+  await page.waitForTimeout(100);
+  await page.setViewportSize({ width: 390, height: 420 }); // roughly half-height, like a keyboard-covered screen
+  await page.waitForTimeout(100);
+  const sendBtn = await page.$('button:has-text("SEND SIGN-IN LINK")');
+  const btnBox = sendBtn ? await sendBtn.boundingBox() : null;
+  const vp = page.viewportSize();
+  const btnReachable = !!btnBox && btnBox.y >= 0 && (btnBox.y + btnBox.height) <= vp.height;
+  console.log('SEND SIGN-IN LINK button reachable with a shrunk (keyboard-simulated) viewport:', btnReachable, btnBox);
+  if (!btnReachable) throw new Error('Expected the sign-in link button to stay within the visible viewport even when it shrinks (simulating an on-screen keyboard)');
+  await page.setViewportSize({ width: 390, height: 844 }); // restore
+  await page.evaluate(() => closeCloudSyncModal());
+
   // 6. Settings panel: simulate a signed-in state (mocking CLOUD_USER directly, since real
   //    Firebase Auth can't run here) and confirm the panel switches to showing sync controls.
   await page.evaluate(() => {
