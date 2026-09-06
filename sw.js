@@ -3,7 +3,11 @@
 // no signal. Lazily-loaded per-aesthetic CSS (aesthetics/<key>/theme.css) is deliberately NOT
 // pre-cached — the fetch handler below caches each one the first time it's actually used, so an
 // install only carries the themes that device has looked at.
-// Bump CACHE_NAME any time you want to force everyone's install to pick up a fresh copy.
+//
+// This is network-first, so an online launch already gets fresh files. Picking up a new deploy
+// on an installed (esp. iOS) PWA is handled in app.js by the <meta name="app-build"> check —
+// NOT by this file. Bump CACHE_NAME only to force-purge the offline cache (e.g. you removed a
+// file from APP_SHELL or a cached response went bad); it is not part of the normal deploy step.
 const CACHE_NAME = 'lifeman-v3';
 const APP_SHELL = ['./', './index.html', './app.js', './styles.css', './manifest.json'];
 

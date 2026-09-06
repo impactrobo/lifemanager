@@ -17,8 +17,11 @@ see `docs/ARCHITECTURE.md` > "Type checking".
 `test_budget.js`, `test_calendar.js`, `test_export.js`, `test_meal_builder.js`,
 `test_meal_plan.js`, `test_reps_validation.js`, `test_photos.js`,
 `test_quickadd_superset.js`, `test_schedule_setup.js`, `test_today_schedule_layout.js`,
-`test_ui_polish.js`. Plus `test_cloud_sync.js` (added with Cloud Sync), and `test_smoke.js` +
-`test_state_persistence.js` (added with the `app.js` split).
+`test_ui_polish.js`. Plus `test_cloud_sync.js` (added with Cloud Sync), `test_smoke.js` +
+`test_state_persistence.js` (added with the `app.js` split), `test_aesthetic_external.js`
+(the lazy-loaded maximalist-aesthetic mechanism), and `test_auto_update.js` (the
+`<meta name="app-build">` self-update — this one runs its own tiny HTTP server since
+`fetch()` doesn't work over `file://`).
 
 (Note: ARCHITECTURE.md also mentions old `test_meso*.js` / `test_life.js` / `test_regress.js`
 files as stale/retired — those are explicitly NOT part of this list, and don't exist here.)

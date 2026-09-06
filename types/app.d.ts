@@ -20,6 +20,8 @@ interface Window {
   webkitAudioContext?: typeof AudioContext;
   /** Claude Artifact runtime bridge — only present when the app runs inside an Artifact */
   claude?: { use(name: string): Promise<any> };
+  /** auto-update: force an immediate build check (console hook + used by test_auto_update.js) */
+  _lmCheckForUpdate?: () => Promise<void>;
 }
 
 // The app reads `.value` / `.checked` / `.getContext` straight off `getElementById(...)` in

@@ -291,8 +291,11 @@ not part of the maintained suite.)
 2. `node --check app.js` for a fast syntax check, then `npm run typecheck` (must stay clean).
 3. `npm test` — the full suite. Screenshot-verify anything visual the tests don't assert on
    (a new icon, a color change, a layout fix) with a throwaway Playwright script at ≈390px.
-4. If a new `sw.js`-cached file was added or the shell changed materially, bump `CACHE_NAME`
-   in `sw.js` so installed PWAs pick up the update.
-5. Publish: commit and push — GitHub Pages serves `index.html` + `app.js` from the repo root.
-   (The old publish-as-Claude-Artifact flow is retired now that GitHub Pages is the deploy
-   target. If you ever do republish an Artifact, read it first to check freshness.)
+4. **Bump `<meta name="app-build">` in `index.html`** if you changed `index.html` / `app.js` /
+   `styles.css` / an aesthetic. This is what makes installed PWAs (esp. iOS home-screen) pick
+   up the deploy — `autoUpdate()` in app.js re-fetches the page on launch + foreground and
+   reloads when the stamp moves. Only touch `CACHE_NAME` in `sw.js` if you removed a file from
+   `APP_SHELL` or need to force-purge the offline cache — it is not a normal deploy step.
+5. Publish: commit and push — GitHub Pages serves `index.html` + `app.js` + `styles.css` from
+   the repo root. (The old publish-as-Claude-Artifact flow is retired now that GitHub Pages is
+   the deploy target. If you ever do republish an Artifact, read it first to check freshness.)

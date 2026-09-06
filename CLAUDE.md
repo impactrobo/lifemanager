@@ -171,10 +171,19 @@ rather than drifting back toward the gap it started in.
 Run the full canonical suite before every publish, screenshot-verify anything visual, and
 do a freshness check against whatever's currently live before overwriting a hosted version.
 
-## Hosting
-Deployed via GitHub Pages, served from `index.html` at repo root (which pulls in `app.js`).
-Includes a basic PWA setup (`manifest.json`, `sw.js`, `icons/`) so it can be installed to an
-iOS home screen via Safari's "Add to Home Screen." `sw.js` caches the app shell — its
-`APP_SHELL` list must include `app.js`, and bump `CACHE_NAME` whenever you want installs to
-pick up a fresh copy. Cross-device sync exists now as opt-in Cloud Sync (see above); the
-manual JSON export/import remains the always-available fallback.
+## Hosting & deploying
+Deployed via GitHub Pages, served from `index.html` at repo root (which pulls in `styles.css`
++ `app.js`). Basic PWA setup (`manifest.json`, `sw.js`, `icons/`) so it installs to an iOS
+home screen via Safari's "Add to Home Screen."
+
+**Every deploy that changes `index.html` / `app.js` / `styles.css` / an aesthetic MUST bump
+`<meta name="app-build" content="...">` in `index.html`.** That stamp is how installed apps
+self-update: `autoUpdate()` in app.js re-fetches the page on launch and on every return to the
+foreground, compares the stamp, and reloads if it moved (deferring while a field is focused;
+a one-time "Updated to the latest version" toast after). Without a bump, an installed iOS PWA
+can stay on a stale build indefinitely (iOS resumes it from a snapshot without re-navigating).
+`window._lmCheckForUpdate()` forces a check from the console.
+
+`sw.js` is network-first and only for offline caching — `CACHE_NAME` is NOT a per-deploy bump
+(see the comment in that file). Cross-device sync is opt-in Cloud Sync (above); manual JSON
+export/import is the always-available fallback.
