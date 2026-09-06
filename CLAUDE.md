@@ -14,6 +14,10 @@ budget). Local-first via localStorage. No build step. Read this before making an
    update both `defaultState()` and the merge logic in `loadState()` for any new field.
 4. `docs/ROADMAP.md` — known limitations and shipped history. Move a feature to "Recently
    Shipped" when it ships. Don't treat "Ideas Worth Considering" as a request queue.
+5. `TESTING_CHECKLIST.md` — a running list of things that need a real device to verify (can't be
+   tested from a sandbox with no real network/keyboard/Mail app). Add to it whenever a new
+   feature ships something that can only really be confirmed on-device, and check items off as
+   they're actually verified — don't let this silently go stale.
 
 ## Source of truth
 `index.html` is the entire app. If a doc goes stale relative to it, trust the file and fix
