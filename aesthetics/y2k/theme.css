@@ -1,18 +1,31 @@
 @import url('https://fonts.googleapis.com/css2?family=Audiowide&family=Chakra+Petch:wght@400;500;600;700&display=swap');
 
 /* ============================================================================
-   Aesthetic: Y2K Chrome — liquid metal on near-black. Mirror-chrome gradients
-   with a hard horizon break, oil-slick iridescence (cyan up top, magenta below),
-   machined bevels, and a periodic specular glint that travels across primary
-   actions and the wordmark.
+   Aesthetic: Y2K Chrome — brushed silver hardware on a black desk. Satin-silver
+   panels and mirror-chrome controls with dark text, framed by dark metal bars,
+   oil-slick iridescence on the wordmark, and a periodic glint that travels
+   across primary actions.
+
+   ---- How the light/dark inversion is done (read before editing) ----
+   The backdrop is black but every surface is silver, so text has to be light in
+   one place and dark in the other. The app has ~25 components that paint
+   themselves with var(--surface)/var(--surface2), and app.js additionally sets
+   `color: var(--text-faint)` INLINE on some elements — inline styles can't be
+   overridden by a class rule.
+
+   So the flip is done with scoped custom properties instead: the root keeps the
+   DARK-theme values (light text) so anything sitting directly on the black
+   backdrop stays readable, and each silver surface re-declares --text/--text-dim/
+   --text-faint/--border/--surface for its own subtree. Custom properties inherit,
+   so descendants — inline styles included — resolve dark against the silver
+   automatically. Adding a new silver surface means adding it to the SILVER
+   SURFACES selector list below, nothing else.
 
    External aesthetic — lazily loaded, everything scoped under [data-aesthetic="y2k"].
-   Fonts are @imported here rather than added to the shared <link> in <head>:
-   Audiowide (chunky squarish tech logo face — thick enough strokes to actually
-   show a chrome gradient) and Chakra Petch (squarish but readable at 15px body).
-   If Chakra Petch reads poorly on a real device, swapping --font-body back to
-   'Inter' is a one-line change; Inter is already in the shared font link.
-
+   Fonts @imported here rather than added to the shared <link>: Audiowide (chunky
+   squarish tech-logo face, thick enough strokes to show a chrome gradient) and
+   Chakra Petch (squarish but readable at 15px). Swapping --font-body back to
+   'Inter' is a one-line change if Chakra Petch reads cramped on device.
    Deliberately NOT reusing Orbitron — Cyberpunk Neon already owns it.
 
    Picker swatch `.aesthetic-preview-y2k` lives in styles.css, not here (the picker
@@ -22,6 +35,9 @@
 
 :root[data-aesthetic="y2k"] {
   --bg: #07080a;
+  /* Root surfaces stay DARK — the only things using them at this level are the
+     bars and floating controls, which sit on the black backdrop. Silver surfaces
+     re-declare these for their own subtree further down. */
   --surface: #16181d;
   --surface2: #1e222a;
   --border: #4a525e;
@@ -29,20 +45,23 @@
   --text: #e9eef5;
   --text-dim: #9aa6b6;
   --text-faint: #6c7784;
-  --accent: #4de3ff;
+
+  /* Accents are deepened so they read on silver (where most of the UI lives) while
+     staying visible on black. The bars brighten them back up locally — see .tabbar. */
+  --accent: #0b7e9f;
   --accent-dim: color-mix(in srgb, var(--accent) 55%, var(--border));
   --accent-soft: color-mix(in srgb, var(--accent) 16%, var(--surface));
-  --good: #3ff0a8;
-  --good-soft: #0c2a20;
-  --bad: #ff4d6d;
-  --bad-soft: #2e1018;
-  --warn: #ffb020;
-  --reset-border: #e9eef5;
-  --reset-bg: #2a2f38;
-  --reset-text: #e9eef5;
-  --myo: #ff4dd8;
-  --goldenrod: #d4af37;
-  --savings: #7c5cff;
+  --good: #0a7d4f;
+  --good-soft: #cfe8dc;
+  --bad: #c4162f;
+  --bad-soft: #f6d8dd;
+  --warn: #a86a00;
+  --reset-border: #10161d;
+  --reset-bg: #d2dbe6;
+  --reset-text: #10161d;
+  --myo: #8f2bb8;
+  --goldenrod: #9a7a00;
+  --savings: #3f4fb8;
   --savings-soft: color-mix(in srgb, var(--savings) 18%, var(--surface));
   --font-head: 'Audiowide', 'Orbitron', sans-serif;
   --font-body: 'Chakra Petch', 'Inter', sans-serif;
@@ -50,45 +69,47 @@
   --radius: 5px;
 
   /* ---- Chrome recipes ----
-     The hard stop around 46–53% is the "horizon": the mirror line where a
-     reflected sky meets reflected ground. It's what separates chrome from a
-     generic silver gradient. Top half takes a cyan cast, bottom half magenta —
-     that's the oil-slick iridescence. */
-  --y2k-chrome: linear-gradient(180deg,
+     The hard stop around 46–50% is the "horizon": the mirror line where a reflected
+     sky meets reflected ground. It's what separates chrome from a plain silver
+     gradient. Panels use a soft version (satin) so body text stays comfortable;
+     controls use a hard specular line so every button edge catches light. */
+  --y2k-panel: linear-gradient(180deg,
+      #f6f9fc 0%, #e0e8f1 32%, #c6d1de 48.5%,
+      #b6c2d1 50%, #d0dae5 72%, #ecf1f7 100%);
+  --y2k-plate: linear-gradient(180deg,
+      #ffffff 0%, #dbe4ee 40%, #fbfdff 46.5%,
+      #8b99ab 49%, #b3c0cf 62%, #e7eef5 100%);
+  /* Bright chrome that takes the chosen accent's hue, so the accent picker still
+     visibly does something on primary actions. */
+  /* Every stop stays light enough for the dark legend to survive crossing it — a true
+     chrome ramp would plunge to near-black just below the horizon, right where centred
+     button text sits. The white specular at 46.5% does the "polished" work instead. */
+  --y2k-chrome-accent: linear-gradient(180deg,
+      color-mix(in srgb, var(--accent) 38%, #ffffff) 0%,
+      color-mix(in srgb, var(--accent) 78%, #ffffff) 40%,
+      #ffffff 46.5%,
+      color-mix(in srgb, var(--accent) 92%, #ffffff) 49%,
+      color-mix(in srgb, var(--accent) 82%, #ffffff) 70%,
+      color-mix(in srgb, var(--accent) 52%, #ffffff) 100%);
+  /* Iridescent mirror chrome — cyan cast above the horizon, magenta below. Used for
+     the wordmark on the dark bar, where it has the contrast to show. */
+  --y2k-chrome-irid: linear-gradient(180deg,
       #0a0d11 0%, #38414d 10%, #8fb9c9 24%, #dff4fb 38%, #ffffff 46%,
       #7e8a99 50%, #1a1620 53%, #3d2b47 66%, #8f5f9e 80%, #e2b6ee 92%, #f6e9fb 100%);
-  /* Same shape, but hue-driven by the chosen accent so the accent picker still does
-     something visible on primary actions. */
-  --y2k-chrome-accent: linear-gradient(180deg,
-      color-mix(in srgb, var(--accent) 18%, #05070a) 0%,
-      color-mix(in srgb, var(--accent) 50%, #ffffff) 38%,
-      #ffffff 46%,
-      color-mix(in srgb, var(--accent) 88%, #000000) 52%,
-      color-mix(in srgb, var(--accent) 55%, #06090e) 78%,
-      color-mix(in srgb, var(--accent) 30%, #04060a) 100%);
-  /* Large surfaces get "dark chrome" — same top-lit / horizon / bounce-up structure as the
-     bright recipe, just pitched dark enough to carry light text. Without the horizon these
-     read as flat grey rectangles and the theme stops looking like metal at all. */
-  --y2k-panel: linear-gradient(180deg,
-      #2b323d 0%, #1c212a 34%, #12161d 48.5%,
-      #0d1015 50%, #171c24 72%, #252c36 100%);
-  /* Controls: darker still, but with a hard specular line at the horizon so every button
-     edge catches light. */
-  --y2k-plate: linear-gradient(180deg,
-      #4d5866 0%, #2c343f 42%, #8e9bab 47%, #10151c 49%, #1a202a 70%, #323a47 100%);
-  --y2k-bevel: inset 0 1px 0 rgba(255, 255, 255, 0.34), inset 0 -1px 0 rgba(0, 0, 0, 0.8);
-  --y2k-rim: 0 1px 3px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(130, 150, 175, 0.14);
+  --y2k-bar: linear-gradient(180deg, #1d222b 0%, #12161c 48%, #0a0d12 50%, #171d25 100%);
+  --y2k-bevel: inset 0 1px 0 rgba(255, 255, 255, 0.85), inset 0 -1px 0 rgba(40, 55, 75, 0.45);
+  --y2k-rim: 0 1px 3px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.10);
 }
 
-/* ---------- Backdrop: black with a cold spotlight and fine brushed grain ----------
+/* ---------- Backdrop: black desk, cold spotlight, fine brushed grain ----------
    Fixed pseudo-element rather than background-attachment (broken on iOS Safari). */
 [data-aesthetic="y2k"] body { background-color: #07080a; }
 [data-aesthetic="y2k"] body::after {
   content: '';
   position: fixed; inset: 0; z-index: -1; pointer-events: none;
   background-image:
-    radial-gradient(90% 55% at 50% -10%, rgba(77, 227, 255, 0.16) 0%, rgba(7, 8, 10, 0) 62%),
-    radial-gradient(70% 45% at 50% 108%, rgba(255, 77, 216, 0.12) 0%, rgba(7, 8, 10, 0) 60%),
+    radial-gradient(90% 55% at 50% -10%, rgba(140, 210, 240, 0.15) 0%, rgba(7, 8, 10, 0) 62%),
+    radial-gradient(70% 45% at 50% 108%, rgba(200, 120, 220, 0.11) 0%, rgba(7, 8, 10, 0) 60%),
     repeating-linear-gradient(0deg,
       rgba(255, 255, 255, 0.022) 0px, rgba(255, 255, 255, 0.022) 1px,
       rgba(0, 0, 0, 0) 1px, rgba(0, 0, 0, 0) 3px),
@@ -96,28 +117,49 @@
 }
 [data-aesthetic="y2k"] #app { position: relative; z-index: 1; }
 
-/* ---------- Panels: dark brushed plate, machined edge ---------- */
+/* ===================== SILVER SURFACES =====================
+   Add any new silver-backed component here — this is the single place the
+   light/dark token flip happens for its whole subtree. */
 [data-aesthetic="y2k"] .panel,
 [data-aesthetic="y2k"] .entry-card,
+[data-aesthetic="y2k"] .note-card,
+[data-aesthetic="y2k"] .chart-wrap,
 [data-aesthetic="y2k"] .workout-cell,
+[data-aesthetic="y2k"] .cal-cell,
+[data-aesthetic="y2k"] .superset-group,
 [data-aesthetic="y2k"] .modal-box,
 [data-aesthetic="y2k"] .aesthetic-card {
+  --text: #10161d;
+  --text-dim: #46525f;
+  --text-faint: #6b7887;
+  --border: #8593a3;
+  --border-soft: #aab6c4;
+  --surface: #e8eef5;
+  --surface2: #d3dce7;
   background: var(--y2k-panel);
-  /* Steel rim rather than --border-soft: at #2a2f38 the edge was invisible against the
-     backdrop and every panel read as a flat void. State rules that set `border-color`
-     (.panel-done etc.) still override this cleanly. */
-  border: 1px solid #3d4653;
+  border: 1px solid #7d8b9c;
+  color: var(--text);
   box-shadow: var(--y2k-bevel), var(--y2k-rim);
 }
 [data-aesthetic="y2k"] .panel-done,
 [data-aesthetic="y2k"] .workout-cell.done {
-  background: linear-gradient(180deg, #16261f 0%, #0f1d18 50%, #142520 100%);
-  border-color: color-mix(in srgb, var(--good) 45%, #0e1116);
+  background: linear-gradient(180deg, #e8f6ee 0%, #cfe8dc 48.5%, #bfdccd 50%, #dcefe4 100%);
+  border-color: #6fa98d;
 }
 
-/* ---------- Bars: heavier metal, edge-lit ---------- */
+/* Headings inside a silver surface need dark chrome lettering, not the light
+   backdrop version defined further down. */
+[data-aesthetic="y2k"] .modal-box .section-title,
+[data-aesthetic="y2k"] .panel .section-title {
+  background: linear-gradient(180deg, #46515f 0%, #10161d 46%, #5d6a79 52%, #2a333f 100%);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent;
+  filter: none;
+}
+
+/* ---------- Bars: dark metal frame around the silver hardware ---------- */
 [data-aesthetic="y2k"] .topbar {
-  background: linear-gradient(180deg, #1d222b 0%, #12161c 52%, #0a0d12 100%);
+  background: var(--y2k-bar);
   border-bottom: 1px solid #000;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 2px 12px rgba(0, 0, 0, 0.7);
   z-index: 20;
@@ -128,37 +170,37 @@
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.20), 0 -3px 14px rgba(0, 0, 0, 0.75);
   z-index: 30;
 }
+/* The deepened accent is tuned for silver; on the black bar it's brightened back up
+   so the active tab still reads as lit. */
 [data-aesthetic="y2k"] .tabbar button.active {
+  color: color-mix(in srgb, var(--accent) 48%, #ffffff);
   text-shadow: 0 0 10px color-mix(in srgb, var(--accent) 70%, transparent);
 }
 [data-aesthetic="y2k"] .toast { z-index: 60; }
 
-/* ---------- Chrome lettering: the wordmark, with a travelling glint ----------
+/* ---------- Chrome lettering ----------
    background-clip:text needs a transparent fill, so the plain `color` above it is the
    fallback if a browser refuses the clip — never leaves invisible text. */
 [data-aesthetic="y2k"] .topbar .brand,
-[data-aesthetic="y2k"] .section-title {
-  color: var(--text);
-  letter-spacing: 0.02em;
-}
+[data-aesthetic="y2k"] .section-title { color: var(--text); letter-spacing: 0.02em; }
 @supports ((-webkit-background-clip: text) or (background-clip: text)) {
   [data-aesthetic="y2k"] .topbar .brand {
-    background: var(--y2k-chrome);
+    background: var(--y2k-chrome-irid);
     background-size: 100% 100%, 240% 100%;
     -webkit-background-clip: text; background-clip: text;
     -webkit-text-fill-color: transparent; color: transparent;
     filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.9));
     animation: y2k-text-sheen 7s linear infinite;
   }
-  /* The accent-coloured span inside the wordmark would be swallowed by the clip, so
-     it opts back out and keeps carrying the chosen accent. */
+  /* The accent span inside the wordmark would be swallowed by the clip, so it opts
+     back out — brightened like the tabbar since it also sits on dark metal. */
   [data-aesthetic="y2k"] .topbar .brand span {
-    -webkit-text-fill-color: var(--accent); color: var(--accent);
+    -webkit-text-fill-color: color-mix(in srgb, var(--accent) 45%, #ffffff);
+    color: color-mix(in srgb, var(--accent) 45%, #ffffff);
     text-shadow: 0 0 12px color-mix(in srgb, var(--accent) 60%, transparent);
   }
-  /* Headings get the same horizon structure as the surfaces, just compressed — a near-white
-     top, a dark band at the mirror line, then a bounce back up. A mostly-light gradient here
-     just reads as white text and throws away the effect. */
+  /* Section titles sit on the black backdrop — light chrome, with the horizon
+     compressed so they still read as metal rather than plain white text. */
   [data-aesthetic="y2k"] .section-title {
     background: linear-gradient(180deg,
       #ffffff 0%, #dce6f2 30%, #8f9dae 46%, #38414e 50%, #6f7d8e 56%, #c8d4e2 78%, #f2f7fc 100%);
@@ -172,28 +214,36 @@
   to   { background-position: 0 0, 240% 0; }
 }
 
-/* ---------- Buttons: machined plates ---------- */
-[data-aesthetic="y2k"] .btn {
+/* ---------- Controls: mirror-chrome plates, dark legends ----------
+   These set `color` explicitly rather than leaning on --text, because several of
+   them (.btn, .icon-btn, .subnav button) can sit either on the black backdrop or
+   inside a silver panel — the plate is bright in both cases, so the text is dark
+   in both cases. */
+[data-aesthetic="y2k"] .btn,
+[data-aesthetic="y2k"] .icon-btn,
+[data-aesthetic="y2k"] .subnav button,
+[data-aesthetic="y2k"] .rt-btn,
+[data-aesthetic="y2k"] .rest-timer-fab,
+[data-aesthetic="y2k"] .week-selector .cycle-btns button {
   background: var(--y2k-plate);
-  border: 1px solid #000;
-  color: var(--text);
-  box-shadow: var(--y2k-bevel), 0 2px 5px rgba(0, 0, 0, 0.8);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.95);
+  border: 1px solid #5f6d7e;
+  color: #10161d;
+  box-shadow: var(--y2k-bevel), 0 2px 5px rgba(0, 0, 0, 0.55);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 [data-aesthetic="y2k"] .btn-primary {
   position: relative; overflow: hidden;
   background: var(--y2k-chrome-accent);
-  border-color: #000;
-  color: #04070c;
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.45);
+  border-color: color-mix(in srgb, var(--accent) 70%, #000000);
+  color: #04141a;
   font-weight: 700;
 }
-/* Periodic glint: mostly parked off-frame, sweeps across every few seconds. Uses
-   transform (compositor) rather than animating a background position. */
+/* Periodic glint: parked off-frame, sweeps across every few seconds. transform-driven
+   so it stays on the compositor. */
 [data-aesthetic="y2k"] .btn-primary::after {
   content: '';
   position: absolute; top: -60%; bottom: -60%; left: -30%; width: 22%;
-  background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.75) 50%, rgba(255,255,255,0) 100%);
+  background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.85) 50%, rgba(255,255,255,0) 100%);
   pointer-events: none;
   animation: y2k-sweep 5s ease-in-out infinite;
 }
@@ -202,45 +252,37 @@
   100%     { transform: translateX(560%) skewX(-22deg); }
 }
 [data-aesthetic="y2k"] .btn-danger {
-  background: linear-gradient(180deg, #ff9fb0 0%, #ff5c78 44%, #ffffff 46%, #b2263c 52%, #7c1526 100%);
-  border-color: #000; color: #2a0208; text-shadow: 0 1px 0 rgba(255,255,255,0.4);
+  background: linear-gradient(180deg, #ffd7dd 0%, #f4919e 40%, #ffffff 46.5%, #a8172c 49%, #d4576a 70%, #f3c2ca 100%);
+  border-color: #8e1526; color: #2a0208;
 }
 [data-aesthetic="y2k"] .btn-good {
-  background: linear-gradient(180deg, #9ef7d2 0%, #45efad 44%, #ffffff 46%, #17a173 52%, #0b6046 100%);
-  border-color: #000; color: #022016; text-shadow: 0 1px 0 rgba(255,255,255,0.4);
+  background: linear-gradient(180deg, #d3f3e3 0%, #86d9b2 40%, #ffffff 46.5%, #0a7d4f 49%, #4fae83 70%, #c4ecd8 100%);
+  border-color: #0a5c3a; color: #022016;
 }
 [data-aesthetic="y2k"] .btn-ghost {
-  background: none; border-color: transparent; box-shadow: none; color: var(--text-dim);
+  background: none; border-color: transparent; box-shadow: none; text-shadow: none;
+  color: var(--text-dim);
 }
-[data-aesthetic="y2k"] .icon-btn {
-  background: var(--y2k-plate);
-  border: 1px solid #000;
-  box-shadow: var(--y2k-bevel), 0 2px 5px rgba(0, 0, 0, 0.8);
-}
-[data-aesthetic="y2k"] .subnav button {
-  background: var(--y2k-plate);
-  border: 1px solid #000;
-  box-shadow: var(--y2k-bevel);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.95);
-}
-[data-aesthetic="y2k"] .subnav button.active {
-  background: var(--y2k-chrome-accent);
-  color: #04070c; text-shadow: 0 1px 0 rgba(255, 255, 255, 0.4); font-weight: 700;
-}
-[data-aesthetic="y2k"] .unit-toggle { border-color: #000; }
+[data-aesthetic="y2k"] .subnav button.active,
 [data-aesthetic="y2k"] .unit-toggle button.active {
-  background: var(--y2k-chrome-accent); color: #04070c;
+  background: var(--y2k-chrome-accent);
+  color: #04141a; font-weight: 700;
+}
+[data-aesthetic="y2k"] .unit-toggle { border-color: #5f6d7e; }
+[data-aesthetic="y2k"] .unit-toggle button {
+  background: var(--y2k-plate); color: #46525f; text-shadow: 0 1px 0 rgba(255,255,255,0.7);
 }
 
-/* ---------- Inputs: recessed into the plate ---------- */
+/* ---------- Inputs: white wells recessed into the silver ---------- */
 [data-aesthetic="y2k"] input[type="text"],
 [data-aesthetic="y2k"] input[type="number"],
 [data-aesthetic="y2k"] select,
-[data-aesthetic="y2k"] textarea {
-  background: linear-gradient(180deg, #05070a 0%, #0e1218 100%);
-  border: 1px solid #000;
-  color: var(--text);
-  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.9), inset 0 -1px 0 rgba(255, 255, 255, 0.10);
+[data-aesthetic="y2k"] textarea,
+[data-aesthetic="y2k"] .note-editor {
+  background: linear-gradient(180deg, #ffffff 0%, #f4f7fb 100%);
+  border: 1px solid #7d8b9c;
+  color: #10161d;
+  box-shadow: inset 0 2px 4px rgba(25, 40, 60, 0.24), inset 0 -1px 0 rgba(255, 255, 255, 0.9);
 }
 
 /* ---------- Reduced motion: keep the chrome, drop the glints ---------- */

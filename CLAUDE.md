@@ -60,6 +60,15 @@ Two kinds of aesthetic, chosen by the `external` flag on the `AESTHETICS` entry:
   `<link id="aestheticCss">` slot that `applyAestheticStylesheet()` re-points. With 8+
   maximalist themes planned, this is what stops every visitor downloading all of them.
 
+**Inverting light/dark within a theme** (e.g. Y2K Chrome: black backdrop, silver panels with
+dark text). Do NOT try to flip `--text*` at `:root` and override classes — ~25 components paint
+themselves from `var(--surface)`/`var(--surface2)` rather than `.panel`, and `app.js` sets
+`color: var(--text-faint)` **inline** on some backdrop elements, which no class rule can beat.
+Instead keep `:root` matching the *backdrop*, and re-declare `--text`/`--text-dim`/`--text-faint`/
+`--border`/`--surface` **on the surface elements themselves**. Custom properties inherit, so every
+descendant — inline styles included — resolves correctly, and adding a new surface means adding
+one selector to that list. See the `SILVER SURFACES` block in `aesthetics/y2k/theme.css`.
+
 Non-obvious rules (both enforced by `test_aesthetic_external.js`):
 - `.aesthetic-preview-<key>` (the picker swatch) **must** be in `styles.css`, not `theme.css` —
   the picker renders while a *different* aesthetic is active.
