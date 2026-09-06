@@ -1,8 +1,8 @@
 // Minimal offline cache for LIFEMan.EXE.
-// Caches the app shell (this single HTML file) so it still opens with no signal.
+// Caches the app shell (index.html + the extracted app.js bundle) so it still opens with no signal.
 // Bump CACHE_NAME any time you want to force everyone's install to pick up a fresh copy.
-const CACHE_NAME = 'lifeman-v1';
-const APP_SHELL = ['./', './index.html', './manifest.json'];
+const CACHE_NAME = 'lifeman-v2';
+const APP_SHELL = ['./', './index.html', './app.js', './manifest.json'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
