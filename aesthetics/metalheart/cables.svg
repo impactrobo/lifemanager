@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 1600" width="900" height="1600">
+<!--
+  Metalheart — the cable field.
+
+  Drawn once as a flat background image (referenced from theme.css by url(), so page CSS can
+  never reach inside it) and parallaxed as a whole by aesthetics/metalheart/fx.ts.
+
+  PORTRAIT ON PURPOSE. theme.css sizes this with `cover`, so the art's aspect ratio decides how
+  much of it a phone actually sees: the first version was 1600x1200 and a 390x844 viewport
+  cropped to the middle third of its width, which blew the tendrils up into vague diagonal bands
+  and threw the composition away. At 900x1600 the same viewport sees ~82% of the width, so the
+  whole sweep reads and the tubes stay tube-sized. Check any change to these dimensions against
+  a phone-shaped viewport, not a desktop one.
+
+  There is no gradient anywhere in here, also on purpose. A stroked path takes its gradient in
+  the *document's* coordinate space, not across the ribbon of the stroke, so a single
+  linearGradient reads as chrome only on the segments that happen to run perpendicular to it and
+  goes flat everywhere else. These tendrils sweep through every direction, so instead each one is
+  stroked seven times at decreasing width with the highlight layers nudged up-left and the bounce
+  light nudged down-right. That offset stack is what makes a flat line read as a round metal
+  tube, and it holds at every angle. Nested <use> keeps it to one path definition per tendril.
+-->
+<defs>
+  <path id="t1" d="M-60 1180 C 200 1080, 360 900, 520 720 S 760 380, 980 180"/>
+  <path id="t2" d="M-60 1420 C 240 1340, 460 1120, 600 880 S 820 480, 980 320"/>
+  <path id="t3" d="M-40 900 C 160 820, 300 660, 440 480 S 720 180, 960 40"/>
+  <path id="t4" d="M960 700 C 700 760, 520 900, 380 1080 S 120 1400, -40 1520"/>
+  <path id="t5" d="M200 -60 C 280 320, 380 560, 540 760 S 820 1080, 960 1240"/>
+  <path id="t6" d="M-60 1660 C 300 1520, 620 1260, 780 940 S 900 620, 940 440"/>
+  <g id="tubes">
+    <use href="#t1"/><use href="#t2"/><use href="#t3"/>
+    <use href="#t4"/><use href="#t5"/><use href="#t6"/>
+  </g>
+  <path id="w1" d="M-60 520 C 260 580, 620 500, 960 600"/>
+  <path id="w2" d="M120 -60 C 200 420, 460 900, 960 1300"/>
+  <path id="w3" d="M-60 220 C 340 300, 680 200, 960 340"/>
+  <g id="wires"><use href="#w1"/><use href="#w2"/><use href="#w3"/></g>
+</defs>
+
+<g fill="none" stroke-linecap="round">
+  <!-- Loose wires sit behind the heavy tendrils. -->
+  <use href="#wires" stroke="#0a1216" stroke-width="4"/>
+  <use href="#wires" stroke="#7c9099" stroke-width="1.4" transform="translate(-1,-1)"/>
+  <use href="#wires" stroke="#35e0b0" stroke-width="0.9" opacity="0.45" transform="translate(1,2)"/>
+
+  <!-- Cast shadow, thrown down-right so the whole field agrees on one light source. -->
+  <use href="#tubes" stroke="#010405" stroke-width="30" opacity="0.7" transform="translate(7,11)"/>
+  <use href="#tubes" stroke="#111a1f" stroke-width="24"/>
+  <use href="#tubes" stroke="#2b3a42" stroke-width="18" transform="translate(-1,-2)"/>
+  <use href="#tubes" stroke="#7c9099" stroke-width="7"   transform="translate(-2,-5)"/>
+  <use href="#tubes" stroke="#dcecf2" stroke-width="2.2" opacity="0.9" transform="translate(-3,-7)"/>
+  <!-- Bounce light on the shaded underside (viridian) and a cold rim on the lit edge (cerulean).
+       These two are the whole reason the field reads as *this* theme and not as grey pipework. -->
+  <use href="#tubes" stroke="#1fd6c8" stroke-width="2" opacity="0.5" transform="translate(4,7)"/>
+  <use href="#tubes" stroke="#2aa8e0" stroke-width="1.2" opacity="0.38" transform="translate(-5,-9)"/>
+
+  <!-- Survey marks: the technical-drawing layer the reference posters always have over the render. -->
+  <g stroke="#4fd6e8" stroke-width="1.1" opacity="0.5">
+    <circle cx="540" cy="760" r="22"/>
+    <path d="M506 760h22M552 760h22M540 726v22M540 782v22"/>
+    <circle cx="300" cy="1180" r="12"/>
+    <path d="M278 1180h10M312 1180h10"/>
+    <circle cx="760" cy="420" r="15"/>
+    <path d="M734 420h14M772 420h14M760 392v14"/>
+  </g>
+</g>
+</svg>

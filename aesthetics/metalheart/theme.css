@@ -1,0 +1,419 @@
+@import url('https://fonts.googleapis.com/css2?family=Oxanium:wght@500;600;700;800&family=Titillium+Web:wght@400;600;700&display=swap');
+
+/* ============================================================================
+   Aesthetic: Metalheart — chrome tendrils in a black room, lit cerulean and
+   viridian. Gunmetal glass panels floating over a parallaxing cable field,
+   technical survey marks bracketing every card, grime over the whole thing.
+
+   ---- Why this one is NOT built like Y2K Chrome ----
+   Y2K puts silver surfaces on a black backdrop, which forces the scoped
+   light/dark token flip documented in its header. Metalheart deliberately keeps
+   every surface DARK — gunmetal glass, light text — so none of that applies
+   here. The tokens at :root are the tokens everywhere.
+
+   The one exception is the bright hardware: primary actions, active tabs and
+   active toggles are accent chrome, which is light. Those rules set `color`
+   explicitly instead of leaning on --text, exactly the way Y2K's shared control
+   rules do, because such a control can sit either on a panel or on the backdrop
+   and its plate is bright in both cases.
+
+   ---- The three backdrop layers ----
+   body::after  (z-index -2)  base gradient + blooms + survey grid + grain + grime
+   body::before (z-index -1)  the cable field, cables.svg, parallaxed
+   #app         (z-index  1)  content
+   The -2/-1 split is load-bearing: two pseudo-elements at the SAME z-index paint
+   in tree order, so an opaque ::after would bury ::before completely. Both are
+   `position: fixed` rather than background-attachment, which is broken on iOS
+   Safari.
+
+   ---- Parallax ----
+   aesthetics/metalheart/fx.ts (enabled by `fx: true` in the AESTHETICS registry)
+   writes --mh-px / --mh-py and nothing else. The translate3d() below falls back
+   to 0px, so the cable field still renders — just static — with no JS at all, on
+   a file:// page where ES modules cannot be imported, or before the lazy import
+   lands. Never make the field's visibility depend on those properties.
+
+   External aesthetic — lazily loaded, everything scoped under
+   [data-aesthetic="metalheart"]. Fonts @imported here rather than added to the
+   shared <link>: Oxanium (wide techno display with real weights) and Titillium
+   Web (the squarish tech-UI face, comfortable at 15px). Michroma is the more
+   literal poster face and was tried first, but it is wide enough that long
+   .section-title strings overflow a 390px viewport. Deliberately not reusing
+   Orbitron (Cyberpunk Neon) or Audiowide (Y2K Chrome).
+
+   Picker swatch `.aesthetic-preview-metalheart` lives in styles.css, not here —
+   the picker renders while a different aesthetic is still active. Positioning of
+   .topbar/.tabbar is never touched; they need their sticky/fixed from styles.css.
+   ============================================================================ */
+
+:root[data-aesthetic="metalheart"] {
+  --bg: #04080a;
+  --surface: #101a1e;
+  --surface2: #182630;
+  --border: #3d525c;
+  --border-soft: #22323a;
+  --text: #e4f0f4;
+  --text-dim: #9ab0b8;
+  --text-faint: #67818a;
+
+  --accent-dim: color-mix(in srgb, var(--accent) 55%, var(--border));
+  --accent-soft: color-mix(in srgb, var(--accent) 18%, var(--surface));
+  --good: #1fc98e;
+  --good-soft: #0c2b24;
+  --bad: #ff3b52;
+  --bad-soft: #2e0d14;
+  --warn: #e8a33d;
+  --reset-border: #8fa8b2;
+  --reset-bg: #1a2830;
+  --reset-text: #d8e8ee;
+  --myo: #a25cff;
+  --goldenrod: #d9a520;
+  --savings: #4d84ff;
+  --savings-soft: color-mix(in srgb, var(--savings) 20%, var(--surface));
+  --font-head: 'Oxanium', 'Chakra Petch', sans-serif;
+  --font-body: 'Titillium Web', 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --radius: 3px;   /* hardware, not app chrome — nearly square corners */
+
+  /* ---- Metal recipes ----
+     Same "horizon" idea as Y2K (the hard stop where a reflected sky meets
+     reflected ground is what separates metal from a plain gradient), but
+     inverted for a dark UI. Y2K's lesson was to keep every stop of a button
+     LIGHT enough for its dark label; here the labels are light, so every stop
+     has to stay DARK enough for them. The polish therefore comes from a thin
+     specular line at the horizon and a bright rim in box-shadow, never from a
+     bright band running through the middle of the plate where the text sits. */
+  --mh-plate: linear-gradient(180deg,
+      #55676f 0%, #35444c 5%, #223037 46%,
+      #8fa6b0 47.5%, #131d23 49%, #1d2b32 78%, #33434b 100%);
+  /* Panels are translucent so the cable field reads THROUGH them — that is the
+     whole "glassy" half of this theme. Paired with backdrop-filter below. */
+  --mh-glass: linear-gradient(180deg,
+      rgba(42, 56, 64, 0.86) 0%, rgba(24, 35, 42, 0.84) 46%,
+      rgba(13, 21, 26, 0.88) 49%, rgba(27, 38, 45, 0.86) 100%);
+  /* Bright accent chrome for the few controls that should read as lit hardware.
+     Deep enough at the horizon to look struck, never so deep that the dark
+     legend crossing it disappears. */
+  --mh-chrome-accent: linear-gradient(180deg,
+      color-mix(in srgb, var(--accent) 24%, #ffffff) 0%,
+      color-mix(in srgb, var(--accent) 72%, #ffffff) 38%,
+      #ffffff 46.5%,
+      color-mix(in srgb, var(--accent) 92%, #ffffff) 49%,
+      color-mix(in srgb, var(--accent) 78%, #ffffff) 72%,
+      color-mix(in srgb, var(--accent) 42%, #ffffff) 100%);
+  --mh-bar: linear-gradient(180deg, #16232a 0%, #0c151a 47%, #060c10 49%, #131f26 100%);
+  --mh-bevel: inset 0 1px 0 rgba(214, 240, 250, 0.22), inset 0 -1px 0 rgba(0, 0, 0, 0.65);
+  --mh-rim: 0 2px 10px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(140, 190, 210, 0.08);
+
+  /* Hairline used by every technical overlay — brackets, rules, ticks. */
+  --mh-tick: rgba(79, 214, 232, 0.5);
+  /* Eight one-pixel runs pinned to the four corners: the survey brackets that sit
+     around a card. Held in one custom property so bracketing a new surface is a
+     single `background: var(--mh-brackets)` on its ::before. */
+  --mh-brackets:
+      linear-gradient(var(--mh-tick), var(--mh-tick)) left top     / 12px 1px no-repeat,
+      linear-gradient(var(--mh-tick), var(--mh-tick)) left top     / 1px 12px no-repeat,
+      linear-gradient(var(--mh-tick), var(--mh-tick)) right top    / 12px 1px no-repeat,
+      linear-gradient(var(--mh-tick), var(--mh-tick)) right top    / 1px 12px no-repeat,
+      linear-gradient(var(--mh-tick), var(--mh-tick)) left bottom  / 12px 1px no-repeat,
+      linear-gradient(var(--mh-tick), var(--mh-tick)) left bottom  / 1px 12px no-repeat,
+      linear-gradient(var(--mh-tick), var(--mh-tick)) right bottom / 12px 1px no-repeat,
+      linear-gradient(var(--mh-tick), var(--mh-tick)) right bottom / 1px 12px no-repeat;
+}
+
+/* ---------- Backdrop ---------- */
+[data-aesthetic="metalheart"] body { background-color: #04080a; }
+
+/* Base plate: blooms, survey grid, scanlines and grime. All static, so the whole
+   stack rasterises once and costs nothing per frame. The grime is an feTurbulence
+   data URI rather than a shipped bitmap — a few hundred bytes for the texture that
+   keeps the glass from looking freshly extruded. */
+[data-aesthetic="metalheart"] body::after {
+  content: '';
+  position: fixed; inset: 0; z-index: -2; pointer-events: none;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='0.32'/%3E%3C/svg%3E"),
+    repeating-linear-gradient(0deg,
+      rgba(180, 230, 245, 0.028) 0px, rgba(180, 230, 245, 0.028) 1px,
+      rgba(0, 0, 0, 0) 1px, rgba(0, 0, 0, 0) 3px),
+    repeating-linear-gradient(0deg,
+      rgba(79, 214, 232, 0.05) 0px, rgba(79, 214, 232, 0.05) 1px,
+      rgba(0, 0, 0, 0) 1px, rgba(0, 0, 0, 0) 64px),
+    repeating-linear-gradient(90deg,
+      rgba(79, 214, 232, 0.05) 0px, rgba(79, 214, 232, 0.05) 1px,
+      rgba(0, 0, 0, 0) 1px, rgba(0, 0, 0, 0) 64px),
+    radial-gradient(90% 55% at 78% 6%,  rgba(31, 168, 224, 0.30) 0%, rgba(4, 8, 10, 0) 68%),
+    radial-gradient(85% 55% at 12% 96%, rgba(24, 214, 168, 0.24) 0%, rgba(4, 8, 10, 0) 66%),
+    linear-gradient(180deg, #061014 0%, #04080a 55%, #050d10 100%);
+  background-size: 180px 180px, auto, auto, auto, auto, auto, auto;
+  opacity: 0.96;
+}
+
+/* The cable field. Its own layer so the parallax transform never repaints the grid
+   or the grime underneath it. `cover` keeps the tendrils reading as huge render
+   geometry rather than tiling into wallpaper, and the negative inset gives the
+   transform room to travel without ever exposing an edge. */
+[data-aesthetic="metalheart"] body::before {
+  content: '';
+  position: fixed; inset: -60px; z-index: -1; pointer-events: none;
+  background: url('cables.svg') center center / cover no-repeat;
+  opacity: 0.42;
+  transform: translate3d(var(--mh-px, 0px), var(--mh-py, 0px), 0);
+  will-change: transform;
+}
+[data-aesthetic="metalheart"] #app { position: relative; z-index: 1; }
+
+/* ---------- Panels: gunmetal glass over the cable field ----------
+   backdrop-filter is limited to the two biggest surfaces (.panel, .modal-box).
+   It is the expensive property in this theme, and a blurred backdrop behind every
+   small card in a scrolling list is where a phone starts to feel it; the smaller
+   surfaces take the same glass gradient without the blur and read the same. */
+[data-aesthetic="metalheart"] .panel,
+[data-aesthetic="metalheart"] .entry-card,
+[data-aesthetic="metalheart"] .note-card,
+[data-aesthetic="metalheart"] .chart-wrap,
+[data-aesthetic="metalheart"] .workout-cell,
+[data-aesthetic="metalheart"] .cal-cell,
+[data-aesthetic="metalheart"] .superset-group,
+[data-aesthetic="metalheart"] .modal-box,
+[data-aesthetic="metalheart"] .aesthetic-card,
+[data-aesthetic="metalheart"] .home-popup,
+[data-aesthetic="metalheart"] .rest-timer-widget {
+  background: var(--mh-glass);
+  border: 1px solid #46606c;
+  box-shadow: var(--mh-bevel), var(--mh-rim);
+}
+[data-aesthetic="metalheart"] .panel,
+[data-aesthetic="metalheart"] .modal-box {
+  position: relative;
+  backdrop-filter: blur(6px) saturate(1.15);
+  -webkit-backdrop-filter: blur(6px) saturate(1.15);
+}
+/* Survey brackets. On a ::before layer rather than the element itself so the card
+   keeps its normal box, border and shadow — the same reason Draconic masks a layer
+   instead of clip-path'ing the element. */
+[data-aesthetic="metalheart"] .panel::before,
+[data-aesthetic="metalheart"] .modal-box::before {
+  content: '';
+  position: absolute; inset: 4px; pointer-events: none;
+  background: var(--mh-brackets);
+}
+[data-aesthetic="metalheart"] .panel-done,
+[data-aesthetic="metalheart"] .workout-cell.done {
+  border-color: #1fc98e;
+  box-shadow: var(--mh-bevel), 0 0 14px rgba(31, 201, 142, 0.28), var(--mh-rim);
+}
+[data-aesthetic="metalheart"] .modal-overlay { background: rgba(2, 6, 8, 0.72); }
+
+/* ---------- Bars ---------- */
+[data-aesthetic="metalheart"] .topbar {
+  background: var(--mh-bar);
+  border-bottom: 1px solid #000;
+  box-shadow: inset 0 1px 0 rgba(190, 235, 250, 0.16), 0 2px 14px rgba(0, 0, 0, 0.75);
+  z-index: 20;
+}
+[data-aesthetic="metalheart"] .tabbar {
+  background: var(--mh-bar);
+  border-top: 1px solid #000;
+  box-shadow: inset 0 1px 0 rgba(190, 235, 250, 0.16), 0 -3px 16px rgba(0, 0, 0, 0.8);
+  z-index: 30;
+}
+[data-aesthetic="metalheart"] .toast { z-index: 60; }
+/* A lit filament along the inner edge of each bar. At a phone viewport the bars are
+   the only backdrop-coloured surfaces guaranteed to be on screen, so this is what
+   actually carries the cerulean/viridian pairing on mobile. */
+[data-aesthetic="metalheart"] .topbar::after,
+[data-aesthetic="metalheart"] .tabbar::after {
+  content: '';
+  position: absolute; left: 0; right: 0; height: 1px;
+  pointer-events: none;
+  animation: mh-filament 6s ease-in-out infinite alternate;
+}
+[data-aesthetic="metalheart"] .topbar::after {
+  bottom: 0;
+  background: linear-gradient(90deg, rgba(31,168,224,0) 0%, rgba(79,214,232,0.9) 50%, rgba(31,168,224,0) 100%);
+  box-shadow: 0 0 12px 1px rgba(79, 214, 232, 0.5);
+}
+[data-aesthetic="metalheart"] .tabbar::after {
+  top: 0;
+  background: linear-gradient(90deg, rgba(24,214,168,0) 0%, rgba(53,224,176,0.9) 50%, rgba(24,214,168,0) 100%);
+  box-shadow: 0 0 12px 1px rgba(53, 224, 176, 0.5);
+}
+@keyframes mh-filament {
+  from { opacity: 0.4; }
+  to   { opacity: 1; }
+}
+[data-aesthetic="metalheart"] .tabbar button.active {
+  color: color-mix(in srgb, var(--accent) 55%, #ffffff);
+  text-shadow: 0 0 10px color-mix(in srgb, var(--accent) 65%, transparent);
+}
+
+/* ---------- Lettering ----------
+   background-clip:text needs a transparent fill, so the plain `color` declared
+   first is the fallback if a browser refuses the clip — this never leaves
+   invisible text behind. */
+[data-aesthetic="metalheart"] .topbar .brand,
+[data-aesthetic="metalheart"] .section-title {
+  color: var(--text);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+  [data-aesthetic="metalheart"] .topbar .brand,
+  [data-aesthetic="metalheart"] .section-title {
+    background: linear-gradient(180deg,
+      #f2fbff 0%, #c3dae3 30%, #8ba3ac 46%,
+      #33454e 49%, #6d868f 55%, #b2c9d2 78%, #e6f5fa 100%);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent; color: transparent;
+    filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.9));
+  }
+  /* The accent span inside the wordmark would otherwise be swallowed by the clip. */
+  [data-aesthetic="metalheart"] .topbar .brand span {
+    -webkit-text-fill-color: color-mix(in srgb, var(--accent) 50%, #ffffff);
+    color: color-mix(in srgb, var(--accent) 50%, #ffffff);
+    text-shadow: 0 0 12px color-mix(in srgb, var(--accent) 60%, transparent);
+  }
+}
+/* Dashed technical rule trailing every section title — the annotation layer the
+   reference posters run under their headings. The heading becomes a flex row so
+   the rule can take the leftover width; .section-title carries only text, so no
+   existing layout depends on it staying a plain block. */
+[data-aesthetic="metalheart"] .section-title {
+  display: flex; align-items: center; gap: 10px;
+}
+[data-aesthetic="metalheart"] .section-title::after {
+  content: '';
+  flex: 1; height: 1px;
+  background: repeating-linear-gradient(90deg,
+    var(--mh-tick) 0px, var(--mh-tick) 5px, rgba(0, 0, 0, 0) 5px, rgba(0, 0, 0, 0) 10px);
+}
+/* Text that sits on the cable field rather than on a panel has to carry its own
+   separation — a lit tendril passing behind a low-contrast string swallows it. The
+   empty states are the worst case (faint grey, centred, no surface under them), so
+   they get lifted a step and shadowed. Anything inside a panel is already covered
+   by the glass and needs none of this. */
+[data-aesthetic="metalheart"] .empty-state {
+  color: var(--text-dim);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.95), 0 0 12px rgba(0, 0, 0, 0.8);
+}
+/* Small labels read as instrument legends. */
+[data-aesthetic="metalheart"] .subtle-label {
+  font-family: var(--font-mono);
+  text-transform: uppercase; letter-spacing: 0.12em;
+  color: color-mix(in srgb, var(--accent) 60%, var(--text-faint));
+}
+
+/* ---------- Controls ----------
+   ORDER MATTERS: `[data-aesthetic] .btn` and `[data-aesthetic] .btn-primary` are
+   equal specificity and every .btn-primary also carries .btn, so the neutral plate
+   must come FIRST or it wins the cascade over the variants. For the same reason
+   .btn-danger/.btn-good are restated below — this theme's .btn outranks the base
+   rules for them in styles.css. */
+[data-aesthetic="metalheart"] .btn,
+[data-aesthetic="metalheart"] .icon-btn,
+[data-aesthetic="metalheart"] .subnav button,
+[data-aesthetic="metalheart"] .rt-btn,
+[data-aesthetic="metalheart"] .rest-timer-fab,
+[data-aesthetic="metalheart"] .week-selector .cycle-btns button {
+  background: var(--mh-plate);
+  border: 1px solid #4d6470;
+  color: var(--text);
+  box-shadow: var(--mh-bevel), 0 2px 6px rgba(0, 0, 0, 0.6);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.85);
+}
+[data-aesthetic="metalheart"] .btn-primary {
+  position: relative; overflow: hidden;
+  background: var(--mh-chrome-accent);
+  border-color: color-mix(in srgb, var(--accent) 65%, #000000);
+  color: #04141a;
+  font-weight: 700;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+/* Travelling glint, parked off-frame between passes. transform-only, so it stays on
+   the compositor and never repaints the plate underneath. */
+[data-aesthetic="metalheart"] .btn-primary::after {
+  content: '';
+  position: absolute; top: -60%; bottom: -60%; left: -30%; width: 20%;
+  background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.8) 50%, rgba(255,255,255,0) 100%);
+  pointer-events: none;
+  animation: mh-sweep 5.5s ease-in-out infinite;
+}
+@keyframes mh-sweep {
+  0%, 64% { transform: translateX(0) skewX(-20deg); }
+  100%    { transform: translateX(600%) skewX(-20deg); }
+}
+[data-aesthetic="metalheart"] .btn-danger {
+  background: linear-gradient(180deg, #7d2130 0%, #4a121c 46%, #ff8a9a 47.5%, #2c0810 49%, #47131d 78%, #6d1f2c 100%);
+  border-color: #8e1b2c; color: #ffd9df;
+}
+[data-aesthetic="metalheart"] .btn-good {
+  background: linear-gradient(180deg, #12735a 0%, #0b4638 46%, #7bf0cc 47.5%, #06281f 49%, #0d4b3b 78%, #106a54 100%);
+  border-color: #17a37c; color: #d4fdef;
+}
+[data-aesthetic="metalheart"] .btn-ghost {
+  background: none; border-color: transparent; box-shadow: none; text-shadow: none;
+  color: var(--text-dim);
+}
+[data-aesthetic="metalheart"] .subnav button.active,
+[data-aesthetic="metalheart"] .unit-toggle button.active {
+  background: var(--mh-chrome-accent);
+  color: #04141a; font-weight: 700;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+[data-aesthetic="metalheart"] .unit-toggle { border-color: #4d6470; }
+[data-aesthetic="metalheart"] .unit-toggle button {
+  background: var(--mh-plate); color: var(--text-dim);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.85);
+}
+[data-aesthetic="metalheart"] .plate {
+  background: var(--mh-plate); border-color: #4d6470; color: var(--text-dim);
+}
+[data-aesthetic="metalheart"] .pill,
+[data-aesthetic="metalheart"] .tag-pill,
+[data-aesthetic="metalheart"] .exercise-chip {
+  background: var(--mh-plate); border-color: #4d6470;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.85);
+}
+
+/* ---------- Inputs: wells milled into the faceplate ----------
+   Lighting inverted from the raised plates above — shadow along the TOP inner edge,
+   a thin lit line along the BOTTOM, plus an outer lip catching light from above.
+   That inversion is what actually makes a field look sunken. */
+[data-aesthetic="metalheart"] input[type="text"],
+[data-aesthetic="metalheart"] input[type="number"],
+[data-aesthetic="metalheart"] input[type="date"],
+[data-aesthetic="metalheart"] input[type="time"],
+[data-aesthetic="metalheart"] select,
+[data-aesthetic="metalheart"] textarea,
+[data-aesthetic="metalheart"] .note-editor {
+  background: linear-gradient(180deg, #060d11 0%, #0d181e 62%, #111f26 100%);
+  border: 1px solid #3f545e;
+  color: var(--text);
+  box-shadow:
+    inset 0 3px 7px rgba(0, 0, 0, 0.8),
+    inset 0 1px 0 rgba(0, 0, 0, 0.9),
+    inset 0 -1px 0 rgba(150, 200, 220, 0.18),
+    0 1px 0 rgba(160, 205, 225, 0.14);
+}
+[data-aesthetic="metalheart"] input::placeholder,
+[data-aesthetic="metalheart"] textarea::placeholder { color: #5d757e; }
+[data-aesthetic="metalheart"] input:focus,
+[data-aesthetic="metalheart"] select:focus,
+[data-aesthetic="metalheart"] textarea:focus {
+  outline-color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 70%, #000000);
+  box-shadow:
+    inset 0 3px 7px rgba(0, 0, 0, 0.8),
+    0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent),
+    0 0 14px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+/* ---------- Reduced motion: keep every surface, drop the moving light ----------
+   The cable field's parallax is stopped inside fx.ts (it never starts the rAF
+   loop), so only the CSS animations need handling here. */
+@media (prefers-reduced-motion: reduce) {
+  [data-aesthetic="metalheart"] .topbar::after,
+  [data-aesthetic="metalheart"] .tabbar::after { animation: none; opacity: 0.85; }
+  [data-aesthetic="metalheart"] .btn-primary::after { animation: none; opacity: 0; }
+}

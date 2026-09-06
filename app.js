@@ -172,6 +172,13 @@ const AESTHETIC_ACCENTS = {
     lime:    { label: 'Toxic Lime', value: '#b8ff3d' },
     silver:  { label: 'Pure Chrome',value: '#c9d4e0' },
   },
+  metalheart: {
+    cerulean: { label: 'Cerulean',    value: '#1fa8e0' },
+    viridian: { label: 'Viridian',    value: '#18d6a8' },
+    acid:     { label: 'Acid Green',  value: '#86e01a' },
+    xenon:    { label: 'Xenon',       value: '#4fd6e8' },
+    gunmetal: { label: 'Gunmetal',    value: '#9fb4c0' },
+  },
   frutigeraero: {
     aqua:    { label: 'Aqua',      value: '#00a8e8' },
     sky:     { label: 'Sky',       value: '#3aa0ff' },
@@ -222,6 +229,10 @@ const AESTHETICS = {
   // tap-ember particle burst — see applyAestheticFX().
   draconic:     { label: 'Draconic',      desc: 'Scorched black and dragonfire — gilded scale plate, footprint tiles, embers on every hot tap.', group: 'Maximalist', external: true, fx: true },
   cream:        { label: 'C.R.E.A.M',     desc: 'Pinstripe purple and gold — a set of chaos emeralds for tiles, gilded controls, sharp suiting.', group: 'Maximalist', external: true },
+  // Metalheart's fx.js is the odd one out: it draws nothing, it only writes --mh-px/--mh-py for
+  // the cable field's parallax. The field renders static without it, so this stays a pure
+  // enhancement — see aesthetics/metalheart/fx.ts.
+  metalheart:   { label: 'Metalheart',    desc: 'Chrome tendrils in a black room — gunmetal glass, cerulean and viridian rim light, survey marks over grime.', group: 'Maximalist', external: true, fx: true },
 };
 const AESTHETIC_GROUP_ORDER = ['Maximalist', 'Vibrant', 'Contrast', 'Light'];
 // Which groups are expanded in the settings panel right now — session-only (not persisted),
@@ -6739,15 +6750,40 @@ function scheduleBlocksForDate(dateObj) {
   blocks.sort((x, y) => anchorMinutes(x.start) - anchorMinutes(y.start));
   return { schedule: sched, blocks };
 }
+// What the Home "RIGHT NOW" card shows. Blocks overlap all the time — a wide anchor like
+// Dinner 18:30-19:15 and a specific activity at 19:10 both contain 19:10 — so this can't just
+// return the first match in a list sorted by start time. That gave the *earliest-starting*
+// block, i.e. the vaguest one: at 19:12 you'd be told "Dinner" while the guitar practice you
+// actually just started sat underneath it. The answer to "what am I doing right now" is the
+// block that started most recently, tie-broken by the shorter (more specific) one.
 function currentScheduleBlock() {
-  const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
-  const { blocks } = scheduleBlocksForDate(new Date());
+  const now = new Date();                     // read the clock once — the old code called
+  const nowMin = now.getHours() * 60 + now.getMinutes();   // new Date() three separate times
+  const { blocks } = scheduleBlocksForDate(now);
+  let best = null;
+  let bestSince = Infinity;   // minutes since the block began — smaller is more recent
+  let bestDur = Infinity;
   for (const b of blocks) {
     const s = anchorMinutes(b.start);
     const e = anchorMinutes(b.end);
-    if (nowMin >= s && nowMin < e) return b;
+    // end < start means the block runs past midnight (a 23:00-06:00 Bed Time, which the old
+    // `nowMin >= s && nowMin < e` test could never match at any hour). end === start is a
+    // zero-length activity — scheduleBlocksForDate() defaults a missing end to the start — and
+    // must stay never-current, so only a strict `<` counts as crossing midnight.
+    const crosses = e < s;
+    const active = crosses ? (nowMin >= s || nowMin < e) : (nowMin >= s && nowMin < e);
+    if (!active) continue;
+    // Measured around the wrap, so an overnight block's evening and morning halves both rank
+    // against same-day blocks correctly.
+    const since = nowMin >= s ? nowMin - s : nowMin + 1440 - s;
+    const dur = crosses ? e + 1440 - s : e - s;
+    if (since < bestSince || (since === bestSince && dur < bestDur)) {
+      best = b;
+      bestSince = since;
+      bestDur = dur;
+    }
   }
-  return null;
+  return best;
 }
 function renderHomeScheduleCard() {
   const b = currentScheduleBlock();

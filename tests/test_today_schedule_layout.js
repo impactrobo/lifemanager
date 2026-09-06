@@ -68,10 +68,16 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // 3. currentScheduleBlock() picks whichever block actually contains right now — inject a
   //    synthetic anchor spanning the real current time so this doesn't depend on mocking Date.
+  //    The default anchors overlap most of the day, so what's really being asserted is the
+  //    tie-break: of every block containing now, the most recently started one wins. Starting
+  //    the injected block exactly at the current minute is what makes that deterministic —
+  //    an earlier start (this used to lead in by 2 minutes) loses to any real anchor that
+  //    happens to begin inside the gap, which made this test fail on the clock rather than on
+  //    the code.
   const nowInfo = await page.evaluate(() => {
     const now = new Date();
     const pad = (n) => String(n).padStart(2, '0');
-    const startMin = now.getHours() * 60 + now.getMinutes() - 2;
+    const startMin = now.getHours() * 60 + now.getMinutes();
     const endMin = startMin + 10;
     const toHHMM = (mins) => `${pad(Math.floor(((mins % 1440) + 1440) % 1440 / 60))}:${pad((((mins % 1440) + 1440) % 1440) % 60)}`;
     const start = toHHMM(startMin), end = toHHMM(endMin);
@@ -118,6 +124,60 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     delete todayLifeLog()['rightnowtest'];
     saveState();
   }, scheduleId);
+
+  // 6. currentScheduleBlock()'s overlap and midnight rules, on a frozen clock.
+  //    The section above can only assert the one case that happens to be true at the moment the
+  //    suite runs. These are the rules that case is an instance of, pinned to fixed times: of
+  //    every block containing now the most recently started wins (blocks overlap constantly —
+  //    the default anchors cover most of the day), a block whose end is before its start runs
+  //    past midnight, and a zero-length block is never current. Runs in its own context so the
+  //    frozen clock and the throwaway anchors can't leak into the assertions above.
+  const clockCtx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const clockPage = await clockCtx.newPage();
+  clockPage.on('pageerror', e => errors.push('PAGEERROR (clock): ' + e.message));
+  await clockPage.route('**/*', route =>
+    route.request().url().startsWith('file://') ? route.continue() : route.abort());
+  // install() has to happen before navigation for the app's own Date calls to see the fake clock.
+  await clockPage.clock.install({ time: new Date(2026, 8, 6, 12, 0, 0) });
+  await clockPage.goto(APP_PATH);
+  await clockPage.waitForTimeout(300);
+  await clockPage.evaluate(() => { STATE.life.schedules = []; STATE.life.assignments = {}; saveState(); });
+
+  const OVERLAP = [
+    { id: 'dinner', start: '18:30', end: '19:15', label: 'Dinner', detail: '' },
+    { id: 'guitar', start: '19:10', end: '19:30', label: 'Guitar', detail: '' },
+  ];
+  const NESTED = [
+    { id: 'work', start: '09:00', end: '17:00', label: 'Work', detail: '' },
+    { id: 'standup', start: '09:00', end: '09:15', label: 'Standup', detail: '' },
+  ];
+  const OVERNIGHT = [{ id: 'bed', start: '23:00', end: '06:00', label: 'Bed', detail: '' }];
+  const ZERO_LENGTH = [{ id: 'z', start: '12:00', end: '12:00', label: 'ZeroLength', detail: '' }];
+
+  const cases = [
+    ['19:12', OVERLAP,     'Guitar',   'both contain 19:12 — the later start wins, not the earlier'],
+    ['18:40', OVERLAP,     'Dinner',   'only Dinner has started yet'],
+    ['19:20', OVERLAP,     'Guitar',   'Dinner is over'],
+    ['09:05', NESTED,      'Standup',  'equal starts — the shorter, more specific block wins'],
+    ['23:30', OVERNIGHT,   'Bed',      'evening half of a block running past midnight'],
+    ['02:00', OVERNIGHT,   'Bed',      'morning half of the same block'],
+    ['12:00', OVERNIGHT,   null,       'outside an overnight block'],
+    ['12:00', ZERO_LENGTH, null,       'a zero-length block is never current'],
+  ];
+  for (const [hhmm, anchors, expected, why] of cases) {
+    const [h, m] = hhmm.split(':').map(Number);
+    await clockPage.clock.setFixedTime(new Date(2026, 8, 6, h, m, 0));
+    const got = await clockPage.evaluate((as) => {
+      STATE.life.anchors = as;
+      const b = currentScheduleBlock();
+      return b ? b.label : null;
+    }, anchors);
+    console.log(`currentScheduleBlock() at ${hhmm}: ${got} (${why})`);
+    if (got !== expected) {
+      throw new Error(`At ${hhmm} expected currentScheduleBlock() to return ${expected}, got ${got} — ${why}`);
+    }
+  }
+  await clockCtx.close();
 
   await browser.close();
 

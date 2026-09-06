@@ -101,8 +101,17 @@ aesthetics/<key>/fx.js   COMMITTED build output — this is what the browser loa
   Make the rAF loop demand-driven (stop when there's nothing to animate), honour
   `prefers-reduced-motion`, and pause on `document.hidden`.
 - Append overlays to `<body>`, never `#app` — `#app.innerHTML` is replaced on every render.
-  Mount them as `<canvas aria-hidden="true">`: `test_aesthetic_fx.js` finds every module's
-  overlay by that shape, so it covers new FX aesthetics with no test changes.
+  Mount them as `<canvas aria-hidden="true">`: that's how `test_aesthetic_fx.js` finds a
+  drawing module's overlay, so it covers new ones with no test changes.
+- A module doesn't have to draw. The other shape is **ambient**: write CSS custom properties on
+  `<html>` and let `theme.css` consume them (`aesthetics/metalheart/fx.ts` writes `--mh-px`/
+  `--mh-py` for the cable-field parallax and nothing else). Two reasons to prefer it when the
+  effect is decorative: the theme still renders correctly with the module absent — no JS, or
+  `file://` where ES modules can't import — if the CSS supplies a fallback
+  (`translate3d(var(--mh-px, 0px), …)`), and the motion stays a compositor-only transform.
+  `destroy()` must `removeProperty()` everything it set. `test_aesthetic_fx.js` detects which
+  shape a module is (canvas vs. new inline custom properties) and applies the matching
+  assertions, so either kind is covered without touching the test.
 - ES modules can't load over `file://`, so the module is inert in the `file://`-based tests
   (the import failure is caught and the theme still renders). FX tests must serve over HTTP.
 

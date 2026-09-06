@@ -526,6 +526,7 @@ select { -webkit-appearance: none; appearance: none; background-image: linear-gr
 .aesthetic-preview-y2k { background: linear-gradient(180deg, #0a0d11 4%, #8fb9c9 26%, #ffffff 45%, #1a1620 53%, #8f5f9e 78%, #e2b6ee 96%); }
 .aesthetic-preview-draconic { background: linear-gradient(160deg, #0a0405 6%, #7d0d0e 30%, #e02617 52%, #ff6b1a 74%, #ffd24a 96%); }
 .aesthetic-preview-cream { background: linear-gradient(100deg, #2a0d44 18%, #562a8c 36%, #f5c518 58%, #1fbf6b 78%, #a855f7 96%); }
+.aesthetic-preview-metalheart { background: linear-gradient(160deg, #04080a 6%, #35454e 26%, #eaf6fa 46%, #131d23 54%, #1fa8e0 76%, #18d6a8 96%); }
 .aesthetic-card-name { font-weight: 700; font-size: 13px; }
 .aesthetic-card-desc { font-size: 11px; color: var(--text-faint); margin-top: 2px; line-height: 1.4; }
 .aesthetic-card-check { position: absolute; right: 10px; top: 10px; }
