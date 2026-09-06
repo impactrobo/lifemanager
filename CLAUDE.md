@@ -20,15 +20,20 @@ budget). Local-first via localStorage. No build step. Read this before making an
 the doc.
 
 ## Testing
-Canonical test files (per ARCHITECTURE.md) should live in `tests/` as individual
-`test_*.js` Node scripts using Playwright directly (no test runner) — run each with
-`node tests/test_whatever.js`; nonzero exit = failure.
+Canonical test files (per ARCHITECTURE.md) live in `tests/` as individual `test_*.js` Node
+scripts using Playwright directly (no test runner) — run each with `node tests/test_whatever.js`;
+nonzero exit = failure. See `tests/README.md` for setup and current status.
 
-**Known gap as of this repo's first commit:** the canonical test suite referenced in
-ARCHITECTURE.md (`test_aesthetics.js`, `test_full_flow.js`, `test_home.js`, etc.) does not
-yet exist in this repo — it previously only existed inside a temporary chat sandbox and was
-lost between sessions. Recreating these as real, committed files under `tests/` is the
-first priority task so testing finally persists across sessions.
+**Progress as of this repo's first real commit:** 3 of 15 canonical tests written and passing
+(`test_home.js`, `test_aesthetics.js`, `test_full_flow.js`). The rest still need writing — see
+`tests/README.md` for the remaining list. These never existed as committed files before; they
+only lived inside temporary chat sandboxes and were lost between sessions, so this is genuinely
+new work, not a restore.
+
+**One correction vs. the old ARCHITECTURE.md testing snippet:** don't hardcode
+`executablePath: '/opt/pw-browsers/chromium'` — that path is specific to one temporary chat
+sandbox and won't exist on a real dev machine. Use `process.env.PW_CHROMIUM_PATH || undefined`
+instead, after a one-time `npm install -D playwright && npx playwright install chromium`.
 
 Run the full canonical suite before every publish, screenshot-verify anything visual, and
 do a freshness check against whatever's currently live before overwriting a hosted version.
