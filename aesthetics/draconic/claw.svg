@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">
+  <!--
+    Dragon footprint used as a CSS mask (see theme.css > home tiles). Four separate shapes —
+    three hooked digits plus a detached heel pad — rather than one connected outline, which is
+    what makes it read as a *print* rather than a paw-shaped blob.
+
+    Curves, not straight segments: each digit's two edges meet at a single point with steep
+    tangents, so the tips come to a needle rather than the blunt triangles a clip-path polygon
+    can manage. The outer digits lean only slightly — splay them wide and they stop reading as
+    toes and start reading as horns.
+
+    Proportions matter more than they look: the digits run y≈0–50 and the heel only y≈52–97.
+    A larger heel immediately reads as a cat paw or a heart — the long-digit / small-heel ratio
+    is what makes it theropod.
+
+    Filled white because only the alpha matters — the fire gradient underneath supplies colour.
+  -->
+  <g fill="#fff">
+    <!-- left digit: sweeps out and hooks back -->
+    <path d="M22 3 C23 18, 25 31, 29 42 C32 49, 41.5 45, 38.5 37 C35 26, 29 13, 22 3 Z"/>
+    <!-- middle digit: longest, near-vertical, sharpest tip -->
+    <path d="M50 0 C47 14, 42.5 28, 43 39.5 C43.5 48, 56.5 48, 57 39.5 C57.5 28, 53 14, 50 0 Z"/>
+    <!-- right digit: mirror of the left -->
+    <path d="M78 3 C77 18, 75 31, 71 42 C68 49, 58.5 45, 61.5 37 C65 26, 71 13, 78 3 Z"/>
+    <!-- heel pad: deliberately compact, tapering to a rounded point -->
+    <path d="M31 61 C36 52, 64 52, 69 61 C76 71.5, 68 89, 50 97 C32 89, 24 71.5, 31 61 Z"/>
+  </g>
+</svg>

@@ -74,12 +74,33 @@ button flames) need no module.
 `styles.css`'s own `.btn-danger`/`.btn-good` (0,1,0), styling `.btn` in a theme means you must
 restate those variants there too or they lose their semantic colour.
 
-### Clipping a component into a custom silhouette
+### Giving a component a custom silhouette
 
-`clip-path` (e.g. Draconic's dragon-footprint home tiles) also clips away the element's border
-and `box-shadow`. Draw the silhouette's edge with `filter: drop-shadow(...)` instead — that
-follows the clipped outline. Add generous `padding` to keep content out of the clipped regions,
-and check the narrowest part of the shape against the longest label the component can hold.
+Two options, and the second is usually better:
+
+- **`clip-path` on the element** clips away its border and `box-shadow` too (draw the edge with
+  `filter: drop-shadow(...)` instead, which follows the clipped outline), constrains content to
+  the shape, and can only describe straight polygon segments.
+- **Mask a `::before` layer** (what Draconic's home tiles do — `mask-image: url("claw.svg")`).
+  The element stays a normal box with its border, shadow and content flow intact; the silhouette
+  is background art. The mask can come from a real `.svg` file in the aesthetic's folder, so the
+  shape gets bezier curves rather than polygon corners, and the layer *under* the mask can be an
+  animated gradient — which is how you get an effect burning inside the shape.
+
+Either way: check the narrowest part of the shape against the longest label the component holds.
+
+### Two animations must not drive the same property
+
+`animation: a 1.9s ..., b 2.9s ...` running at different periods is the usual trick for making a
+flicker feel irregular — but if both keyframe sets animate `transform`, the later one in the list
+wins outright and the other's motion is silently dropped. Split them across different properties
+(e.g. `transform` in one, `opacity` in the other).
+
+### `body::before` / `body::after` at the same z-index
+
+Both default to painting in tree order, so an opaque `::after` will bury a `::before` sitting at
+the same `z-index`. When a theme uses both backdrop layers, give them distinct values (Y2K uses
+`-2` for the base plate and `-1` for the animated glow layer above it).
 
 ## State & persistence
 

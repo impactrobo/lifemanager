@@ -104,16 +104,35 @@
 /* ---------- Backdrop: black desk, cold spotlight, fine brushed grain ----------
    Fixed pseudo-element rather than background-attachment (broken on iOS Safari). */
 [data-aesthetic="y2k"] body { background-color: #07080a; }
+/* Base plate: flat dark + brushed grain. Static, so it can stay on one layer.
+   z-index -2, NOT -1: ::before and ::after at the same z-index paint in tree order, so an
+   opaque ::after would bury the glow layer below it entirely. */
 [data-aesthetic="y2k"] body::after {
   content: '';
-  position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  position: fixed; inset: 0; z-index: -2; pointer-events: none;
   background-image:
-    radial-gradient(90% 55% at 50% -10%, rgba(140, 210, 240, 0.15) 0%, rgba(7, 8, 10, 0) 62%),
-    radial-gradient(70% 45% at 50% 108%, rgba(200, 120, 220, 0.11) 0%, rgba(7, 8, 10, 0) 60%),
     repeating-linear-gradient(0deg,
       rgba(255, 255, 255, 0.022) 0px, rgba(255, 255, 255, 0.022) 1px,
       rgba(0, 0, 0, 0) 1px, rgba(0, 0, 0, 0) 3px),
     linear-gradient(180deg, #0b0e13 0%, #07080a 55%, #0a0c11 100%);
+}
+/* The oil-slick glows get their own layer so they can breathe without repainting the grain.
+   They were previously far too faint to survive a phone screen in daylight — and worse, the
+   silver panels cover most of the viewport, so the only backdrop left to show them is a thin
+   margin. Hence: much higher alpha, pulled further into frame, and animated. */
+[data-aesthetic="y2k"] body::before {
+  content: '';
+  position: fixed; inset: -12%; z-index: -1; pointer-events: none;
+  background-image:
+    radial-gradient(78% 46% at 50% 4%,  rgba(96, 214, 255, 0.42) 0%, rgba(7, 8, 10, 0) 66%),
+    radial-gradient(72% 42% at 50% 97%, rgba(226, 108, 246, 0.36) 0%, rgba(7, 8, 10, 0) 64%);
+  animation: y2k-irid 7.5s ease-in-out infinite alternate;
+  will-change: opacity, transform;
+}
+/* opacity + transform only — both composited, so this costs nothing per frame even full-screen. */
+@keyframes y2k-irid {
+  from { opacity: 0.62; transform: scale(1); }
+  to   { opacity: 1;    transform: scale(1.07); }
 }
 [data-aesthetic="y2k"] #app { position: relative; z-index: 1; }
 
@@ -177,6 +196,30 @@
   text-shadow: 0 0 10px color-mix(in srgb, var(--accent) 70%, transparent);
 }
 [data-aesthetic="y2k"] .toast { z-index: 60; }
+/* The bars are the only backdrop-coloured surfaces guaranteed to be on screen at a phone
+   viewport, so the cyan/magenta split is echoed on their inner edges — that's what actually
+   makes the iridescence readable on mobile rather than only in the gaps between panels. */
+[data-aesthetic="y2k"] .topbar::after,
+[data-aesthetic="y2k"] .tabbar::after {
+  content: '';
+  position: absolute; left: 0; right: 0; height: 2px;
+  pointer-events: none;
+  animation: y2k-edge 7.5s ease-in-out infinite alternate;
+}
+[data-aesthetic="y2k"] .topbar::after {
+  bottom: 0;
+  background: linear-gradient(90deg, rgba(96,214,255,0) 0%, rgba(96,214,255,0.85) 50%, rgba(96,214,255,0) 100%);
+  box-shadow: 0 0 14px 1px rgba(96, 214, 255, 0.55);
+}
+[data-aesthetic="y2k"] .tabbar::after {
+  top: 0;
+  background: linear-gradient(90deg, rgba(226,108,246,0) 0%, rgba(226,108,246,0.85) 50%, rgba(226,108,246,0) 100%);
+  box-shadow: 0 0 14px 1px rgba(226, 108, 246, 0.55);
+}
+@keyframes y2k-edge {
+  from { opacity: 0.45; }
+  to   { opacity: 1; }
+}
 
 /* ---------- Chrome lettering ----------
    background-clip:text needs a transparent fill, so the plain `color` above it is the
@@ -273,20 +316,52 @@
   background: var(--y2k-plate); color: #46525f; text-shadow: 0 1px 0 rgba(255,255,255,0.7);
 }
 
-/* ---------- Inputs: white wells recessed into the silver ---------- */
+/* ---------- Inputs: dark wells milled into the silver faceplate ----------
+   A light well on a light panel had almost nothing to sell the recess. Going dark does three
+   jobs at once: it reads as a machined cavity, it gives the field a hard edge against the
+   silver, and the value gets far more contrast than dark-on-near-white managed. The lighting
+   is deliberately inverted from the raised controls — shadow along the TOP inner edge, a thin
+   highlight along the BOTTOM — which is what actually makes an element look sunken. */
 [data-aesthetic="y2k"] input[type="text"],
 [data-aesthetic="y2k"] input[type="number"],
 [data-aesthetic="y2k"] select,
 [data-aesthetic="y2k"] textarea,
 [data-aesthetic="y2k"] .note-editor {
-  background: linear-gradient(180deg, #ffffff 0%, #f4f7fb 100%);
-  border: 1px solid #7d8b9c;
-  color: #10161d;
-  box-shadow: inset 0 2px 4px rgba(25, 40, 60, 0.24), inset 0 -1px 0 rgba(255, 255, 255, 0.9);
+  background: linear-gradient(180deg, #0d1219 0%, #161d27 62%, #1b2430 100%);
+  border: 1px solid #5c6875;
+  color: #dfe9f5;
+  box-shadow:
+    inset 0 3px 6px rgba(0, 0, 0, 0.75),
+    inset 0 1px 0 rgba(0, 0, 0, 0.9),
+    inset 0 -1px 0 rgba(190, 208, 226, 0.30),
+    0 1px 0 rgba(255, 255, 255, 0.75);        /* outer lip catching light from above */
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.8);
+}
+[data-aesthetic="y2k"] input::placeholder,
+[data-aesthetic="y2k"] textarea::placeholder { color: #6e7d8e; }
+[data-aesthetic="y2k"] input:focus,
+[data-aesthetic="y2k"] select:focus,
+[data-aesthetic="y2k"] textarea:focus {
+  outline-color: color-mix(in srgb, var(--accent) 60%, #ffffff);
+}
+/* styles.css draws the select chevron from two gradients tinted with --text-dim, which the
+   silver-surface scope makes dark — invisible against a dark well. Restated light here, with
+   the well's own gradient re-supplied as the bottom layer. */
+[data-aesthetic="y2k"] select {
+  background-image:
+    linear-gradient(45deg, transparent 50%, #9fb2c6 50%),
+    linear-gradient(135deg, #9fb2c6 50%, transparent 50%),
+    linear-gradient(180deg, #0d1219 0%, #161d27 62%, #1b2430 100%);
+  background-position: calc(100% - 16px) center, calc(100% - 11px) center, 0 0;
+  background-size: 5px 5px, 5px 5px, 100% 100%;
+  background-repeat: no-repeat, no-repeat, no-repeat;
 }
 
 /* ---------- Reduced motion: keep the chrome, drop the glints ---------- */
 @media (prefers-reduced-motion: reduce) {
   [data-aesthetic="y2k"] .topbar .brand { animation: none; }
+  [data-aesthetic="y2k"] body::before { animation: none; opacity: 0.85; }
+  [data-aesthetic="y2k"] .topbar::after,
+  [data-aesthetic="y2k"] .tabbar::after { animation: none; opacity: 0.8; }
   [data-aesthetic="y2k"] .btn-primary::after { animation: none; opacity: 0; }
 }

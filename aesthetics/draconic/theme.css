@@ -4,13 +4,12 @@
    Aesthetic: Draconic — scorched black, bright-to-deep red, gold and ember accents.
 
    Three things beyond a normal palette swap:
-     1. Home tiles are clipped into a dragon footprint (clip-path). Because clip-path
-        also clips borders and box-shadows away, the silhouette's edge is drawn with
-        `filter: drop-shadow()` instead — drop-shadow follows the clipped outline, a
-        box-shadow would be cut off with the corners.
-     2. Hot buttons have a flame licking up from their bottom edge — two internal
-        glow layers on ::before with different periods, so the flicker never lands
-        on an obvious loop.
+     1. Home tiles carry a dragon footprint as MASKED BACKGROUND ART (claw.svg), not a
+        clip-path on the tile. The tile stays an ordinary square panel — it keeps its
+        border, shadow and normal content flow — while the claw is a ::before layer whose
+        fill is a live fire gradient, so the fire burns *inside* the silhouette.
+     2. Hot buttons have a flame rising from their bottom inner edge — two radial tongues
+        on ::before, screen-blended, animated on separate properties.
      3. Tap embers are a JS particle burst, not CSS — see fx.ts in this folder.
 
    External aesthetic — lazily loaded, everything scoped under [data-aesthetic="draconic"].
@@ -177,23 +176,33 @@
 [data-aesthetic="draconic"] .btn-good::before,
 [data-aesthetic="draconic"] .subnav button.active::before {
   content: '';
-  position: absolute; left: -10%; right: -10%; bottom: -35%;
-  height: 85%;
+  position: absolute; left: 0; right: 0; bottom: 0;
+  height: 72%;
   pointer-events: none;
+  z-index: 0;
+  /* Sits flush to the bottom edge and fades out upward, so it reads as heat rising inside the
+     button rather than a blurred shape floating over it. Two offset tongues at different
+     widths/positions keep the flicker from looking like one pulsing block. */
   background:
-    radial-gradient(60% 100% at 30% 100%, rgba(255, 210, 90, 0.85) 0%, rgba(255, 120, 20, 0.35) 45%, rgba(255, 60, 10, 0) 78%),
-    radial-gradient(55% 100% at 72% 100%, rgba(255, 160, 40, 0.75) 0%, rgba(255, 80, 15, 0.30) 48%, rgba(255, 40, 10, 0) 80%);
-  filter: blur(3px);
-  animation: drac-flame-a 1.7s ease-in-out infinite alternate,
-             drac-flame-b 2.6s ease-in-out infinite alternate;
+    radial-gradient(58% 118% at 34% 112%, rgba(255, 226, 130, 0.95) 0%, rgba(255, 150, 35, 0.50) 34%, rgba(255, 70, 12, 0.16) 62%, rgba(255, 40, 10, 0) 84%),
+    radial-gradient(50% 104% at 71% 116%, rgba(255, 186, 70, 0.85) 0%, rgba(255, 110, 22, 0.42) 38%, rgba(255, 50, 10, 0) 80%);
+  mix-blend-mode: screen;
+  filter: blur(2px);
+  transform-origin: 50% 100%;
+  animation: drac-flame-a 1.9s ease-in-out infinite alternate,
+             drac-flame-b 2.9s ease-in-out infinite alternate;
 }
+/* The two animations run at different periods so the flicker never lands on an obvious loop —
+   but they must drive DIFFERENT properties. Two keyframe sets both animating `transform` would
+   silently cancel: the later one in the `animation` list wins outright and the other's motion
+   is simply dropped. So all the transform work lives in -a, and -b only touches opacity. */
 @keyframes drac-flame-a {
-  from { transform: translateY(4%) scaleY(0.88); opacity: 0.55; }
-  to   { transform: translateY(0)  scaleY(1.12); opacity: 0.95; }
+  from { transform: scaleY(0.86) scaleX(0.95); }
+  to   { transform: scaleY(1.12) scaleX(1.06); }
 }
 @keyframes drac-flame-b {
-  from { transform: scaleX(0.94) translateX(-2%); }
-  to   { transform: scaleX(1.07) translateX(2%); }
+  from { opacity: 0.60; }
+  to   { opacity: 1; }
 }
 /* The flame is a decorative underlay — keep the label above it. */
 [data-aesthetic="draconic"] .btn-primary > *,
@@ -213,49 +222,66 @@
   box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.85);
 }
 
-/* ---------- Home tiles: dragon footprint ----------
-   Four clawed toes across the top, wide heel pad below — the label sits on the pad,
-   which is the widest part of the silhouette, so it stays fully readable.
-   clip-path removes the border and box-shadow, so the molten edge is a drop-shadow
-   filter (which follows the clipped outline) rather than a box-shadow (which wouldn't). */
+/* ---------- Home tiles: dragon footprint, lit from within ----------
+   NOT clip-path. The tile stays an ordinary square panel (so it keeps its border, shadow and
+   normal content flow) and the footprint is drawn as art on a ::before layer, masked to
+   claw.svg. Masking a layer instead of clipping the element buys two things clip-path can't:
+   the claw's edges come from bezier curves (needle tips, hooked outer digits) instead of
+   straight polygon segments, and the fill underneath the mask is a live animated gradient —
+   so the fire genuinely burns *inside* the claw rather than behind a hole cut in the tile. */
 [data-aesthetic="draconic"] .workout-cell.home-tile {
-  /* THREE splayed clawed toes over a broad heel — three reads reptilian/theropod, four read
-     as a cat paw, and thin spikes read as a crown (the first attempt's mistake). Toes are
-     thick digits tapering to a claw, not spikes. The heel stays wide through y≈90% so the
-     section label has real width to sit on. */
-  clip-path: polygon(
-    11% 34%, 14% 18%, 21% 6%, 28% 18%, 30% 34%,   /* left toe */
-    36% 38%,                                       /* web notch */
-    40% 20%, 50% 0%, 60% 20%, 64% 38%,             /* middle toe (longest) */
-    70% 34%,                                       /* web notch */
-    72% 18%, 79% 6%, 86% 18%, 89% 34%,             /* right toe */
-    92% 52%, 90% 72%, 82% 90%, 66% 99%,            /* heel pad */
-    34% 99%, 18% 90%, 10% 72%, 8% 52%
-  );
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
   background:
-    radial-gradient(70% 55% at 50% 96%, rgba(255, 110, 20, 0.40) 0%, rgba(255, 60, 10, 0) 70%),
-    linear-gradient(180deg, #3d1214 0%, #21090b 52%, #150607 100%);
-  border: none;
-  border-radius: 0;
-  box-shadow: none;
-  filter: drop-shadow(0 0 3px rgba(255, 150, 40, 0.85))
-          drop-shadow(0 0 12px rgba(255, 70, 15, 0.45));
-  /* Push content down clear of the toes (which occupy the top ~38%) and in from the edges. */
-  padding: 32% 8% 12%;
-  transition: filter 160ms ease-out;
+    radial-gradient(80% 60% at 50% 108%, rgba(255, 90, 15, 0.22) 0%, rgba(255, 60, 10, 0) 70%),
+    linear-gradient(180deg, #2c1013 0%, #190809 55%, #120607 100%);
+  border: 1px solid #5e2020;
+  box-shadow: var(--drac-rim), inset 0 1px 0 rgba(255, 150, 70, 0.10);
+  transition: box-shadow 160ms ease-out;
+}
+[data-aesthetic="draconic"] .workout-cell.home-tile::before {
+  content: '';
+  position: absolute; inset: 3% 5% 3%;
+  z-index: 0;
+  pointer-events: none;
+  -webkit-mask-image: url("claw.svg"); mask-image: url("claw.svg");
+  -webkit-mask-size: contain;         mask-size: contain;
+  -webkit-mask-repeat: no-repeat;     mask-repeat: no-repeat;
+  -webkit-mask-position: center;      mask-position: center;
+  /* Hottest at the base, cooling upward — but the cool end has to stay a RICH dark red, not
+     near-black. Fading to #3f0708 dropped the digit tips below the tile's own background and
+     the claw visibly lost its toes. */
+  background:
+    radial-gradient(96% 112% at 50% 102%,
+      #ffe89e 0%, #ffb238 14%, #ff7a16 28%, #f0430e 46%, #cc2110 66%, #a3160f 84%, #86110f 100%);
+  animation: drac-claw-fire 3.2s ease-in-out infinite alternate;
+}
+/* Brightness/saturation only — cheap, and it reads as the fire breathing rather than moving. */
+@keyframes drac-claw-fire {
+  from { filter: brightness(0.86) saturate(1) drop-shadow(0 0 5px rgba(255, 90, 15, 0.45)); }
+  to   { filter: brightness(1.22) saturate(1.2) drop-shadow(0 0 13px rgba(255, 130, 30, 0.8)); }
 }
 [data-aesthetic="draconic"] .workout-cell.home-tile:active {
-  filter: drop-shadow(0 0 5px rgba(255, 200, 90, 1))
-          drop-shadow(0 0 20px rgba(255, 110, 20, 0.7));
+  box-shadow: var(--drac-rim), inset 0 0 22px rgba(255, 120, 25, 0.45),
+              inset 0 1px 0 rgba(255, 180, 90, 0.25);
+}
+[data-aesthetic="draconic"] .workout-cell.home-tile:active::before {
+  filter: brightness(1.55) saturate(1.3) drop-shadow(0 0 14px rgba(255, 160, 50, 0.9));
+}
+/* Icon and label ride above the burning claw. */
+[data-aesthetic="draconic"] .workout-cell.home-tile .cell-icon,
+[data-aesthetic="draconic"] .workout-cell.home-tile .wname {
+  position: relative;
+  z-index: 1;
 }
 [data-aesthetic="draconic"] .workout-cell.home-tile .wname {
-  color: var(--accent);
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.95);
-  letter-spacing: 0.01em;
-  font-size: 11px;   /* the heel pad is narrower than a square tile — buys a line back */
-  line-height: 1.15;
+  color: #fff4d6;
+  /* Doubled shadow: the claw behind it runs from near-black to bright ember, so one soft
+     shadow isn't enough to hold the label legible across both. */
+  text-shadow: 0 1px 3px #000, 0 0 10px rgba(0, 0, 0, 0.95);
+  letter-spacing: 0.02em;
 }
-[data-aesthetic="draconic"] .workout-cell.home-tile .cell-icon { margin-top: 0; }
 
 /* ---------- Reduced motion: keep the heat, drop the movement ----------
    (the JS ember burst checks the same query before spawning — see fx.ts) */
@@ -266,5 +292,9 @@
   [data-aesthetic="draconic"] .subnav button.active::before {
     animation: none;
     opacity: 0.8;
+  }
+  [data-aesthetic="draconic"] .workout-cell.home-tile::before {
+    animation: none;
+    filter: brightness(1.05) drop-shadow(0 0 6px rgba(255, 110, 20, 0.5));
   }
 }
