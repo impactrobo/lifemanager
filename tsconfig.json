@@ -1,0 +1,26 @@
+{
+  // Loose type-checking pass over the app. We do NOT compile anything — `tsc` here only
+  // reports type errors (`npm run typecheck`). The shipped code is still plain JS loaded as a
+  // classic <script>. See docs/ARCHITECTURE.md > "Type checking".
+  //
+  // Deliberately permissive for now: `strict` and `noImplicitAny` are off so a 7.9k-line
+  // legacy file doesn't drown the signal. Tighten incrementally. New `aesthetics/**/*.ts` FX
+  // modules are held to a higher bar via their own settings below is not possible in one
+  // tsconfig, so treat lint discipline there as a review convention (see ARCHITECTURE.md).
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "strict": false,
+    "noImplicitAny": false,
+    "noImplicitThis": false,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "types": []
+  },
+  "include": ["app.js", "types/**/*.d.ts", "aesthetics/**/*.ts"]
+}

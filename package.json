@@ -1,0 +1,15 @@
+{
+  "name": "lifemanager",
+  "version": "1.0.0",
+  "private": true,
+  "description": "LIFEMan.EXE — single-page personal life-tracking web app (index.html + app.js).",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "node tests/run_all.js",
+    "serve": "node tests/_serve.js"
+  },
+  "devDependencies": {
+    "playwright": "^1.49.0",
+    "typescript": "^5.7.0"
+  }
+}
