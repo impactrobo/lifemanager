@@ -4,9 +4,9 @@
   "private": true,
   "description": "LIFEMan.EXE — single-page personal life-tracking web app (index.html + app.js).",
   "scripts": {
-    "typecheck": "tsc -p tsconfig.json",
-    "test": "node tests/run_all.js",
-    "serve": "node tests/_serve.js"
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.fx.json --noEmit",
+    "build:fx": "tsc -p tsconfig.fx.json",
+    "test": "node tests/run_all.js"
   },
   "devDependencies": {
     "playwright": "^1.49.0",

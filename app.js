@@ -134,6 +134,13 @@ const AESTHETIC_ACCENTS = {
     acid:        { label: 'Acid Chartreuse',   value: '#d4ff00' },
     sludge:      { label: 'Sludge Lime',       value: '#b8d936' },
   },
+  draconic: {
+    ember:   { label: 'Ember',      value: '#ffb020' },
+    molten:  { label: 'Molten Gold',value: '#ffd24a' },
+    scorch:  { label: 'Scorch',     value: '#ff6b1a' },
+    blood:   { label: 'Wyrm Blood', value: '#e02617' },
+    brass:   { label: 'Old Brass',  value: '#c98a2b' },
+  },
   y2k: {
     cyan:    { label: 'Ice Cyan',   value: '#4de3ff' },
     magenta: { label: 'Oil Slick',  value: '#ff4dd8' },
@@ -187,6 +194,9 @@ const AESTHETICS = {
   // that this is worth it; the original twelve stay inline. See applyAestheticStylesheet().
   frutigeraero: { label: 'Frutiger Aero', desc: 'Mid-2000s optimism — sky-to-grass gradient, glossy Aero glass, drifting bubbles.', group: 'Maximalist', external: true },
   y2k:          { label: 'Y2K Chrome',    desc: 'Liquid metal on near-black — mirror-chrome bevels, oil-slick iridescence, travelling glints.', group: 'Maximalist', external: true },
+  // `fx: true` additionally loads aesthetics/draconic/fx.js (compiled from fx.ts) for the
+  // tap-ember particle burst — see applyAestheticFX().
+  draconic:     { label: 'Draconic',      desc: 'Scorched black and dragonfire — gilded scale plate, footprint tiles, embers on every hot tap.', group: 'Maximalist', external: true, fx: true },
 };
 const AESTHETIC_GROUP_ORDER = ['Maximalist', 'Vibrant', 'Contrast', 'Light'];
 // Which groups are expanded in the settings panel right now — session-only (not persisted),
@@ -214,9 +224,41 @@ function applyAestheticStylesheet(key) {
   // Re-setting an identical href would re-trigger a load and flash the theme; skip that.
   if (link.getAttribute('href') !== href) link.setAttribute('href', href);
 }
+// Some aesthetics need behaviour CSS can't express (particles, pointer-reactive effects). Those
+// declare `fx: true` and ship aesthetics/<key>/fx.js — a real ES module, compiled from fx.ts by
+// `npm run build:fx` — default-exporting an AestheticFX ({key, init, destroy}). It's imported
+// lazily the first time that aesthetic is chosen and torn down before switching away, so a
+// theme's animation loop can never outlive the theme. See docs/ARCHITECTURE.md.
+let ACTIVE_FX = null;   // { key, mod } for the module currently running, or null
+let FX_LOAD_SEQ = 0;    // guards against a slow import landing after another switch
+function applyAestheticFX(key) {
+  const meta = AESTHETICS[key];
+  const wants = !!(meta && meta.fx);
+  if (ACTIVE_FX && ACTIVE_FX.key !== key) {
+    try { ACTIVE_FX.mod.destroy(); } catch (e) { console.warn('FX destroy failed', e); }
+    ACTIVE_FX = null;
+  }
+  if (!wants || (ACTIVE_FX && ACTIVE_FX.key === key)) return;
+  const seq = ++FX_LOAD_SEQ;
+  import(`./aesthetics/${key}/fx.js`).then((m) => {
+    const fx = m && m.default;
+    // Bail if the user has moved on since, or the module isn't shaped like the contract.
+    if (seq !== FX_LOAD_SEQ || currentAesthetic() !== key) return;
+    if (!fx || typeof fx.init !== 'function' || typeof fx.destroy !== 'function') {
+      console.warn(`aesthetics/${key}/fx.js does not export an AestheticFX`);
+      return;
+    }
+    fx.init(document.body); // <body>, not #app — #app.innerHTML is replaced on every render
+    ACTIVE_FX = { key, mod: fx };
+  }).catch(() => {
+    // No module, offline, or a file:// page (ES modules can't load from file://). The theme is
+    // still fully usable — it just renders without its runtime effects.
+  });
+}
 function applyAesthetic() {
   const key = currentAesthetic();
   applyAestheticStylesheet(key);
+  applyAestheticFX(key);
   document.documentElement.dataset.aesthetic = key;
   applyAccentColor(); // every aesthetic now owns its own accent choice
 }

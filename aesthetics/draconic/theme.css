@@ -1,0 +1,270 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&display=swap');
+
+/* ============================================================================
+   Aesthetic: Draconic — scorched black, bright-to-deep red, gold and ember accents.
+
+   Three things beyond a normal palette swap:
+     1. Home tiles are clipped into a dragon footprint (clip-path). Because clip-path
+        also clips borders and box-shadows away, the silhouette's edge is drawn with
+        `filter: drop-shadow()` instead — drop-shadow follows the clipped outline, a
+        box-shadow would be cut off with the corners.
+     2. Hot buttons have a flame licking up from their bottom edge — two internal
+        glow layers on ::before with different periods, so the flicker never lands
+        on an obvious loop.
+     3. Tap embers are a JS particle burst, not CSS — see fx.ts in this folder.
+
+   External aesthetic — lazily loaded, everything scoped under [data-aesthetic="draconic"].
+   Picker swatch `.aesthetic-preview-draconic` lives in styles.css (the picker renders
+   under a different theme). .topbar/.tabbar positioning is never overridden.
+   ============================================================================ */
+
+:root[data-aesthetic="draconic"] {
+  --bg: #0a0405;
+  --surface: #1c0b0d;
+  --surface2: #2b1012;
+  --border: #7a2422;
+  --border-soft: #431618;
+  --text: #ffeada;
+  --text-dim: #d29a7c;
+  --text-faint: #9c6552;
+  --accent: #ffb020;
+  --accent-dim: color-mix(in srgb, var(--accent) 55%, var(--border));
+  --accent-soft: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  /* Jade reads as a deliberate counter-hue against all this red rather than fighting it —
+     a green-on-red clash is exactly what makes completion states legible here. */
+  --good: #3fbf7f;
+  --good-soft: #10281f;
+  --bad: #ff2d1f;
+  --bad-soft: #3a0d0a;
+  --warn: #ff6b1a;
+  --reset-border: #ffeada;
+  --reset-bg: #3a1416;
+  --reset-text: #ffeada;
+  --myo: #b04dff;
+  --goldenrod: #c98a2b;
+  --savings: #4a7fd4;
+  --savings-soft: color-mix(in srgb, var(--savings) 18%, var(--surface));
+  --font-head: 'Cinzel', Georgia, serif;
+  --font-body: 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --radius: 6px;
+
+  --drac-ember: linear-gradient(180deg, #ff3b12 0%, #c4160f 46%, #7d0d0e 100%);
+  --drac-scale: linear-gradient(180deg, #2a0f11 0%, #1b0a0c 50%, #240d0f 100%);
+  --drac-rim: 0 0 0 1px rgba(255, 140, 40, 0.16), 0 3px 10px rgba(0, 0, 0, 0.8);
+}
+
+/* ---------- Backdrop: cooled lava — black with a forge glow rising from the floor ---------- */
+[data-aesthetic="draconic"] body { background-color: #0a0405; }
+[data-aesthetic="draconic"] body::after {
+  content: '';
+  position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background-image:
+    radial-gradient(120% 55% at 50% 104%, rgba(255, 90, 20, 0.30) 0%, rgba(10, 4, 5, 0) 60%),
+    radial-gradient(80% 40% at 50% -8%, rgba(150, 20, 20, 0.24) 0%, rgba(10, 4, 5, 0) 62%),
+    /* dragon-scale texture: offset rows of soft arcs, kept very low contrast */
+    radial-gradient(circle at 50% 118%, rgba(255, 120, 60, 0.035) 0 9px, rgba(0,0,0,0) 10px),
+    linear-gradient(180deg, #12070800 0%, #0a0405 60%);
+  background-size: auto, auto, 26px 15px, auto;
+}
+[data-aesthetic="draconic"] #app { position: relative; z-index: 1; }
+
+/* ---------- Panels: charred scale plate ---------- */
+[data-aesthetic="draconic"] .panel,
+[data-aesthetic="draconic"] .entry-card,
+[data-aesthetic="draconic"] .note-card,
+[data-aesthetic="draconic"] .chart-wrap,
+[data-aesthetic="draconic"] .modal-box,
+[data-aesthetic="draconic"] .aesthetic-card {
+  background: var(--drac-scale);
+  border: 1px solid var(--border-soft);
+  box-shadow: var(--drac-rim), inset 0 1px 0 rgba(255, 150, 70, 0.10);
+}
+[data-aesthetic="draconic"] .panel-done {
+  background: linear-gradient(180deg, #12281f 0%, #0d1e18 100%);
+  border-color: color-mix(in srgb, var(--good) 45%, #0d1e18);
+}
+
+/* ---------- Headings: gilded ---------- */
+[data-aesthetic="draconic"] .section-title {
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  text-shadow: 0 0 14px rgba(255, 140, 30, 0.45), 0 1px 0 rgba(0, 0, 0, 0.8);
+}
+[data-aesthetic="draconic"] .topbar .brand {
+  letter-spacing: 0.05em;
+  text-shadow: 0 0 16px rgba(255, 120, 20, 0.5), 0 1px 0 #000;
+}
+
+/* ---------- Bars ---------- */
+[data-aesthetic="draconic"] .topbar {
+  background: linear-gradient(180deg, #21090b 0%, #140607 100%);
+  border-bottom: 1px solid #55191a;
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.8);
+  z-index: 20;
+}
+[data-aesthetic="draconic"] .tabbar {
+  background: linear-gradient(180deg, #140607 0%, #21090b 100%);
+  border-top: 1px solid #55191a;
+  /* the forge glow leaking up through the bottom bar */
+  box-shadow: 0 -6px 22px rgba(255, 80, 20, 0.16), inset 0 1px 0 rgba(255, 140, 60, 0.14);
+  z-index: 30;
+}
+[data-aesthetic="draconic"] .tabbar button.active {
+  text-shadow: 0 0 12px color-mix(in srgb, var(--accent) 75%, transparent);
+}
+[data-aesthetic="draconic"] .toast { z-index: 60; }
+
+/* ---------- Buttons ----------
+   ORDER MATTERS HERE. `[data-aesthetic] .btn` and `[data-aesthetic] .btn-primary` have
+   identical specificity (0,2,0), so whichever is written last wins — and .btn-primary also
+   carries .btn. The neutral base must therefore come FIRST; the coloured variants after it.
+   (Getting this backwards silently flattened every hot button to the neutral fill.)
+   The variants also have to be restated here at all, because this file's `.btn` outranks
+   styles.css's own `.btn-danger`/`.btn-good`. */
+[data-aesthetic="draconic"] .btn {
+  background: linear-gradient(180deg, #33161a 0%, #1d0b0d 100%);
+  border: 1px solid #5e2020;
+  color: var(--text);
+}
+[data-aesthetic="draconic"] .icon-btn {
+  background: linear-gradient(180deg, #2c1316 0%, #1a0a0c 100%);
+  border: 1px solid #5e2020;
+}
+[data-aesthetic="draconic"] .subnav button {
+  background: linear-gradient(180deg, #2c1316 0%, #1a0a0c 100%);
+  border: 1px solid #5e2020;
+}
+[data-aesthetic="draconic"] .btn-primary {
+  background: var(--drac-ember);
+  border-color: #ff8a2b;
+  color: #fff3e2;
+  text-shadow: 0 1px 3px rgba(80, 10, 0, 0.9);
+  font-weight: 700;
+}
+[data-aesthetic="draconic"] .btn-danger {
+  background: linear-gradient(180deg, #ff2d1f 0%, #a3100c 100%);
+  border-color: #ff6a4a; color: #fff3e2; text-shadow: 0 1px 3px rgba(60, 5, 0, 0.9);
+}
+[data-aesthetic="draconic"] .btn-good {
+  background: linear-gradient(180deg, #3fbf7f 0%, #146b46 100%);
+  border-color: #6fe0aa; color: #04231a; text-shadow: 0 1px 2px rgba(255, 255, 255, 0.25);
+}
+[data-aesthetic="draconic"] .subnav button.active {
+  background: var(--drac-ember);
+  border-color: #ff8a2b;
+  color: #fff3e2;
+}
+[data-aesthetic="draconic"] .btn-ghost {
+  background: none; border-color: transparent; color: var(--text-dim);
+}
+
+/* ---------- Hot buttons: flame licking up from the bottom edge ----------
+   Two overlaid glows on one pseudo-element with different periods so the flicker
+   doesn't read as a single obvious loop. `overflow:hidden` keeps the flame inside
+   the button; `isolation` stops the glow blending with whatever is behind it. */
+[data-aesthetic="draconic"] .btn-primary,
+[data-aesthetic="draconic"] .btn-danger,
+[data-aesthetic="draconic"] .btn-good,
+[data-aesthetic="draconic"] .subnav button.active {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+[data-aesthetic="draconic"] .btn-primary::before,
+[data-aesthetic="draconic"] .btn-danger::before,
+[data-aesthetic="draconic"] .btn-good::before,
+[data-aesthetic="draconic"] .subnav button.active::before {
+  content: '';
+  position: absolute; left: -10%; right: -10%; bottom: -35%;
+  height: 85%;
+  pointer-events: none;
+  background:
+    radial-gradient(60% 100% at 30% 100%, rgba(255, 210, 90, 0.85) 0%, rgba(255, 120, 20, 0.35) 45%, rgba(255, 60, 10, 0) 78%),
+    radial-gradient(55% 100% at 72% 100%, rgba(255, 160, 40, 0.75) 0%, rgba(255, 80, 15, 0.30) 48%, rgba(255, 40, 10, 0) 80%);
+  filter: blur(3px);
+  animation: drac-flame-a 1.7s ease-in-out infinite alternate,
+             drac-flame-b 2.6s ease-in-out infinite alternate;
+}
+@keyframes drac-flame-a {
+  from { transform: translateY(4%) scaleY(0.88); opacity: 0.55; }
+  to   { transform: translateY(0)  scaleY(1.12); opacity: 0.95; }
+}
+@keyframes drac-flame-b {
+  from { transform: scaleX(0.94) translateX(-2%); }
+  to   { transform: scaleX(1.07) translateX(2%); }
+}
+/* The flame is a decorative underlay — keep the label above it. */
+[data-aesthetic="draconic"] .btn-primary > *,
+[data-aesthetic="draconic"] .btn-danger > *,
+[data-aesthetic="draconic"] .btn-good > *,
+[data-aesthetic="draconic"] .subnav button.active > * { position: relative; z-index: 1; }
+
+/* ---------- Inputs ---------- */
+[data-aesthetic="draconic"] input[type="text"],
+[data-aesthetic="draconic"] input[type="number"],
+[data-aesthetic="draconic"] select,
+[data-aesthetic="draconic"] textarea,
+[data-aesthetic="draconic"] .note-editor {
+  background: linear-gradient(180deg, #120607 0%, #1d0b0d 100%);
+  border: 1px solid #5e2020;
+  color: var(--text);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.85);
+}
+
+/* ---------- Home tiles: dragon footprint ----------
+   Four clawed toes across the top, wide heel pad below — the label sits on the pad,
+   which is the widest part of the silhouette, so it stays fully readable.
+   clip-path removes the border and box-shadow, so the molten edge is a drop-shadow
+   filter (which follows the clipped outline) rather than a box-shadow (which wouldn't). */
+[data-aesthetic="draconic"] .workout-cell.home-tile {
+  /* THREE splayed clawed toes over a broad heel — three reads reptilian/theropod, four read
+     as a cat paw, and thin spikes read as a crown (the first attempt's mistake). Toes are
+     thick digits tapering to a claw, not spikes. The heel stays wide through y≈90% so the
+     section label has real width to sit on. */
+  clip-path: polygon(
+    11% 34%, 14% 18%, 21% 6%, 28% 18%, 30% 34%,   /* left toe */
+    36% 38%,                                       /* web notch */
+    40% 20%, 50% 0%, 60% 20%, 64% 38%,             /* middle toe (longest) */
+    70% 34%,                                       /* web notch */
+    72% 18%, 79% 6%, 86% 18%, 89% 34%,             /* right toe */
+    92% 52%, 90% 72%, 82% 90%, 66% 99%,            /* heel pad */
+    34% 99%, 18% 90%, 10% 72%, 8% 52%
+  );
+  background:
+    radial-gradient(70% 55% at 50% 96%, rgba(255, 110, 20, 0.40) 0%, rgba(255, 60, 10, 0) 70%),
+    linear-gradient(180deg, #3d1214 0%, #21090b 52%, #150607 100%);
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  filter: drop-shadow(0 0 3px rgba(255, 150, 40, 0.85))
+          drop-shadow(0 0 12px rgba(255, 70, 15, 0.45));
+  /* Push content down clear of the toes (which occupy the top ~38%) and in from the edges. */
+  padding: 32% 8% 12%;
+  transition: filter 160ms ease-out;
+}
+[data-aesthetic="draconic"] .workout-cell.home-tile:active {
+  filter: drop-shadow(0 0 5px rgba(255, 200, 90, 1))
+          drop-shadow(0 0 20px rgba(255, 110, 20, 0.7));
+}
+[data-aesthetic="draconic"] .workout-cell.home-tile .wname {
+  color: var(--accent);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.95);
+  letter-spacing: 0.01em;
+  font-size: 11px;   /* the heel pad is narrower than a square tile — buys a line back */
+  line-height: 1.15;
+}
+[data-aesthetic="draconic"] .workout-cell.home-tile .cell-icon { margin-top: 0; }
+
+/* ---------- Reduced motion: keep the heat, drop the movement ----------
+   (the JS ember burst checks the same query before spawning — see fx.ts) */
+@media (prefers-reduced-motion: reduce) {
+  [data-aesthetic="draconic"] .btn-primary::before,
+  [data-aesthetic="draconic"] .btn-danger::before,
+  [data-aesthetic="draconic"] .btn-good::before,
+  [data-aesthetic="draconic"] .subnav button.active::before {
+    animation: none;
+    opacity: 0.8;
+  }
+}

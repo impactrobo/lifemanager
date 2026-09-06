@@ -81,23 +81,36 @@ Non-obvious rules (both enforced by `test_aesthetic_external.js`):
 
 Full add-an-aesthetic checklist is in `docs/ARCHITECTURE.md`.
 
-## Aesthetic FX modules (visual / animation effects per aesthetic)
-As aesthetics get more maximalist (Y2K, Frutiger Aero, Metalheart, …), effects that CSS +
-`@keyframes` can't do (canvas shimmer, particles, pointer parallax) go in a **TypeScript**
-module per aesthetic, not inline in `app.js`:
+## Aesthetic FX modules (runtime effects per aesthetic)
+Effects CSS can't do (particles, canvas, pointer parallax) live in a **real TypeScript module**
+per aesthetic. `aesthetics/draconic/` is the reference implementation.
 
 ```
-aesthetics/<key>/fx.ts   default-exports an object implementing AestheticFX (see types/app.d.ts)
+aesthetics/<key>/fx.ts   source — default-exports an AestheticFX (see types/app.d.ts)
+aesthetics/<key>/fx.js   COMMITTED build output — this is what the browser loads
 ```
 
-Contract: `init(root)` starts the effect, `destroy()` stops **everything** it started (every
-rAF loop, listener, timer) — the aesthetic switcher calls `destroy()` on the outgoing theme
-before `init()` on the incoming one, so a leak here bleeds into the next theme. Respect
-`matchMedia('(prefers-reduced-motion: reduce)')` and pause on `document.hidden`. Pure
-token/`@keyframes` aesthetics need no module — this is only for runtime behavior. New `.ts`
-FX modules are held to a higher bar than legacy `app.js` (write them clean under strict-ish
-types; the shared tsconfig is loose only because of `app.js`). Purely CSS-driven touches
-(e.g. the Hunny bee) stay in the `<style>` block in `index.html` as today.
+- The aesthetic sets `fx: true` in its `AESTHETICS` entry; `applyAestheticFX()` lazily
+  `import()`s the module on selection and `destroy()`s it before switching away.
+- **This is the one compiled part of the codebase.** `npm run build:fx` (tsconfig.fx.json,
+  `strict: true`) emits `fx.js` next to `fx.ts`; **commit the .js** — GitHub Pages does no
+  build. `npm run typecheck` runs both configs. `test_aesthetic_fx.js` recompiles to a temp
+  dir and byte-compares, so a stale `fx.js` fails the suite rather than silently shipping.
+- Contract: `init(root)` starts it, `destroy()` releases **everything** — every rAF handle,
+  listener and timer — because a leak keeps burning battery under whatever theme comes next.
+  Make the rAF loop demand-driven (stop when there's nothing to animate), honour
+  `prefers-reduced-motion`, and pause on `document.hidden`.
+- Append overlays to `<body>`, never `#app` — `#app.innerHTML` is replaced on every render.
+- ES modules can't load over `file://`, so the module is inert in the `file://`-based tests
+  (the import failure is caught and the theme still renders). FX tests must serve over HTTP.
+
+Purely CSS effects (the Hunny bee, Y2K's glints, Draconic's button flames) need no module.
+
+### CSS gotcha that has bitten twice
+`[data-aesthetic="x"] .btn` and `[data-aesthetic="x"] .btn-primary` have **identical
+specificity** (0,2,0), and `.btn-primary` also carries `.btn` — so source order decides. Write
+the neutral `.btn` rule **first**, coloured variants after. Also: a theme's own `.btn` outranks
+`styles.css`'s `.btn-danger`/`.btn-good`, so if you style `.btn` you must restate those too.
 
 ## Known issues (fixed)
 - ~~`exportData()` was broken outside the Claude Artifact runtime~~ — **fixed.** It used to

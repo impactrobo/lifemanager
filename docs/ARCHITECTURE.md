@@ -40,12 +40,46 @@ signal. Ambient types live in `types/app.d.ts`:
 
 ## Aesthetic FX modules
 
-Runtime visual effects that CSS + `@keyframes` can't express (canvas, particles, parallax)
-go in `aesthetics/<key>/fx.ts` — a TypeScript module default-exporting an `AestheticFX`
-(`{ key, init(root), destroy() }`). `destroy()` must stop everything `init()` started; the
-aesthetic switcher runs `destroy()` on the old theme before `init()` on the new one. Respect
-`prefers-reduced-motion` and pause on `document.hidden`. Token/`@keyframes`-only aesthetics
-(the majority today, e.g. the Hunny bee) need no module and stay in the `<style>` block.
+Runtime effects CSS can't express (canvas, particles, parallax) go in `aesthetics/<key>/fx.ts`
+— a TypeScript module default-exporting an `AestheticFX` (`{ key, init(root), destroy() }`) —
+enabled by `fx: true` on the aesthetic's registry entry. `aesthetics/draconic/` is the
+reference implementation (tap-triggered ember particles).
+
+**This is the only compiled code in the repo.** `npm run build:fx` uses `tsconfig.fx.json`
+(`strict: true`, stricter than `app.js`'s loose `checkJs`) and emits `fx.js` beside `fx.ts`.
+That `.js` is committed, because GitHub Pages runs no build. `npm run typecheck` checks both
+configs, and `test_aesthetic_fx.js` recompiles into a temp dir and byte-compares against the
+committed output, so a forgotten `build:fx` fails the suite instead of shipping stale code.
+
+Rules that matter:
+- `destroy()` must release every rAF handle, listener and timer. The switcher calls it before
+  `init()`-ing the next theme, so anything left running burns battery under a theme that never
+  asked for it. `test_aesthetic_fx.js` proves this by tapping a trigger after `destroy()` and
+  asserting nothing happens.
+- Keep the rAF loop demand-driven — start on demand, stop when there's nothing left to animate.
+- Mount overlays on `<body>`, not `#app` (`#app.innerHTML` is replaced on every render).
+- Honour `prefers-reduced-motion`; pause on `document.hidden`.
+- ES modules can't be imported from `file://`, so the module simply doesn't load in the
+  `file://`-based tests (the import rejection is caught, theme still renders). FX tests serve
+  over HTTP — see `test_aesthetic_fx.js`.
+
+Token/`@keyframes`-only aesthetics (the majority — the Hunny bee, Y2K's glints, Draconic's
+button flames) need no module.
+
+### Specificity trap when restyling buttons in a theme
+
+`[data-aesthetic="x"] .btn` and `[data-aesthetic="x"] .btn-primary` are both (0,2,0) and
+`.btn-primary` also carries `.btn`, so **source order decides the winner**. Put the neutral
+`.btn` rule first and the coloured variants after it. And because a theme's `.btn` outranks
+`styles.css`'s own `.btn-danger`/`.btn-good` (0,1,0), styling `.btn` in a theme means you must
+restate those variants there too or they lose their semantic colour.
+
+### Clipping a component into a custom silhouette
+
+`clip-path` (e.g. Draconic's dragon-footprint home tiles) also clips away the element's border
+and `box-shadow`. Draw the silhouette's edge with `filter: drop-shadow(...)` instead — that
+follows the clipped outline. Add generous `padding` to keep content out of the clipped regions,
+and check the narrowest part of the shape against the longest label the component can hold.
 
 ## State & persistence
 
@@ -289,13 +323,15 @@ not part of the maintained suite.)
 1. Edit `index.html` (shell/CSS) and/or `app.js` (logic) directly — those two files are the
    source of truth.
 2. `node --check app.js` for a fast syntax check, then `npm run typecheck` (must stay clean).
-3. `npm test` — the full suite. Screenshot-verify anything visual the tests don't assert on
+3. If you touched any `aesthetics/*/fx.ts`, run `npm run build:fx` and commit the emitted
+   `fx.js` — GitHub Pages does no build. (`npm test` fails if you forget.)
+4. `npm test` — the full suite. Screenshot-verify anything visual the tests don't assert on
    (a new icon, a color change, a layout fix) with a throwaway Playwright script at ≈390px.
-4. **Bump `<meta name="app-build">` in `index.html`** if you changed `index.html` / `app.js` /
+5. **Bump `<meta name="app-build">` in `index.html`** if you changed `index.html` / `app.js` /
    `styles.css` / an aesthetic. This is what makes installed PWAs (esp. iOS home-screen) pick
    up the deploy — `autoUpdate()` in app.js re-fetches the page on launch + foreground and
    reloads when the stamp moves. Only touch `CACHE_NAME` in `sw.js` if you removed a file from
    `APP_SHELL` or need to force-purge the offline cache — it is not a normal deploy step.
-5. Publish: commit and push — GitHub Pages serves `index.html` + `app.js` + `styles.css` from
+6. Publish: commit and push — GitHub Pages serves `index.html` + `app.js` + `styles.css` from
    the repo root. (The old publish-as-Claude-Artifact flow is retired now that GitHub Pages is
    the deploy target. If you ever do republish an Artifact, read it first to check freshness.)

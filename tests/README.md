@@ -21,7 +21,9 @@ see `docs/ARCHITECTURE.md` > "Type checking".
 `test_state_persistence.js` (added with the `app.js` split), `test_aesthetic_external.js`
 (the lazy-loaded maximalist-aesthetic mechanism), and `test_auto_update.js` (the
 `<meta name="app-build">` self-update — this one runs its own tiny HTTP server since
-`fetch()` doesn't work over `file://`).
+`fetch()` doesn't work over `file://`), and `test_aesthetic_fx.js` (the AestheticFX runtime
+module — also HTTP-served, since ES modules can't be imported from `file://`; it additionally
+fails if a committed `fx.js` is stale relative to its `fx.ts`).
 
 (Note: ARCHITECTURE.md also mentions old `test_meso*.js` / `test_life.js` / `test_regress.js`
 files as stale/retired — those are explicitly NOT part of this list, and don't exist here.)

@@ -22,5 +22,7 @@
     "forceConsistentCasingInFileNames": true,
     "types": []
   },
-  "include": ["app.js", "types/**/*.d.ts", "aesthetics/**/*.ts"]
+  // aesthetics/**/*.ts is deliberately excluded — tsconfig.fx.json owns those under stricter
+  // settings and is the config that emits their .js. Both run under `npm run typecheck`.
+  "include": ["app.js", "types/**/*.d.ts"]
 }
