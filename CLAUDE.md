@@ -28,21 +28,58 @@ the doc.
   a plain `Blob` + temporary `<a download>` link, which works in effectively every modern
   browser. Verified in `test_export.js` via a real captured Playwright download event.
 
+## Cloud Sync (opt-in, added post-launch)
+Optional cross-device sync via Firebase — completely inert until someone taps "Enable Cloud
+Sync" in Settings. Until then: zero network calls, zero login prompts, behaves exactly like
+before. This preserves the local-first philosophy in PROJECT_OVERVIEW.md; sync is an addition,
+not a requirement.
+
+- **Auth:** Google popup sign-in or passwordless email-link, both via Firebase Auth (compat SDK,
+  loaded via `<script src="...">` from Google's CDN — no bundler, matches the Chart.js pattern
+  already in the file).
+- **Data:** one Firestore document per user at `users/{uid}`, holding the whole `STATE` blob as
+  a JSON string plus its own `updatedAt`. See `firestore.rules` — each user can only read/write
+  their own document; this is enforced server-side by Firestore, not just in the app's JS.
+- **Sync model:** simple last-write-wins, comparing `STATE.updatedAt` (bumped on every
+  `saveState()`) against the remote doc's `updatedAt`. Right level of complexity for one
+  person's data synced across their own couple of devices — not built for multi-editor conflict
+  resolution.
+- **Offline:** Firestore's own offline persistence (`enablePersistence`) means sync keeps
+  working (queuing writes, reading last-synced data) with no connection, syncing automatically
+  once back online.
+- **Sharing this app with others:** works today with zero changes needed — anyone who opens the
+  public URL gets their own fully independent, private, local-only instance (everything's
+  `localStorage`-based). Cloud Sync is a purely optional feature *you* opted into for your own
+  devices; nobody else sees a login screen unless they also tap "Enable Cloud Sync" and sign in
+  with their own account, which gives them their own isolated `users/{their-uid}` document.
+- **What's NOT yet verified for real:** this was built and tested in a sandboxed environment
+  with no network route to Firebase's servers at all — every test around it
+  (`test_cloud_sync.js`) verifies the client-side logic and graceful degradation, but the actual
+  Google sign-in popup, email-link flow, and real Firestore push/pull have only been verified by
+  reasoning about the SDK's documented behavior, not by an actual live test. First priority after
+  deploying: sign in for real on one device, log something, hit "Sync Now" on a second device,
+  confirm it actually shows up.
+- **One-time Firebase console setup still needed:** paste `firestore.rules`' contents into
+  Firestore's Rules tab (Firebase console), and add the deployed domain (e.g.
+  `impactrobo.github.io`) to Authentication → Settings → Authorized domains, or the email-link
+  sign-in redirect won't be allowed to complete.
+
 ## Testing
 Canonical test files live in `tests/` as individual `test_*.js` Node scripts using Playwright
 directly (no test runner) — run each with `node tests/test_whatever.js`; nonzero exit = failure.
 See `tests/README.md` for setup.
 
-**All 16 of 16 canonical tests are written and passing** (as of this commit, run together in
-one pass with no failures): `test_home.js`, `test_aesthetics.js`, `test_full_flow.js`,
-`test_resttimer.js`, `test_notes.js`, `test_budget.js`, `test_calendar.js`, `test_export.js`,
+**All 16 of 16 original canonical tests are written and passing**, plus one new one added
+alongside the Cloud Sync feature (`test_cloud_sync.js`) — 17 total, all passing together in one
+pass: `test_home.js`, `test_aesthetics.js`, `test_full_flow.js`, `test_resttimer.js`,
+`test_notes.js`, `test_budget.js`, `test_calendar.js`, `test_export.js`,
 `test_meal_builder.js`, `test_meal_plan.js`, `test_reps_validation.js`, `test_photos.js`,
 `test_quickadd_superset.js`, `test_schedule_setup.js`, `test_today_schedule_layout.js`,
-`test_ui_polish.js`. These never existed as committed files before this repo — they only ever
-lived inside temporary chat sandboxes and were lost between sessions, so this was genuinely new
-work, not a restore. Going forward, run the full suite before any publish and add a new
-test_*.js whenever a new feature area is added, so this stays complete rather than drifting
-back toward the gap it started in.
+`test_ui_polish.js`, `test_cloud_sync.js`. These never existed as committed files before this
+repo — they only ever lived inside temporary chat sandboxes and were lost between sessions, so
+this was genuinely new work, not a restore. Going forward, run the full suite before any
+publish and add a new test_*.js whenever a new feature area is added, so this stays complete
+rather than drifting back toward the gap it started in.
 
 Run the full canonical suite before every publish, screenshot-verify anything visual, and
 do a freshness check against whatever's currently live before overwriting a hosted version.

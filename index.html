@@ -1188,6 +1188,12 @@ select { -webkit-appearance: none; appearance: none; background-image: linear-gr
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<!-- Cloud Sync (opt-in): Firebase's "compat" build exposes a plain global `firebase` object,
+     same style as Chart.js above — no bundler, no ES module scoping issues, works fine inside
+     the classic-script app below. See the CLOUD SYNC section near the end of the main script. -->
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
 <script>
 // ================= ICONS =================
 // Small duotone SVG icon set — soft accent-orange fill + solid accent-orange line/detail work,
@@ -2110,10 +2116,18 @@ function defaultState() {
   return {
     units: 'lb',
     rounding: 2.5,
+    // Bumped to Date.now() on every saveState() call — the one thing Cloud Sync compares
+    // between the local copy and whatever's in Firestore to decide which is newer. Not shown
+    // in the UI; purely a sync implementation detail. See CLOUD SYNC section below.
+    updatedAt: null,
     settings: {
       accentByAesthetic: {}, noteTagNames: {}, customNoteTags: [], noteTagsMigrated: false, aesthetic: 'cyberpunk',
       restTimer: defaultRestTimerSettings(), mealUnitSystem: 'metric', defaultPage: 'home',
       homeLayout: defaultHomeLayout(),
+      // Purely a user preference flag ("did I opt into this"). The actual signed-in/out truth
+      // comes from Firebase Auth itself at runtime (see CLOUD SYNC section) — this just decides
+      // whether the Settings screen shows "Enable Cloud Sync" or the signed-in sync controls.
+      cloudSync: { enabled: false },
     },
     meso: { cycles: 8 },
     categories: defaultCategories(),
@@ -2196,7 +2210,9 @@ function loadState() {
 
 function saveState() {
   try {
+    STATE.updatedAt = Date.now();
     localStorage.setItem(STORAGE_KEY, JSON.stringify(STATE));
+    queueCloudPush(); // no-op unless Cloud Sync is enabled and signed in — see CLOUD SYNC section
   } catch (e) {
     console.error('Failed to save state', e);
     showToast('Save failed — storage may be full');
@@ -4633,6 +4649,9 @@ function renderHomeSetup() {
         <button class="btn btn-danger btn-block" onclick="resetAllData()">RESET ALL DATA</button>
       </div>
     </div>
+    <div class="subtle-label" style="margin:22px 0 10px;">CLOUD SYNC</div>
+    <div class="panel">${renderCloudSyncPanel()}</div>
+    ${renderCloudSyncModal()}
   </div>`;
 }
 function updateDefaultPage(val) {
@@ -5623,6 +5642,188 @@ function importData(evt) {
   };
   reader.readAsText(file);
 }
+
+// ================= CLOUD SYNC (opt-in) =================
+// Nothing in this section ever runs unless the person explicitly taps "Enable Cloud Sync" in
+// Settings. Until then, zero network calls happen, zero login prompts appear, and the app
+// behaves exactly as it always has (local-only, localStorage). This is deliberate — see
+// PROJECT_OVERVIEW.md's local-first philosophy and CLAUDE.md's Cloud Sync notes.
+//
+// Data model: one Firestore document per signed-in user, at users/{uid}, holding the entire
+// STATE blob as a JSON string plus its own updatedAt. Sync compares STATE.updatedAt (local)
+// against the remote doc's updatedAt and keeps whichever is newer — a simple last-write-wins
+// model, which is the right level of complexity for one person's data synced across their own
+// couple of devices (not a multi-editor conflict-resolution problem).
+const firebaseConfig = {
+  apiKey: "AIzaSyASBHVcfN4rQ3v8X-CUzQBsMhJ-7pb3-z4",
+  authDomain: "lifemanager-sync.firebaseapp.com",
+  projectId: "lifemanager-sync",
+  storageBucket: "lifemanager-sync.firebasestorage.app",
+  messagingSenderId: "149717482089",
+  appId: "1:149717482089:web:8763a70a31891a4edfc0f8",
+};
+let CLOUD_SYNC_READY = false;
+let CLOUD_USER = null; // Firebase auth user object, or null when signed out
+let CLOUD_SYNC_STATUS = 'idle'; // 'idle' | 'syncing' | 'synced' | 'error'
+let CLOUD_SYNC_ERROR = null;
+function initCloudSync() {
+  if (typeof firebase === 'undefined') { CLOUD_SYNC_ERROR = 'Firebase SDK failed to load (are you offline, or is a script blocked?)'; return; }
+  try {
+    firebase.initializeApp(firebaseConfig);
+    // Firestore's own offline cache — this is what lets Cloud Sync keep working (queuing writes,
+    // reading last-synced data) even with no connection, syncing automatically once back online.
+    firebase.firestore().enablePersistence({ synchronizeTabs: true }).catch((e) => {
+      console.warn('Firestore offline persistence unavailable (e.g. private browsing, or already open in another tab set):', e.code);
+    });
+    firebase.auth().onAuthStateChanged((user) => {
+      CLOUD_USER = user;
+      if (user && STATE.settings.cloudSync.enabled) {
+        pullThenSync();
+      }
+      render();
+    });
+    // Completes an email-link sign-in if this page load IS that link being opened
+    if (firebase.auth().isSignInWithEmailLink(window.location.href)) {
+      let email = window.localStorage.getItem('cloudSyncPendingEmail');
+      if (!email) email = window.prompt('Confirm the email address you used for the sync link:');
+      if (email) {
+        firebase.auth().signInWithEmailLink(email, window.location.href)
+          .then(() => {
+            window.localStorage.removeItem('cloudSyncPendingEmail');
+            STATE.settings.cloudSync.enabled = true;
+            saveState();
+            showToast('Signed in — cloud sync enabled');
+            // Clean the sign-in link's query params out of the visible URL
+            window.history.replaceState({}, document.title, window.location.pathname);
+          })
+          .catch((e) => showToast('Sign-in link failed: ' + e.message));
+      }
+    }
+    CLOUD_SYNC_READY = true;
+  } catch (e) {
+    CLOUD_SYNC_ERROR = e.message;
+    console.error('Cloud Sync init failed', e);
+  }
+}
+function openCloudSyncModal() { CLOUD_SYNC_MODAL_OPEN = true; render(); }
+function closeCloudSyncModal() { CLOUD_SYNC_MODAL_OPEN = false; render(); }
+let CLOUD_SYNC_MODAL_OPEN = false;
+function signInWithGoogle() {
+  if (!CLOUD_SYNC_READY) { showToast('Cloud Sync isn\'t available right now'); return; }
+  const provider = new firebase.auth.GoogleAuthProvider();
+  firebase.auth().signInWithPopup(provider)
+    .then(() => {
+      STATE.settings.cloudSync.enabled = true;
+      saveState();
+      closeCloudSyncModal();
+      showToast('Signed in — cloud sync enabled');
+    })
+    .catch((e) => {
+      if (e.code === 'auth/popup-closed-by-user') return; // user cancelled — no error toast
+      showToast('Google sign-in failed: ' + e.message);
+    });
+}
+function sendEmailSignInLink(email) {
+  if (!CLOUD_SYNC_READY) { showToast('Cloud Sync isn\'t available right now'); return; }
+  if (!email || !email.includes('@')) { showToast('Enter a valid email first'); return; }
+  const actionCodeSettings = { url: window.location.href, handleCodeInApp: true };
+  firebase.auth().sendSignInLinkToEmail(email, actionCodeSettings)
+    .then(() => {
+      window.localStorage.setItem('cloudSyncPendingEmail', email);
+      showToast('Check your email for a sign-in link');
+      closeCloudSyncModal();
+    })
+    .catch((e) => showToast('Could not send sign-in link: ' + e.message));
+}
+function signOutCloudSync() {
+  showConfirm('Sign out of Cloud Sync? Your data stays on this device either way.', () => {
+    firebase.auth().signOut().then(() => {
+      STATE.settings.cloudSync.enabled = false;
+      saveState();
+      showToast('Signed out of cloud sync');
+      render();
+    });
+  });
+}
+function userDocRef() { return firebase.firestore().collection('users').doc(CLOUD_USER.uid); }
+// Pulls the remote copy once at sign-in time and keeps whichever side is newer — this only
+// runs right after signing in, specifically so a second device's existing local data doesn't
+// get silently clobbered the moment it connects for the first time.
+function pullThenSync() {
+  if (!CLOUD_USER) return;
+  CLOUD_SYNC_STATUS = 'syncing'; render();
+  userDocRef().get().then((doc) => {
+    if (doc.exists) {
+      const remote = doc.data();
+      const remoteUpdatedAt = remote.updatedAt || 0;
+      const localUpdatedAt = STATE.updatedAt || 0;
+      if (remoteUpdatedAt > localUpdatedAt) {
+        const remoteState = JSON.parse(remote.data);
+        STATE = Object.assign(defaultState(), remoteState);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(STATE)); // skip saveState() here — avoid re-triggering a push of what we just pulled
+        showToast('Synced — pulled your other device\'s newer data');
+        render();
+      } else if (localUpdatedAt > remoteUpdatedAt) {
+        pushStateToCloud();
+      }
+    } else {
+      pushStateToCloud(); // first-ever sync for this account — nothing remote yet
+    }
+    CLOUD_SYNC_STATUS = 'synced'; render();
+  }).catch((e) => {
+    CLOUD_SYNC_STATUS = 'error'; CLOUD_SYNC_ERROR = e.message; render();
+  });
+}
+let _cloudPushDebounceTimer = null;
+// Called from saveState() itself — a no-op unless sync is actually on, and debounced so rapid
+// local edits (typing, dragging) don't fire a network write on every keystroke.
+function queueCloudPush() {
+  if (!STATE.settings.cloudSync.enabled || !CLOUD_USER) return;
+  clearTimeout(_cloudPushDebounceTimer);
+  _cloudPushDebounceTimer = setTimeout(pushStateToCloud, 1500);
+}
+function pushStateToCloud() {
+  if (!CLOUD_USER) return;
+  CLOUD_SYNC_STATUS = 'syncing';
+  userDocRef().set({ data: JSON.stringify(STATE), updatedAt: STATE.updatedAt, email: CLOUD_USER.email || null })
+    .then(() => { CLOUD_SYNC_STATUS = 'synced'; render(); })
+    .catch((e) => { CLOUD_SYNC_STATUS = 'error'; CLOUD_SYNC_ERROR = e.message; render(); });
+}
+// Manual "Sync Now" button — same logic as the sign-in-time pull, just re-runnable any time.
+function manualSyncNow() {
+  if (!CLOUD_USER) { showToast('Not signed in'); return; }
+  pullThenSync();
+}
+function renderCloudSyncPanel() {
+  if (!STATE.settings.cloudSync.enabled || !CLOUD_USER) {
+    return `<button class="btn btn-block" onclick="openCloudSyncModal()">ENABLE CLOUD SYNC</button>
+      <div style="font-size:11px; color:var(--text-faint); margin-top:8px;">Optional — sync your data across your own devices. Off by default; nothing is sent anywhere unless you turn this on.</div>`;
+  }
+  const statusLabel = { idle: 'Ready', syncing: 'Syncing…', synced: 'Synced', error: 'Sync error' }[CLOUD_SYNC_STATUS] || '';
+  return `
+    <div style="font-size:12px; color:var(--text-dim); margin-bottom:10px;">Signed in as ${escapeHtml(CLOUD_USER.email || CLOUD_USER.displayName || 'this account')} &middot; <span style="color:${CLOUD_SYNC_STATUS==='error'?'var(--bad)':'var(--good)'};">${statusLabel}</span></div>
+    ${CLOUD_SYNC_STATUS === 'error' ? `<div style="font-size:11px; color:var(--bad); margin-bottom:8px;">${escapeHtml(CLOUD_SYNC_ERROR || '')}</div>` : ''}
+    <button class="btn btn-block" onclick="manualSyncNow()">SYNC NOW</button>
+    <button class="btn btn-block" style="margin-top:8px;" onclick="signOutCloudSync()">SIGN OUT OF SYNC</button>
+  `;
+}
+function renderCloudSyncModal() {
+  if (!CLOUD_SYNC_MODAL_OPEN) return '';
+  return `
+    <div class="home-popup-backdrop" onclick="closeCloudSyncModal()">
+      <div class="panel home-popup" onclick="event.stopPropagation()">
+        <div class="row" style="margin-bottom:10px;">
+          <div class="subtle-label" style="margin-bottom:0;">ENABLE CLOUD SYNC</div>
+          <button class="icon-btn" onclick="closeCloudSyncModal()">${icon('close')}</button>
+        </div>
+        <button class="btn btn-primary btn-block" onclick="signInWithGoogle()">CONTINUE WITH GOOGLE</button>
+        <div class="divider" style="margin:14px 0;"></div>
+        <label class="field" style="margin-bottom:8px;"><span class="lbl">Email</span><input type="email" id="cloudSyncEmailInput" placeholder="you@example.com"></label>
+        <button class="btn btn-block" onclick="sendEmailSignInLink(document.getElementById('cloudSyncEmailInput').value.trim())">SEND SIGN-IN LINK</button>
+      </div>
+    </div>`;
+}
+initCloudSync();
 function resetAllData() {
   showConfirm('This erases everything stored on this device — training maxes, workout logs, measurements, weight log. This cannot be undone. Continue?', () => {
     STATE = defaultState(); // reset in-memory first — never skipped even if storage access below fails
