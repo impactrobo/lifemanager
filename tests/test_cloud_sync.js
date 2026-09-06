@@ -72,6 +72,44 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   const modalClosedHtml = await page.evaluate(() => renderCloudSyncModal());
   if (modalClosedHtml !== '') throw new Error('Expected renderCloudSyncModal() to return empty string when closed');
 
+  // 5c. Paste-the-link flow: after "sending" the email (mocked, since real Firebase can't run
+  //     here), the modal should switch into paste mode, and completeEmailSignInFromPastedLink()'s
+  //     guard clauses should fail gracefully rather than throw when Firebase is unavailable.
+  await page.evaluate(() => openCloudSyncModal());
+  const beforeSendHtml = await page.evaluate(() => renderCloudSyncModal());
+  console.log('modal before sending shows SEND SIGN-IN LINK, not the paste box:', beforeSendHtml.includes('SEND SIGN-IN LINK'), !beforeSendHtml.includes('COMPLETE SIGN-IN'));
+  if (!beforeSendHtml.includes('SEND SIGN-IN LINK') || beforeSendHtml.includes('COMPLETE SIGN-IN')) {
+    throw new Error('Expected the initial modal state to show the send form, not the paste-completion form');
+  }
+
+  // Simulate what sendEmailSignInLink() does on success, without a real Firebase call
+  await page.evaluate(() => { CLOUD_SYNC_EMAIL_LINK_SENT = true; });
+  const afterSendHtml = await page.evaluate(() => renderCloudSyncModal());
+  console.log('modal after "sending" shows the paste box and back-link:', afterSendHtml.includes('COMPLETE SIGN-IN'), afterSendHtml.includes('Send to a different email'));
+  if (!afterSendHtml.includes('COMPLETE SIGN-IN') || !afterSendHtml.includes('cloudSyncPastedLink')) {
+    throw new Error('Expected the modal to switch to the paste-a-link form once CLOUD_SYNC_EMAIL_LINK_SENT is true');
+  }
+
+  // Empty paste should fail gracefully (toast), never touching firebase.auth() at all
+  await page.evaluate(() => completeEmailSignInFromPastedLink(''));
+  const emptyPasteToast = await page.evaluate(() => document.getElementById('toast').textContent);
+  console.log('toast for an empty pasted link:', emptyPasteToast);
+  if (!emptyPasteToast.includes('Paste the link')) throw new Error(`Expected the empty-paste guard toast, got "${emptyPasteToast}"`);
+  if (errors.length > 0) throw new Error('Empty paste should never reach firebase.auth() at all: ' + errors.join('; '));
+
+  // Non-empty paste with Firebase unavailable should ALSO fail gracefully, not throw
+  await page.evaluate(() => completeEmailSignInFromPastedLink('https://example.com/not-a-real-link'));
+  const unavailableToast = await page.evaluate(() => document.getElementById('toast').textContent);
+  console.log('toast for a non-empty paste with Firebase unavailable:', unavailableToast);
+  if (!unavailableToast.includes('isn\'t available')) throw new Error(`Expected the "Cloud Sync isn't available" toast, got "${unavailableToast}"`);
+  if (errors.length > 0) throw new Error('completeEmailSignInFromPastedLink() threw instead of degrading gracefully: ' + errors.join('; '));
+
+  // Closing the modal resets the paste-mode flag, so reopening starts fresh
+  await page.evaluate(() => closeCloudSyncModal());
+  const resetFlag = await page.evaluate(() => CLOUD_SYNC_EMAIL_LINK_SENT);
+  console.log('CLOUD_SYNC_EMAIL_LINK_SENT reset after closing:', resetFlag);
+  if (resetFlag !== false) throw new Error('Expected closing the modal to reset CLOUD_SYNC_EMAIL_LINK_SENT back to false');
+
   // 5b. Regression check: the modal must stay reachable even with a drastically shrunk visible
   //     viewport (simulating an on-screen keyboard covering the bottom of the screen) — it was
   //     previously anchored as a bottom sheet, which put its own button under where a keyboard

@@ -5706,7 +5706,7 @@ function initCloudSync() {
   }
 }
 function openCloudSyncModal() { CLOUD_SYNC_MODAL_OPEN = true; render(); }
-function closeCloudSyncModal() { CLOUD_SYNC_MODAL_OPEN = false; render(); }
+function closeCloudSyncModal() { CLOUD_SYNC_MODAL_OPEN = false; CLOUD_SYNC_EMAIL_LINK_SENT = false; render(); }
 let CLOUD_SYNC_MODAL_OPEN = false;
 function signInWithGoogle() {
   if (!CLOUD_SYNC_READY) { showToast('Cloud Sync isn\'t available right now'); return; }
@@ -5730,10 +5730,33 @@ function sendEmailSignInLink(email) {
   firebase.auth().sendSignInLinkToEmail(email, actionCodeSettings)
     .then(() => {
       window.localStorage.setItem('cloudSyncPendingEmail', email);
-      showToast('Check your email for a sign-in link');
-      closeCloudSyncModal();
+      CLOUD_SYNC_EMAIL_LINK_SENT = true; // switches the modal into "paste it here" mode — see renderCloudSyncModal()
+      render();
     })
     .catch((e) => showToast('Could not send sign-in link: ' + e.message));
+}
+let CLOUD_SYNC_EMAIL_LINK_SENT = false;
+// Alternative completion path to tapping the emailed link directly (which opens Safari, not the
+// installed home-screen app — see CLAUDE.md's Cloud Sync notes). Instead: long-press the link in
+// Mail -> Copy Link -> paste it here. Runs the exact same Firebase completion check, just against
+// pasted text instead of window.location.href, so it finishes without ever leaving the app.
+function completeEmailSignInFromPastedLink(pastedText) {
+  const link = (pastedText || '').trim();
+  if (!link) { showToast('Paste the link from your email first'); return; }
+  if (!CLOUD_SYNC_READY) { showToast('Cloud Sync isn\'t available right now'); return; }
+  if (!firebase.auth().isSignInWithEmailLink(link)) { showToast('That doesn\'t look like a valid sign-in link'); return; }
+  const email = window.localStorage.getItem('cloudSyncPendingEmail');
+  if (!email) { showToast('Lost track of which email this was for — try sending a new link'); return; }
+  firebase.auth().signInWithEmailLink(email, link)
+    .then(() => {
+      window.localStorage.removeItem('cloudSyncPendingEmail');
+      CLOUD_SYNC_EMAIL_LINK_SENT = false;
+      STATE.settings.cloudSync.enabled = true;
+      saveState();
+      closeCloudSyncModal();
+      showToast('Signed in — cloud sync enabled');
+    })
+    .catch((e) => showToast('Sign-in failed: ' + e.message));
 }
 function signOutCloudSync() {
   showConfirm('Sign out of Cloud Sync? Your data stays on this device either way.', () => {
@@ -5809,6 +5832,17 @@ function renderCloudSyncPanel() {
 }
 function renderCloudSyncModal() {
   if (!CLOUD_SYNC_MODAL_OPEN) return '';
+  const body = CLOUD_SYNC_EMAIL_LINK_SENT ? `
+        <div style="font-size:12px; color:var(--text-dim); margin-bottom:12px;">Check your email for the sign-in link. Tapping it works, but opens in Safari instead of this app — for the smoothest experience, long-press the link in Mail, tap <b>Copy Link</b>, then paste it below.</div>
+        <label class="field" style="margin-bottom:8px;"><span class="lbl">Paste the link here</span><textarea id="cloudSyncPastedLink" rows="3" placeholder="https://..."></textarea></label>
+        <button class="btn btn-primary btn-block" onclick="completeEmailSignInFromPastedLink(document.getElementById('cloudSyncPastedLink').value)">COMPLETE SIGN-IN</button>
+        <button class="btn btn-ghost btn-block btn-sm" style="margin-top:8px;" onclick="CLOUD_SYNC_EMAIL_LINK_SENT=false; render();">&#8249; Send to a different email</button>
+      ` : `
+        <button class="btn btn-primary btn-block" onclick="signInWithGoogle()">CONTINUE WITH GOOGLE</button>
+        <div class="divider" style="margin:14px 0;"></div>
+        <label class="field" style="margin-bottom:8px;"><span class="lbl">Email</span><input type="email" id="cloudSyncEmailInput" placeholder="you@example.com"></label>
+        <button class="btn btn-block" onclick="sendEmailSignInLink(document.getElementById('cloudSyncEmailInput').value.trim())">SEND SIGN-IN LINK</button>
+      `;
   return `
     <div class="home-popup-backdrop" style="align-items:flex-start; padding-top:48px; overflow-y:auto;" onclick="closeCloudSyncModal()">
       <div class="panel" style="width:100%; max-width:640px; margin:0 12px; border-radius:var(--radius);" onclick="event.stopPropagation()">
@@ -5816,10 +5850,7 @@ function renderCloudSyncModal() {
           <div class="subtle-label" style="margin-bottom:0;">ENABLE CLOUD SYNC</div>
           <button class="icon-btn" onclick="closeCloudSyncModal()">${icon('close')}</button>
         </div>
-        <button class="btn btn-primary btn-block" onclick="signInWithGoogle()">CONTINUE WITH GOOGLE</button>
-        <div class="divider" style="margin:14px 0;"></div>
-        <label class="field" style="margin-bottom:8px;"><span class="lbl">Email</span><input type="email" id="cloudSyncEmailInput" placeholder="you@example.com"></label>
-        <button class="btn btn-block" onclick="sendEmailSignInLink(document.getElementById('cloudSyncEmailInput').value.trim())">SEND SIGN-IN LINK</button>
+        ${body}
       </div>
     </div>`;
 }

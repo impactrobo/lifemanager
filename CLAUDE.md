@@ -52,17 +52,27 @@ not a requirement.
   `localStorage`-based). Cloud Sync is a purely optional feature *you* opted into for your own
   devices; nobody else sees a login screen unless they also tap "Enable Cloud Sync" and sign in
   with their own account, which gives them their own isolated `users/{their-uid}` document.
-- **What's NOT yet verified for real:** this was built and tested in a sandboxed environment
-  with no network route to Firebase's servers at all — every test around it
-  (`test_cloud_sync.js`) verifies the client-side logic and graceful degradation, but the actual
-  Google sign-in popup, email-link flow, and real Firestore push/pull have only been verified by
-  reasoning about the SDK's documented behavior, not by an actual live test. First priority after
-  deploying: sign in for real on one device, log something, hit "Sync Now" on a second device,
-  confirm it actually shows up.
+- **Verified working live:** Google sign-in, and cross-device sync (sign in on two real devices,
+  log data on one, "Sync Now" on the other, data appeared) have been confirmed working for real
+  on a live deployment. Email-link sign-in specifically hasn't been separately confirmed yet —
+  worth trying once, but the underlying mechanism is the same Firebase Auth flow as the
+  already-verified Google path.
 - **One-time Firebase console setup still needed:** paste `firestore.rules`' contents into
   Firestore's Rules tab (Firebase console), and add the deployed domain (e.g.
   `impactrobo.github.io`) to Authentication → Settings → Authorized domains, or the email-link
   sign-in redirect won't be allowed to complete.
+
+- **Email-link UX note:** tapping the emailed sign-in link opens Safari (an iOS platform
+  limitation — only real native apps registered with Apple can intercept links from other apps
+  like Mail; a web app can't). To avoid that, the modal now offers a second completion path:
+  after sending, it switches into "paste the link here" mode — long-press the link in Mail,
+  Copy Link, paste it into the app, tap Complete Sign-In. Runs the exact same
+  `signInWithEmailLink()` check, just against pasted text instead of `window.location.href`, so
+  it finishes without leaving the installed app. Tapping the link directly still works too as a
+  fallback (completes in Safari). A "true 6-digit OTP code by email" alternative was considered
+  and explicitly deferred — it would need a real backend (Firebase Cloud Functions, which
+  requires upgrading off the free Spark plan) and a separate email-sending service; revisit only
+  if the paste flow proves to be a real problem in practice.
 
 ## Testing
 Canonical test files live in `tests/` as individual `test_*.js` Node scripts using Playwright
