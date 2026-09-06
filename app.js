@@ -57,8 +57,8 @@ const AESTHETIC_ACCENTS = {
     green: { label: 'Phosphor Green', accent: '#39ff6a', bg: '#060a06', surface: '#0d140d', surface2: '#121b12', border: '#234226', borderSoft: '#17281a', text: '#4dff7a', textDim: '#2fae55', textFaint: '#1f6b38', good: '#39ff6a', goodSoft: '#0f2415', resetBorder: '#4dff7a', resetBg: '#16261a', resetText: '#4dff7a' },
     amber: { label: 'Amber',          accent: '#ffb000', bg: '#0a0704', surface: '#161009', surface2: '#1e160b', border: '#4a3814', borderSoft: '#2a2009', text: '#ffc266', textDim: '#c98a1e', textFaint: '#7a5312', good: '#ffb000', goodSoft: '#241a08', resetBorder: '#ffc266', resetBg: '#261c0c', resetText: '#ffc266' },
     cyan:  { label: 'Cyan',           accent: '#00e5ff', bg: '#040a0a', surface: '#0a1616', surface2: '#0e1e1e', border: '#1c4a4a', borderSoft: '#122a2a', text: '#4dffff', textDim: '#2fb0b0', textFaint: '#1f6b6b', good: '#00e5ff', goodSoft: '#0a2424', resetBorder: '#4dffff', resetBg: '#16262a', resetText: '#4dffff' },
-    red:   { label: 'Alert Red',      accent: '#ff3b3b', bg: '#0a0505', surface: '#160a0a', surface2: '#1e0e0e', border: '#4a1c1c', borderSoft: '#2a1212', text: '#ff8a8a', textDim: '#c94040', textFaint: '#7a2626', good: '#ff5b5b', goodSoft: '#240a0a', resetBorder: '#ff8a8a', resetBg: '#261212', resetText: '#ff8a8a' },
-    white: { label: 'Paper White',    accent: '#eaeaea', bg: '#07080a', surface: '#121316', surface2: '#181a1e', border: '#3d4247', borderSoft: '#22262a', text: '#eaeaea', textDim: '#a8adb2', textFaint: '#6b7176', good: '#eaeaea', goodSoft: '#1c2024', resetBorder: '#eaeaea', resetBg: '#22262a', resetText: '#eaeaea' },
+    red:   { label: 'Red Alert',      accent: '#ff3b3b', bg: '#0a0505', surface: '#160a0a', surface2: '#1e0e0e', border: '#4a1c1c', borderSoft: '#2a1212', text: '#ff8a8a', textDim: '#c94040', textFaint: '#7a2626', good: '#ff5b5b', goodSoft: '#240a0a', resetBorder: '#ff8a8a', resetBg: '#261212', resetText: '#ff8a8a' },
+    white: { label: 'White Paper',    accent: '#eaeaea', bg: '#07080a', surface: '#121316', surface2: '#181a1e', border: '#3d4247', borderSoft: '#22262a', text: '#eaeaea', textDim: '#a8adb2', textFaint: '#6b7176', good: '#eaeaea', goodSoft: '#1c2024', resetBorder: '#eaeaea', resetBg: '#22262a', resetText: '#eaeaea' },
   },
   // Four Symbols (Sì Xiàng): each guardian is a full mini-palette, same shape as Retro Terminal's
   // MAIN COLOR entries above — see FULL_PALETTE_AESTHETICS / applyAccentColor(). --bad, --warn,
@@ -134,6 +134,13 @@ const AESTHETIC_ACCENTS = {
     acid:        { label: 'Acid Chartreuse',   value: '#d4ff00' },
     sludge:      { label: 'Sludge Lime',       value: '#b8d936' },
   },
+  frutigeraero: {
+    aqua:    { label: 'Aqua',      value: '#00a8e8' },
+    sky:     { label: 'Sky',       value: '#3aa0ff' },
+    lagoon:  { label: 'Lagoon',    value: '#00c2b2' },
+    lime:    { label: 'Lime',      value: '#7cc043' },
+    sunbeam: { label: 'Sunbeam',   value: '#f7b731' },
+  },
   spookyscary: {
     pumpkin: { label: 'Pumpkin Glow',  value: '#ffb627' },
     witch:   { label: 'Witch Violet',  value: '#b06aff' },
@@ -167,8 +174,13 @@ const AESTHETICS = {
   spookyscary: { label: "Jack-o'-Lantern", desc: 'Halloween night carved in pumpkin glow — warm amber light, deep violet shadow, witch-green trim.', group: 'Vibrant' },
   thrash:    { label: 'Thrash Metal',     desc: 'Studded black leather and amp-stack grit — yellow, chrome and blood red under stage light.', group: 'Vibrant' },
   sixiang:   { label: 'Four Symbols',     desc: 'Sì Xiàng guardians of the four directions — pick Azure Dragon, Vermilion Phoenix, White Tiger or Black Tortoise below.', group: 'Vibrant' },
+  // `external: true` means this one's CSS lives in aesthetics/<key>/theme.css and is fetched
+  // only when it's actually selected, instead of riding along in styles.css for everyone.
+  // Maximalist themes are heavy enough (gradient stacks, gloss, their own keyframes/fonts)
+  // that this is worth it; the original twelve stay inline. See applyAestheticStylesheet().
+  frutigeraero: { label: 'Frutiger Aero', desc: 'Mid-2000s optimism — sky-to-grass gradient, glossy Aero glass, drifting bubbles.', group: 'Maximalist', external: true },
 };
-const AESTHETIC_GROUP_ORDER = ['Vibrant', 'Contrast', 'Light'];
+const AESTHETIC_GROUP_ORDER = ['Maximalist', 'Vibrant', 'Contrast', 'Light'];
 // Which groups are expanded in the settings panel right now — session-only (not persisted),
 // resets to "everything open" on reload so a chosen aesthetic is never accidentally hidden.
 let AESTHETIC_GROUPS_OPEN = new Set(AESTHETIC_GROUP_ORDER);
@@ -178,8 +190,25 @@ function currentAesthetic() {
   // from a save made before one was removed) rather than rendering with no matching styles at all.
   return (key && AESTHETICS[key]) ? key : 'cyberpunk';
 }
+// The original twelve aesthetics are plain token blocks living in styles.css, so switching to
+// one is just a data-attribute flip. The maximalist ones are big enough (gradients, bevels,
+// masks, their own keyframes) that shipping all of them to render one would be wasteful, so an
+// aesthetic can instead declare `external: true` and keep its CSS in aesthetics/<key>/theme.css,
+// fetched only the first time it's actually chosen. The <link id="aestheticCss"> in index.html
+// is the single slot they load into — swapping its href swaps the whole theme.
+// See docs/ARCHITECTURE.md > "Aesthetic file layout".
+function applyAestheticStylesheet(key) {
+  const link = document.getElementById('aestheticCss');
+  if (!link) return;
+  const meta = AESTHETICS[key];
+  const href = (meta && meta.external) ? `aesthetics/${key}/theme.css` : null;
+  if (!href) { link.removeAttribute('href'); return; }
+  // Re-setting an identical href would re-trigger a load and flash the theme; skip that.
+  if (link.getAttribute('href') !== href) link.setAttribute('href', href);
+}
 function applyAesthetic() {
   const key = currentAesthetic();
+  applyAestheticStylesheet(key);
   document.documentElement.dataset.aesthetic = key;
   applyAccentColor(); // every aesthetic now owns its own accent choice
 }

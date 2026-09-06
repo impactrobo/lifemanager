@@ -4,10 +4,14 @@ Personal life-tracking web app (exercise, schedule, hobbies, health/diet, notes,
 Local-first via localStorage. No bundler / no build step to deploy. Read this before making
 any change.
 
-The app ships as two files: `index.html` (shell + all CSS) and `app.js` (all application
-logic, ~7.9k lines, loaded as a classic `<script>` so its top-level `function`s stay global
-for the inline `onclick=` handlers). It used to be one file; the split is what makes type
-checking possible. There is still no compile step — `app.js` is served as-is.
+The app ships as three files: `index.html` (a ~90-line shell), `styles.css` (base + component
+styles + the twelve inline aesthetics), and `app.js` (all application logic, ~7.9k lines,
+loaded as a classic `<script>` so its top-level `function`s stay global for the inline
+`onclick=` handlers). It used to be one file; the split is what makes type checking possible.
+There is still no compile step — everything is served as-is.
+
+Maximalist aesthetics additionally get their own lazily-loaded `aesthetics/<key>/theme.css`
+(see "Aesthetic file layout" below).
 
 ## Read these first, in order
 1. `docs/PROJECT_OVERVIEW.md` — what the app is and the design philosophy to preserve
@@ -46,6 +50,27 @@ real signal, not noise to suppress.
   lights up ~80 legacy call sites); tightening it is a future step, not a regression.
 - `.value` / `.checked` / `.src` / `.getContext` are widened onto `HTMLElement` in the d.ts
   so `getElementById(...).value` doesn't need a cast at every call site. Accepted tradeoff.
+
+## Aesthetic file layout
+Two kinds of aesthetic, chosen by the `external` flag on the `AESTHETICS` entry:
+
+- **Inline** (the original twelve) — token block lives in `styles.css`, ships to everyone.
+- **External** (`external: true`, e.g. `frutigeraero`) — CSS lives in
+  `aesthetics/<key>/theme.css`, fetched **only when selected**, via the single
+  `<link id="aestheticCss">` slot that `applyAestheticStylesheet()` re-points. With 8+
+  maximalist themes planned, this is what stops every visitor downloading all of them.
+
+Non-obvious rules (both enforced by `test_aesthetic_external.js`):
+- `.aesthetic-preview-<key>` (the picker swatch) **must** be in `styles.css`, not `theme.css` —
+  the picker renders while a *different* aesthetic is active.
+- Scope everything in `theme.css` under `[data-aesthetic="<key>"]`.
+- Never override `position` on `.topbar`/`.tabbar` to raise stacking — they rely on
+  `sticky`/`fixed` from `styles.css`. Set `z-index` only. (This bit me building Frutiger Aero:
+  `position: relative` dropped the tabbar out of the viewport bottom.)
+- External themes `@import` their own webfont at the top of `theme.css` rather than adding to
+  the shared `<link>`.
+
+Full add-an-aesthetic checklist is in `docs/ARCHITECTURE.md`.
 
 ## Aesthetic FX modules (visual / animation effects per aesthetic)
 As aesthetics get more maximalist (Y2K, Frutiger Aero, Metalheart, …), effects that CSS +

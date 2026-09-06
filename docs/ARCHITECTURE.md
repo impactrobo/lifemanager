@@ -160,21 +160,53 @@ aesthetic declares its `group` in the `AESTHETICS` object):
 | `sakura` | Sakura | Light | radial-dot SVG body background, pill-shaped buttons |
 | `honey` | Honey & Bee | Light | tessellating hexagon SVG body background, text halos for legibility on the pattern |
 
+### Aesthetic file layout: inline vs. external
+
+An aesthetic's CSS lives in one of two places, chosen by the `external` flag on its `AESTHETICS`
+entry:
+
+- **Inline (default)** — the token block and any overrides sit in `styles.css`, shipped to every
+  visitor. Right for the original twelve: each is ~40–50 lines of mostly token substitution.
+- **External (`external: true`)** — the CSS lives in `aesthetics/<key>/theme.css` and is fetched
+  **only when that aesthetic is actually selected**. Right for maximalist themes, which run
+  several hundred lines of gradient stacks, gloss, masks, their own `@keyframes` and often their
+  own webfont. `applyAestheticStylesheet()` (app.js) points the single
+  `<link id="aestheticCss">` in `index.html` at the file, and clears its `href` when switching
+  back to an inline aesthetic. `frutigeraero` is the reference implementation.
+
+Two rules for external aesthetics, both enforced by `test_aesthetic_external.js`:
+
+1. **The `.aesthetic-preview-<key>` swatch stays in `styles.css`,** never in `theme.css` — the
+   picker renders it while a *different* aesthetic is active, so the theme file isn't loaded.
+2. **Everything in `theme.css` is scoped under `[data-aesthetic="<key>"]`** so the file is inert
+   if it's ever still attached while another theme is active.
+
+Fonts for an external aesthetic go in an `@import` at the top of its own `theme.css` rather than
+the shared `<link>` in `<head>` — that keeps the theme self-contained and avoids every visitor
+paying for eight maximalist themes' worth of webfonts.
+
 **To add a new aesthetic:**
 1. Add an entry to `AESTHETICS` (`label`, `desc`, `group` — pick an existing group or extend
-   `AESTHETIC_GROUP_ORDER`).
-2. Add a full `:root[data-aesthetic="<key>"] { ... }` block defining every token above. Pick
-   `--savings`/`--myo`/`--goldenrod` as genuinely distinct hues from `--good`/`--bad`/`--accent`
-   within that same palette — these are meant to be visually separable status colors, not
-   near-duplicates.
+   `AESTHETIC_GROUP_ORDER`; add `external: true` for a heavy/maximalist one).
+2. Add a full `:root[data-aesthetic="<key>"] { ... }` block defining every token above — in
+   `styles.css` for an inline aesthetic, or `aesthetics/<key>/theme.css` for an external one.
+   Pick `--savings`/`--myo`/`--goldenrod` as genuinely distinct hues from
+   `--good`/`--bad`/`--accent` within that same palette — these are meant to be visually
+   separable status colors, not near-duplicates.
 3. Add an `AESTHETIC_ACCENTS.<key>` entry (5ish named accent-color options; see below).
-4. Add a `.aesthetic-preview-<key>` swatch gradient (used on the picker card).
-5. If the aesthetic needs a font not already imported, add it to the single Google Fonts
-   `<link>` in `<head>`.
+4. Add a `.aesthetic-preview-<key>` swatch gradient to **`styles.css`** (used on the picker card).
+5. Fonts: inline aesthetics add to the shared Google Fonts `<link>` in `<head>`; external ones
+   `@import` their own at the top of `theme.css`.
 6. Optional: feature-specific override rules scoped under `[data-aesthetic="<key>"] .some-class`
    for anything beyond token substitution (a body background pattern, custom shadows, etc.).
-7. Run `test_aesthetics.js` — it asserts the total aesthetic count, checks removed/renamed
-   aesthetics aren't still referenced, and spot-checks a few tokens per aesthetic.
+   **Never override `position` on `.topbar` / `.tabbar`** to raise stacking — they carry
+   `sticky`/`fixed` from `styles.css` and lose their pinning if you do; set `z-index` alone.
+7. Bump `EXPECTED_AESTHETIC_COUNT` in `test_aesthetics.js`, then run `npm test` —
+   `test_aesthetics.js` asserts the total count and per-aesthetic tokens, and
+   `test_aesthetic_external.js` covers the lazy-load wiring for external ones.
+8. Screenshot-verify at ≈390px. A bright/light theme in particular needs its `--text-dim` /
+   `--text-faint` checked against the real backdrop — the usual pale greys wash out on a
+   saturated background.
 
 **Accent colors.** Each aesthetic (except Terminal) exposes ~5 named accent-color choices via
 `AESTHETIC_ACCENTS[key] = { swatchKey: { label, value }, ... }`; picking one just sets `--accent`

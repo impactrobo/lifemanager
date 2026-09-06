@@ -1,0 +1,254 @@
+@import url('https://fonts.googleapis.com/css2?family=Titillium+Web:wght@400;600;700;900&display=swap');
+
+/* ============================================================================
+   Aesthetic: Frutiger Aero — 2006-era optimism. Sky-to-grass gradient backdrop,
+   glossy translucent "Aero glass" panels, wet-looking buttons, drifting bubbles.
+
+   This is the first EXTERNAL aesthetic: its CSS lives here rather than in
+   styles.css and is fetched only when the theme is actually selected (see
+   applyAestheticStylesheet() in app.js). Everything below is scoped under
+   [data-aesthetic="frutigeraero"] so this file is inert if it ever loads while
+   another theme is active.
+
+   Note the one piece that is NOT here: `.aesthetic-preview-frutigeraero`, the
+   picker swatch, lives in styles.css — it has to render while a *different*
+   aesthetic is active, so it can't depend on this file being loaded.
+   ============================================================================ */
+
+:root[data-aesthetic="frutigeraero"] {
+  --bg: #bfe9fb;
+  --surface: #ffffff;
+  --surface2: #ddf2fd;
+  --border: #7fc4e8;
+  --border-soft: #bfe3f5;
+  --text: #0d3a52;
+  /* Darker than a normal light theme's dim/faint would be: these sit on a bright, saturated
+     sky rather than a neutral off-white, so the usual pale greys disappear into it. */
+  --text-dim: #2f6683;
+  --text-faint: #4e849e;
+  --accent: #00a8e8;
+  --accent-dim: color-mix(in srgb, var(--accent) 55%, var(--border));
+  --accent-soft: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  --good: #2e9e4f;
+  --good-soft: #dcf3e2;
+  --bad: #e8434f;
+  --bad-soft: #fbdfe1;
+  --warn: #f5a623;
+  --reset-border: #0d3a52;
+  --reset-bg: #cfe8f5;
+  --reset-text: #0d3a52;
+  --myo: #a45cf0;
+  --goldenrod: #f0b429;
+  --savings: #0e5f9e;
+  --savings-soft: color-mix(in srgb, var(--savings) 16%, var(--surface));
+  --font-head: 'Titillium Web', 'Segoe UI', sans-serif;
+  --font-body: 'Inter', 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --radius: 14px;
+
+  /* Theme-local helpers — the gloss recipe reused across panels/buttons/cards. */
+  --aero-gloss: linear-gradient(180deg,
+      rgba(255, 255, 255, 0.95) 0%,
+      rgba(255, 255, 255, 0.62) 48%,
+      rgba(214, 240, 252, 0.72) 50%,
+      rgba(232, 248, 255, 0.88) 100%);
+  --aero-rim: 0 1px 0 rgba(255, 255, 255, 0.95) inset,
+              0 -1px 0 rgba(120, 180, 210, 0.28) inset;
+  --aero-lift: 0 6px 18px rgba(12, 74, 110, 0.16);
+}
+
+/* ---------- Backdrop: sky → horizon haze → grass, with a soft sun glow ----------
+   The sky lives on a fixed pseudo-element rather than `background-attachment: fixed` on
+   <body> — that property is long-broken/janky on iOS Safari, which is the primary target
+   here (installed PWA). z-index:-1 puts it above the propagated body background colour but
+   below everything the app renders. */
+[data-aesthetic="frutigeraero"] body { background-color: #bfe9fb; }
+[data-aesthetic="frutigeraero"] body::after {
+  content: '';
+  position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background-image:
+    radial-gradient(120% 60% at 78% 6%, rgba(255, 255, 255, 0.85) 0%, rgba(255, 255, 255, 0) 55%),
+    linear-gradient(180deg,
+      #2ea8e0 0%,
+      #7fd0f0 26%,
+      #c4ecfb 52%,
+      #e6f7e2 72%,
+      #9fd47a 88%,
+      #5aa844 100%);
+}
+
+/* Drifting bubbles. One fixed pseudo-element, 200vh tall with the same 100vh bubble tile
+   stacked twice, moved by transform (compositor-friendly — no repaint per frame) so it
+   loops seamlessly. pointer-events:none keeps it from eating taps.
+
+   Each bubble is a ring plus a faint interior, not a solid disc — a filled white circle just
+   reads as a dot on this pale sky. The bright outer stop is the rim, the low-alpha interior
+   is the glassy body, and the off-centre highlight gradient is the specular. */
+[data-aesthetic="frutigeraero"] body::before {
+  content: '';
+  position: fixed; left: 0; right: 0; top: 0;
+  height: 200vh; z-index: 0; pointer-events: none;
+  background-image:
+    /* specular highlights */
+    radial-gradient(circle at 11.2% 13.2%, rgba(255,255,255,0.95) 0 2px, rgba(255,255,255,0) 3px),
+    radial-gradient(circle at 76.5% 20.6%, rgba(255,255,255,0.95) 0 3px, rgba(255,255,255,0) 4px),
+    radial-gradient(circle at 20.6% 72.6%, rgba(255,255,255,0.95) 0 3px, rgba(255,255,255,0) 4px),
+    /* bubbles: faint glass body + bright rim */
+    radial-gradient(circle at 12% 14%, rgba(255,255,255,0.16) 0 6px, rgba(255,255,255,0.70) 7px 8px, rgba(255,255,255,0) 9px),
+    radial-gradient(circle at 78% 22%, rgba(255,255,255,0.14) 0 11px, rgba(255,255,255,0.58) 12px 13px, rgba(255,255,255,0) 14px),
+    radial-gradient(circle at 34% 44%, rgba(255,255,255,0.14) 0 5px, rgba(255,255,255,0.55) 6px 6.8px, rgba(255,255,255,0) 8px),
+    radial-gradient(circle at 88% 61%, rgba(255,255,255,0.15) 0 7px, rgba(255,255,255,0.62) 8px 9px, rgba(255,255,255,0) 10px),
+    radial-gradient(circle at 22% 74%, rgba(255,255,255,0.13) 0 13px, rgba(255,255,255,0.52) 14px 15px, rgba(255,255,255,0) 16px),
+    radial-gradient(circle at 62% 88%, rgba(255,255,255,0.15) 0 6px, rgba(255,255,255,0.60) 7px 8px, rgba(255,255,255,0) 9px);
+  background-size: 100% 100vh;
+  background-repeat: repeat-y;
+  animation: aero-bubbles 26s linear infinite;
+  will-change: transform;
+}
+@keyframes aero-bubbles {
+  from { transform: translate3d(0, 0, 0); }
+  to   { transform: translate3d(0, -100vh, 0); }
+}
+/* Everything the app renders sits above the bubble layer. Only `#app` needs a position added
+   (it's static by default and z-index alone wouldn't apply) — the bars already carry their own
+   sticky/fixed positioning from styles.css and MUST keep it, so they only get a z-index here.
+   Setting `position: relative` on .tabbar/.topbar drops them out of the viewport. */
+[data-aesthetic="frutigeraero"] #app { position: relative; z-index: 1; }
+[data-aesthetic="frutigeraero"] .topbar { z-index: 20; }
+[data-aesthetic="frutigeraero"] .tabbar { z-index: 30; }
+[data-aesthetic="frutigeraero"] .toast { z-index: 60; }
+
+/* ---------- Aero glass: panels, cards, cells, modals ---------- */
+[data-aesthetic="frutigeraero"] .panel,
+[data-aesthetic="frutigeraero"] .entry-card,
+[data-aesthetic="frutigeraero"] .workout-cell,
+[data-aesthetic="frutigeraero"] .modal-box,
+[data-aesthetic="frutigeraero"] .aesthetic-card {
+  background: var(--aero-gloss);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow: var(--aero-rim), var(--aero-lift);
+  -webkit-backdrop-filter: blur(8px) saturate(1.3);
+  backdrop-filter: blur(8px) saturate(1.3);
+}
+[data-aesthetic="frutigeraero"] .panel-done,
+[data-aesthetic="frutigeraero"] .workout-cell.done {
+  background: linear-gradient(180deg, rgba(255,255,255,0.95), rgba(214,244,220,0.85));
+  border-color: rgba(120, 200, 145, 0.85);
+}
+
+/* ---------- Top bar / bottom bar: frosted, not flat ---------- */
+[data-aesthetic="frutigeraero"] .topbar {
+  background: linear-gradient(180deg, rgba(255,255,255,0.88), rgba(212,238,251,0.72));
+  border-bottom: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 1px 0 rgba(255,255,255,0.9) inset, 0 2px 10px rgba(12, 74, 110, 0.12);
+  -webkit-backdrop-filter: blur(10px) saturate(1.3);
+  backdrop-filter: blur(10px) saturate(1.3);
+}
+[data-aesthetic="frutigeraero"] .topbar .brand {
+  font-weight: 900; letter-spacing: 0.005em;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+[data-aesthetic="frutigeraero"] .tabbar {
+  background: linear-gradient(180deg, rgba(255,255,255,0.86), rgba(202,232,248,0.78));
+  border-top: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 -1px 0 rgba(255,255,255,0.9) inset, 0 -3px 14px rgba(12, 74, 110, 0.14);
+  -webkit-backdrop-filter: blur(10px) saturate(1.3);
+  backdrop-filter: blur(10px) saturate(1.3);
+}
+[data-aesthetic="frutigeraero"] .tabbar button.active {
+  text-shadow: 0 0 10px rgba(0, 168, 232, 0.45);
+}
+
+/* ---------- Buttons: wet glass with a hard top highlight ---------- */
+[data-aesthetic="frutigeraero"] .btn {
+  border-radius: 999px;
+  background: var(--aero-gloss);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow: var(--aero-rim), 0 3px 8px rgba(12, 74, 110, 0.16);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.75);
+}
+[data-aesthetic="frutigeraero"] .btn-primary {
+  color: #ffffff;
+  text-shadow: 0 1px 2px rgba(4, 60, 92, 0.55);
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--accent) 55%, #ffffff) 0%,
+    var(--accent) 48%,
+    color-mix(in srgb, var(--accent) 82%, #04324a) 50%,
+    color-mix(in srgb, var(--accent) 92%, #04324a) 100%);
+  border-color: color-mix(in srgb, var(--accent) 70%, #04324a);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.7) inset,
+              0 -2px 6px rgba(4, 50, 74, 0.28) inset,
+              0 4px 12px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+[data-aesthetic="frutigeraero"] .btn-danger {
+  color: #ffffff; text-shadow: 0 1px 2px rgba(90, 10, 16, 0.5);
+  background: linear-gradient(180deg, #f79aa1 0%, var(--bad) 48%, #c8333e 50%, #b02b36 100%);
+  border-color: #a8262f;
+}
+[data-aesthetic="frutigeraero"] .btn-good {
+  color: #ffffff; text-shadow: 0 1px 2px rgba(8, 60, 26, 0.5);
+  background: linear-gradient(180deg, #8fd6a5 0%, var(--good) 48%, #24803f 50%, #1d6c35 100%);
+  border-color: #1d6c35;
+}
+[data-aesthetic="frutigeraero"] .btn-ghost {
+  background: transparent; border-color: transparent; box-shadow: none; text-shadow: none;
+}
+[data-aesthetic="frutigeraero"] .icon-btn {
+  border-radius: 999px;
+  background: var(--aero-gloss);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow: var(--aero-rim), 0 2px 6px rgba(12, 74, 110, 0.14);
+}
+[data-aesthetic="frutigeraero"] .subnav button {
+  background: var(--aero-gloss);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow: var(--aero-rim);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+[data-aesthetic="frutigeraero"] .subnav button.active {
+  color: #ffffff; text-shadow: 0 1px 2px rgba(4, 60, 92, 0.5);
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--accent) 50%, #ffffff) 0%, var(--accent) 48%,
+    color-mix(in srgb, var(--accent) 85%, #04324a) 50%, color-mix(in srgb, var(--accent) 95%, #04324a) 100%);
+  border-color: color-mix(in srgb, var(--accent) 70%, #04324a);
+}
+[data-aesthetic="frutigeraero"] .unit-toggle { border-radius: 999px; overflow: hidden; }
+[data-aesthetic="frutigeraero"] .unit-toggle button.active {
+  color: #ffffff; text-shadow: 0 1px 1px rgba(4, 60, 92, 0.5);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 45%, #fff), var(--accent));
+}
+
+/* ---------- Inputs: recessed rather than raised ---------- */
+[data-aesthetic="frutigeraero"] input[type="text"],
+[data-aesthetic="frutigeraero"] input[type="number"],
+[data-aesthetic="frutigeraero"] select,
+[data-aesthetic="frutigeraero"] textarea {
+  background: linear-gradient(180deg, rgba(226, 243, 252, 0.95), rgba(255, 255, 255, 0.95));
+  border: 1px solid rgba(126, 180, 208, 0.75);
+  border-radius: 10px;
+  box-shadow: 0 2px 5px rgba(12, 74, 110, 0.12) inset, 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+/* ---------- Type: bright backdrop needs a little lift, not heavier weight ---------- */
+[data-aesthetic="frutigeraero"] .section-title {
+  font-weight: 700; letter-spacing: 0.01em;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+/* Section labels sit directly on the sky with no panel behind them, so they get the dim tone
+   (not faint) plus a white halo — the default faint grey vanishes against the gradient. */
+[data-aesthetic="frutigeraero"] .subtle-label {
+  color: var(--text-dim); font-weight: 700;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.9), 0 0 6px rgba(255, 255, 255, 0.7);
+}
+[data-aesthetic="frutigeraero"] .home-date-line {
+  color: var(--text-dim);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+[data-aesthetic="frutigeraero"] .pill {
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.75) inset;
+}
+
+/* ---------- Reduced motion: keep the look, drop the drift ---------- */
+@media (prefers-reduced-motion: reduce) {
+  [data-aesthetic="frutigeraero"] body::before { animation: none; }
+}

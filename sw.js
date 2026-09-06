@@ -1,8 +1,11 @@
 // Minimal offline cache for LIFEMan.EXE.
-// Caches the app shell (index.html + the extracted app.js bundle) so it still opens with no signal.
+// Caches the app shell (index.html + the extracted app.js / styles.css) so it still opens with
+// no signal. Lazily-loaded per-aesthetic CSS (aesthetics/<key>/theme.css) is deliberately NOT
+// pre-cached — the fetch handler below caches each one the first time it's actually used, so an
+// install only carries the themes that device has looked at.
 // Bump CACHE_NAME any time you want to force everyone's install to pick up a fresh copy.
-const CACHE_NAME = 'lifeman-v2';
-const APP_SHELL = ['./', './index.html', './app.js', './manifest.json'];
+const CACHE_NAME = 'lifeman-v3';
+const APP_SHELL = ['./', './index.html', './app.js', './styles.css', './manifest.json'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
