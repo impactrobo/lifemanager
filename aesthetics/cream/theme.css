@@ -1,0 +1,291 @@
+@import url('https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,700;6..96,900&display=swap');
+
+/* ============================================================================
+   Aesthetic: C.R.E.A.M — pinstripe purple, gold, and a set of chaos emeralds.
+
+   Beyond the palette:
+     1. Backdrop is a pinstripe suit: thin white verticals over a purple that is
+        DARKEST down the centre column. That's deliberate — the content sits in
+        the middle, so the darkest band is exactly where cream text needs it.
+     2. Home tiles become brilliant-cut gems, each a different stone. The
+        silhouette is a mask (gem.svg); the facets are a repeating-conic-gradient
+        underneath it, so one shape file serves six hues.
+     3. Gold buttons carry a static sparkle field plus a travelling sheen (CSS),
+        and throw a burst of falling glitter on tap (fx.ts in this folder).
+
+   External aesthetic — lazily loaded, everything scoped under [data-aesthetic="cream"].
+   Picker swatch `.aesthetic-preview-cream` lives in styles.css (the picker renders
+   under a different theme). .topbar/.tabbar positioning is never overridden.
+   ============================================================================ */
+
+:root[data-aesthetic="cream"] {
+  --bg: #2a0d44;
+  --surface: #3a1560;
+  --surface2: #481c74;
+  --border: #9c7c2a;
+  --border-soft: #5d3a86;
+  --text: #f6efe0;          /* cream, obviously */
+  --text-dim: #c9b48f;
+  --text-faint: #9c8a6d;
+  --accent: #f5c518;
+  --accent-dim: color-mix(in srgb, var(--accent) 55%, var(--border));
+  --accent-soft: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  --good: #1fbf6b;
+  --good-soft: #0f3626;
+  --bad: #f43f6e;
+  --bad-soft: #40102a;
+  --warn: #f59e0b;
+  --reset-border: #f6efe0;
+  --reset-bg: #481c74;
+  --reset-text: #f6efe0;
+  --myo: #c084fc;
+  --goldenrod: #d4a017;
+  --savings: #2dd4a7;
+  --savings-soft: color-mix(in srgb, var(--savings) 18%, var(--surface));
+  --font-head: 'Bodoni Moda', Georgia, serif;
+  --font-body: 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --radius: 6px;
+
+  --cream-gold: linear-gradient(180deg, #ffeba4 0%, #f5c518 40%, #e0a913 52%, #a87b0d 100%);
+  --cream-gold-edge: #6b4e08;
+  --cream-rim: 0 0 0 1px rgba(245, 197, 24, 0.22), 0 3px 12px rgba(0, 0, 0, 0.55);
+}
+
+/* ---------- Backdrop: pinstripe suit ----------
+   Two layers: the white verticals, then the purple beneath them running light at the edges
+   to darkest at the centre. Fixed pseudo-element rather than background-attachment (broken
+   on iOS Safari). */
+[data-aesthetic="cream"] body { background-color: #2a0d44; }
+[data-aesthetic="cream"] body::after {
+  content: '';
+  position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background-image:
+    repeating-linear-gradient(90deg,
+      rgba(255, 255, 255, 0.34) 0 1px,
+      rgba(255, 255, 255, 0) 1px 15px),
+    linear-gradient(90deg,
+      #562a8c 0%, #43206f 22%, #331150 40%,
+      #280c40 50%,
+      #331150 60%, #43206f 78%, #562a8c 100%);
+}
+[data-aesthetic="cream"] #app { position: relative; z-index: 1; }
+
+/* ---------- Panels: deep velvet with a gold hairline ---------- */
+[data-aesthetic="cream"] .panel,
+[data-aesthetic="cream"] .entry-card,
+[data-aesthetic="cream"] .note-card,
+[data-aesthetic="cream"] .chart-wrap,
+[data-aesthetic="cream"] .modal-box,
+[data-aesthetic="cream"] .aesthetic-card {
+  background: linear-gradient(180deg, rgba(60, 22, 99, 0.94) 0%, rgba(42, 13, 68, 0.96) 100%);
+  border: 1px solid rgba(245, 197, 24, 0.34);
+  box-shadow: var(--cream-rim), inset 0 1px 0 rgba(255, 235, 164, 0.14);
+}
+[data-aesthetic="cream"] .panel-done {
+  background: linear-gradient(180deg, #10402c 0%, #0c2c1f 100%);
+  border-color: color-mix(in srgb, var(--good) 55%, #0c2c1f);
+}
+
+/* ---------- Headings: gilded high-contrast serif ---------- */
+[data-aesthetic="cream"] .section-title {
+  color: var(--accent);
+  letter-spacing: 0.03em;
+  text-shadow: 0 0 16px rgba(245, 197, 24, 0.35), 0 2px 0 rgba(0, 0, 0, 0.6);
+}
+[data-aesthetic="cream"] .topbar .brand {
+  letter-spacing: 0.03em;
+  text-shadow: 0 0 18px rgba(245, 197, 24, 0.45), 0 2px 0 #000;
+}
+
+/* ---------- Bars ---------- */
+[data-aesthetic="cream"] .topbar {
+  background: linear-gradient(180deg, #3d1663 0%, #250b3c 100%);
+  border-bottom: 1px solid rgba(245, 197, 24, 0.45);
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.7);
+  z-index: 20;
+}
+[data-aesthetic="cream"] .tabbar {
+  background: linear-gradient(180deg, #250b3c 0%, #3d1663 100%);
+  border-top: 1px solid rgba(245, 197, 24, 0.45);
+  box-shadow: 0 -3px 18px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 235, 164, 0.16);
+  z-index: 30;
+}
+[data-aesthetic="cream"] .tabbar button.active {
+  text-shadow: 0 0 12px color-mix(in srgb, var(--accent) 80%, transparent);
+}
+[data-aesthetic="cream"] .toast { z-index: 60; }
+
+/* ---------- Gold buttons ----------
+   Neutral `.btn` FIRST, coloured variants after: they share specificity (0,2,0) and
+   .btn-primary also carries .btn, so source order decides. */
+[data-aesthetic="cream"] .btn,
+[data-aesthetic="cream"] .icon-btn,
+[data-aesthetic="cream"] .subnav button.active {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  background: var(--cream-gold);
+  border: 1px solid var(--cream-gold-edge);
+  color: #2a1a02;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.45);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), inset 0 -1px 0 rgba(90, 62, 4, 0.5),
+              0 2px 6px rgba(0, 0, 0, 0.5);
+}
+/* Sparkle field: a scattering of tiny specular points that fade in and out together, so the
+   gold reads as glittering rather than flat. Kept to opacity-only animation — cheap, and the
+   points can stay as one static background image. */
+[data-aesthetic="cream"] .btn::after,
+[data-aesthetic="cream"] .icon-btn::after,
+[data-aesthetic="cream"] .subnav button.active::after {
+  content: '';
+  position: absolute; inset: 0; pointer-events: none; z-index: 0;
+  background-image:
+    radial-gradient(circle at 14% 28%, rgba(255,255,255,0.95) 0 0.9px, rgba(255,255,255,0) 2px),
+    radial-gradient(circle at 37% 71%, rgba(255,255,255,0.85) 0 0.7px, rgba(255,255,255,0) 1.7px),
+    radial-gradient(circle at 58% 22%, rgba(255,255,255,0.90) 0 0.8px, rgba(255,255,255,0) 1.9px),
+    radial-gradient(circle at 76% 62%, rgba(255,255,255,0.85) 0 1.0px, rgba(255,255,255,0) 2.2px),
+    radial-gradient(circle at 90% 34%, rgba(255,255,255,0.80) 0 0.7px, rgba(255,255,255,0) 1.7px),
+    radial-gradient(circle at 26% 52%, rgba(255,255,255,0.75) 0 0.6px, rgba(255,255,255,0) 1.5px);
+  animation: cream-twinkle 2.4s ease-in-out infinite alternate;
+}
+@keyframes cream-twinkle {
+  from { opacity: 0.25; }
+  to   { opacity: 1; }
+}
+/* Travelling sheen. Separate pseudo from the sparkles so the two can animate independently —
+   and note it drives `transform` while the sparkles drive `opacity`, never the same property
+   from two animations. */
+[data-aesthetic="cream"] .btn::before,
+[data-aesthetic="cream"] .subnav button.active::before {
+  content: '';
+  position: absolute; top: -60%; bottom: -60%; left: -30%; width: 26%;
+  pointer-events: none; z-index: 0;
+  background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.75) 50%, rgba(255,255,255,0) 100%);
+  animation: cream-sheen 5.5s ease-in-out infinite;
+}
+@keyframes cream-sheen {
+  0%, 68% { transform: translateX(0) skewX(-20deg); }
+  100%    { transform: translateX(520%) skewX(-20deg); }
+}
+[data-aesthetic="cream"] .btn > *,
+[data-aesthetic="cream"] .subnav button.active > * { position: relative; z-index: 1; }
+
+[data-aesthetic="cream"] .btn-primary {
+  background: linear-gradient(180deg, #7bf0b4 0%, #1fbf6b 42%, #149a55 52%, #0a6b3a 100%);
+  border-color: #075230; color: #04240f;
+}
+[data-aesthetic="cream"] .btn-danger {
+  background: linear-gradient(180deg, #ffb0c6 0%, #f43f6e 42%, #cc1f4c 52%, #8d0f30 100%);
+  border-color: #6d0a24; color: #2c0310;
+}
+[data-aesthetic="cream"] .btn-good {
+  background: linear-gradient(180deg, #7bf0b4 0%, #1fbf6b 42%, #149a55 52%, #0a6b3a 100%);
+  border-color: #075230; color: #04240f;
+}
+[data-aesthetic="cream"] .btn-ghost {
+  background: none; border-color: transparent; box-shadow: none; text-shadow: none;
+  color: var(--text-dim);
+}
+[data-aesthetic="cream"] .btn-ghost::after,
+[data-aesthetic="cream"] .btn-ghost::before { display: none; }
+[data-aesthetic="cream"] .subnav button {
+  background: linear-gradient(180deg, #4a1d78 0%, #33114f 100%);
+  border: 1px solid rgba(245, 197, 24, 0.3);
+  color: var(--text-dim);
+}
+[data-aesthetic="cream"] .unit-toggle { border-color: rgba(245, 197, 24, 0.45); }
+[data-aesthetic="cream"] .unit-toggle button.active { background: var(--cream-gold); color: #2a1a02; }
+
+/* ---------- Inputs: recessed velvet ---------- */
+[data-aesthetic="cream"] input[type="text"],
+[data-aesthetic="cream"] input[type="number"],
+[data-aesthetic="cream"] select,
+[data-aesthetic="cream"] textarea,
+[data-aesthetic="cream"] .note-editor {
+  background: linear-gradient(180deg, #1f0834 0%, #2c1049 100%);
+  border: 1px solid rgba(245, 197, 24, 0.30);
+  color: var(--text);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.8);
+}
+
+/* ---------- Home tiles: the chaos emeralds ----------
+   The tile keeps its square box (layout, text flow, tap target) and the gem is drawn as a
+   masked ::before that fills it — the same approach as Draconic's claw, and for the same
+   reason: clip-path would take the border and shadow with it and squeeze the label.
+
+   The facets are a repeating-conic-gradient radiating from just under the table, so alternating
+   wedges catch and lose the light. One shape file, six stones: each tile only sets --gem-lt /
+   --gem-dk / --gem-glow.
+
+   Gem assignment is by POSITION (nth-child), not by section, so reordering or hiding sections
+   on the Home screen reshuffles which stone a section gets. That's intentional — the grid always
+   reads as a full set. */
+[data-aesthetic="cream"] .workout-cell.home-tile {
+  background: none;
+  border: none;
+  box-shadow: none;
+  position: relative;
+  /* Content rides in the crown (above the girdle at 40%), so it needs bottom padding to push
+     it up off the pavilion. Keep that padding MODEST: `.workout-cell` is `aspect-ratio: 1` in
+     a `repeat(3, 1fr)` grid, and if icon + label can't fit in the space padding leaves behind,
+     the box grows to fit its content, the square ratio breaks, and the tiles overrun the grid
+     track (a 40% bottom pad blew the third column clean off screen). The icon is shrunk below
+     for the same reason. */
+  padding: 8% 10% 26%;
+  gap: 2px;
+}
+/* The icon SVGs paint themselves from var(--accent), so re-scoping that one property on the
+   tile turns them white — gold-on-gold made the Exercise gem's icon almost invisible. */
+[data-aesthetic="cream"] .workout-cell.home-tile { --accent: #ffffff; }
+/* styles.css sizes this with !important, so matching it is the only way to win. */
+[data-aesthetic="cream"] .workout-cell.home-tile .icon-svg {
+  width: 24px !important;
+  height: 24px !important;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.85));
+}
+[data-aesthetic="cream"] .workout-cell.home-tile::before {
+  content: '';
+  position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  -webkit-mask: url("gem.svg") center / contain no-repeat;
+          mask: url("gem.svg") center / contain no-repeat;
+  background-image:
+    /* specular streak across the table */
+    linear-gradient(172deg, rgba(255,255,255,0.62) 0%, rgba(255,255,255,0.10) 20%, rgba(255,255,255,0) 34%),
+    /* the facets */
+    repeating-conic-gradient(from 18deg at 50% 30%,
+      var(--gem-dk) 0 22deg, var(--gem-lt) 22deg 44deg);
+  filter: drop-shadow(0 0 7px var(--gem-glow)) drop-shadow(0 2px 3px rgba(0,0,0,0.55));
+  transition: filter 160ms ease-out;
+}
+[data-aesthetic="cream"] .workout-cell.home-tile:active::before {
+  filter: drop-shadow(0 0 15px var(--gem-glow)) brightness(1.25);
+}
+[data-aesthetic="cream"] .workout-cell.home-tile > * { position: relative; z-index: 1; }
+[data-aesthetic="cream"] .workout-cell.home-tile .wname {
+  color: #fffbef;
+  font-size: 10px;
+  line-height: 1.1;
+  letter-spacing: 0.02em;
+  /* The facets run bright-to-dark directly behind the label, so one soft shadow isn't enough. */
+  text-shadow: 0 1px 2px rgba(0,0,0,0.95), 0 0 8px rgba(0,0,0,0.85);
+}
+/* The set. */
+[data-aesthetic="cream"] .workout-grid > .home-tile:nth-child(1) { --gem-lt: #4ae08f; --gem-dk: #0a6b3a; --gem-glow: rgba(31,191,107,0.75); }
+[data-aesthetic="cream"] .workout-grid > .home-tile:nth-child(2) { --gem-lt: #ffe07a; --gem-dk: #9a7200; --gem-glow: rgba(245,197,24,0.75); }
+[data-aesthetic="cream"] .workout-grid > .home-tile:nth-child(3) { --gem-lt: #c99bff; --gem-dk: #5b21a8; --gem-glow: rgba(168,85,247,0.75); }
+[data-aesthetic="cream"] .workout-grid > .home-tile:nth-child(4) { --gem-lt: #ff8fae; --gem-dk: #98123c; --gem-glow: rgba(244,63,110,0.75); }
+[data-aesthetic="cream"] .workout-grid > .home-tile:nth-child(5) { --gem-lt: #7ce8f8; --gem-dk: #0a7a8f; --gem-glow: rgba(34,211,238,0.75); }
+[data-aesthetic="cream"] .workout-grid > .home-tile:nth-child(6) { --gem-lt: #9aa2ff; --gem-dk: #2f2f9e; --gem-glow: rgba(99,102,241,0.75); }
+/* A seventh stone, in case the grid ever grows — the set is seven after all. */
+[data-aesthetic="cream"] .workout-grid > .home-tile:nth-child(7) { --gem-lt: #ffffff; --gem-dk: #8a8f9c; --gem-glow: rgba(255,255,255,0.7); }
+
+/* ---------- Reduced motion ----------
+   (the JS glitter burst checks the same query before spawning — see fx.ts) */
+@media (prefers-reduced-motion: reduce) {
+  [data-aesthetic="cream"] .btn::after,
+  [data-aesthetic="cream"] .icon-btn::after,
+  [data-aesthetic="cream"] .subnav button.active::after { animation: none; opacity: 0.8; }
+  [data-aesthetic="cream"] .btn::before,
+  [data-aesthetic="cream"] .subnav button.active::before { animation: none; opacity: 0; }
+}

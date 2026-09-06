@@ -134,6 +134,13 @@ const AESTHETIC_ACCENTS = {
     acid:        { label: 'Acid Chartreuse',   value: '#d4ff00' },
     sludge:      { label: 'Sludge Lime',       value: '#b8d936' },
   },
+  cream: {
+    gold:    { label: 'Bullion',     value: '#f5c518' },
+    emerald: { label: 'Emerald',     value: '#1fbf6b' },
+    amethyst:{ label: 'Amethyst',    value: '#a855f7' },
+    jade:    { label: 'Jade',        value: '#2dd4a7' },
+    rose:    { label: 'Rose Gold',   value: '#e8a0a0' },
+  },
   draconic: {
     ember:   { label: 'Ember',      value: '#ffb020' },
     molten:  { label: 'Molten Gold',value: '#ffd24a' },
@@ -197,6 +204,7 @@ const AESTHETICS = {
   // `fx: true` additionally loads aesthetics/draconic/fx.js (compiled from fx.ts) for the
   // tap-ember particle burst — see applyAestheticFX().
   draconic:     { label: 'Draconic',      desc: 'Scorched black and dragonfire — gilded scale plate, footprint tiles, embers on every hot tap.', group: 'Maximalist', external: true, fx: true },
+  cream:        { label: 'C.R.E.A.M',     desc: 'Pinstripe purple and gold — a set of chaos emeralds for tiles, and glitter on every tap.', group: 'Maximalist', external: true, fx: true },
 };
 const AESTHETIC_GROUP_ORDER = ['Maximalist', 'Vibrant', 'Contrast', 'Light'];
 // Which groups are expanded in the settings panel right now — session-only (not persisted),

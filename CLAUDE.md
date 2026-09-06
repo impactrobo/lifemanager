@@ -101,10 +101,19 @@ aesthetics/<key>/fx.js   COMMITTED build output — this is what the browser loa
   Make the rAF loop demand-driven (stop when there's nothing to animate), honour
   `prefers-reduced-motion`, and pause on `document.hidden`.
 - Append overlays to `<body>`, never `#app` — `#app.innerHTML` is replaced on every render.
+  Mount them as `<canvas aria-hidden="true">`: `test_aesthetic_fx.js` finds every module's
+  overlay by that shape, so it covers new FX aesthetics with no test changes.
 - ES modules can't load over `file://`, so the module is inert in the `file://`-based tests
   (the import failure is caught and the theme still renders). FX tests must serve over HTTP.
 
 Purely CSS effects (the Hunny bee, Y2K's glints, Draconic's button flames) need no module.
+
+### Sizing content inside a re-shaped tile
+`.workout-cell` is `aspect-ratio: 1` inside `repeat(3, 1fr)`. If padding leaves less room than
+icon + label actually need, the box **grows to fit its content**, the square ratio breaks and
+the tiles overrun their grid track (a 40% bottom pad on C.R.E.A.M's gems pushed the third
+column off screen). When a theme insets content to fit a silhouette, shrink the icon to match —
+`styles.css` sizes `.workout-cell .cell-icon svg` with `!important`, so you must too.
 
 ### CSS gotcha that has bitten twice
 `[data-aesthetic="x"] .btn` and `[data-aesthetic="x"] .btn-primary` have **identical

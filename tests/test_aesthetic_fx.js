@@ -17,9 +17,13 @@ const ROOT = path.resolve(__dirname, '..');
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css',
   '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml' };
 
-// A control that should throw embers, and one that shouldn't (see TRIGGER_SELECTOR in fx.ts).
+// A control that should throw particles, and one that shouldn't (see TRIGGER_SELECTOR in
+// each fx.ts). Both are common to every fx aesthetic so this stays data-driven.
 const HOT_SELECTOR = '.btn-primary';
 const COLD_SELECTOR = '#app input';
+// Every FX module mounts its overlay as an aria-hidden canvas on <body> — that's the shared
+// shape of the contract, so the test finds it that way instead of hardcoding one module's id.
+const FX_CANVAS = 'body > canvas[aria-hidden="true"]';
 
 function serve() {
   const server = http.createServer((req, res) => {
@@ -35,10 +39,10 @@ function serve() {
   return server;
 }
 
-/** Count non-transparent pixels on the ember canvas — the honest "are particles drawn" check. */
+/** Count non-transparent pixels on the FX canvas — the honest "are particles drawn" check. */
 async function litPixels(page) {
-  return page.evaluate(() => {
-    const c = document.getElementById('draconicEmberCanvas');
+  return page.evaluate((sel) => {
+    const c = document.querySelector(sel);
     if (!c) return -1;
     const g = c.getContext('2d');
     if (!g) return -1;
@@ -46,7 +50,7 @@ async function litPixels(page) {
     let n = 0;
     for (let i = 3; i < d.length; i += 4) if (d[i] > 8) n++;
     return n;
-  });
+  }, FX_CANVAS);
 }
 
 async function tapCenter(page, selector) {
@@ -111,54 +115,62 @@ async function tapCenter(page, selector) {
   // --- 1. No FX module is installed under a plain aesthetic. ---
   await page.evaluate(() => setAesthetic('cyberpunk'));
   await page.waitForTimeout(200);
-  if (await page.$('#draconicEmberCanvas')) throw new Error('ember canvas present under a non-fx aesthetic');
+  if (await page.$(FX_CANVAS)) throw new Error('an FX canvas is present under a non-fx aesthetic');
   console.log('non-fx aesthetic: no canvas (good)');
 
-  // --- 2. Selecting the fx aesthetic loads and init()s the module. ---
-  await page.evaluate(() => setAesthetic('draconic'));
-  await page.waitForFunction(() => !!document.getElementById('draconicEmberCanvas'), null, { timeout: 5000 });
-  console.log('draconic: fx module loaded and canvas installed');
+  for (const key of fxKeys) {
+    console.log(`
+--- ${key} ---`);
 
-  await page.evaluate(() => switchTab('budget'));
-  await page.waitForTimeout(250);
+    // --- 2. Selecting the fx aesthetic loads and init()s the module. ---
+    await page.evaluate(k => setAesthetic(k), key);
+    await page.waitForFunction(sel => !!document.querySelector(sel), FX_CANVAS, { timeout: 5000 });
+    const canvasId = await page.evaluate(sel => document.querySelector(sel).id, FX_CANVAS);
+    console.log(`fx module loaded, canvas #${canvasId}`);
 
-  // --- 3. A cold control draws nothing; a hot one draws embers. ---
-  if (await litPixels(page) !== 0) throw new Error('canvas should start empty');
-  await tapCenter(page, COLD_SELECTOR);
-  await page.waitForTimeout(150);
-  const afterCold = await litPixels(page);
-  console.log('lit pixels after tapping a cold control:', afterCold);
-  if (afterCold !== 0) throw new Error('embers spawned from a control that should not trigger them');
+    await page.evaluate(() => switchTab('budget'));
+    await page.waitForTimeout(250);
 
-  await tapCenter(page, HOT_SELECTOR);
-  await page.waitForTimeout(150);
-  const afterHot = await litPixels(page);
-  console.log('lit pixels after tapping a hot control:', afterHot);
-  if (afterHot <= 0) throw new Error('no embers spawned from a hot control');
+    // --- 3. A cold control draws nothing; a hot one draws particles. ---
+    if (await litPixels(page) !== 0) throw new Error(`${key}: canvas should start empty`);
+    await tapCenter(page, COLD_SELECTOR);
+    await page.waitForTimeout(150);
+    const afterCold = await litPixels(page);
+    console.log('lit pixels after tapping a cold control:', afterCold);
+    if (afterCold !== 0) throw new Error(`${key}: particles spawned from a control that should not trigger them`);
 
-  // --- 4. The loop is demand-driven: embers die and the canvas clears itself. ---
-  await page.waitForTimeout(1800);
-  const afterSettle = await litPixels(page);
-  console.log('lit pixels once the burst has burned out:', afterSettle);
-  if (afterSettle !== 0) throw new Error('embers never expired — the rAF loop may be running forever');
+    await tapCenter(page, HOT_SELECTOR);
+    await page.waitForTimeout(150);
+    const afterHot = await litPixels(page);
+    console.log('lit pixels after tapping a hot control:', afterHot);
+    if (afterHot <= 0) throw new Error(`${key}: no particles spawned from a hot control`);
 
-  // --- 5. Switching away destroys it: canvas gone AND the listener released. ---
-  await page.evaluate(() => setAesthetic('cyberpunk'));
-  await page.waitForTimeout(250);
-  if (await page.$('#draconicEmberCanvas')) throw new Error('destroy() left the canvas behind');
-  await page.evaluate(() => switchTab('budget'));
-  await page.waitForTimeout(200);
-  await tapCenter(page, HOT_SELECTOR); // must be inert now
-  await page.waitForTimeout(150);
-  if (await page.$('#draconicEmberCanvas')) {
-    throw new Error('a tap after destroy() re-created the canvas — the pointerdown listener survived');
+    // --- 4. The loop is demand-driven: particles die and the canvas clears itself. ---
+    await page.waitForTimeout(2000);
+    const afterSettle = await litPixels(page);
+    console.log('lit pixels once the burst has burned out:', afterSettle);
+    if (afterSettle !== 0) throw new Error(`${key}: particles never expired — the rAF loop may be running forever`);
+
+    // --- 5. Switching away destroys it: canvas gone AND the listener released. ---
+    await page.evaluate(() => setAesthetic('cyberpunk'));
+    await page.waitForTimeout(250);
+    if (await page.$(FX_CANVAS)) throw new Error(`${key}: destroy() left the canvas behind`);
+    await page.evaluate(() => switchTab('budget'));
+    await page.waitForTimeout(200);
+    await tapCenter(page, HOT_SELECTOR); // must be inert now
+    await page.waitForTimeout(150);
+    if (await page.$(FX_CANVAS)) {
+      throw new Error(`${key}: a tap after destroy() re-created the canvas — the pointerdown listener survived`);
+    }
+    console.log('destroy(): canvas removed and listener released');
+
+    // --- 6. Re-selecting it works again (init/destroy are repeatable). ---
+    await page.evaluate(k => setAesthetic(k), key);
+    await page.waitForFunction(sel => !!document.querySelector(sel), FX_CANVAS, { timeout: 5000 });
+    console.log('re-selecting re-installs cleanly');
+    await page.evaluate(() => setAesthetic('cyberpunk'));
+    await page.waitForTimeout(200);
   }
-  console.log('destroy(): canvas removed and listener released');
-
-  // --- 6. Re-selecting it works again (init/destroy are repeatable). ---
-  await page.evaluate(() => setAesthetic('draconic'));
-  await page.waitForFunction(() => !!document.getElementById('draconicEmberCanvas'), null, { timeout: 5000 });
-  console.log('re-selecting draconic re-installs cleanly');
 
   if (errors.length) throw new Error('Page errors:\n  ' + errors.join('\n  '));
   console.log('test_aesthetic_fx.js: PASS');
