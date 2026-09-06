@@ -5803,7 +5803,7 @@ function renderCloudSyncPanel() {
   return `
     <div style="font-size:12px; color:var(--text-dim); margin-bottom:10px;">Signed in as ${escapeHtml(CLOUD_USER.email || CLOUD_USER.displayName || 'this account')} &middot; <span style="color:${CLOUD_SYNC_STATUS==='error'?'var(--bad)':'var(--good)'};">${statusLabel}</span></div>
     ${CLOUD_SYNC_STATUS === 'error' ? `<div style="font-size:11px; color:var(--bad); margin-bottom:8px;">${escapeHtml(CLOUD_SYNC_ERROR || '')}</div>` : ''}
-    <button class="btn btn-block" onclick="manualSyncNow()">SYNC NOW</button>
+    <button class="btn btn-block" onclick="manualSyncNow()">SYNC NOW (PULL DATA)</button>
     <button class="btn btn-block" style="margin-top:8px;" onclick="signOutCloudSync()">SIGN OUT OF SYNC</button>
   `;
 }
