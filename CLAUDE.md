@@ -1,7 +1,13 @@
 # LIFEMan.EXE
 
-Single-file personal life-tracking web app (exercise, schedule, hobbies, health/diet, notes,
-budget). Local-first via localStorage. No build step. Read this before making any change.
+Personal life-tracking web app (exercise, schedule, hobbies, health/diet, notes, budget).
+Local-first via localStorage. No bundler / no build step to deploy. Read this before making
+any change.
+
+The app ships as two files: `index.html` (shell + all CSS) and `app.js` (all application
+logic, ~7.9k lines, loaded as a classic `<script>` so its top-level `function`s stay global
+for the inline `onclick=` handlers). It used to be one file; the split is what makes type
+checking possible. There is still no compile step — `app.js` is served as-is.
 
 ## Read these first, in order
 1. `docs/PROJECT_OVERVIEW.md` — what the app is and the design philosophy to preserve
@@ -20,8 +26,44 @@ budget). Local-first via localStorage. No build step. Read this before making an
    they're actually verified — don't let this silently go stale.
 
 ## Source of truth
-`index.html` is the entire app. If a doc goes stale relative to it, trust the file and fix
-the doc.
+`index.html` + `app.js` are the entire app. If a doc goes stale relative to them, trust the
+files and fix the doc. (The `docs/` folder — PROJECT_OVERVIEW / ARCHITECTURE / DATA_MODEL /
+ROADMAP — still describes the pre-split, pre-Cloud-Sync, publish-as-Artifact era in places;
+this file and the code are ahead of it.)
+
+## Type checking
+`npm run typecheck` runs `tsc` in check-only mode (`allowJs` + `checkJs`, no emit) over
+`app.js` against the ambient types in `types/app.d.ts`. It is deliberately loose right now
+(`strict` / `noImplicitAny` off) and **must stay at zero errors** — treat a new error as a
+real signal, not noise to suppress.
+
+- `types/app.d.ts` holds `AppState` (the STATE shape), the `AestheticFX` contract, and shims
+  for the CDN globals (`Chart`, `firebase`) and a few `window` props.
+- `defaultState()` is annotated `@returns {AppState}`, so that function is the one place the
+  full STATE shape is actually enforced — keep `AppState` in sync when you add a field (and
+  still add it to `defaultState()` **and** the `loadState()` merge, per DATA_MODEL.md).
+- The live `STATE` variable is intentionally left un-annotated for now (a strict annotation
+  lights up ~80 legacy call sites); tightening it is a future step, not a regression.
+- `.value` / `.checked` / `.src` / `.getContext` are widened onto `HTMLElement` in the d.ts
+  so `getElementById(...).value` doesn't need a cast at every call site. Accepted tradeoff.
+
+## Aesthetic FX modules (visual / animation effects per aesthetic)
+As aesthetics get more maximalist (Y2K, Frutiger Aero, Metalheart, …), effects that CSS +
+`@keyframes` can't do (canvas shimmer, particles, pointer parallax) go in a **TypeScript**
+module per aesthetic, not inline in `app.js`:
+
+```
+aesthetics/<key>/fx.ts   default-exports an object implementing AestheticFX (see types/app.d.ts)
+```
+
+Contract: `init(root)` starts the effect, `destroy()` stops **everything** it started (every
+rAF loop, listener, timer) — the aesthetic switcher calls `destroy()` on the outgoing theme
+before `init()` on the incoming one, so a leak here bleeds into the next theme. Respect
+`matchMedia('(prefers-reduced-motion: reduce)')` and pause on `document.hidden`. Pure
+token/`@keyframes` aesthetics need no module — this is only for runtime behavior. New `.ts`
+FX modules are held to a higher bar than legacy `app.js` (write them clean under strict-ish
+types; the shared tsconfig is loose only because of `app.js`). Purely CSS-driven touches
+(e.g. the Hunny bee) stay in the `<style>` block in `index.html` as today.
 
 ## Known issues (fixed)
 - ~~`exportData()` was broken outside the Claude Artifact runtime~~ — **fixed.** It used to
@@ -81,7 +123,13 @@ not a requirement.
 ## Testing
 Canonical test files live in `tests/` as individual `test_*.js` Node scripts using Playwright
 directly (no test runner) — run each with `node tests/test_whatever.js`; nonzero exit = failure.
-See `tests/README.md` for setup.
+`npm test` (`tests/run_all.js`) runs every `test_*.js` in sequence and reports a summary.
+See `tests/README.md` for setup. Tests load `file://.../index.html`; the extracted `app.js`
+loads fine over `file://` since it's a classic (non-module) script.
+
+Added alongside the app.js split: `test_smoke.js` (boots clean + every section renders + the
+narrow-viewport tabbar guard) and `test_state_persistence.js` (the `loadState()` migration
+contract — old saves gain new defaults, keep their data).
 
 **All 16 of 16 original canonical tests are written and passing**, plus one new one added
 alongside the Cloud Sync feature (`test_cloud_sync.js`) — 17 total, all passing together in one
@@ -99,7 +147,9 @@ Run the full canonical suite before every publish, screenshot-verify anything vi
 do a freshness check against whatever's currently live before overwriting a hosted version.
 
 ## Hosting
-Deployed via GitHub Pages, served from `index.html` at repo root. Includes a basic PWA
-setup (`manifest.json`, `sw.js`, `icons/`) so it can be installed to an iOS home screen via
-Safari's "Add to Home Screen." No backend, no sync between devices yet — that's a known
-open design question, not yet solved.
+Deployed via GitHub Pages, served from `index.html` at repo root (which pulls in `app.js`).
+Includes a basic PWA setup (`manifest.json`, `sw.js`, `icons/`) so it can be installed to an
+iOS home screen via Safari's "Add to Home Screen." `sw.js` caches the app shell — its
+`APP_SHELL` list must include `app.js`, and bump `CACHE_NAME` whenever you want installs to
+pick up a fresh copy. Cross-device sync exists now as opt-in Cloud Sync (see above); the
+manual JSON export/import remains the always-available fallback.

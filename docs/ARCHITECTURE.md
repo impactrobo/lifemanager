@@ -3,26 +3,49 @@
 This is the dev-facing reference for working on `ironlog.html`. Read `PROJECT_OVERVIEW.md` first
 for *why* the app is shaped this way; this doc is *how* it's actually built.
 
+> **Note:** this doc still says `ironlog.html` in places and predates the `index.html` + `app.js`
+> split, Cloud Sync, and the committed test suite. Trust `CLAUDE.md` and the code where they
+> disagree; the sections below are still accurate for the subsystems they describe.
+
 ## File layout
 
-Everything lives in one file, `ironlog.html` (~7,700 lines, ~425KB as of this writing):
+The app ships as two files (plus PWA support files):
 
 ```
-<head>
-  <link> Google Fonts import (one big multi-family URL, added to as new aesthetics need new fonts)
-  <style> ... all CSS: base styles, component styles, then one block per aesthetic ... </style>
-</head>
-<body>
-  Static shell markup: topbar, #app (render target), #tabbar, rest-timer FAB/widget,
-  toast, scroll indicators, confirm modal
-  <script src=".../chart.umd.min.js"></script>   (CDN — the only external JS dependency)
-  <script> ... the entire application logic ... </script>
-</body>
+index.html   (~1,200 lines) — <head> (Google Fonts <link>, <style> with ALL CSS: base,
+             components, then one block per aesthetic) + <body> static shell markup (topbar,
+             #app render target, #tabbar, rest-timer FAB/widget, toast, scroll indicators,
+             confirm modal) + CDN <script src> tags (Chart.js, Firebase compat) + <script src="app.js">
+app.js       (~7,900 lines) — the entire application logic. Loaded as a CLASSIC script (not a
+             module) on purpose: top-level `function`s must stay global for the inline
+             `onclick="globalFn()"` handlers in the rendered HTML.
 ```
 
-There is exactly one `<script>` block with real content (a second, trivial one loads Chart.js
-from a CDN) — when regenerating `app.js` for syntax-checking or test purposes, extract the
-**largest** `<script>...</script>` block, not just the first one.
+`app.js` was extracted from the single inline `<script>` block the app used to have. It's
+served verbatim — no bundler, no transpile. `node --check app.js` for a fast syntax check.
+
+## Type checking
+
+`npm run typecheck` → `tsc -p tsconfig.json` (check-only: `allowJs`, `checkJs`, `noEmit`).
+Loose on purpose (`strict`/`noImplicitAny` off) but kept at **zero errors** — a new error is
+signal. Ambient types live in `types/app.d.ts`:
+
+- `AppState` — the STATE shape. `defaultState()` is annotated `@returns {AppState}`, so it's
+  the enforced source of truth for the shape. Keep `AppState` in sync when adding a field.
+  The live `STATE` var is left un-annotated for now (strict annotation = ~80 legacy errors).
+- `AestheticFX` — the FX-module contract (see below).
+- Shims: `Chart` / `firebase` globals; `_toastTimer` / `webkitAudioContext` / `claude` on
+  `Window`; `.value` / `.checked` / `.src` / `.getContext` widened onto `HTMLElement` so
+  `getElementById(...).value` needs no per-site cast.
+
+## Aesthetic FX modules
+
+Runtime visual effects that CSS + `@keyframes` can't express (canvas, particles, parallax)
+go in `aesthetics/<key>/fx.ts` — a TypeScript module default-exporting an `AestheticFX`
+(`{ key, init(root), destroy() }`). `destroy()` must stop everything `init()` started; the
+aesthetic switcher runs `destroy()` on the old theme before `init()` on the new one. Respect
+`prefers-reduced-motion` and pause on `document.hidden`. Token/`@keyframes`-only aesthetics
+(the majority today, e.g. the Hunny bee) need no module and stay in the `<style>` block.
 
 ## State & persistence
 
@@ -191,19 +214,24 @@ Tests are individual Node scripts (`test_*.js`) using Playwright directly (no te
 run each with `node test_whatever.js`; a nonzero exit code means failure. Shared pattern:
 
 ```js
-const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
-const page = await browser.newPage();
+const { chromium } = require('playwright');
+const path = require('path');
+const browser = await chromium.launch({ executablePath: process.env.PW_CHROMIUM_PATH || undefined });
+const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
 const errors = [];
 page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
 await page.route('**/*', route => {
   const url = route.request().url();
   if (url.startsWith('file://')) return route.continue();
-  return route.abort();               // blocks Google Fonts / CDN requests too — see below
+  return route.abort();               // blocks Google Fonts / CDN / Firestore too — see below
 });
-await page.goto('file:///path/to/ironlog.html');
+await page.goto('file://' + path.resolve(__dirname, '..', 'index.html'));
 // ...interact, assert, console.log for anything worth seeing in output...
 if (errors.length > 0) process.exit(1);
 ```
+
+`npm test` runs every `tests/test_*.js` via `tests/run_all.js`. New-machine setup and the
+`PW_CHROMIUM_PATH` convention are in `tests/README.md`.
 
 **Sandbox limitation, worth knowing before "fixing" a font bug that isn't one:** this
 environment's network egress blocks Google Fonts and CDN requests entirely for real browser page
@@ -226,20 +254,13 @@ not part of the maintained suite.)
 
 ## Build / verify / publish workflow
 
-1. Edit `ironlog.html` directly (it's the one source of truth).
-2. Regenerate `app.js` for a quick syntax check — extract the **largest** `<script>` block:
-   ```python
-   scripts = re.findall(r'<script>(.*?)</script>', html, re.DOTALL)
-   scripts.sort(key=len, reverse=True)
-   # scripts[0] -> app.js
-   ```
-   then `node --check app.js`.
-3. Run the full canonical test suite (see above).
-4. Screenshot-verify anything visual that the automated tests don't already assert on (a new
-   icon, a color change, a layout fix) — a throwaway Playwright script at a mobile viewport width
-   (≈390px) is the usual approach.
-5. **Mandatory freshness check before publishing**: `Artifact({action:"read", url:...})` to
-   confirm the currently-live version is what you expect to be diffing against (catches any
-   out-of-band changes before you overwrite them).
-6. `Artifact({action:"publish", file_path:"ironlog.html", url:...})` with the **same** `url`
-   each time, so it updates the existing Artifact in place rather than creating a new one.
+1. Edit `index.html` (shell/CSS) and/or `app.js` (logic) directly — those two files are the
+   source of truth.
+2. `node --check app.js` for a fast syntax check, then `npm run typecheck` (must stay clean).
+3. `npm test` — the full suite. Screenshot-verify anything visual the tests don't assert on
+   (a new icon, a color change, a layout fix) with a throwaway Playwright script at ≈390px.
+4. If a new `sw.js`-cached file was added or the shell changed materially, bump `CACHE_NAME`
+   in `sw.js` so installed PWAs pick up the update.
+5. Publish: commit and push — GitHub Pages serves `index.html` + `app.js` from the repo root.
+   (The old publish-as-Claude-Artifact flow is retired now that GitHub Pages is the deploy
+   target. If you ever do republish an Artifact, read it first to check freshness.)
