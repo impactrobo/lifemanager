@@ -5559,14 +5559,50 @@ function updateMeso(field, val) {
 }
 async function exportData() {
   const json = JSON.stringify(STATE, null, 2);
-  const filename = 'ironlog-backup-' + todayStr() + '.json';
+  const filename = 'lifeman-backup-' + todayStr() + '.json';
+
+  // Prefer the Claude Artifact runtime's native download prompt when present (harmless to keep
+  // around in case this is ever re-embedded there), but this is no longer the primary path —
+  // real hosting (GitHub Pages, etc.) never has window.claude, so the fallback below is what
+  // actually runs day to day.
   try {
     const downloads = (window.claude && typeof window.claude.use === 'function') ? await window.claude.use('downloads') : null;
-    if (!downloads) { showToast('Backup download is unavailable here'); return; }
-    await downloads.save({ filename, data: json });
-    showToast('Backup downloaded');
+    if (downloads) {
+      await downloads.save({ filename, data: json });
+      showToast('Backup downloaded');
+      return;
+    }
   } catch (e) {
     if (e && e.code === 'declined') return; // user dismissed the prompt — no error toast
+    // fall through to the portable path below rather than giving up
+  }
+
+  try {
+    const blob = new Blob([json], { type: 'application/json' });
+    // On iOS/mobile, the Web Share API (when it can share files) is the better experience —
+    // it opens the native share sheet so the backup can go straight to Files, AirDrop, email,
+    // etc., rather than landing wherever a same-tab download happens to go.
+    if (navigator.canShare && navigator.share) {
+      const file = new File([blob], filename, { type: 'application/json' });
+      if (navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: filename });
+        showToast('Backup shared');
+        return;
+      }
+    }
+    // Universal fallback: a temporary object URL + an <a download> click, which works in every
+    // modern desktop browser and most mobile ones without needing any special API.
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    showToast('Backup downloaded');
+  } catch (e) {
+    if (e && e.name === 'AbortError') return; // user cancelled the share sheet — no error toast
     showToast('Could not save backup');
   }
 }

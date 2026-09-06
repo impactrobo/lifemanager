@@ -19,21 +19,30 @@ budget). Local-first via localStorage. No build step. Read this before making an
 `index.html` is the entire app. If a doc goes stale relative to it, trust the file and fix
 the doc.
 
+## Known issues (fixed)
+- ~~`exportData()` was broken outside the Claude Artifact runtime~~ — **fixed.** It used to
+  depend on `window.claude.use('downloads')`, an Artifact-runtime-only capability absent on
+  real hosting (GitHub Pages, etc.), so "EXPORT BACKUP" silently did nothing anywhere except
+  inside a Claude Artifact preview. It now falls back to the Web Share API (nice on iOS — opens
+  the native share sheet so a backup can go straight to Files/AirDrop/email) and, failing that,
+  a plain `Blob` + temporary `<a download>` link, which works in effectively every modern
+  browser. Verified in `test_export.js` via a real captured Playwright download event.
+
 ## Testing
-Canonical test files (per ARCHITECTURE.md) live in `tests/` as individual `test_*.js` Node
-scripts using Playwright directly (no test runner) — run each with `node tests/test_whatever.js`;
-nonzero exit = failure. See `tests/README.md` for setup and current status.
+Canonical test files live in `tests/` as individual `test_*.js` Node scripts using Playwright
+directly (no test runner) — run each with `node tests/test_whatever.js`; nonzero exit = failure.
+See `tests/README.md` for setup.
 
-**Progress as of this repo's first real commit:** 3 of 15 canonical tests written and passing
-(`test_home.js`, `test_aesthetics.js`, `test_full_flow.js`). The rest still need writing — see
-`tests/README.md` for the remaining list. These never existed as committed files before; they
-only lived inside temporary chat sandboxes and were lost between sessions, so this is genuinely
-new work, not a restore.
-
-**One correction vs. the old ARCHITECTURE.md testing snippet:** don't hardcode
-`executablePath: '/opt/pw-browsers/chromium'` — that path is specific to one temporary chat
-sandbox and won't exist on a real dev machine. Use `process.env.PW_CHROMIUM_PATH || undefined`
-instead, after a one-time `npm install -D playwright && npx playwright install chromium`.
+**All 16 of 16 canonical tests are written and passing** (as of this commit, run together in
+one pass with no failures): `test_home.js`, `test_aesthetics.js`, `test_full_flow.js`,
+`test_resttimer.js`, `test_notes.js`, `test_budget.js`, `test_calendar.js`, `test_export.js`,
+`test_meal_builder.js`, `test_meal_plan.js`, `test_reps_validation.js`, `test_photos.js`,
+`test_quickadd_superset.js`, `test_schedule_setup.js`, `test_today_schedule_layout.js`,
+`test_ui_polish.js`. These never existed as committed files before this repo — they only ever
+lived inside temporary chat sandboxes and were lost between sessions, so this was genuinely new
+work, not a restore. Going forward, run the full suite before any publish and add a new
+test_*.js whenever a new feature area is added, so this stays complete rather than drifting
+back toward the gap it started in.
 
 Run the full canonical suite before every publish, screenshot-verify anything visual, and
 do a freshness check against whatever's currently live before overwriting a hosted version.

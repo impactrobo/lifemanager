@@ -7,13 +7,20 @@ node tests/test_whatever.js
 Nonzero exit code = failure. No test runner, no npm install needed beyond `playwright` itself
 (see setup note below).
 
-**Done:** `test_home.js`, `test_aesthetics.js`, `test_full_flow.js`
+**All 16 of 16 written and passing, run together with no failures:** `test_home.js`,
+`test_aesthetics.js`, `test_full_flow.js`, `test_resttimer.js`, `test_notes.js`,
+`test_budget.js`, `test_calendar.js`, `test_export.js`, `test_meal_builder.js`,
+`test_meal_plan.js`, `test_reps_validation.js`, `test_photos.js`,
+`test_quickadd_superset.js`, `test_schedule_setup.js`, `test_today_schedule_layout.js`,
+`test_ui_polish.js`.
 
-**Still to write** (see `../docs/ARCHITECTURE.md` "Testing" section for the full canonical
-list): `test_budget.js`, `test_calendar.js`, `test_export.js`, `test_meal_builder.js`,
-`test_meal_plan.js`, `test_notes.js`, `test_photos.js`, `test_resttimer.js`,
-`test_quickadd_superset.js`, `test_reps_validation.js`, `test_schedule_setup.js`,
-`test_ui_polish.js`, `test_today_schedule_layout.js`.
+(Note: ARCHITECTURE.md also mentions old `test_meso*.js` / `test_life.js` / `test_regress.js`
+files as stale/retired — those are explicitly NOT part of this list, and don't exist here.)
+
+Going forward: run the full suite before any publish, and add a new `test_*.js` whenever a
+new feature area ships, so the suite stays complete instead of drifting back toward the gap
+it started in (it previously only ever existed inside temporary chat sandboxes and was lost
+between sessions).
 
 ## One-time setup on a new machine
 ```
