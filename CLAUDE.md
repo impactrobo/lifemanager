@@ -108,12 +108,29 @@ aesthetics/<key>/fx.js   COMMITTED build output — this is what the browser loa
 
 Purely CSS effects (the Hunny bee, Y2K's glints, Draconic's button flames) need no module.
 
+## MAIN COLOR aesthetics (full-palette swap, not an accent tint)
+Most aesthetics' `AESTHETIC_ACCENTS` entries are `{label, value}` and picking one only sets
+`--accent`. Aesthetics listed in `FULL_PALETTE_AESTHETICS` (`terminal`, `sixiang`, `cream`)
+instead give each entry a full mini-palette — `applyAccentColor()` writes the whole
+`TERMINAL_PALETTE_VARS` list inline on `<html>`, and clears it again when you leave. Picker
+wording comes from `PALETTE_PICKER_COPY`; entries can set `swatch` to override the chip colour
+(C.R.E.A.M needs this — both its palettes share the same gold accent).
+
+To make a theme actually respond to the swap, its `theme.css` must **derive** hue-dependent
+surfaces from `--bg` / `--surface` / `--surface2` via `color-mix()` rather than hardcoding hex.
+Note `--good` is in the swappable set: C.R.E.A.M uses it as the "opposite hue", so choosing
+Dollar Green turns the suit green *and* flips the primary buttons to purple.
+
 ### Sizing content inside a re-shaped tile
 `.workout-cell` is `aspect-ratio: 1` inside `repeat(3, 1fr)`. If padding leaves less room than
 icon + label actually need, the box **grows to fit its content**, the square ratio breaks and
-the tiles overrun their grid track (a 40% bottom pad on C.R.E.A.M's gems pushed the third
-column off screen). When a theme insets content to fit a silhouette, shrink the icon to match —
-`styles.css` sizes `.workout-cell .cell-icon svg` with `!important`, so you must too.
+the tiles overrun their grid track (this has now bitten twice — C.R.E.A.M's gems and Draconic's
+talons both pushed the third column off screen). Two things to budget for:
+- `styles.css` sizes `.workout-cell .cell-icon svg` with `!important`, so shrinking the icon
+  needs `!important` too.
+- **The icon's wrapper `<div>` carries an inline `font-size:36px` from `app.js`**, so its line
+  box stays ~42px tall however small you make the SVG inside. That wrapper, not the icon, is
+  what the vertical budget actually has to fit.
 
 ### CSS gotcha that has bitten twice
 `[data-aesthetic="x"] .btn` and `[data-aesthetic="x"] .btn-primary` have **identical

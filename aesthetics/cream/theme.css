@@ -10,8 +10,10 @@
      2. Home tiles become brilliant-cut gems, each a different stone. The
         silhouette is a mask (gem.svg); the facets are a repeating-conic-gradient
         underneath it, so one shape file serves six hues.
-     3. Gold buttons carry a static sparkle field plus a travelling sheen (CSS),
-        and throw a burst of falling glitter on tap (fx.ts in this folder).
+     3. Gold buttons carry a static sparkle field plus a travelling sheen — both
+        pure CSS. (A JS tap-glitter module lived here briefly and was removed: on a
+        data-entry app you tap constantly, and a burst on every press stopped being
+        a treat. The ambient shimmer is the subtle version that survives.)
 
    External aesthetic — lazily loaded, everything scoped under [data-aesthetic="cream"].
    Picker swatch `.aesthetic-preview-cream` lives in styles.css (the picker renders
@@ -27,7 +29,10 @@
   --text: #f6efe0;          /* cream, obviously */
   --text-dim: #c9b48f;
   --text-faint: #9c8a6d;
-  --accent: #f5c518;
+  /* Deeper than a bright bullion yellow on purpose: --accent also paints the SVG icons, and a
+     bright gold icon on the gold button faces below was effectively invisible. This still reads
+     as gold against the purple, and the buttons re-scope it darker again for their own icons. */
+  --accent: #e0a512;
   --accent-dim: color-mix(in srgb, var(--accent) 55%, var(--border));
   --accent-soft: color-mix(in srgb, var(--accent) 16%, var(--surface));
   --good: #1fbf6b;
@@ -50,13 +55,25 @@
   --cream-gold: linear-gradient(180deg, #ffeba4 0%, #f5c518 40%, #e0a913 52%, #a87b0d 100%);
   --cream-gold-edge: #6b4e08;
   --cream-rim: 0 0 0 1px rgba(245, 197, 24, 0.22), 0 3px 12px rgba(0, 0, 0, 0.55);
+
+  /* Everything hue-dependent is derived from --bg / --surface / --surface2 rather than written
+     as literal purple, because applyAccentColor() overwrites exactly those three (inline on
+     <html>, so they win) when you switch MAIN COLOR. That's what lets the whole suit turn
+     green without a second copy of this file. */
+  --cream-suit-edge: color-mix(in srgb, var(--surface2) 74%, #ffffff);
+  --cream-suit-mid:  color-mix(in srgb, var(--bg) 62%, #000000);
+  --cream-panel-hi:  color-mix(in srgb, var(--surface) 94%, transparent);
+  --cream-panel-lo:  color-mix(in srgb, var(--bg) 96%, transparent);
+  --cream-bar-hi:    color-mix(in srgb, var(--surface) 88%, #000000);
+  --cream-bar-lo:    color-mix(in srgb, var(--bg) 78%, #000000);
+  --cream-well:      color-mix(in srgb, var(--bg) 72%, #000000);
 }
 
 /* ---------- Backdrop: pinstripe suit ----------
    Two layers: the white verticals, then the purple beneath them running light at the edges
    to darkest at the centre. Fixed pseudo-element rather than background-attachment (broken
    on iOS Safari). */
-[data-aesthetic="cream"] body { background-color: #2a0d44; }
+[data-aesthetic="cream"] body { background-color: var(--bg); }
 [data-aesthetic="cream"] body::after {
   content: '';
   position: fixed; inset: 0; z-index: -1; pointer-events: none;
@@ -64,10 +81,12 @@
     repeating-linear-gradient(90deg,
       rgba(255, 255, 255, 0.34) 0 1px,
       rgba(255, 255, 255, 0) 1px 15px),
+    /* Darkened and the central band widened (it used to pinch to a point at 50%) — the content
+       column sits here, so a broader, deeper trough is what gives the cream text its contrast. */
     linear-gradient(90deg,
-      #562a8c 0%, #43206f 22%, #331150 40%,
-      #280c40 50%,
-      #331150 60%, #43206f 78%, #562a8c 100%);
+      var(--cream-suit-edge) 0%, var(--surface2) 16%, var(--bg) 30%,
+      var(--cream-suit-mid) 42%, var(--cream-suit-mid) 58%,
+      var(--bg) 70%, var(--surface2) 84%, var(--cream-suit-edge) 100%);
 }
 [data-aesthetic="cream"] #app { position: relative; z-index: 1; }
 
@@ -78,13 +97,14 @@
 [data-aesthetic="cream"] .chart-wrap,
 [data-aesthetic="cream"] .modal-box,
 [data-aesthetic="cream"] .aesthetic-card {
-  background: linear-gradient(180deg, rgba(60, 22, 99, 0.94) 0%, rgba(42, 13, 68, 0.96) 100%);
+  background: linear-gradient(180deg, var(--cream-panel-hi) 0%, var(--cream-panel-lo) 100%);
   border: 1px solid rgba(245, 197, 24, 0.34);
   box-shadow: var(--cream-rim), inset 0 1px 0 rgba(255, 235, 164, 0.14);
 }
 [data-aesthetic="cream"] .panel-done {
-  background: linear-gradient(180deg, #10402c 0%, #0c2c1f 100%);
-  border-color: color-mix(in srgb, var(--good) 55%, #0c2c1f);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--good) 26%, #000000) 0%,
+                                       color-mix(in srgb, var(--good) 14%, #000000) 100%);
+  border-color: color-mix(in srgb, var(--good) 55%, #000000);
 }
 
 /* ---------- Headings: gilded high-contrast serif ---------- */
@@ -100,13 +120,13 @@
 
 /* ---------- Bars ---------- */
 [data-aesthetic="cream"] .topbar {
-  background: linear-gradient(180deg, #3d1663 0%, #250b3c 100%);
+  background: linear-gradient(180deg, var(--cream-bar-hi) 0%, var(--cream-bar-lo) 100%);
   border-bottom: 1px solid rgba(245, 197, 24, 0.45);
   box-shadow: 0 2px 16px rgba(0, 0, 0, 0.7);
   z-index: 20;
 }
 [data-aesthetic="cream"] .tabbar {
-  background: linear-gradient(180deg, #250b3c 0%, #3d1663 100%);
+  background: linear-gradient(180deg, var(--cream-bar-lo) 0%, var(--cream-bar-hi) 100%);
   border-top: 1px solid rgba(245, 197, 24, 0.45);
   box-shadow: 0 -3px 18px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 235, 164, 0.16);
   z-index: 30;
@@ -170,18 +190,29 @@
 }
 [data-aesthetic="cream"] .btn > *,
 [data-aesthetic="cream"] .subnav button.active > * { position: relative; z-index: 1; }
+/* The icon SVGs paint themselves from var(--accent). Re-scoping it here renders them dark
+   bronze — engraved into the gold rather than lost in it — and matches the dark legend colour
+   these buttons already use. Also covers the coloured variants, whose text is dark too. */
+[data-aesthetic="cream"] .btn,
+[data-aesthetic="cream"] .icon-btn,
+[data-aesthetic="cream"] .subnav button.active { --accent: #4a3206; }
 
-[data-aesthetic="cream"] .btn-primary {
-  background: linear-gradient(180deg, #7bf0b4 0%, #1fbf6b 42%, #149a55 52%, #0a6b3a 100%);
-  border-color: #075230; color: #04240f;
+/* Built from --good rather than a literal green: the MAIN COLOR palettes swap --good to the
+   opposite hue, so these turn purple on a green suit and green on a purple one. */
+[data-aesthetic="cream"] .btn-primary,
+[data-aesthetic="cream"] .btn-good {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--good) 52%, #ffffff) 0%,
+    var(--good) 42%,
+    color-mix(in srgb, var(--good) 82%, #000000) 52%,
+    color-mix(in srgb, var(--good) 58%, #000000) 100%);
+  border-color: color-mix(in srgb, var(--good) 45%, #000000);
+  color: #ffffff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.65);
 }
 [data-aesthetic="cream"] .btn-danger {
   background: linear-gradient(180deg, #ffb0c6 0%, #f43f6e 42%, #cc1f4c 52%, #8d0f30 100%);
   border-color: #6d0a24; color: #2c0310;
-}
-[data-aesthetic="cream"] .btn-good {
-  background: linear-gradient(180deg, #7bf0b4 0%, #1fbf6b 42%, #149a55 52%, #0a6b3a 100%);
-  border-color: #075230; color: #04240f;
 }
 [data-aesthetic="cream"] .btn-ghost {
   background: none; border-color: transparent; box-shadow: none; text-shadow: none;
@@ -190,7 +221,7 @@
 [data-aesthetic="cream"] .btn-ghost::after,
 [data-aesthetic="cream"] .btn-ghost::before { display: none; }
 [data-aesthetic="cream"] .subnav button {
-  background: linear-gradient(180deg, #4a1d78 0%, #33114f 100%);
+  background: linear-gradient(180deg, var(--surface2) 0%, var(--surface) 100%);
   border: 1px solid rgba(245, 197, 24, 0.3);
   color: var(--text-dim);
 }
@@ -203,7 +234,7 @@
 [data-aesthetic="cream"] select,
 [data-aesthetic="cream"] textarea,
 [data-aesthetic="cream"] .note-editor {
-  background: linear-gradient(180deg, #1f0834 0%, #2c1049 100%);
+  background: linear-gradient(180deg, var(--cream-well) 0%, color-mix(in srgb, var(--bg) 88%, #000000) 100%);
   border: 1px solid rgba(245, 197, 24, 0.30);
   color: var(--text);
   box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.8);
@@ -249,17 +280,32 @@
   position: absolute; inset: 0; z-index: 0; pointer-events: none;
   -webkit-mask: url("gem.svg") center / contain no-repeat;
           mask: url("gem.svg") center / contain no-repeat;
+  /* A real cut stone has TWO facet systems, and drawing one pattern over the whole shape is
+     what made the first attempt look like a paper fan. The crown's facets radiate from the
+     table; the pavilion's converge on the culet — different origins, different wedge counts.
+     Each is a conic gradient confined to its own band via background-size/position, stacked
+     front-to-back with the specular highlights on top and the base colour at the bottom. */
   background-image:
-    /* specular streak across the table */
-    linear-gradient(172deg, rgba(255,255,255,0.62) 0%, rgba(255,255,255,0.10) 20%, rgba(255,255,255,0) 34%),
-    /* the facets */
-    repeating-conic-gradient(from 18deg at 50% 30%,
-      var(--gem-dk) 0 22deg, var(--gem-lt) 22deg 44deg);
-  filter: drop-shadow(0 0 7px var(--gem-glow)) drop-shadow(0 2px 3px rgba(0,0,0,0.55));
+    /* table glint — a hard bright sliver across the top facet */
+    linear-gradient(104deg, rgba(255,255,255,0.72) 0%, rgba(255,255,255,0.12) 26%, rgba(255,255,255,0) 44%),
+    /* girdle: the bright line where crown meets pavilion, plus the shadow just under it */
+    linear-gradient(180deg, rgba(255,255,255,0) 30%, rgba(255,255,255,0.55) 34%, rgba(0,0,0,0.35) 38%, rgba(0,0,0,0) 46%),
+    /* crown facets — radiate outward from the table centre */
+    repeating-conic-gradient(from 200deg at 50% 34%,
+      var(--gem-dk) 0 15deg, var(--gem-lt) 15deg 30deg),
+    /* pavilion facets — long wedges converging on the culet */
+    repeating-conic-gradient(from 188deg at 50% 99%,
+      var(--gem-lt) 0 11deg, var(--gem-dk) 11deg 22deg),
+    /* base body colour, so any gap reads as stone rather than a hole */
+    linear-gradient(180deg, var(--gem-lt) 0%, var(--gem-dk) 100%);
+  background-repeat: no-repeat;
+  background-size: 100% 100%, 100% 100%, 100% 40%, 100% 62%, 100% 100%;
+  background-position: center, center, top, bottom, center;
+  filter: drop-shadow(0 0 7px var(--gem-glow)) drop-shadow(0 2px 3px rgba(0, 0, 0, 0.55));
   transition: filter 160ms ease-out;
 }
 [data-aesthetic="cream"] .workout-cell.home-tile:active::before {
-  filter: drop-shadow(0 0 15px var(--gem-glow)) brightness(1.25);
+  filter: drop-shadow(0 0 16px var(--gem-glow)) brightness(1.22);
 }
 [data-aesthetic="cream"] .workout-cell.home-tile > * { position: relative; z-index: 1; }
 [data-aesthetic="cream"] .workout-cell.home-tile .wname {
@@ -280,8 +326,7 @@
 /* A seventh stone, in case the grid ever grows — the set is seven after all. */
 [data-aesthetic="cream"] .workout-grid > .home-tile:nth-child(7) { --gem-lt: #ffffff; --gem-dk: #8a8f9c; --gem-glow: rgba(255,255,255,0.7); }
 
-/* ---------- Reduced motion ----------
-   (the JS glitter burst checks the same query before spawning — see fx.ts) */
+/* ---------- Reduced motion ---------- */
 @media (prefers-reduced-motion: reduce) {
   [data-aesthetic="cream"] .btn::after,
   [data-aesthetic="cream"] .icon-btn::after,

@@ -1,16 +1,18 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">
+<svg xmlns="http://www.w3.org/2000/svg" width="100" height="86" viewBox="0 0 100 86">
   <!--
-    Brilliant-cut gem outline, used as a CSS mask for the home tiles (see theme.css).
-    Only the silhouette lives here — the facets are drawn underneath the mask with a
-    repeating-conic-gradient, which is what lets each tile take a different hue from one
-    shared shape file.
+    Brilliant-cut gem silhouette, used as a CSS mask for the home tiles (see theme.css).
+    Only the outline lives here — the facets are built from gradients underneath the mask,
+    which is what lets one shape file serve six different stones.
 
-    Chosen over a plain rhombus for a practical reason as much as a stylistic one: the flat
-    table and wide shoulders give the top half real width, which is where the icon and the
-    section label have to sit. A rotated square is narrowest exactly where the label goes.
-
-    Proportions: table y=5, girdle (widest) y=40, culet (point) y=97 — a shallow crown over a
-    deep pavilion, which is what reads as a cut stone rather than a kite.
+    Traced off a reference set of cut gems, so the proportions are the real ones rather than a
+    kite: a broad flat table, a shallow bevelled crown, the girdle as the widest point about a
+    third of the way down, then a deep pavilion falling to the culet. Wider than tall (100x86)
+    for the same reason — a cut stone viewed face-on is a squat shape, and a square one reads
+    as a playing-card diamond instead.
   -->
-  <path fill="#fff" d="M32 5 L68 5 L88 22 L97 40 L50 97 L3 40 L12 22 Z"/>
+  <path fill="#fff" d="
+    M24 6 L76 6
+    L92 17 L99 30
+    L50 85
+    L1 30 L8 17 Z"/>
 </svg>

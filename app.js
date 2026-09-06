@@ -134,12 +134,29 @@ const AESTHETIC_ACCENTS = {
     acid:        { label: 'Acid Chartreuse',   value: '#d4ff00' },
     sludge:      { label: 'Sludge Lime',       value: '#b8d936' },
   },
+  // C.R.E.A.M is a MAIN COLOR aesthetic, not an accent one: each entry is a full mini-palette
+  // (see FULL_PALETTE_AESTHETICS). Gold stays the accent in both — what swaps is the suit, and
+  // with it `--good`, which is what the primary/confirm buttons are built from. So picking
+  // Dollar Green turns the suit green and flips those buttons to purple, and vice versa.
+  // `swatch` overrides the picker chip, which would otherwise show the identical gold accent
+  // for both options.
   cream: {
-    gold:    { label: 'Bullion',     value: '#f5c518' },
-    emerald: { label: 'Emerald',     value: '#1fbf6b' },
-    amethyst:{ label: 'Amethyst',    value: '#a855f7' },
-    jade:    { label: 'Jade',        value: '#2dd4a7' },
-    rose:    { label: 'Rose Gold',   value: '#e8a0a0' },
+    purple: {
+      label: 'Regal Purple', swatch: '#7a3fc0', accent: '#e0a512',
+      bg: '#2a0d44', surface: '#3a1560', surface2: '#481c74',
+      border: '#9c7c2a', borderSoft: '#5d3a86',
+      text: '#f6efe0', textDim: '#c9b48f', textFaint: '#9c8a6d',
+      good: '#1fbf6b', goodSoft: '#0f3626',
+      resetBorder: '#f6efe0', resetBg: '#481c74', resetText: '#f6efe0',
+    },
+    green: {
+      label: 'Dollar Green', swatch: '#1f9c5c', accent: '#e0a512',
+      bg: '#0b2a1b', surface: '#123f2b', surface2: '#175236',
+      border: '#9c7c2a', borderSoft: '#245e42',
+      text: '#f6efe0', textDim: '#c9b48f', textFaint: '#8fa389',
+      good: '#8b5cf6', goodSoft: '#251043',
+      resetBorder: '#f6efe0', resetBg: '#175236', resetText: '#f6efe0',
+    },
   },
   draconic: {
     ember:   { label: 'Ember',      value: '#ffb020' },
@@ -204,7 +221,7 @@ const AESTHETICS = {
   // `fx: true` additionally loads aesthetics/draconic/fx.js (compiled from fx.ts) for the
   // tap-ember particle burst — see applyAestheticFX().
   draconic:     { label: 'Draconic',      desc: 'Scorched black and dragonfire — gilded scale plate, footprint tiles, embers on every hot tap.', group: 'Maximalist', external: true, fx: true },
-  cream:        { label: 'C.R.E.A.M',     desc: 'Pinstripe purple and gold — a set of chaos emeralds for tiles, and glitter on every tap.', group: 'Maximalist', external: true, fx: true },
+  cream:        { label: 'C.R.E.A.M',     desc: 'Pinstripe purple and gold — a set of chaos emeralds for tiles, gilded controls, sharp suiting.', group: 'Maximalist', external: true },
 };
 const AESTHETIC_GROUP_ORDER = ['Maximalist', 'Vibrant', 'Contrast', 'Light'];
 // Which groups are expanded in the settings panel right now — session-only (not persisted),
@@ -332,7 +349,15 @@ function currentAccentKey() {
 const TERMINAL_PALETTE_VARS = ['--bg', '--surface', '--surface2', '--border', '--border-soft', '--text', '--text-dim', '--text-faint', '--good', '--good-soft', '--reset-border', '--reset-bg', '--reset-text'];
 // Aesthetics whose accent-palette entries are full mini-palettes (see TERMINAL_PALETTE_VARS above)
 // rather than a single `value` color — Retro Terminal's phosphor colors and Four Symbols' guardians.
-const FULL_PALETTE_AESTHETICS = new Set(['terminal', 'sixiang']);
+const FULL_PALETTE_AESTHETICS = new Set(['terminal', 'sixiang', 'cream']);
+// What the picker calls itself for each full-palette aesthetic. Everything else gets the
+// default "ACCENT COLOR" heading — this map is only for aesthetics where the choice repaints
+// the whole app rather than tinting one colour.
+const PALETTE_PICKER_COPY = {
+  terminal: { label: 'MAIN COLOR', note: 'Recolors the whole terminal — background, borders and every shade of text.' },
+  sixiang:  { label: 'GUARDIAN',   note: 'Choose your guardian — each recolors the whole app, background, borders and every shade of text.' },
+  cream:    { label: 'MAIN COLOR', note: 'Swap the suit between regal purple and dollar green — gold stays, and the button colour swaps to whichever hue the suit is not.' },
+};
 function applyAccentColor() {
   const aesthetic = currentAesthetic();
   const pal = AESTHETIC_ACCENTS[aesthetic];
@@ -379,13 +404,12 @@ function renderAccentSwatches() {
   const aesthetic = currentAesthetic();
   const pal = AESTHETIC_ACCENTS[aesthetic];
   const current = currentAccentKey();
-  const isTerminal = aesthetic === 'terminal';
-  const isSixiang = aesthetic === 'sixiang';
-  if (label) label.textContent = isTerminal ? 'MAIN COLOR' : (isSixiang ? 'GUARDIAN' : 'ACCENT COLOR');
-  if (note) note.textContent = isTerminal ? 'Recolors the whole terminal — background, borders and every shade of text.' : (isSixiang ? 'Choose your guardian — each recolors the whole app, background, borders and every shade of text.' : `Colors curated for ${AESTHETICS[aesthetic].label}.`);
+  const copy = PALETTE_PICKER_COPY[aesthetic];
+  if (label) label.textContent = copy ? copy.label : 'ACCENT COLOR';
+  if (note) note.textContent = copy ? copy.note : `Colors curated for ${AESTHETICS[aesthetic].label}.`;
   grid.innerHTML = Object.keys(pal).map(key => {
     const c = pal[key];
-    const sw = c.value || c.accent;
+    const sw = c.swatch || c.value || c.accent;
     return `<div class="accent-swatch-item">
       <button class="accent-swatch ${key===current?'active':''}" style="--sw:${sw}" onclick="setAccentColor('${key}')" title="${c.label}" aria-label="${c.label}"></button>
       <div class="accent-swatch-label">${c.label.toUpperCase()}</div>
