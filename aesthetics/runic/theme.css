@@ -2,28 +2,32 @@
 
 /* ============================================================================
    Aesthetic: Runic — a slate wall carved with Elder Futhark, oak panels bolted
-   to it, silver filigree, and a rune-lit sword hanging in the left of the room.
+   to it in silver-banded frames, hashed bands that light with the wall, and a
+   rune-lit sword hanging the height of the room.
 
    ---- The material split ----
    Every colour in the brief has exactly one job, which is what keeps four
    materials from turning to mud:
      grey slate    the room       -- --bg and the backdrop layers
      aged oak      the furniture  -- --surface / --surface2, every panel and card
-     silver        the metalwork  -- filigree, borders, the blade
-     green         the magic      -- --accent, the rune glow, the sword's light
+     silver        the metalwork  -- panel banding, borders, the blade
+     green         the magic      -- --accent, the rune glow, the sword's light,
+                                     and the hashed bands, which light with it
    Surfaces are all DARK with light text, so none of the scoped light/dark token
    inversion documented in Y2K's header applies here.
 
    ---- The four backdrop layers ----
    body::after   (z -2)  slate wash + grain + carved runes + vignette   static
    body::before  (z -1)  the runes igniting, phase by phase             opacity
+   #app::after   (z -2)  the sword's cast glow on the wall              parallax
    #app::before  (z -1)  the sword                                      parallax
-   #app::after           unused, and worth leaving that way for headroom
-   The -2/-1 split is load-bearing: two pseudo-elements at the SAME z-index paint
-   in tree order, so an opaque ::after would bury ::before. All are
-   `position: fixed` rather than background-attachment, which is broken on iOS
-   Safari. #app::before is hosted inside #app's own stacking context so it lands
-   above the body layers and below the app's content.
+   All four are spoken for now. The -2/-1 split is load-bearing in both pairs: two
+   pseudo-elements at the SAME z-index paint in tree order, so an opaque ::after
+   would bury ::before, and the sword's glow has to land under the blade and over
+   the runes. Everything is `position: fixed` rather than background-attachment,
+   which is broken on iOS Safari. The #app pair is hosted inside #app's own
+   stacking context, so both sit above the body layers and below the app content
+   however they order against each other.
 
    ---- Sequential rune ignition ----
    One element does all three phases. The obvious build — a lit layer per phase,
@@ -90,9 +94,10 @@
   --font-mono: 'JetBrains Mono', monospace;
   --radius: 4px;   /* carved and joined, not moulded */
 
-  /* Silver: fixed, not themed. It's the metalwork, and the filigree SVG can't be
-     recoloured from here anyway (referenced by url()), so the CSS silver has to
-     agree with the silver drawn inside that file. */
+  /* Silver: fixed, not themed. It's the metalwork on the panel frames, and it has
+     to agree with the steel drawn inside sword.svg — anything referenced by url()
+     is out of reach of page CSS. (The hashed bands are the exception: they're
+     drawn green and lit by a filter — see rn-filigree-glow.) */
   --rn-silver: #c8d2d8;
   --rn-silver-dim: #7d8b93;
   --rn-silver-dark: #434f56;
@@ -173,29 +178,88 @@
   100%     { opacity: 0;    background-image: url('runes-c.svg'); }
 }
 
+/* The hashed bands start black and light up with the wall. filigree.svg is drawn
+   in the lit green, and `brightness()` is what darkens it — a silver drawing can't
+   be turned green by a filter, so the colour lives in the file and the darkness is
+   the animated end of the range.
+
+   Filter rather than opacity, which would have been free on the compositor: a
+   cross-fade needs a second stacked layer, and .section-title's band is a FLEX
+   ITEM (it takes the leftover width of the heading), so an overlaid twin would
+   either take part in the flex layout or need absolute coordinates nobody knows
+   until layout runs. Filters repaint, but each band is roughly 200x9px, so the
+   whole screen's worth of them is a smaller area than one line of body text.
+
+   Same 15s period as rn-ignite, peaking in the gaps between the rune phases, so
+   the wall and the metalwork trade off rather than pulsing on top of each other.
+   Both filter lists carry the same functions in the same order — that is what
+   makes them interpolable at all. */
+@keyframes rn-filigree-glow {
+  0%,  8%  { filter: brightness(0.10) drop-shadow(0 0 0 rgba(79, 224, 140, 0)); }
+  20%      { filter: brightness(0.95) drop-shadow(0 0 5px rgba(79, 224, 140, 0.7)); }
+  34%      { filter: brightness(0.10) drop-shadow(0 0 0 rgba(79, 224, 140, 0)); }
+  53%      { filter: brightness(0.95) drop-shadow(0 0 5px rgba(79, 224, 140, 0.7)); }
+  67%      { filter: brightness(0.10) drop-shadow(0 0 0 rgba(79, 224, 140, 0)); }
+  86%      { filter: brightness(0.95) drop-shadow(0 0 5px rgba(79, 224, 140, 0.7)); }
+  100%     { filter: brightness(0.10) drop-shadow(0 0 0 rgba(79, 224, 140, 0)); }
+}
+
 [data-aesthetic="runic"] #app { position: relative; z-index: 1; }
 
-/* The sword: over the left of the room, its centre about a third of the way in.
+/* The light the sword throws onto the wall behind it — its cast glow, separate
+   from the halo baked into sword.svg. Two pools: a tall soft one up the blade and
+   a wider brighter one low down where the light gathers.
+
+   z-index -2 against the sword's -1: both live inside #app's stacking context, so
+   they order against each other by z-index and BOTH still sit above the body
+   layers and below the app's content. That ordering is the whole point — the glow
+   has to fall on the rune wall (lighting the carvings it covers) and under the
+   blade, not over it.
+
+   Parallaxes at 45% of the sword's travel. It's painted on the wall, which is
+   further away than the sword, and nearer things move more — matching the rates
+   would glue the light to the blade and kill the depth. fx.ts writes one offset
+   pair; the fraction is applied here with calc().
+
+   Fixed green rather than var(--accent): sword.svg's own glow is baked green and
+   can't be recoloured through url(), so an accent-tinted pool would put a red or
+   blue light under a green blade. */
+[data-aesthetic="runic"] #app::after {
+  content: '';
+  position: fixed; z-index: -2; pointer-events: none;
+  left: -22%; top: 0; width: 420px; height: 100%;
+  background-image:
+    radial-gradient(54% 26% at 50% 78%, rgba(79, 224, 140, 0.26) 0%, rgba(79, 224, 140, 0) 72%),
+    radial-gradient(26% 48% at 50% 40%, rgba(79, 224, 140, 0.17) 0%, rgba(79, 224, 140, 0) 74%);
+  transform: translate3d(calc(var(--rn-px, 0px) * 0.45), calc(var(--rn-py, 0px) * 0.45), 0);
+  will-change: transform;
+}
+
+/* The sword itself, over the left of the room with its centre about a third of
+   the way in, and now running nearly the full height of a phone screen.
 
    CROPPED BY THE BOX, not by the artwork. The element is shorter than the image
-   (300px against the sword's natural 336px at this width) and the background is
-   anchored to the top, so the pommel falls outside the padding box and is simply
-   never painted — "a portion of the blade and hilt", per the brief. The mask
-   fades the last stretch out so the cut reads as the blade losing itself in the
-   dark rather than as a clipped image.
+   (780px against the sword's natural 840px at this width) and the background is
+   anchored to the top, so the bottom of the pommel falls outside the padding box
+   and is simply never painted. The mask fades the last stretch so the cut reads
+   as the blade losing itself in the dark rather than as a clipped image.
 
-   Sized down hard from the first pass. At 200x560 it filled the viewport and read
-   as a pillar the UI was stacked on top of; it has to be scenery. Top clears the
-   sticky topbar (~52px, z-index 20) so the visible run of blade starts below the
-   bar instead of being eaten by it. */
+   `top` clears the sticky topbar (~52px, z-index 20) so the blade appears to come
+   out from behind the bar rather than being eaten by it. `left` is negative on
+   purpose: at this width the sword is wider than a third of the screen, so the
+   only way to keep its CENTRE a third of the way in is to hang its left edge off
+   the viewport. */
 [data-aesthetic="runic"] #app::before {
   content: '';
   position: fixed; z-index: -1; pointer-events: none;
-  left: 16%; top: 30px; width: 120px; height: 300px;
-  background: url('sword.svg') center top / 120px 336px no-repeat;
-  -webkit-mask-image: linear-gradient(to bottom, #000 68%, transparent 100%);
-          mask-image: linear-gradient(to bottom, #000 68%, transparent 100%);
-  opacity: 0.8;
+  left: -5%; top: 26px; width: 300px; height: 780px;
+  background: url('sword.svg') center top / 300px 840px no-repeat;
+  -webkit-mask-image: linear-gradient(to bottom, #000 86%, transparent 100%);
+          mask-image: linear-gradient(to bottom, #000 86%, transparent 100%);
+  /* Held down deliberately. At full height the blade is a tall panel of light steel
+     directly behind the reading column, and opacity is the one dial that calms it
+     without giving back any of the scale. */
+  opacity: 0.62;
   transform: translate3d(var(--rn-px, 0px), var(--rn-py, 0px), 0);
   will-change: transform;
 }
@@ -213,10 +277,11 @@
 [data-aesthetic="runic"] .panel::after,
 [data-aesthetic="runic"] .modal-box::after {
   content: '';
-  position: absolute; left: 12px; right: 12px; bottom: 8px; height: 12px;
+  position: absolute; left: 12px; right: 12px; bottom: 8px; height: 9px;
   pointer-events: none;
-  background: var(--rn-filigree) repeat-x center / auto 12px;
-  opacity: 0.6;
+  background: var(--rn-filigree) repeat-x center / auto 9px;
+  opacity: 0.85;
+  animation: rn-filigree-glow 15s ease-in-out infinite;
 }
 /* Smaller surfaces take the oak and the banding but no filigree — a silver strip
    inside every row of a long list is noise, and the extra bottom padding it needs
@@ -255,11 +320,10 @@
 /* The filigree band under the header the brief asks for. */
 [data-aesthetic="runic"] .topbar::after {
   content: '';
-  position: absolute; left: 0; right: 0; bottom: -11px; height: 12px;
+  position: absolute; left: 0; right: 0; bottom: -9px; height: 9px;
   pointer-events: none;
-  background: var(--rn-filigree) repeat-x center / auto 12px;
-  opacity: 0.8;
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.85));
+  background: var(--rn-filigree) repeat-x center / auto 9px;
+  animation: rn-filigree-glow 15s ease-in-out infinite;
 }
 [data-aesthetic="runic"] .tabbar {
   background: linear-gradient(180deg, #101416 0%, #171c1f 40%, #232a2d 100%);
@@ -293,13 +357,16 @@
 }
 [data-aesthetic="runic"] .section-title::after {
   content: '';
-  flex: 1; height: 12px;
-  background: var(--rn-filigree) repeat-x center / auto 12px;
-  opacity: 0.7;
+  flex: 1; height: 9px;
+  background: var(--rn-filigree) repeat-x center / auto 9px;
+  animation: rn-filigree-glow 15s ease-in-out infinite;
 }
 [data-aesthetic="runic"] .subtle-label {
   color: color-mix(in srgb, var(--accent) 55%, var(--text-faint));
   text-transform: uppercase; letter-spacing: 0.14em; font-weight: 700;
+  /* Same reason as .empty-state below: these sit on the wall, not on a panel, and
+     the blade passes behind them. */
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95), 0 0 10px rgba(0, 0, 0, 0.8);
 }
 /* Text sitting on the wall rather than on a panel needs its own separation — an
    igniting rune passing behind faint centred text swallows it. */
@@ -426,4 +493,14 @@
    visible either way. */
 @media (prefers-reduced-motion: reduce) {
   [data-aesthetic="runic"] body::before { animation: none; opacity: 0; }
+  /* The bands are left LIT, not black: their animation is the only thing that
+     ever brings them up, and a permanently near-black hash band would just look
+     like the filigree failed to load. */
+  [data-aesthetic="runic"] .topbar::after,
+  [data-aesthetic="runic"] .section-title::after,
+  [data-aesthetic="runic"] .panel::after,
+  [data-aesthetic="runic"] .modal-box::after {
+    animation: none;
+    filter: brightness(0.95) drop-shadow(0 0 5px rgba(79, 224, 140, 0.5));
+  }
 }

@@ -92,6 +92,32 @@ async function propValues(page, names) {
   return page.evaluate(ns => ns.map(n => document.documentElement.style.getPropertyValue(n)), names);
 }
 
+/** Polls until the properties stop changing, and returns their final values — or null if they
+ *  never stop.
+ *
+ *  This replaced a fixed `waitForTimeout(2200)` followed by an exact-equality check. The
+ *  contract these modules owe is that the loop STOPS, not that it stops inside some arbitrary
+ *  sleep, and how long converging takes is a property of each module: Runic eases 34px at 0.075
+ *  where Metalheart eases 22px at 0.08, and the fixed budget — tuned on Metalheart — expired
+ *  with Runic 0.02px from its snap and reported a phantom runaway loop. A fixed sleep just
+ *  encodes one module's timing as the rule for all of them.
+ *
+ *  Three consecutive identical samples, not two: a slow enough tail could produce two matching
+ *  reads while still creeping, since the modules round to 2dp when they write. */
+async function waitUntilSettled(page, names, timeoutMs = 10000) {
+  const started = Date.now();
+  let prev = await propValues(page, names);
+  let stable = 0;
+  while (Date.now() - started < timeoutMs) {
+    await page.waitForTimeout(250);
+    const now = await propValues(page, names);
+    stable = names.every((_, i) => now[i] === prev[i]) ? stable + 1 : 0;
+    prev = now;
+    if (stable >= 2) return now;
+  }
+  return null;
+}
+
 /** Anything a user does that an ambient module might respond to. Scroll and pointer are what
  *  the modules actually listen to; keep this generic rather than per-module. */
 async function nudge(page) {
@@ -168,23 +194,17 @@ async function checkAmbientModule(page, key, baseProps) {
   await page.evaluate(() => switchTab('budget'));
   await page.waitForTimeout(250);
 
-  // --- 3. Scroll/pointer input moves the values. ---
+  // --- 3 & 4. Input moves the values, and then the loop stops on its own. ---
   const before = await propValues(page, own);
   await nudge(page);
-  await page.waitForTimeout(2200);   // long enough for an eased value to finish travelling
-  const after = await propValues(page, own);
-  console.log(`values: [${before.join(', ')}] -> [${after.join(', ')}]`);
-  if (own.every((_, i) => after[i] === before[i])) {
+  const settled = await waitUntilSettled(page, own);
+  if (!settled) {
+    throw new Error(`${key}: values never stopped changing — the rAF loop may be running forever`);
+  }
+  console.log(`values: [${before.join(', ')}] -> [${settled.join(', ')}], settled`);
+  if (own.every((_, i) => settled[i] === before[i])) {
     throw new Error(`${key}: ${own.join(' ')} never moved under scroll/pointer input`);
   }
-
-  // --- 4. The loop is demand-driven: with no further input the values stop changing. ---
-  await page.waitForTimeout(700);
-  const settled = await propValues(page, own);
-  if (own.some((_, i) => settled[i] !== after[i])) {
-    throw new Error(`${key}: values still drifting with no input — the rAF loop may be running forever`);
-  }
-  console.log('values settled once input stopped');
 
   // --- 5. Switching away destroys it: properties cleared AND the listeners released. ---
   await page.evaluate(() => setAesthetic('cyberpunk'));

@@ -1,61 +1,39 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 22" width="160" height="22">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 10" width="160" height="10">
 <!--
-  Runic — silver filigree strip.
+  Runic — the hashed band.
+
+  Pared back to the twisted-wire rope alone: two rails with diagonal hatching between them.
+  The Borre-style spiral scrolls, the curved connector and the granules that the reference
+  jewellery has were drawn here first and then removed — at 12px tall on a phone they read as
+  a row of "@" signs rather than as silverwork, and the straight hatch is the part that
+  actually holds up at this size.
 
   TILEABLE HORIZONTALLY. theme.css repeats it under the topbar, after every section title and
-  along the bottom inside edge of panels, so the two ends have to meet: the twisted rope runs
-  edge to edge on a period that divides 160 exactly (10px), and every spiral and granule sits
-  well inside the tile so nothing is sliced by the repeat. Change the width and the rope period
-  has to change with it.
+  along the bottom inside edge of panels, so the ends have to meet: the hatch runs edge to edge
+  on a 10px period, which divides 160 exactly. Change the width and the period has to divide it.
 
-  Drawn after the Borre-style silver work in the references: a twisted-wire rope border, tight
-  spiral scrolls, and granules (the small beads) at the spiral centres and in the gaps. Rendered
-  as a fixed silver rather than a themed colour, because it is referenced by url() and page CSS
-  can't reach inside it — silver is a constant of this aesthetic, the accent tints the UI around
-  it. The dark under-stroke offset a hair down-right is what keeps it from reading as flat line
-  art at small sizes.
+  DRAWN IN THE LIT GREEN, not in silver. theme.css animates `filter: brightness()` on it, from
+  near-black up to full, so the band starts as a dark cut in the surface and then glows in step
+  with the runes on the wall. A silver drawing can't be turned green by brightness alone, so the
+  colour has to live here and the darkness has to be the animated end. Anything referenced by
+  url() is out of reach of page CSS, which is why the state that changes is a filter and not
+  a fill.
 -->
-<defs>
-  <!-- One spiral scroll: arcs of shrinking radius winding inward, ending on a granule. -->
-  <path id="scroll" d="M 8,0 A 8,8 0 0 1 0,8 A 8,8 0 0 1 -8,0 A 8,8 0 0 1 0,-8
-                       A 5.6,5.6 0 0 1 5.6,-2.4 A 5.6,5.6 0 0 1 0,3.2
-                       A 3.2,3.2 0 0 1 -3.2,0 A 3.2,3.2 0 0 1 0,-3.2"/>
-  <g id="rope">
-    <path d="M0,15 H160 M0,20 H160"/>
-    <path d="M0,20 L6,15 M10,20 L16,15 M20,20 L26,15 M30,20 L36,15 M40,20 L46,15
-             M50,20 L56,15 M60,20 L66,15 M70,20 L76,15 M80,20 L86,15 M90,20 L96,15
-             M100,20 L106,15 M110,20 L116,15 M120,20 L126,15 M130,20 L136,15
-             M140,20 L146,15 M150,20 L156,15"/>
+<g fill="none" stroke-linecap="round">
+  <!-- Dark under-layer, offset, so the band keeps some depth at full brightness. -->
+  <g stroke="#08140d" stroke-width="2.6" opacity="0.9" transform="translate(0.5,0.7)">
+    <path d="M0,2.4 H160 M0,7.6 H160"/>
+    <path d="M0,7.6 L6,2.4 M10,7.6 L16,2.4 M20,7.6 L26,2.4 M30,7.6 L36,2.4 M40,7.6 L46,2.4
+             M50,7.6 L56,2.4 M60,7.6 L66,2.4 M70,7.6 L76,2.4 M80,7.6 L86,2.4 M90,7.6 L96,2.4
+             M100,7.6 L106,2.4 M110,7.6 L116,2.4 M120,7.6 L126,2.4 M130,7.6 L136,2.4
+             M140,7.6 L146,2.4 M150,7.6 L156,2.4"/>
   </g>
-  <g id="art">
-    <use href="#rope"/>
-    <g transform="translate(40,8)"><use href="#scroll"/></g>
-    <g transform="translate(120,8) scale(-1,1)"><use href="#scroll"/></g>
-    <path d="M56,8 C 66,2 74,2 80,8 C 86,2 94,2 104,8"/>
+  <g stroke="#8dffc4" stroke-width="1.5">
+    <path d="M0,2.4 H160 M0,7.6 H160"/>
+    <path d="M0,7.6 L6,2.4 M10,7.6 L16,2.4 M20,7.6 L26,2.4 M30,7.6 L36,2.4 M40,7.6 L46,2.4
+             M50,7.6 L56,2.4 M60,7.6 L66,2.4 M70,7.6 L76,2.4 M80,7.6 L86,2.4 M90,7.6 L96,2.4
+             M100,7.6 L106,2.4 M110,7.6 L116,2.4 M120,7.6 L126,2.4 M130,7.6 L136,2.4
+             M140,7.6 L146,2.4 M150,7.6 L156,2.4"/>
   </g>
-</defs>
-
-<!-- Dark under-layer, offset, so the silver above it reads as raised wire. -->
-<g fill="none" stroke="#191f22" stroke-width="3" stroke-linecap="round" opacity="0.8"
-   transform="translate(0.8,1.2)">
-  <use href="#art"/>
-</g>
-<g fill="none" stroke="#b9c6cd" stroke-width="1.7" stroke-linecap="round">
-  <use href="#art"/>
-</g>
-<g fill="none" stroke="#f2f7f9" stroke-width="0.7" stroke-linecap="round" opacity="0.7"
-   transform="translate(-0.5,-0.7)">
-  <use href="#art"/>
-</g>
-
-<!-- Granules: the beads. -->
-<g fill="#d6e0e5" stroke="#20272a" stroke-width="0.6">
-  <circle cx="40" cy="8" r="2.1"/>
-  <circle cx="120" cy="8" r="2.1"/>
-  <circle cx="80" cy="6" r="1.8"/>
-  <circle cx="14" cy="7" r="1.4"/>
-  <circle cx="146" cy="7" r="1.4"/>
-  <circle cx="62" cy="4" r="1.1"/>
-  <circle cx="98" cy="4" r="1.1"/>
 </g>
 </svg>
