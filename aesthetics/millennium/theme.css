@@ -3,8 +3,7 @@
 /* ============================================================================
    Aesthetic: Millennium Disco — a dark club room. Mirrorball turning overhead,
    its light spots sweeping the walls, a lit checkerboard floor, and every frame
-   in the app built from three concentric solid colour steps with bulbs running
-   around the outside.
+   in the app built from three concentric solid colour steps.
 
    ---- This is a MAIN COLOR aesthetic (see FULL_PALETTE_AESTHETICS) ----
    Four vibes — Warm, Cool, Acid, Ultraviolet — and each is a whole room, not a
@@ -34,20 +33,26 @@
    body::after   (z -2)  base wash + checkerboard floor + vignette   static
    body::before  (z -1)  the mirrorball                              facets turn
    #app::before  (z -1)  its light spots                             rotate
-   #app::after   (z -1)  the periodic floor sweep                    translate
-   plus running bulbs on the bars and on every .panel / .modal-box frame.
+   #app::after   (z -1)  the floor lighting up, colour by colour     opacity
+   plus chasing bulbs on the two bars. All four layers are spoken for — adding
+   another effect means finding a fifth host, not adding to one of these, since
+   an element gets one transform and one opacity.
+
    A mirrorball never stops, and an always-on requestAnimationFrame loop would
    break the demand-driven rule every AestheticFX module is held to, so this
-   theme ships no fx.ts at all. The spots and the sweep animate transform only
-   (compositor-only, and the browser stops them when the tab is hidden).
+   theme ships no fx.ts at all. The spots animate transform and the floor pulse
+   animates opacity — both compositor-only, both stopped by the browser when the
+   tab is hidden.
 
-   Everything else moves by shifting a background-position, which does repaint —
-   so every one of those uses steps() rather than a linear slide. That is what a
-   bulb chaser looks like anyway (sockets firing one at a time, not a strip
-   sliding), and it drops the repaint from 60 frames a second to two or three.
-   The ball is the one exception, and it is a single 280px element.
-   Nothing depends on an animation to be visible: stop them all and every frame,
-   bulb and light spot is still painted by the static layer underneath.
+   Anything moving by background-position repaints, so those use steps() rather
+   than a linear slide. That is what a bulb chaser looks like anyway (sockets
+   firing one at a time, not a strip sliding), and it drops the repaint from 60
+   frames a second to two or three. The ball is the one exception, and it is a
+   single 170px element.
+
+   Nothing except the floor pulse depends on an animation to be visible: stop
+   them all and every frame, bulb and light spot is still painted by the static
+   layer underneath.
 
    The -2/-1 split matters: two pseudo-elements at the SAME z-index paint in
    tree order, so an opaque ::after would bury ::before. Everything is
@@ -236,75 +241,67 @@
 }
 @keyframes md-spots { to { transform: rotate(360deg); } }
 
-/* The periodic sweep across the floor — parked off-frame between passes. */
+/* The floor lighting up: one colour's tiles swell and fade, a beat of nothing,
+   then the other colour's do the same. ~12s round trip.
+
+   This is ONE layer doing both halves, which is the only reason it's cheap.
+   The obvious build — a lit layer per colour, each fading on its own schedule —
+   needs two elements, and there isn't a spare one (see the layer map in the
+   header). So instead the lit tiles and the opacity ride the same element:
+   `opacity` is the only thing animating continuously, which keeps it on the
+   compositor with no repaint, and the `background-image` swaps between the two
+   colours' quadrants DURING the dark beat, where the flip can't be seen.
+   background-image isn't interpolable, so it flips discretely at the midpoint
+   between keyframes — normally a nuisance, exactly what's wanted here. Net cost
+   is two repaints per 12 seconds.
+
+   The quadrant phase and the 76px tile match the static checkerboard painted in
+   body::after, so the lit tiles land exactly on the floor squares rather than
+   half a tile off. Change one and you have to change the other. The mask keeps
+   the glow inside the floor, matching that layer's own horizon fade. */
 [data-aesthetic="millennium"] #app::after {
   content: '';
-  position: fixed; z-index: -1; pointer-events: none;
-  top: -50%; bottom: -50%; left: -45%; width: 26%;
-  background: linear-gradient(90deg,
-    transparent 0%,
-    color-mix(in srgb, var(--accent) 26%, transparent) 50%,
-    transparent 100%);
-  animation: md-sweep 9s ease-in-out infinite;
+  position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background-size: 76px 76px;
+  background-position: center bottom;
+  -webkit-mask-image: linear-gradient(to top, #000 0%, transparent 46%);
+          mask-image: linear-gradient(to top, #000 0%, transparent 46%);
+  opacity: 0;
+  animation: md-floor-pulse 12s ease-in-out infinite;
 }
-@keyframes md-sweep {
-  0%, 68% { transform: translateX(0) skewX(-18deg); }
-  100%    { transform: translateX(520%) skewX(-18deg); }
+@keyframes md-floor-pulse {
+  /* colour 1's tiles */
+  0%   { opacity: 0;    background-image: repeating-conic-gradient(color-mix(in srgb, var(--accent) 70%, #ffffff) 0% 25%, transparent 0% 50%); }
+  10%  { opacity: 0.5;  background-image: repeating-conic-gradient(color-mix(in srgb, var(--accent) 70%, #ffffff) 0% 25%, transparent 0% 50%); }
+  25%  { opacity: 0;    background-image: repeating-conic-gradient(color-mix(in srgb, var(--accent) 70%, #ffffff) 0% 25%, transparent 0% 50%); }
+  /* dark beat — the swap to colour 2's quadrants happens in here, unseen */
+  50%  { opacity: 0;    background-image: repeating-conic-gradient(transparent 0% 25%, color-mix(in srgb, var(--good) 70%, #ffffff) 0% 50%); }
+  60%  { opacity: 0.5;  background-image: repeating-conic-gradient(transparent 0% 25%, color-mix(in srgb, var(--good) 70%, #ffffff) 0% 50%); }
+  75%  { opacity: 0;    background-image: repeating-conic-gradient(transparent 0% 25%, color-mix(in srgb, var(--good) 70%, #ffffff) 0% 50%); }
+  100% { opacity: 0;    background-image: repeating-conic-gradient(transparent 0% 25%, color-mix(in srgb, var(--good) 70%, #ffffff) 0% 50%); }
 }
 
-/* ---------- Lit panels: three solid steps, bulbs running the outside ----------
+/* ---------- Lit panels: three solid steps ----------
    Padding is bumped past the 9px ramp — styles.css's 14px would leave text
-   sitting on the innermost step. */
+   sitting on the innermost step.
+
+   These carried a marquee of bulbs chasing around the inside of the frame, and
+   it was removed: a ring of lights running beside every block of text you are
+   trying to read is motion in your peripheral vision the whole time you're
+   logging, on an app that gets tapped constantly. The stepped frames were
+   already carrying the look on their own. The bulb motif still lives on the
+   bars and behind the section headings, where nothing is being read closely.
+   Note there is deliberately no `position: relative` here either — it was only
+   ever there to host that marquee, and setting it made .panel a containing
+   block for absolutely-positioned descendants, which styles.css never does. */
 [data-aesthetic="millennium"] .panel,
 [data-aesthetic="millennium"] .modal-box {
-  position: relative;
   padding: 22px;
   background: var(--md-panel);
   border: none;
   border-radius: var(--radius);
   box-shadow: var(--md-steps), 0 6px 26px rgba(0, 0, 0, 0.55);
 }
-/* The running bulbs — a marquee just INSIDE the stepped frame.
-   Sat at inset:0 first, where it overlapped the outer step and read as a pale
-   fringe on the frame rather than as lights. inset:9px clears the full 9px ramp,
-   so the bulbs sit in their own channel between the frame and the content.
-
-   The bulbs are FOUR explicit edge strips, one background layer per side, each
-   repeating along its own edge. Two earlier attempts failed:
-     - a repeating-conic-gradient masked to a ring: its stops are angular, so on a
-       wide short panel the bulbs bunch along the short edges and stretch along the
-       long ones;
-     - a dot GRID masked to a ring: whether a dot appears depends on where the
-       grid's 14px period happens to fall across a 4px band, so most edges came out
-       empty and only the one that happened to align showed any bulbs.
-   Strips sidestep both — every side is guaranteed an evenly spaced run, and no
-   mask is needed at all.
-
-   Animating each strip along its own axis, in opposite senses per pair, makes the
-   lights actually circulate: right along the top, down the right, left along the
-   bottom, up the left. steps(3) fires them socket by socket like a real chaser and
-   holds the repaint to two frames a second rather than sixty. */
-[data-aesthetic="millennium"] .panel::before,
-[data-aesthetic="millennium"] .modal-box::before {
-  content: '';
-  position: absolute; inset: 9px; border-radius: 8px;
-  pointer-events: none;
-  background-image:
-    radial-gradient(circle 2px at 7px 2px, var(--md-bulb) 45%, transparent 58%),
-    radial-gradient(circle 2px at 7px 2px, var(--md-bulb) 45%, transparent 58%),
-    radial-gradient(circle 2px at 2px 7px, var(--md-bulb) 45%, transparent 58%),
-    radial-gradient(circle 2px at 2px 7px, var(--md-bulb) 45%, transparent 58%);
-  background-size: 14px 4px, 14px 4px, 4px 14px, 4px 14px;
-  background-repeat: repeat-x, repeat-x, repeat-y, repeat-y;
-  background-position: 0 0, 0 100%, 0 0, 100% 0;
-  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--accent) 75%, transparent));
-  animation: md-chase 1.5s steps(3) infinite;
-}
-@keyframes md-chase {
-  from { background-position: 0 0,      0 100%,      0 0,     100% 0; }
-  to   { background-position: 14px 0, -14px 100%,  0 14px,  100% -14px; }
-}
-
 /* The smaller surfaces take the frame but not the chase — a running ring behind
    every row of a long list is both visual noise and a repaint per card. */
 [data-aesthetic="millennium"] .entry-card,
@@ -553,8 +550,9 @@
   [data-aesthetic="millennium"] #app::before,
   [data-aesthetic="millennium"] #app::after,
   [data-aesthetic="millennium"] .topbar::after,
-  [data-aesthetic="millennium"] .tabbar::after,
-  [data-aesthetic="millennium"] .panel::before,
-  [data-aesthetic="millennium"] .modal-box::before { animation: none; }
+  [data-aesthetic="millennium"] .tabbar::after { animation: none; }
+  /* The floor pulse is the one layer with nothing underneath it — it exists only
+     to light up — so stopping its animation has to also hide it, or it freezes
+     mid-pulse with one colour's tiles stuck on at whatever opacity it landed on. */
   [data-aesthetic="millennium"] #app::after { opacity: 0; }
 }
