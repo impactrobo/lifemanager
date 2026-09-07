@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Space Highway — the alien bobblehead stuck to the dash (reference 3).
+     Its own file, not part of cockpit.svg, so theme.css can nod it on its own background layer
+     while the rest of the dash stays bolted down. Baked green: it's a physical object on the
+     dash, not something the SECTOR should repaint. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="330" viewBox="0 0 240 330">
+  <defs>
+    <radialGradient id="skin" cx="0.36" cy="0.28" r="0.82">
+      <stop offset="0" stop-color="#a8f06a"/>
+      <stop offset="0.42" stop-color="#4fbf3c"/>
+      <stop offset="1" stop-color="#186b28"/>
+    </radialGradient>
+    <radialGradient id="eye" cx="0.34" cy="0.26" r="0.8">
+      <stop offset="0" stop-color="#3a3f4a"/>
+      <stop offset="0.5" stop-color="#0d0f14"/>
+      <stop offset="1" stop-color="#000000"/>
+    </radialGradient>
+    <linearGradient id="disc" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#39414d"/>
+      <stop offset="1" stop-color="#10131a"/>
+    </linearGradient>
+  </defs>
+
+  <!-- base the whole thing is stuck to -->
+  <ellipse cx="120" cy="308" rx="66" ry="15" fill="url(#disc)"/>
+  <ellipse cx="120" cy="303" rx="66" ry="14" fill="#4a5462"/>
+  <ellipse cx="120" cy="301" rx="52" ry="10" fill="#232b36"/>
+
+  <!-- legs + torso -->
+  <path d="M 103 296 L 99 244 L 141 244 L 137 296 Z" fill="#2c8a33"/>
+  <path d="M 120 158 Q 88 168 84 214 Q 82 248 96 262 L 144 262 Q 158 248 156 214 Q 152 168 120 158 Z"
+        fill="url(#skin)"/>
+  <!-- arms: one down, one up in the reference's peace sign -->
+  <path d="M 90 190 Q 62 208 56 244 Q 54 258 64 260 Q 74 260 76 246 Q 80 218 98 208 Z" fill="url(#skin)"/>
+  <path d="M 150 190 Q 176 178 184 146 Q 187 132 177 129 Q 167 128 164 141 Q 158 166 142 176 Z" fill="url(#skin)"/>
+  <!-- two fingers up -->
+  <g stroke="#59c744" stroke-width="9" stroke-linecap="round" fill="none">
+    <line x1="176" y1="130" x2="170" y2="104"/>
+    <line x1="186" y1="132" x2="192" y2="106"/>
+  </g>
+
+  <!-- neck spring: this is the bit the nod happens on -->
+  <rect x="113" y="140" width="14" height="26" rx="6" fill="#2a7a2f"/>
+
+  <!-- head -->
+  <path d="M 120 22
+           Q 196 26 198 92
+           Q 199 132 162 152
+           Q 140 164 120 164
+           Q 100 164 78 152
+           Q 41 132 42 92
+           Q 44 26 120 22 Z" fill="url(#skin)"/>
+  <!-- eyes -->
+  <path d="M 96 82 Q 76 88 72 108 Q 70 128 88 132 Q 104 134 108 112 Q 111 90 96 82 Z" fill="url(#eye)"/>
+  <path d="M 144 82 Q 164 88 168 108 Q 170 128 152 132 Q 136 134 132 112 Q 129 90 144 82 Z" fill="url(#eye)"/>
+  <ellipse cx="88" cy="97" rx="7" ry="10" fill="#ffffff" opacity="0.55" transform="rotate(-18 88 97)"/>
+  <ellipse cx="152" cy="97" rx="7" ry="10" fill="#ffffff" opacity="0.55" transform="rotate(18 152 97)"/>
+  <!-- mouth + nostrils -->
+  <path d="M 108 143 Q 120 149 132 143" stroke="#1b5a24" stroke-width="5" fill="none" stroke-linecap="round"/>
+  <circle cx="114" cy="128" r="2.6" fill="#1b5a24"/>
+  <circle cx="126" cy="128" r="2.6" fill="#1b5a24"/>
+  <!-- crown highlight -->
+  <ellipse cx="98" cy="52" rx="30" ry="16" fill="#ffffff" opacity="0.16" transform="rotate(-22 98 52)"/>
+</svg>

@@ -1,59 +1,80 @@
 @import url('https://fonts.googleapis.com/css2?family=Michroma&family=Exo+2:wght@400;500;600;700&display=swap');
 
 /* ============================================================================
-   Aesthetic: Space Highway — cruising one of Saturn's rings where it has been
-   paved into a banked concrete highway. Saturn's limb curves in from the left,
-   the road runs to a lit vanishing point, guardrail posts tick past, UFOs
-   drift through the star field and a cosmic swirl hangs overhead.
+   Aesthetic: Space Highway — you are in the driver's seat. Through the
+   windshield: a neon-edged highway running to a vanishing point, its lane
+   dashes streaming toward you, and past the horizon a colourful star field with
+   a cosmic swirl and a planet. On the dash: a speedometer, a readout, a vent,
+   an under-lit LED strip, and an alien bobblehead nodding along. A saucer
+   crosses the sky now and then.
 
    ---- This is a MAIN COLOR aesthetic (see FULL_PALETTE_AESTHETICS) ----
    Four SECTORS — Andromeda Blue / Violet Nebula / Rose Quartz / Aurora — and
    each is a whole patch of deep space, not a tint. applyAccentColor() writes the
-   full TERMINAL_PALETTE_VARS list inline on <html> (--bg / --surface / --surface2
-   / --border / --border-soft / --text* / --good / --good-soft / --reset-* /
-   --accent), so NOTHING hue-dependent may be hardcoded below: every colour is
-   derived from those via color-mix(), or the SECTOR picker would visibly do
-   nothing.
+   full TERMINAL_PALETTE_VARS list inline on <html> (--bg / --surface /
+   --surface2 / --border / --border-soft / --text* / --good / --good-soft /
+   --reset-* / --accent), so NOTHING hue-dependent may be hardcoded below: every
+   colour is derived from those via color-mix(), or the SECTOR picker would
+   visibly do nothing.
 
-   --accent is the dominant nebula hue; --good is a harmonised second light
-   (used on the swirl, the confirm buttons and "done" states). Unlike C.R.E.A.M
-   / Millennium, --good is kept in a positive-feeling green/teal/gold/blue per
-   sector rather than flipped to a clashing hue — the buttons still read as
-   "go".
+   --accent is the dominant nebula hue; --good is a harmonised second light.
+   Unlike C.R.E.A.M / Millennium, --good is kept in a positive-feeling
+   green/teal/gold/blue per sector rather than flipped to a clashing hue, so the
+   confirm buttons still read "go".
 
    ---- What is baked vs. what recolours ----
-   scene.svg carries the physical scenery — Saturn (sunlit tan), the concrete,
-   the steel rail, the two 1950s sedans. Art referenced by url() can't see page
-   CSS, so it stays sector-neutral and constant. Everything that takes the
-   sector's colour — the backdrop wash, the star field, the swirl, all UI
-   chrome — is CSS in this file, mixed off --bg / --accent / --good.
+   The SVGs carry physical objects — asphalt and its white neon edge lines
+   (road.svg), the car's black interior and chrome (cockpit.svg), a green alien
+   (bobble.svg), a metal saucer (ufo.svg). Art referenced by url() can't see page
+   CSS, so all of it stays sector-neutral and constant. Everything that takes the
+   sector's colour is CSS in this file: the sky wash, the swirl, the planet, the
+   road bloom, the dash LED spill, the readout glow, and every UI surface.
+   road.svg and lanes-*.svg are GENERATED — edit road.gen.js and re-run it, never
+   the .svg files, or the dashes drift off the tarmac.
 
-   ---- The layer map (four planes, each on its own depth fraction) ----
-   body::after   (z -3)  deep-space wash + far star field + cosmic swirl   0.06
-   body::before  (z -2)  near stars + sparkles, twinkling                  0.16
-   #app::before  (z -1)  scene.svg: Saturn, road, rail, cars               0.42
-   #app::after   (z -1)  UFOs crossing the star field                      0.60
-   fx.ts writes ONE offset pair (--sh-px / --sh-py); each plane multiplies it by
-   its fraction, so the planes separate on their own and the road gains depth.
-   Every translate3d() falls back to 0px, so the scene is correct with no JS,
-   on file://, or before the lazy import lands — it just doesn't parallax.
+   ---- The layer map (four planes) ----
+   body::after   (z -4) sky wash + swirl + planet + UFO      parallax 0.05
+   body::before  (z -3) star tiles, twinkling                parallax 0.15
+   #app::before  (z -2) road.svg + streaming lane dashes      parallax 0.34
+   #app::after   (z -1) cockpit.svg + dash glows + bobble     NO parallax
+   fx.ts writes ONE offset pair (--sh-px / --sh-py) and each plane outside the
+   car multiplies it by its own depth fraction. The cockpit deliberately takes
+   none: it's bolted to you, and holding it still is exactly what makes the world
+   outside move. Every translate3d() falls back to 0px, so the scene is correct
+   with no JS, on file://, or before the lazy import lands.
+
    Two pseudo-elements at the same z-index paint in tree order, so #app::after
-   (UFOs) lands above #app::before (road); both sit above the body planes
+   (the car) lands above #app::before (the road); both sit above the body planes
    because #app is its own stacking context (position: relative; z-index: 1) and
-   below the app's content.
+   below the app's content. Within one element, background layers paint
+   first-on-top — that's why the bobble is listed before cockpit.svg and the road
+   bloom last (it has to fall under the dash but over the road).
 
-   ---- What moves, and why little of it is close to text ----
-   Twinkle is an opacity pulse on the whole near-star plane (compositor-only).
-   The UFOs animate background-position on #app::after — two quick passes then
-   ~30s of quiet, so it reads as "one goes by now and then" rather than constant
-   traffic. The swirl does NOT rotate (a nebula doesn't visibly turn, and a
-   permanent rAF-free spin still burns composites for no read). No motion is
-   placed on a reading surface; panels are opaque glass over the star field.
+   ---- What moves, and what it costs ----
+   sh-lanes  streaming dashes. Four pre-rendered phases of ONE dash period
+             (lanes-0..3.svg) cycled with steps(1, end): background-image isn't
+             interpolable so it flips discretely, giving marching dashes for
+             ~4 repaints a second instead of a repaint every frame. Phase 0.75 is
+             phase 0 advanced one whole slot, which is what makes the loop
+             seamless. THIS IS THE FIRST THING TO TURN OFF if the motion is too
+             much on device — delete the one `animation` line on #app::before and
+             the road keeps its dashes, just parked.
+   sh-ufo    saucer crossing. background-position on the sky layer; parked
+             off-screen for ~58% of a 48s cycle, so it reads as "one goes by now
+             and then" rather than traffic.
+   sh-twinkle star field breathing. One opacity pulse on the whole plane —
+             compositor-only, and it composits fine alongside the parallax
+             transform because they're different properties. (Rotation WOULD
+             fight the var-driven transform; nothing here rotates. The swirl is
+             static on purpose — a nebula doesn't visibly turn.)
+   sh-bob    the bobblehead nodding. background-position on the cockpit layer,
+             ~6px, 2.6s.
+   Naming background-position or background-image in a keyframe RESETS that whole
+   layer list, so every keyframe below restates every layer of its element.
 
    External aesthetic — lazily loaded, everything scoped under
    [data-aesthetic="spacehighway"]. Fonts @imported here: Michroma (wide techno
-   display, the licence-plate / instrument face — single weight, that's fine, so
-   is Millennium's Righteous) and Exo 2 (rounded sci-fi, readable at 15px).
+   display, the instrument face) and Exo 2 (rounded sci-fi, readable at 15px).
    Deliberately NOT Orbitron — Cyberpunk Neon owns it (same call Y2K made).
 
    Picker swatch .aesthetic-preview-spacehighway lives in styles.css, not here —
@@ -94,80 +115,83 @@
       inset 0 0 0 1px color-mix(in srgb, var(--accent) 16%, transparent),
       0 8px 26px rgba(0, 0, 0, 0.5),
       0 0 26px -8px color-mix(in srgb, var(--accent) 45%, transparent);
-  --sh-star: color-mix(in srgb, var(--text) 88%, var(--accent));
   --sh-glow: 0 0 16px color-mix(in srgb, var(--accent) 55%, transparent);
 }
 
-/* ---------- The deep-space plane ---------- */
+/* ---------- The sky, furthest out ----------
+   Wash + cosmic swirl + a planet, with the saucer crossing above the horizon.
+   Layers paint first-on-top, so the UFO flies over the swirl and the wash sits
+   underneath everything. Nothing here is drawn below ~40% of the viewport: the
+   road plane's opaque ground covers that band. */
 [data-aesthetic="spacehighway"] body { background-color: var(--bg); }
 
-/* Base wash + far star field + the cosmic swirl. Layers paint first-on-top:
-   the swirl and stars sit over the wash. The swirl is soft wedges plus a bright
-   core — not a true logarithmic spiral, but at this opacity it reads as a
-   nebula haze, not a pinwheel. */
 [data-aesthetic="spacehighway"] body::after {
+  content: '';
+  position: fixed; inset: -6%; z-index: -4; pointer-events: none;
+  background-image:
+    url('ufo.svg'),
+    /* planet: a disc in the upper sky, lit from the swirl's side. The outermost stop has to
+       land ON the sky colour, not darker than it — mixing --bg toward black there drew a wide
+       dark halo around the planet instead of an edge. */
+    radial-gradient(circle 58px at 84% 14%,
+      color-mix(in srgb, var(--accent) 40%, #ffffff) 0%,
+      color-mix(in srgb, var(--accent) 80%, var(--bg)) 32%,
+      color-mix(in srgb, var(--good) 44%, var(--bg)) 66%,
+      color-mix(in srgb, var(--bg) 88%, var(--accent)) 93%,
+      transparent 96%),
+    /* swirl core */
+    radial-gradient(circle at 24% 17%,
+      color-mix(in srgb, var(--accent) 60%, #ffffff) 0%,
+      color-mix(in srgb, var(--accent) 38%, transparent) 9%,
+      color-mix(in srgb, var(--good) 22%, transparent) 18%,
+      transparent 30%),
+    /* swirl arms */
+    conic-gradient(from 25deg at 24% 17%,
+      color-mix(in srgb, var(--accent) 36%, transparent) 0%,
+      transparent 22%,
+      color-mix(in srgb, var(--good) 28%, transparent) 46%,
+      transparent 68%,
+      color-mix(in srgb, var(--accent) 34%, transparent) 90%,
+      transparent 100%),
+    /* wash: nebula-lit at the top, deep space toward the horizon */
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--bg) 84%, var(--accent)) 0%,
+      var(--bg) 34%,
+      color-mix(in srgb, var(--bg) 88%, #000000) 100%);
+  background-repeat: no-repeat;
+  background-size: 128px 53px, 100% 100%, 100% 100%, 100% 100%, 100% 100%;
+  background-position: -18% 22%, center, center, center, center;
+  transform: translate3d(calc(var(--sh-px, 0px) * 0.05), calc(var(--sh-py, 0px) * 0.05), 0);
+  will-change: transform;
+  animation: sh-ufo 48s linear infinite;
+}
+@keyframes sh-ufo {
+  0%, 30%   { background-position: -18% 22%, center, center, center, center; }
+  44%, 72%  { background-position: 118% 15%, center, center, center, center; }
+  86%, 100% { background-position: -18% 29%, center, center, center, center; }
+}
+
+/* ---------- Star field ----------
+   Three tiles rather than three dozen gradients: far dust, brighter near stars
+   (a few tinted pink/blue/warm, which is what makes it read as colourful rather
+   than as white noise) and sparse 4-point sparkles. Masked off at the horizon so
+   no star is ever painted on the ground — which also shrinks the area the
+   twinkle has to repaint. */
+[data-aesthetic="spacehighway"] body::before {
   content: '';
   position: fixed; inset: -6%; z-index: -3; pointer-events: none;
   background-image:
-    /* far stars — many, tiny, faint */
-    radial-gradient(1.4px 1.4px at 12% 8%,  var(--sh-star) 50%, transparent 60%),
-    radial-gradient(1.2px 1.2px at 27% 21%, var(--sh-star) 50%, transparent 60%),
-    radial-gradient(1.5px 1.5px at 43% 6%,  var(--sh-star) 50%, transparent 60%),
-    radial-gradient(1.1px 1.1px at 61% 15%, var(--sh-star) 50%, transparent 60%),
-    radial-gradient(1.3px 1.3px at 78% 9%,  var(--sh-star) 50%, transparent 60%),
-    radial-gradient(1.2px 1.2px at 91% 22%, var(--sh-star) 50%, transparent 60%),
-    radial-gradient(1.5px 1.5px at 7%  34%, var(--sh-star) 50%, transparent 60%),
-    radial-gradient(1.1px 1.1px at 33% 39%, var(--sh-star) 50%, transparent 60%),
-    radial-gradient(1.3px 1.3px at 55% 31%, var(--sh-star) 50%, transparent 60%),
-    radial-gradient(1.2px 1.2px at 71% 42%, var(--sh-star) 50%, transparent 60%),
-    radial-gradient(1.4px 1.4px at 88% 37%, var(--sh-star) 50%, transparent 60%),
-    radial-gradient(1.1px 1.1px at 18% 52%, var(--sh-star) 50%, transparent 60%),
-    radial-gradient(1.3px 1.3px at 46% 57%, var(--sh-star) 50%, transparent 60%),
-    radial-gradient(1.2px 1.2px at 82% 54%, var(--sh-star) 50%, transparent 60%),
-    radial-gradient(1.1px 1.1px at 63% 64%, var(--sh-star) 50%, transparent 60%),
-    radial-gradient(1.3px 1.3px at 9%  71%, var(--sh-star) 50%, transparent 60%),
-    radial-gradient(1.2px 1.2px at 37% 77%, var(--sh-star) 50%, transparent 60%),
-    /* cosmic swirl — bright core + soft arms, upper area */
-    radial-gradient(circle at 32% 24%,
-      color-mix(in srgb, var(--good) 60%, transparent) 0%,
-      color-mix(in srgb, var(--accent) 30%, transparent) 12%,
-      transparent 26%),
-    conic-gradient(from 25deg at 32% 24%,
-      color-mix(in srgb, var(--accent) 34%, transparent) 0%,
-      transparent 22%,
-      color-mix(in srgb, var(--good) 26%, transparent) 46%,
-      transparent 68%,
-      color-mix(in srgb, var(--accent) 32%, transparent) 90%,
-      transparent 100%),
-    /* base wash — nebula-lit at top, deep space below */
-    linear-gradient(180deg,
-      color-mix(in srgb, var(--bg) 78%, var(--accent)) 0%,
-      var(--bg) 42%,
-      color-mix(in srgb, var(--bg) 84%, #000000) 100%);
-  background-repeat: no-repeat;
-  transform: translate3d(calc(var(--sh-px, 0px) * 0.06), calc(var(--sh-py, 0px) * 0.06), 0);
-  will-change: transform;
-}
-
-/* Near stars — fewer, brighter, with a soft halo — plus a sparse layer of
-   4-point sparkles. The whole plane pulses (opacity), which is the twinkle:
-   one compositor-only animation instead of a timer per star. */
-[data-aesthetic="spacehighway"] body::before {
-  content: '';
-  position: fixed; inset: -6%; z-index: -2; pointer-events: none;
-  background-image:
-    radial-gradient(2.6px 2.6px at 16% 12%, #ffffff 40%, color-mix(in srgb, var(--accent) 60%, transparent) 60%, transparent 78%),
-    radial-gradient(2.2px 2.2px at 74% 18%, #ffffff 40%, color-mix(in srgb, var(--good) 60%, transparent) 60%, transparent 78%),
-    radial-gradient(3px 3px at 44% 27%,     #ffffff 40%, color-mix(in srgb, var(--accent) 60%, transparent) 60%, transparent 80%),
-    radial-gradient(2.2px 2.2px at 88% 44%, #ffffff 40%, color-mix(in srgb, var(--accent) 55%, transparent) 60%, transparent 78%),
-    radial-gradient(2.4px 2.4px at 24% 47%, #ffffff 40%, color-mix(in srgb, var(--good) 55%, transparent) 60%, transparent 78%),
-    radial-gradient(2px 2px at 58% 55%,     #ffffff 40%, color-mix(in srgb, var(--accent) 55%, transparent) 60%, transparent 78%),
-    radial-gradient(2.8px 2.8px at 9% 63%,  #ffffff 40%, color-mix(in srgb, var(--accent) 55%, transparent) 60%, transparent 80%),
-    radial-gradient(2.2px 2.2px at 79% 68%, #ffffff 40%, color-mix(in srgb, var(--good) 55%, transparent) 60%, transparent 78%),
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='560' height='560'%3E%3Cg fill='%23ffffff'%3E%3Cpath d='M120 66 L128 108 L170 116 L128 124 L120 166 L112 124 L70 116 L112 108 Z'/%3E%3Cpath d='M430 320 L436 348 L464 354 L436 360 L430 388 L424 360 L396 354 L424 348 Z'/%3E%3Cpath d='M320 150 L324 168 L342 172 L324 176 L320 194 L316 176 L298 172 L316 168 Z'/%3E%3Cpath d='M96 430 L101 452 L123 457 L101 462 L96 484 L91 462 L69 457 L91 452 Z'/%3E%3C/g%3E%3C/svg%3E");
-  background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, repeat;
-  background-size: auto, auto, auto, auto, auto, auto, auto, auto, 560px 560px;
-  transform: translate3d(calc(var(--sh-px, 0px) * 0.16), calc(var(--sh-py, 0px) * 0.16), 0);
+    /* Sparkles are drawn at their FINAL pixel size, because this tile is placed at its natural
+       560px and never scaled — the first pass used ~100-unit glyphs and they came out as
+       hundred-pixel stars sitting on top of the headings. */
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='560' height='560'%3E%3Cg fill='%23ffffff'%3E%3Cpath d='M118 56 L122 68 L134 72 L122 76 L118 88 L114 76 L102 72 L114 68 Z'/%3E%3Cpath d='M432 333 L435 341 L443 344 L435 347 L432 355 L429 347 L421 344 L429 341 Z'/%3E%3Cpath d='M318 160 L320.5 165.5 L326 168 L320.5 170.5 L318 176 L315.5 170.5 L310 168 L315.5 165.5 Z'/%3E%3Cpath d='M94 439 L97.5 448.5 L107 452 L97.5 455.5 L94 465 L90.5 455.5 L81 452 L90.5 448.5 Z'/%3E%3C/g%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Ccircle cx='28' cy='40' r='2.1' fill='%23ffffff'/%3E%3Ccircle cx='112' cy='18' r='1.7' fill='%23ffd8ec'/%3E%3Ccircle cx='196' cy='62' r='2.3' fill='%23ffffff'/%3E%3Ccircle cx='262' cy='26' r='1.6' fill='%23cfe8ff'/%3E%3Ccircle cx='64' cy='128' r='1.9' fill='%23fff0c0'/%3E%3Ccircle cx='158' cy='150' r='2.4' fill='%23ffffff'/%3E%3Ccircle cx='244' cy='176' r='1.8' fill='%23ffd8ec'/%3E%3Ccircle cx='36' cy='214' r='2.2' fill='%23cfe8ff'/%3E%3Ccircle cx='128' cy='248' r='1.7' fill='%23ffffff'/%3E%3Ccircle cx='214' cy='274' r='2' fill='%23ffffff'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cg fill='%23ffffff' opacity='0.75'%3E%3Ccircle cx='12' cy='20' r='1'/%3E%3Ccircle cx='48' cy='8' r='0.9'/%3E%3Ccircle cx='84' cy='34' r='1.1'/%3E%3Ccircle cx='128' cy='14' r='0.9'/%3E%3Ccircle cx='164' cy='44' r='1'/%3E%3Ccircle cx='26' cy='72' r='1.1'/%3E%3Ccircle cx='70' cy='96' r='0.9'/%3E%3Ccircle cx='110' cy='68' r='1'/%3E%3Ccircle cx='152' cy='104' r='1.1'/%3E%3Ccircle cx='18' cy='134' r='0.9'/%3E%3Ccircle cx='62' cy='158' r='1'/%3E%3Ccircle cx='104' cy='140' r='1.1'/%3E%3Ccircle cx='146' cy='166' r='0.9'/%3E%3C/g%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 560px 560px, 300px 300px, 180px 180px;
+  -webkit-mask-image: linear-gradient(to bottom, #000 0 33%, transparent 41%);
+          mask-image: linear-gradient(to bottom, #000 0 33%, transparent 41%);
+  transform: translate3d(calc(var(--sh-px, 0px) * 0.15), calc(var(--sh-py, 0px) * 0.15), 0);
   will-change: transform, opacity;
   animation: sh-twinkle 5.5s ease-in-out infinite;
 }
@@ -175,47 +199,78 @@
 
 [data-aesthetic="spacehighway"] #app { position: relative; z-index: 1; }
 
-/* The scenery: Saturn, the paved ring, the guardrail, the cars. A roadside light
-   bloom is layered over the top of the SVG so it takes the sector's hue. */
+/* ---------- The road, seen through the glass ----------
+   road.svg is the asphalt, its neon edges and the roadside headlands; the lane
+   layer on top of it is swapped between four pre-rendered phases to march the
+   dashes toward you. Both are `cover` on the same 900x1600 canvas, which is what
+   keeps the dashes exactly on the tarmac at any viewport. */
 [data-aesthetic="spacehighway"] #app::before {
   content: '';
-  position: fixed; inset: 0; z-index: -1; pointer-events: none;
-  background-image:
-    radial-gradient(60% 32% at 62% 46%,
-      color-mix(in srgb, var(--accent) 26%, transparent) 0%, transparent 100%),
-    url('scene.svg');
+  position: fixed; inset: 0; z-index: -2; pointer-events: none;
+  background-image: url('lanes-0.svg'), url('road.svg');
   background-repeat: no-repeat, no-repeat;
-  background-size: auto, cover;
-  background-position: center, center bottom;
-  transform: translate3d(calc(var(--sh-px, 0px) * 0.42), calc(var(--sh-py, 0px) * 0.42), 0);
+  background-size: cover, cover;
+  background-position: center, center;
+  transform: translate3d(calc(var(--sh-px, 0px) * 0.34), calc(var(--sh-py, 0px) * 0.34), 0);
   will-change: transform;
+  /* ---- DIAL-BACK POINT: delete this one line to park the dashes. ---- */
+  animation: sh-lanes 0.92s steps(1, end) infinite;
+}
+@keyframes sh-lanes {
+  0%   { background-image: url('lanes-3.svg'), url('road.svg'); }
+  25%  { background-image: url('lanes-2.svg'), url('road.svg'); }
+  50%  { background-image: url('lanes-1.svg'), url('road.svg'); }
+  75%  { background-image: url('lanes-0.svg'), url('road.svg'); }
+  100% { background-image: url('lanes-3.svg'), url('road.svg'); }
 }
 
-/* UFOs. Two saucers that sit off-screen for most of the cycle, then cross — one
-   left-to-right high, one right-to-left low — a beat apart, ~46s round trip.
-   Naming background-position in the keyframes resets the layer list, but this
-   element only carries the two saucers, so there is nothing else to restate. */
+/* ---------- The car ----------
+   No parallax: the cockpit is rigid, and that's what sells the motion outside.
+   Order matters — bobble over the dash, sheen over the glass, the two hue glows
+   over their instruments, cockpit art under all of them, and the road bloom LAST
+   so it falls beneath the dash but still lands on the road behind. */
 [data-aesthetic="spacehighway"] #app::after {
   content: '';
   position: fixed; inset: 0; z-index: -1; pointer-events: none;
   background-image:
-    radial-gradient(ellipse 30px 9px at 50% 55%,
-      color-mix(in srgb, var(--good) 85%, #ffffff) 0%,
-      color-mix(in srgb, var(--good) 45%, transparent) 55%, transparent 72%),
-    radial-gradient(ellipse 22px 7px at 50% 55%,
-      color-mix(in srgb, var(--accent) 85%, #ffffff) 0%,
-      color-mix(in srgb, var(--accent) 45%, transparent) 55%, transparent 72%);
-  background-repeat: no-repeat, no-repeat;
-  background-size: 62px 22px, 46px 16px;
-  background-position: -14% 30%, 116% 60%;
-  transform: translate3d(calc(var(--sh-px, 0px) * 0.60), calc(var(--sh-py, 0px) * 0.60), 0);
-  will-change: transform;
-  animation: sh-ufo 46s linear infinite;
+    url('bobble.svg'),
+    /* windshield sheen — kept very faint; at the alpha this started on it read as a paint
+       streak across the sky rather than as a reflection in glass */
+    linear-gradient(104deg,
+      transparent 38%,
+      rgba(255, 255, 255, 0.022) 45%,
+      rgba(255, 255, 255, 0.05) 48%,
+      rgba(255, 255, 255, 0.015) 51%,
+      transparent 57%),
+    /* under-dash LED strip */
+    linear-gradient(180deg,
+      transparent 0%,
+      color-mix(in srgb, var(--accent) 62%, transparent) 40%,
+      color-mix(in srgb, var(--accent) 85%, #ffffff) 50%,
+      color-mix(in srgb, var(--accent) 62%, transparent) 60%,
+      transparent 100%),
+    /* centre readout glow */
+    radial-gradient(ellipse at 50% 50%,
+      color-mix(in srgb, var(--accent) 55%, transparent) 0%,
+      color-mix(in srgb, var(--accent) 18%, transparent) 52%,
+      transparent 74%),
+    url('cockpit.svg'),
+    /* bloom over the road and horizon — the sector's light on the tarmac. road.svg bakes its
+       neon edges white on purpose; this is what gives them (and the asphalt) their hue, so it
+       has to be strong enough to actually tint, and centred on the horizon rather than the
+       middle of the road or the vanishing point stays grey. */
+    radial-gradient(88% 30% at 58% 40%,
+      color-mix(in srgb, var(--accent) 38%, transparent) 0%,
+      color-mix(in srgb, var(--accent) 12%, transparent) 46%,
+      transparent 100%);
+  background-repeat: no-repeat;
+  background-size: 58px 80px, 100% 70%, 100% 30px, 160px 110px, cover, 100% 100%;
+  background-position: 45% 73.5%, center top, center 76%, 82% 82%, center, center;
+  animation: sh-bob 2.6s ease-in-out infinite;
 }
-@keyframes sh-ufo {
-  0%, 42%   { background-position: -14% 30%, 116% 60%; }
-  56%       { background-position: 116% 22%, 116% 60%; }
-  70%, 100% { background-position: 116% 22%, -14% 72%; }
+@keyframes sh-bob {
+  0%, 100% { background-position: 45% 73.5%, center top, center 76%, 82% 82%, center, center; }
+  50%      { background-position: 45% 72.6%, center top, center 76%, 82% 82%, center, center; }
 }
 
 /* ---------- Cockpit glass panels ---------- */
@@ -243,7 +298,6 @@
 [data-aesthetic="spacehighway"] .modal-overlay {
   background: color-mix(in srgb, var(--bg) 74%, transparent);
 }
-
 /* Grid tiles: aspect-ratio:1 in a 1fr grid — take the glass but NO extra padding
    or the square breaks and the third column runs off screen. */
 [data-aesthetic="spacehighway"] .workout-cell,
@@ -254,28 +308,53 @@
   box-shadow: var(--sh-rim);
 }
 
-/* ---------- Bars ---------- */
+/* ---------- Bars, styled as the rest of the cockpit ----------
+   The topbar is the windshield header trim; the tabbar is the lower half of the
+   console (cockpit.svg deliberately leaves that zone sparse because this covers
+   it). Neither has its `position` touched — only z-index. */
 [data-aesthetic="spacehighway"] .topbar {
-  background: linear-gradient(180deg,
-    color-mix(in srgb, var(--surface) 92%, #000000) 0%,
-    color-mix(in srgb, var(--bg) 88%, #000000) 100%);
-  border-bottom: 1px solid color-mix(in srgb, var(--accent) 32%, var(--border));
-  box-shadow: 0 2px 20px -4px color-mix(in srgb, var(--accent) 45%, transparent);
+  background: linear-gradient(180deg, #0a0d12 0%, #12161f 68%, #070a0f 100%);
+  border-bottom: none;
+  box-shadow:
+    inset 0 -2px 0 color-mix(in srgb, var(--accent) 38%, #7d8794),
+    0 3px 16px rgba(0, 0, 0, 0.75);
   z-index: 20;
 }
 [data-aesthetic="spacehighway"] .tabbar {
-  background: linear-gradient(180deg,
-    color-mix(in srgb, var(--bg) 88%, #000000) 0%,
-    color-mix(in srgb, var(--surface) 92%, #000000) 100%);
-  border-top: 1px solid color-mix(in srgb, var(--accent) 32%, var(--border));
-  box-shadow: 0 -2px 20px -4px color-mix(in srgb, var(--accent) 45%, transparent);
+  background: linear-gradient(180deg, #1a1f29 0%, #0e1219 40%, #05070b 100%);
+  border-top: none;
+  box-shadow: 0 -3px 22px rgba(0, 0, 0, 0.85);
   z-index: 30;
 }
-[data-aesthetic="spacehighway"] .toast { z-index: 60; }
+/* chrome lip with the LED strip running along it, matching the dash edge above */
+[data-aesthetic="spacehighway"] .tabbar::before {
+  content: '';
+  position: absolute; left: 0; right: 0; top: 0; height: 2px;
+  pointer-events: none;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--accent) 85%, #ffffff) 22%,
+    color-mix(in srgb, var(--accent) 85%, #ffffff) 78%,
+    transparent 100%);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 70%, transparent);
+}
+/* each nav button sunk into its own instrument bezel */
+[data-aesthetic="spacehighway"] .tabbar button {
+  background: radial-gradient(ellipse at 50% 30%,
+    color-mix(in srgb, var(--surface2) 88%, #ffffff) 0%,
+    #0b0f16 74%);
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 1px #2a3340, inset 0 1px 0 rgba(255, 255, 255, 0.10);
+  color: var(--text-faint);
+}
 [data-aesthetic="spacehighway"] .tabbar button.active {
   color: var(--accent);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 60%, transparent),
+    0 0 16px -2px color-mix(in srgb, var(--accent) 70%, transparent);
   text-shadow: var(--sh-glow);
 }
+[data-aesthetic="spacehighway"] .toast { z-index: 60; }
 
 /* ---------- Lettering ---------- */
 [data-aesthetic="spacehighway"] .topbar .brand {
@@ -290,9 +369,10 @@
   font-family: var(--font-head);
   text-transform: uppercase; letter-spacing: 0.08em; font-size: 17px;
   color: var(--text);
-  text-shadow: 0 0 12px color-mix(in srgb, var(--accent) 40%, transparent);
+  text-shadow: 0 1px 5px rgba(0, 0, 0, 0.85),
+               0 0 14px color-mix(in srgb, var(--accent) 40%, transparent);
 }
-/* A highway stretching off past the heading — a line that fades to the vanishing point. */
+/* road stretching off past the heading — a line that fades to the vanishing point */
 [data-aesthetic="spacehighway"] .section-title::after {
   content: '';
   flex: 1; height: 2px;
@@ -303,15 +383,16 @@
 [data-aesthetic="spacehighway"] .subtle-label {
   color: color-mix(in srgb, var(--accent) 30%, var(--text-dim));
   text-transform: uppercase; letter-spacing: 0.12em; font-weight: 600;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.85);
 }
-/* Text sitting straight on the star field (empty states) has to carry its own
-   separation — a bright near-star behind faint centred grey text swallows it. */
+/* Text sitting straight on the star field has to carry its own separation — a
+   bright star or a lane dash behind faint centred grey text swallows it. */
 [data-aesthetic="spacehighway"] .empty-state {
   color: var(--text-dim);
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9), 0 0 14px rgba(0, 0, 0, 0.8);
 }
-/* The date line under the greeting sits straight on the swirl — app.js sets its colour inline
-   (can't be beaten by a class rule) but the shadow is fair game, same fix Hunny uses. */
+/* app.js sets .home-date-line's colour inline (no class rule can beat that) but
+   the shadow is fair game — same fix Hunny uses. */
 [data-aesthetic="spacehighway"] .home-date-line {
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9), 0 0 12px rgba(0, 0, 0, 0.75);
 }
@@ -319,8 +400,8 @@
 /* ---------- Controls ----------
    ORDER MATTERS: [data-aesthetic] .btn and [data-aesthetic] .btn-primary are
    equal specificity and every .btn-primary also carries .btn, so the neutral
-   plate must come FIRST. .btn-danger / .btn-good are restated below because
-   this theme's .btn outranks styles.css's rules for them.
+   plate must come FIRST. .btn-danger / .btn-good are restated below because this
+   theme's .btn outranks styles.css's rules for them.
    NO padding on the shared rule — .icon-btn is a fixed 30x30 box, .rest-timer-fab
    52x52, .rt-btn has its own padding; a blanket value collapses their SVGs. */
 [data-aesthetic="spacehighway"] .btn,
@@ -420,10 +501,17 @@
   box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.55), var(--sh-glow);
 }
 
-/* ---------- Reduced motion: the scene stays fully painted, nothing moves ----------
-   Both animations sit over static art (the near stars at 0.5 opacity are always
-   drawn; the UFOs just park off-screen), so stopping them costs only the motion. */
+/* ---------- Reduced motion: the drive stops, the scene stays ----------
+   Every animation here sits over art that is already painted, so stopping them
+   costs only the motion — except the saucer, which is parked OFF-SCREEN by the
+   base rule (that's where its cycle starts), so it has to be put back in the sky
+   explicitly or it simply vanishes. */
 @media (prefers-reduced-motion: reduce) {
-  [data-aesthetic="spacehighway"] body::before { animation: none; opacity: 0.85; }
+  [data-aesthetic="spacehighway"] body::before,
+  [data-aesthetic="spacehighway"] #app::before,
   [data-aesthetic="spacehighway"] #app::after { animation: none; }
+  [data-aesthetic="spacehighway"] body::after {
+    animation: none;
+    background-position: 24% 18%, center, center, center, center;
+  }
 }

@@ -532,9 +532,9 @@ select { -webkit-appearance: none; appearance: none; background-image: linear-gr
 .aesthetic-preview-runic { background: linear-gradient(150deg, #14181a 6%, #34251a 30%, #7a5c39 48%, #c8d2d8 62%, #4fe08c 84%, #12331f 98%); }
 /* Nested bands, not a blend — the swatch is the corridor seen end-on. */
 .aesthetic-preview-liminal { background: linear-gradient(180deg, #fffdf0 0 10%, #d9cf9c 10% 30%, #d3c88a 30% 48%, #cdc079 48% 66%, #c6b96b 66% 86%, #86793f 86% 100%); }
-/* Deep space down to the paved ring: black, nebula violet, cyan star-glow, the pale concrete
-   crown of the highway, then dark asphalt. Retinted per SECTOR at runtime; this is the default. */
-.aesthetic-preview-spacehighway { background: linear-gradient(158deg, #05070f 6%, #a875f0 26%, #3fb4e6 46%, #c9d2dc 62%, #3a3f47 78%, #12151c 96%); }
+/* The view out of the windshield, top to bottom: deep space, nebula, the lit horizon, neon
+   asphalt, then the black dash. Retinted per SECTOR at runtime; this is the default. */
+.aesthetic-preview-spacehighway { background: linear-gradient(180deg, #05070f 0 20%, #a875f0 20% 34%, #3fb4e6 34% 44%, #cfe8ff 44% 50%, #262e3a 50% 74%, #05070b 74% 100%); }
 .aesthetic-card-name { font-weight: 700; font-size: 13px; }
 .aesthetic-card-desc { font-size: 11px; color: var(--text-faint); margin-top: 2px; line-height: 1.4; }
 .aesthetic-card-check { position: absolute; right: 10px; top: 10px; }

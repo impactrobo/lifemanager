@@ -342,7 +342,7 @@ const AESTHETICS = {
   // MAIN COLOR aesthetic (see FULL_PALETTE_AESTHETICS) — the SECTOR picker swaps the whole
   // deep-space palette. Fourth ambient FX module: fx.js writes one offset pair --sh-px/--sh-py
   // and each scene plane multiplies it by its own depth fraction — see aesthetics/spacehighway/fx.ts.
-  spacehighway: { label: 'Space Highway', desc: "Cruising one of Saturn's rings where it's been paved into a highway — banked concrete to a vanishing point, guardrail posts, UFOs in the star field, a cosmic swirl overhead.", group: 'Maximalist', external: true, fx: true },
+  spacehighway: { label: 'Space Highway', desc: 'Behind the wheel on a neon highway running into deep space — lane lines streaming past, a cosmic swirl through the windshield, a saucer now and then, and an alien nodding on the dash.', group: 'Maximalist', external: true, fx: true },
 };
 const AESTHETIC_GROUP_ORDER = ['Maximalist', 'Vibrant', 'Contrast', 'Light'];
 // Which groups are expanded in the settings panel right now — session-only (not persisted),

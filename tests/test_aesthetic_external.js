@@ -87,6 +87,36 @@ const REQUIRED_TOKENS = [
     }
   }
 
+  // Every aesthetic's SVG art must actually PARSE. An SVG served as image/svg+xml is parsed as
+  // strict XML, and a malformed one renders as nothing at all — no console error, no failed
+  // request, just a layer silently missing from the scene. The way this bit: XML forbids `--`
+  // inside a comment, so the `/* ---------- Section ---------- */` banner style used all over
+  // this repo's CSS is illegal the moment it's pasted into an .svg, and it takes the whole file
+  // down. Parsed with the browser's own DOMParser rather than a Node library so this matches
+  // exactly what Chromium will do with the file.
+  const svgFiles = [];
+  for (const dir of fs.readdirSync(path.join(ROOT, 'aesthetics'))) {
+    const d = path.join(ROOT, 'aesthetics', dir);
+    if (!fs.statSync(d).isDirectory()) continue;
+    for (const f of fs.readdirSync(d)) {
+      if (f.endsWith('.svg')) svgFiles.push({ rel: `aesthetics/${dir}/${f}`, text: fs.readFileSync(path.join(d, f), 'utf8') });
+    }
+  }
+  if (!svgFiles.length) throw new Error('no aesthetic .svg art found — this check has nothing to cover');
+  const malformed = await page.evaluate((files) => files
+    .map(({ rel, text }) => {
+      const doc = new DOMParser().parseFromString(text, 'image/svg+xml');
+      const err = doc.querySelector('parsererror');
+      if (err) return `${rel}: ${err.textContent.replace(/\s+/g, ' ').trim().slice(0, 160)}`;
+      if (!doc.documentElement || doc.documentElement.nodeName.toLowerCase() !== 'svg') {
+        return `${rel}: root element is <${doc.documentElement && doc.documentElement.nodeName}>, expected <svg>`;
+      }
+      return null;
+    })
+    .filter(Boolean), svgFiles);
+  if (malformed.length) throw new Error('malformed SVG art (renders as nothing):\n  ' + malformed.join('\n  '));
+  console.log(`all ${svgFiles.length} aesthetic .svg files parse as XML`);
+
   // Switching back to a built-in clears the slot again (no stale theme bleeding through).
   await page.evaluate(() => setAesthetic('cyberpunk'));
   await page.waitForTimeout(150);
