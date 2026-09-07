@@ -400,9 +400,49 @@ select { -webkit-appearance: none; appearance: none; background-image: linear-gr
   z-index: 50; opacity: 0; pointer-events: none; transition: opacity 0.2s, transform 0.2s;
 }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(-6px); }
-.subnav { display: flex; gap: 6px; margin-bottom: 14px; overflow-x: auto; }
+/* A horizontally-scrolling row of sub-tab buttons. Always built by subNav() in JS, which wraps
+   it in .subnav-wrap and adds the scroll affordances below — never hand-write `<div class="subnav">`.
+   The 14px bottom gap now lives on the wrap so the overlay children can sit flush to the row. */
+.subnav { display: flex; gap: 6px; overflow-x: auto; }
 .subnav button { flex-shrink: 0; background: var(--surface2); border: 1px solid var(--border); color: var(--text-dim); padding: 7px 13px; border-radius: 20px; font-size: 12px; font-weight: 600; }
 .subnav button.active { background: var(--accent); border-color: var(--accent); color: #17181b; }
+/* ---- Sub-nav scroll affordances (see attachSubnavScrollAffordances() in JS) ----
+   Native scrollbars are hidden app-wide, and a strip of 5-6 sub-tabs overflows a phone. Two
+   cues: a thin bar along the bottom edge that fades in while the strip is being scrolled and
+   out ~800ms after (matching the page/tabbar indicators), plus an accent chevron pinned to
+   whichever end still has more strip that way, over a short fade so buttons dissolve instead
+   of being sliced. The chevron is decorative on touch (you swipe) and, on a fine pointer,
+   clickable to page the strip — gated purely here via pointer-events. */
+.subnav-wrap { position: relative; margin-bottom: 14px; }
+.subnav-more {
+  position: absolute; top: 0; bottom: 4px; width: 52px;
+  display: flex; align-items: center;
+  border: none; background: transparent; padding: 0; margin: 0;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.2s ease;
+  z-index: 2;
+}
+/* opaque bg for the first half so the chevron always sits on the page colour, not on a
+   half-sliced (often accent-coloured) button, then a quick fade to nothing */
+.subnav-more .icon-svg { width: 22px; height: 22px; filter: drop-shadow(0 0 2px var(--bg)) drop-shadow(0 0 5px var(--bg)); }
+.subnav-more.visible { opacity: 1; }
+.subnav-more-l { left: 0; justify-content: flex-start;
+  background: linear-gradient(to right, var(--bg) 0 48%, color-mix(in srgb, var(--bg) 35%, transparent) 74%, transparent); }
+.subnav-more-r { right: 0; justify-content: flex-end;
+  background: linear-gradient(to left, var(--bg) 0 48%, color-mix(in srgb, var(--bg) 35%, transparent) 74%, transparent); }
+@media (hover: hover) and (pointer: fine) {
+  .subnav-more.visible { pointer-events: auto; cursor: pointer; }
+}
+.subnav-scrollbar {
+  position: absolute; left: 0; bottom: 0; height: 3px; min-width: 24px;
+  border-radius: 2px; background: var(--text-faint);
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.25s ease; z-index: 1;
+}
+.subnav-scrollbar.visible { opacity: 0.6; }
+@media (prefers-reduced-motion: reduce) {
+  .subnav-more, .subnav-scrollbar { transition: none; }
+}
 .icon-btn { background: none; border: 1px solid var(--border); color: var(--text-dim); width: 30px; height: 30px; border-radius: var(--radius); display: flex; align-items: center; justify-content: center; font-size: 14px; }
 .icon-btn.disabled { opacity: 0.3; pointer-events: none; }
 

@@ -2324,15 +2324,79 @@ function attachBoxScrollIndicator(box) {
     const maxTop = trackH - thumbH;
     const top = maxTop * (box.scrollTop / scrollable);
     indicator.style.height = thumbH + 'px';
-    indicator.style.top = top + 'px';
+    // The indicator is position:absolute INSIDE the scrolling box, so it moves with the content
+    // — add scrollTop back so it stays pinned to the visible portion. Without this it slides up
+    // off the top of the box as you scroll down.
+    indicator.style.top = (box.scrollTop + top) + 'px';
     indicator.classList.add('visible');
     clearTimeout(hideTimer);
     hideTimer = setTimeout(() => indicator.classList.remove('visible'), 700);
   }
   box.addEventListener('scroll', update, { passive: true });
 }
+// A row of sub-tab buttons (Exercise Setup's PLAN/MAXES/BUILDER/…, Progress's chart tabs, etc.)
+// that scrolls horizontally when it outgrows the viewport. Wraps the strip so the scroll
+// affordances — the thin bar + the end chevrons, see the .subnav-* CSS — can overlay it without
+// scrolling away with the buttons. `opts.marginTop` adds the standard 14px gap under the
+// section title (default on; pass false where the caller doesn't want it).
+function subNav(inner, opts) {
+  opts = opts || {};
+  const style = opts.marginTop === false ? '' : ' style="margin-top:14px"';
+  return `<div class="subnav-wrap"${style}>
+    <div class="subnav">${inner}</div>
+    <button type="button" class="subnav-more subnav-more-l" tabindex="-1" aria-hidden="true">${icon('back')}</button>
+    <button type="button" class="subnav-more subnav-more-r" tabindex="-1" aria-hidden="true">${icon('forward')}</button>
+    <span class="subnav-scrollbar" aria-hidden="true"></span>
+  </div>`;
+}
+const _subnavHideTimers = new WeakMap();
+// Wires (idempotently — uses .onscroll/.onclick, not addEventListener) each .subnav-wrap in the
+// current render: the end chevrons toggle on whenever there's more strip that way, the thin bar
+// tracks scrollLeft and fades itself out ~800ms after motion stops, and on a fine pointer a
+// chevron click pages the strip by ~3/4 of its width.
+function attachSubnavScrollAffordances() {
+  /** @type {any} */
+  const wraps = document.querySelectorAll('#app .subnav-wrap');
+  wraps.forEach((/** @type {any} */ wrap) => {
+    const nav = wrap.querySelector(':scope > .subnav');
+    if (!nav) return;
+    const left = wrap.querySelector(':scope > .subnav-more-l');
+    const right = wrap.querySelector(':scope > .subnav-more-r');
+    const bar = wrap.querySelector(':scope > .subnav-scrollbar');
+    const page = (dir) => nav.scrollBy({ left: dir * Math.max(nav.clientWidth * 0.75, 96), behavior: 'smooth' });
+    if (left) left.onclick = () => page(-1);
+    if (right) right.onclick = () => page(1);
+    const update = (reveal) => {
+      const max = nav.scrollWidth - nav.clientWidth;
+      if (max <= 4) {
+        if (left) left.classList.remove('visible');
+        if (right) right.classList.remove('visible');
+        if (bar) bar.classList.remove('visible');
+        return;
+      }
+      const sl = nav.scrollLeft;
+      if (left) left.classList.toggle('visible', sl > 4);
+      if (right) right.classList.toggle('visible', sl < max - 4);
+      if (bar) {
+        const trackW = nav.clientWidth;
+        const thumbW = Math.max(24, trackW * (trackW / nav.scrollWidth));
+        bar.style.width = thumbW + 'px';
+        bar.style.left = ((trackW - thumbW) * (sl / max)) + 'px';
+        if (reveal) {
+          bar.classList.add('visible');
+          clearTimeout(_subnavHideTimers.get(bar));
+          _subnavHideTimers.set(bar, setTimeout(() => bar.classList.remove('visible'), 800));
+        }
+      }
+    };
+    nav.onscroll = () => update(true);
+    update(false);
+  });
+}
+window.addEventListener('resize', attachSubnavScrollAffordances);
 function attachScrollIndicators() {
   document.querySelectorAll('#app .scroll-box').forEach(attachBoxScrollIndicator);
+  attachSubnavScrollAffordances();
 }
 // The bottom nav is hidden entirely on Home; once inside a section it shows a HOME
 // button (back out) plus that section's own sub-navigation — never the fixed global
@@ -3643,14 +3707,14 @@ function renderExerciseSetup() {
   // has more buttons than fit a narrow viewport (see ARCHITECTURE.md).
   return `<div class="screen">
     <div class="section-title">Setup</div>
-    <div class="subnav" style="margin-top:14px;">
+    ${subNav(`
       <button class="${SETUP_SUBTAB==='plan'?'active':''}" onclick="setSetupSubtab('plan')">PLAN</button>
       <button class="${SETUP_SUBTAB==='tm'?'active':''}" onclick="setSetupSubtab('tm')">MAXES</button>
       <button class="${SETUP_SUBTAB==='builder'?'active':''}" onclick="setSetupSubtab('builder')">BUILDER</button>
       <button class="${SETUP_SUBTAB==='viewWorkouts'?'active':''}" onclick="setSetupSubtab('viewWorkouts')">VIEW WORKOUTS</button>
       <button class="${SETUP_SUBTAB==='planner'?'active':''}" onclick="setSetupSubtab('planner')">PLANNER</button>
       <button class="${SETUP_SUBTAB==='general'?'active':''}" onclick="setSetupSubtab('general')">GENERAL</button>
-    </div>
+    `)}
     ${body}
   </div>`;
 }
@@ -3754,10 +3818,10 @@ function setScheduleSetupSubtab(t) { SCHEDULE_SETUP_SUBTAB = t; if (t === 'build
 function renderScheduleSetup() {
   return `<div class="screen">
     <div class="section-title">Setup</div>
-    <div class="subnav" style="margin-top:14px;">
+    ${subNav(`
       <button class="${SCHEDULE_SETUP_SUBTAB==='anchors'?'active':''}" onclick="setScheduleSetupSubtab('anchors')">SET ANCHORS</button>
       <button class="${SCHEDULE_SETUP_SUBTAB==='builder'?'active':''}" onclick="setScheduleSetupSubtab('builder')">SCHEDULE BUILDER</button>
-    </div>
+    `)}
     ${SCHEDULE_SETUP_SUBTAB === 'builder' ? renderScheduleBuilder() : renderSetAnchors()}
   </div>`;
 }
@@ -4000,11 +4064,11 @@ function setHealthSetupSubtab(t) { HEALTH_SETUP_SUBTAB = t; render(); }
 function renderHealthSetup() {
   return `<div class="screen">
     <div class="section-title">Setup</div>
-    <div class="subnav" style="margin-top:14px;">
+    ${subNav(`
       <button class="${HEALTH_SETUP_SUBTAB==='builder'?'active':''}" onclick="setHealthSetupSubtab('builder')">MEAL BUILDER</button>
       <button class="${HEALTH_SETUP_SUBTAB==='meals'?'active':''}" onclick="setHealthSetupSubtab('meals')">ALL MEALS</button>
       <button class="${HEALTH_SETUP_SUBTAB==='plan'?'active':''}" onclick="setHealthSetupSubtab('plan')">MEAL PLAN</button>
-    </div>
+    `)}
     ${HEALTH_SETUP_SUBTAB === 'meals' ? renderAllMeals() : HEALTH_SETUP_SUBTAB === 'plan' ? renderMealPlanTab() : renderMealBuilderTab()}
   </div>`;
 }
@@ -6048,12 +6112,11 @@ function renderHealth() {
 function setHealthSubtab(t) { HEALTH_SUBTAB = t; render(); }
 
 function renderExerciseProgress() {
-  const subnav = `
-    <div class="subnav">
-      <button class="${PROGRESS_SUBTAB==='bodyweight'?'active':''}" onclick="setProgressSubtab('bodyweight')">BODY WEIGHT</button>
-      <button class="${PROGRESS_SUBTAB==='bodymeasurement'?'active':''}" onclick="setProgressSubtab('bodymeasurement')">BODY MEASUREMENT</button>
-      <button class="${PROGRESS_SUBTAB==='volume'?'active':''}" onclick="setProgressSubtab('volume')">SET VOLUME</button>
-    </div>`;
+  const subnav = subNav(`
+    <button class="${PROGRESS_SUBTAB==='bodyweight'?'active':''}" onclick="setProgressSubtab('bodyweight')">BODY WEIGHT</button>
+    <button class="${PROGRESS_SUBTAB==='bodymeasurement'?'active':''}" onclick="setProgressSubtab('bodymeasurement')">BODY MEASUREMENT</button>
+    <button class="${PROGRESS_SUBTAB==='volume'?'active':''}" onclick="setProgressSubtab('volume')">SET VOLUME</button>
+  `, { marginTop: false });
   let body;
   if (PROGRESS_SUBTAB === 'bodyweight') body = renderBodyWeightChart();
   else if (PROGRESS_SUBTAB === 'bodymeasurement') body = renderBodyMeasurementChart();
@@ -6767,10 +6830,10 @@ function renderNotesFilterRow() {
     return `<button class="tag-pill ${active?'active':''}" style="--tc:${c}" onclick="toggleNotesFilter('${key}')">${escapeHtml(label)}</button>`;
   }).join('');
   return `
-    <div class="subnav" style="margin-top:14px;">
+    ${subNav(`
       <button class="${NOTES_SORT==='date'?'active':''}" onclick="setNotesSort('date')">NEWEST FIRST</button>
       <button class="${NOTES_SORT==='tag'?'active':''}" onclick="setNotesSort('tag')">GROUP BY TAG</button>
-    </div>
+    `)}
     <div class="tag-pill-row">
       <button class="tag-pill ${!NOTES_FILTER_TAG?'active':''}" style="--tc:var(--text-dim)" onclick="toggleNotesFilter(null)">ALL</button>
       ${tagPills}

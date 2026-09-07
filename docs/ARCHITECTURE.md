@@ -169,13 +169,20 @@ container is actively scrolling and fades out ~700ms after motion stops.
   attached to `window`'s `scroll`/`resize` events once at load.
 - `.scroll-box` + `attachBoxScrollIndicator()` / `attachScrollIndicators()` — for any inner
   scrollable panel (currently Meal Builder's food list); re-attached after every render since
-  those boxes get recreated via `innerHTML`.
+  those boxes get recreated via `innerHTML`. The thumb is `position:absolute` *inside* the
+  scrolling box, so `update()` adds `scrollTop` back into its `top` or it slides out of view.
 - `.scroll-indicator-h` (horizontal, tabbar) — driven by `updateTabbarScrollIndicator()`,
   attached once to `#tabbar`'s own `scroll` event (that element is a stable DOM node across
   renders — only its `innerHTML` is replaced).
+- **Sub-nav strips** (`subNav()` → `.subnav-wrap`, wired by `attachSubnavScrollAffordances()`
+  from `attachScrollIndicators()`): every sub-tab row goes through `subNav()`, which wraps the
+  overflowing `.subnav` and adds its own thin `.subnav-scrollbar` plus an accent `.subnav-more`
+  chevron at each end. The chevrons toggle on whenever there's more strip that way; they're
+  `pointer-events:none` on touch and, only under `@media (hover:hover) and (pointer:fine)`,
+  become clickable to page the strip. Never hand-write `<div class="subnav">`.
 
-If you add another horizontally-scrollable region, follow the `-h` pattern rather than inventing
-a new indicator style.
+If you add another horizontally-scrollable region, follow the `-h` (or `subNav()`) pattern
+rather than inventing a new indicator style.
 
 ## CSS design tokens & the aesthetic system
 

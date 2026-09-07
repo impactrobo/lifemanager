@@ -1,7 +1,8 @@
 // test_ui_polish.js — small UI-chrome mechanics: toast show/auto-hide timing, the bottom tabbar
 // being hidden on Home but shown inside any section, the page/tabbar scroll-indicator
-// show-on-scroll-then-auto-hide behavior, and scroll indicators actually attaching to a real
-// .scroll-box (Meal Builder's food list).
+// show-on-scroll-then-auto-hide behavior, scroll indicators attaching to a real .scroll-box
+// (Meal Builder's food list) and staying pinned in view as it scrolls, and the sub-nav
+// horizontal scroll affordances (end chevrons + the thin bar) on an overflowing sub-nav.
 const { chromium } = require('playwright');
 const path = require('path');
 
@@ -96,7 +97,74 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   });
   console.log('a .scroll-indicator child was attached to the .scroll-box:', indicatorAttached);
   if (!indicatorAttached) throw new Error('Expected attachScrollIndicators() to append a .scroll-indicator element into the .scroll-box');
+
+  // 4b. The .scroll-box indicator is position:absolute INSIDE the scrolling element, so it must
+  //     be offset by scrollTop to stay in view — regression guard for it sliding off the top.
+  const boxIndicatorTracks = await page.evaluate(() => {
+    const box = document.querySelector('#app .scroll-box');
+    const ind = box && box.querySelector(':scope > .scroll-indicator');
+    if (!ind) return { ok: false, why: 'no indicator' };
+    const scrollable = box.scrollHeight - box.clientHeight;
+    if (scrollable <= 4) return { ok: true, skipped: 'box does not overflow in this fixture' };
+    const samples = [0, 1].map((frac) => {
+      box.scrollTop = scrollable * frac;
+      box.dispatchEvent(new Event('scroll'));
+      const b = box.getBoundingClientRect(), i = ind.getBoundingClientRect();
+      return i.top >= b.top - 1 && i.bottom <= b.bottom + 1;
+    });
+    box.scrollTop = 0;
+    return { ok: samples.every(Boolean), samples };
+  });
+  console.log('.scroll-box indicator stays within the box while scrolling:', boxIndicatorTracks);
+  if (!boxIndicatorTracks.ok) throw new Error('.scroll-box indicator drifted outside the box when scrolled: ' + JSON.stringify(boxIndicatorTracks));
   await page.evaluate(() => cancelMealDraft());
+
+  // 5. Sub-nav scroll affordances. Exercise Setup has 6 sub-tabs — it overflows a 390px phone.
+  await page.evaluate(() => { switchTab('train'); TRAIN_TOP_SUBTAB = 'setup'; render(); });
+  await page.waitForTimeout(150);
+  const subnavFresh = await page.evaluate(() => {
+    const w = document.querySelector('#app .subnav-wrap');
+    if (!w) return { ok: false, why: 'no .subnav-wrap — subNav() not used?' };
+    const nav = w.querySelector(':scope > .subnav');
+    return {
+      overflows: nav.scrollWidth - nav.clientWidth > 4,
+      leftVisible: w.querySelector('.subnav-more-l').classList.contains('visible'),
+      rightVisible: w.querySelector('.subnav-more-r').classList.contains('visible'),
+    };
+  });
+  console.log('sub-nav at rest (scrolled to start):', subnavFresh);
+  if (!subnavFresh.overflows) throw new Error('Exercise Setup sub-nav should overflow a 390px viewport');
+  if (subnavFresh.leftVisible) throw new Error('left chevron should be hidden at the start of the strip');
+  if (!subnavFresh.rightVisible) throw new Error('right chevron should show when there is more strip to the right');
+
+  const subnavEnd = await page.evaluate(() => {
+    const w = document.querySelector('#app .subnav-wrap');
+    const nav = w.querySelector(':scope > .subnav');
+    nav.scrollLeft = nav.scrollWidth;
+    nav.dispatchEvent(new Event('scroll'));
+    return {
+      leftVisible: w.querySelector('.subnav-more-l').classList.contains('visible'),
+      rightVisible: w.querySelector('.subnav-more-r').classList.contains('visible'),
+      barVisible: w.querySelector('.subnav-scrollbar').classList.contains('visible'),
+    };
+  });
+  console.log('sub-nav scrolled to the end:', subnavEnd);
+  if (!subnavEnd.leftVisible) throw new Error('left chevron should show once scrolled away from the start');
+  if (subnavEnd.rightVisible) throw new Error('right chevron should hide at the end of the strip');
+  if (!subnavEnd.barVisible) throw new Error('the thin scroll bar should fade in on a scroll event');
+
+  // A sub-nav that fits (Schedule Setup, 2 tabs) shows no affordances.
+  const subnavShort = await page.evaluate(() => {
+    document.getElementById('app').innerHTML = renderScheduleSetup();
+    attachScrollIndicators();
+    const w = document.querySelector('#app .subnav-wrap');
+    return {
+      anyVisible: ['.subnav-more-l', '.subnav-more-r', '.subnav-scrollbar']
+        .some((s) => w.querySelector(s).classList.contains('visible')),
+    };
+  });
+  console.log('short sub-nav (fits, no scroll):', subnavShort);
+  if (subnavShort.anyVisible) throw new Error('a non-overflowing sub-nav should show no chevrons or bar');
 
   await browser.close();
 
