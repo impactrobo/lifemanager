@@ -1,0 +1,560 @@
+@import url('https://fonts.googleapis.com/css2?family=Righteous&family=Rubik:wght@400;500;600;700&display=swap');
+
+/* ============================================================================
+   Aesthetic: Millennium Disco — a dark club room. Mirrorball turning overhead,
+   its light spots sweeping the walls, a lit checkerboard floor, and every frame
+   in the app built from three concentric solid colour steps with bulbs running
+   around the outside.
+
+   ---- This is a MAIN COLOR aesthetic (see FULL_PALETTE_AESTHETICS) ----
+   Four vibes — Warm, Cool, Acid, Ultraviolet — and each is a whole room, not a
+   tint. applyAccentColor() writes the full TERMINAL_PALETTE_VARS list inline on
+   <html>, so NOTHING hue-dependent may be hardcoded here: every colour below is
+   derived from --bg / --surface / --surface2 / --accent / --good via color-mix,
+   or the vibe picker would visibly do nothing.
+
+   Two tokens carry the design:
+     --accent  the first disco hue (orange / blue / lime / purple)
+     --good    the second one (pink / ice / yellow / cyan)
+   The stepped frames run --good -> blend -> --accent from outside in, which is
+   why --good is a disco hue here rather than a green. Same trade C.R.E.A.M
+   makes; it means "done" states are tinted with the vibe's second colour.
+
+   ---- The stepwise frames ----
+   Three solid steps, done as stacked INSET box-shadows:
+       inset 0 0 0 3px OUTER, inset 0 0 0 6px MID, inset 0 0 0 9px INNER
+   Shadows paint first-on-top and all three start at the element's edge, so the
+   first listed wins the outer 3px, the second shows in 3-6px, the third in
+   6-9px. Inset rather than outset on purpose: it costs no layout, so a frame
+   can never overflow into a neighbour or break the .workout-cell grid. The
+   trade is padding — the rings eat 9px, so any surface using the full ramp has
+   to pad past it or text will sit on the frame.
+
+   ---- What moves, and why none of it is JavaScript ----
+   body::after   (z -2)  base wash + checkerboard floor + vignette   static
+   body::before  (z -1)  the mirrorball                              facets turn
+   #app::before  (z -1)  its light spots                             rotate
+   #app::after   (z -1)  the periodic floor sweep                    translate
+   plus running bulbs on the bars and on every .panel / .modal-box frame.
+   A mirrorball never stops, and an always-on requestAnimationFrame loop would
+   break the demand-driven rule every AestheticFX module is held to, so this
+   theme ships no fx.ts at all. The spots and the sweep animate transform only
+   (compositor-only, and the browser stops them when the tab is hidden).
+
+   Everything else moves by shifting a background-position, which does repaint —
+   so every one of those uses steps() rather than a linear slide. That is what a
+   bulb chaser looks like anyway (sockets firing one at a time, not a strip
+   sliding), and it drops the repaint from 60 frames a second to two or three.
+   The ball is the one exception, and it is a single 280px element.
+   Nothing depends on an animation to be visible: stop them all and every frame,
+   bulb and light spot is still painted by the static layer underneath.
+
+   The -2/-1 split matters: two pseudo-elements at the SAME z-index paint in
+   tree order, so an opaque ::after would bury ::before. Everything is
+   `position: fixed` rather than background-attachment, which is broken on iOS
+   Safari. #app::before/::after are hosted inside #app's own stacking context so
+   they land above the body layers and below the app's content.
+
+   External aesthetic — lazily loaded, everything scoped under
+   [data-aesthetic="millennium"]. Fonts @imported here rather than added to the
+   shared <link>: Righteous (rounded retro display, the disco-poster face) and
+   Rubik (rounded, friendly, holds up at 15px). Neither is used by another
+   aesthetic — check the other theme.css @imports and the --font-head blocks in
+   styles.css before swapping.
+
+   Picker swatch `.aesthetic-preview-millennium` lives in styles.css, not here —
+   the picker renders while a different aesthetic is still active. Positioning of
+   .topbar/.tabbar is never touched; they need their sticky/fixed from styles.css.
+   ============================================================================ */
+
+:root[data-aesthetic="millennium"] {
+  /* --bg / --surface / --surface2 / --border / --border-soft / --text* / --good /
+     --good-soft / --reset-* / --accent all arrive inline from applyAccentColor().
+     Only the hue-independent tokens are set here. */
+  --accent-dim: color-mix(in srgb, var(--accent) 55%, var(--border));
+  --accent-soft: color-mix(in srgb, var(--accent) 20%, var(--surface));
+  --bad: #ff3355;
+  --bad-soft: color-mix(in srgb, #ff3355 22%, var(--surface));
+  --warn: #ffb020;
+  --myo: #c07cff;
+  --goldenrod: #ffcc33;
+  --savings: #4d84ff;
+  --savings-soft: color-mix(in srgb, var(--savings) 22%, var(--surface));
+  --font-head: 'Righteous', 'Fredoka', sans-serif;
+  --font-body: 'Rubik', 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --radius: 16px;   /* the rounded-rectangle light panel is the whole visual motif */
+
+  /* ---- The three solid steps, outside in ---- */
+  --md-ring-outer: var(--good);
+  --md-ring-mid: color-mix(in srgb, var(--accent) 50%, var(--good));
+  --md-ring-inner: var(--accent);
+  /* Full ramp (9px) for roomy surfaces; the tight one (6px) is for grid tiles,
+     where extra padding would break .workout-cell's aspect-ratio and push the
+     third column off screen. */
+  --md-steps:
+      inset 0 0 0 3px var(--md-ring-outer),
+      inset 0 0 0 6px var(--md-ring-mid),
+      inset 0 0 0 9px var(--md-ring-inner);
+  --md-steps-tight:
+      inset 0 0 0 2px var(--md-ring-outer),
+      inset 0 0 0 4px var(--md-ring-mid),
+      inset 0 0 0 6px var(--md-ring-inner);
+
+  /* A lit bulb: the vibe's hue blown out toward white so it reads as a filament
+     rather than as more paint. */
+  --md-bulb: color-mix(in srgb, var(--accent) 30%, #ffffff);
+  --md-bulb-alt: color-mix(in srgb, var(--good) 30%, #ffffff);
+  --md-glow: 0 0 18px color-mix(in srgb, var(--accent) 45%, transparent);
+  /* Surfaces are lifted off --surface rather than stated, so a vibe swap moves them. */
+  --md-panel: linear-gradient(180deg,
+      color-mix(in srgb, var(--surface2) 88%, #ffffff) 0%,
+      var(--surface) 55%,
+      color-mix(in srgb, var(--surface) 88%, #000000) 100%);
+  --md-plate: linear-gradient(180deg,
+      color-mix(in srgb, var(--surface2) 80%, #ffffff) 0%,
+      var(--surface2) 48%,
+      color-mix(in srgb, var(--surface) 90%, #000000) 100%);
+}
+
+/* ---------- The room ---------- */
+[data-aesthetic="millennium"] body { background-color: var(--bg); }
+
+/* Base wash, the lit floor, and a vignette to close the room in. Layers paint
+   first-on-top, so the floor-fade gradient sits ABOVE the checkerboard and
+   erases it everywhere past the horizon — that is what makes it read as a floor
+   receding rather than as wallpaper, and it avoids needing a mask (which would
+   have faded the vignette and the wash along with it). */
+[data-aesthetic="millennium"] body::after {
+  content: '';
+  position: fixed; inset: 0; z-index: -2; pointer-events: none;
+  background-image:
+    radial-gradient(120% 80% at 50% 22%, rgba(0, 0, 0, 0) 38%, rgba(0, 0, 0, 0.72) 100%),
+    linear-gradient(to top, rgba(0, 0, 0, 0) 0%, var(--bg) 46%),
+    repeating-conic-gradient(
+      color-mix(in srgb, var(--accent) 80%, var(--bg)) 0% 25%,
+      color-mix(in srgb, var(--good) 68%, var(--bg)) 0% 50%),
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--bg) 82%, var(--accent)) 0%,
+      var(--bg) 45%,
+      color-mix(in srgb, var(--bg) 88%, var(--good)) 100%);
+  background-size: auto, auto, 76px 76px, auto;
+  background-position: center, center, center bottom, center;
+}
+
+/* The mirrorball.
+   Facets are a GRID of small squares, not conic wedges. A repeating-conic-gradient
+   was the first attempt and it's the wrong primitive: conic wedges all converge on
+   the centre, so the ball rendered as a grey pinwheel — a sunburst, not a sphere.
+   Two crossed repeating-linear-gradients give square mirror tiles instead, and the
+   radial underneath supplies the volume.
+
+   The element never rotates. Only the vertical facet COLUMNS travel (a shift of
+   background-position on that one layer), which leaves the specular highlight
+   parked at upper-left where the light source is, and correctly leaves the
+   horizontal rows still — those are latitude lines, and they don't move on a ball
+   spinning about a vertical axis. Rotating the whole element instead swings the
+   highlight around the sphere, which reads as a tumbling planet.
+
+   The inset shadow deepens the lower-right away from the highlight; without it the
+   flat tile grid still reads as a disc. */
+[data-aesthetic="millennium"] body::before {
+  content: '';
+  position: fixed; z-index: -1; pointer-events: none;
+  /* Hangs in the upper RIGHT, clear of the topbar and clear of the left-aligned
+     headings. Two positioning mistakes to not repeat: parked at a negative `top`
+     the sticky topbar (z-index 20) covered everything above 52px, so the only part
+     still on screen was the ball's unlit underside — a dark blob; and centred, its
+     bright side sat directly behind the section heading and the date line.
+     It also has to sit ENTIRELY on screen: bled off the right edge and clipped by
+     the topbar it reads as a pale rounded patch, not a sphere. A whole circle is
+     what makes it legible as a ball, even with its lower half behind the tiles. */
+  top: 58px; right: 10px; width: 170px; height: 170px;
+  border-radius: 50%;
+  /* The facet layers are kept LOW contrast on purpose. At the alphas this started
+     with (0.22 black over 0.17 black) the two grids together flattened the radial
+     underneath and the ball rendered as a grey tiled disc — the tiles have to read
+     as a texture ON a sphere, not replace its shading.
+     The sphere is also tinted toward the vibe rather than left neutral silver: a
+     mirrorball takes the colour of the room it hangs in, and a grey blob in a hot
+     pink room looks like a hole in the backdrop. It also means the ball repaints
+     with the vibe picker, which a MAIN COLOR aesthetic should. */
+  background-image:
+    radial-gradient(circle at 34% 26%, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0) 22%),
+    repeating-linear-gradient(90deg,
+      rgba(255, 255, 255, 0.12) 0 6px, rgba(0, 0, 0, 0.12) 6px 13px),
+    repeating-linear-gradient(0deg,
+      rgba(255, 255, 255, 0.09) 0 6px, rgba(0, 0, 0, 0.09) 6px 13px),
+    radial-gradient(circle at 38% 30%,
+      #ffffff 0%,
+      color-mix(in srgb, var(--md-bulb) 45%, #ffffff) 18%,
+      color-mix(in srgb, var(--accent) 30%, #b3c4d2) 42%,
+      color-mix(in srgb, var(--bg) 30%, #5d6e7d) 76%,
+      color-mix(in srgb, var(--bg) 72%, #000000) 100%);
+  background-size: auto, 13px 13px, 13px 13px, auto;
+  box-shadow:
+    inset -12px -14px 32px rgba(0, 0, 0, 0.45),
+    0 0 60px 12px color-mix(in srgb, var(--accent) 55%, transparent),
+    0 0 150px 46px color-mix(in srgb, var(--good) 26%, transparent);
+  opacity: 0.8;
+  animation: md-ball-spin 6s linear infinite;
+}
+/* Every layer's position has to be restated — naming background-position at all
+   resets the whole list — so only the second (the facet columns) actually moves. */
+@keyframes md-ball-spin {
+  from { background-position: 0 0, 0 0,    0 0, 0 0; }
+  to   { background-position: 0 0, 13px 0, 0 0, 0 0; }
+}
+
+[data-aesthetic="millennium"] #app { position: relative; z-index: 1; }
+
+/* The spots the ball throws. Rotating one oversized layer about its centre is
+   exactly how real mirrorball spots travel — they sweep around the room rather
+   than drifting in a line — and it keeps this to a compositor-only transform no
+   matter how many dots are on it. */
+[data-aesthetic="millennium"] #app::before {
+  content: '';
+  position: fixed; inset: -45%; z-index: -1; pointer-events: none;
+  background-repeat: no-repeat;
+  background-image:
+    radial-gradient(circle 7px at 12% 18%, var(--md-bulb) 0%, transparent 100%),
+    radial-gradient(circle 5px at 27% 9%,  var(--md-bulb-alt) 0%, transparent 100%),
+    radial-gradient(circle 9px at 41% 24%, var(--md-bulb) 0%, transparent 100%),
+    radial-gradient(circle 6px at 58% 13%, var(--md-bulb-alt) 0%, transparent 100%),
+    radial-gradient(circle 8px at 73% 27%, var(--md-bulb) 0%, transparent 100%),
+    radial-gradient(circle 5px at 88% 16%, var(--md-bulb-alt) 0%, transparent 100%),
+    radial-gradient(circle 7px at 8%  47%, var(--md-bulb-alt) 0%, transparent 100%),
+    radial-gradient(circle 10px at 33% 56%, var(--md-bulb) 0%, transparent 100%),
+    radial-gradient(circle 6px at 64% 44%, var(--md-bulb-alt) 0%, transparent 100%),
+    radial-gradient(circle 8px at 91% 58%, var(--md-bulb) 0%, transparent 100%),
+    radial-gradient(circle 6px at 19% 78%, var(--md-bulb) 0%, transparent 100%),
+    radial-gradient(circle 9px at 47% 87%, var(--md-bulb-alt) 0%, transparent 100%),
+    radial-gradient(circle 5px at 71% 72%, var(--md-bulb) 0%, transparent 100%),
+    radial-gradient(circle 7px at 86% 91%, var(--md-bulb-alt) 0%, transparent 100%);
+  opacity: 0.5;
+  animation: md-spots 30s linear infinite;
+}
+@keyframes md-spots { to { transform: rotate(360deg); } }
+
+/* The periodic sweep across the floor — parked off-frame between passes. */
+[data-aesthetic="millennium"] #app::after {
+  content: '';
+  position: fixed; z-index: -1; pointer-events: none;
+  top: -50%; bottom: -50%; left: -45%; width: 26%;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--accent) 26%, transparent) 50%,
+    transparent 100%);
+  animation: md-sweep 9s ease-in-out infinite;
+}
+@keyframes md-sweep {
+  0%, 68% { transform: translateX(0) skewX(-18deg); }
+  100%    { transform: translateX(520%) skewX(-18deg); }
+}
+
+/* ---------- Lit panels: three solid steps, bulbs running the outside ----------
+   Padding is bumped past the 9px ramp — styles.css's 14px would leave text
+   sitting on the innermost step. */
+[data-aesthetic="millennium"] .panel,
+[data-aesthetic="millennium"] .modal-box {
+  position: relative;
+  padding: 22px;
+  background: var(--md-panel);
+  border: none;
+  border-radius: var(--radius);
+  box-shadow: var(--md-steps), 0 6px 26px rgba(0, 0, 0, 0.55);
+}
+/* The running bulbs — a marquee just INSIDE the stepped frame.
+   Sat at inset:0 first, where it overlapped the outer step and read as a pale
+   fringe on the frame rather than as lights. inset:9px clears the full 9px ramp,
+   so the bulbs sit in their own channel between the frame and the content.
+
+   The bulbs are FOUR explicit edge strips, one background layer per side, each
+   repeating along its own edge. Two earlier attempts failed:
+     - a repeating-conic-gradient masked to a ring: its stops are angular, so on a
+       wide short panel the bulbs bunch along the short edges and stretch along the
+       long ones;
+     - a dot GRID masked to a ring: whether a dot appears depends on where the
+       grid's 14px period happens to fall across a 4px band, so most edges came out
+       empty and only the one that happened to align showed any bulbs.
+   Strips sidestep both — every side is guaranteed an evenly spaced run, and no
+   mask is needed at all.
+
+   Animating each strip along its own axis, in opposite senses per pair, makes the
+   lights actually circulate: right along the top, down the right, left along the
+   bottom, up the left. steps(3) fires them socket by socket like a real chaser and
+   holds the repaint to two frames a second rather than sixty. */
+[data-aesthetic="millennium"] .panel::before,
+[data-aesthetic="millennium"] .modal-box::before {
+  content: '';
+  position: absolute; inset: 9px; border-radius: 8px;
+  pointer-events: none;
+  background-image:
+    radial-gradient(circle 2px at 7px 2px, var(--md-bulb) 45%, transparent 58%),
+    radial-gradient(circle 2px at 7px 2px, var(--md-bulb) 45%, transparent 58%),
+    radial-gradient(circle 2px at 2px 7px, var(--md-bulb) 45%, transparent 58%),
+    radial-gradient(circle 2px at 2px 7px, var(--md-bulb) 45%, transparent 58%);
+  background-size: 14px 4px, 14px 4px, 4px 14px, 4px 14px;
+  background-repeat: repeat-x, repeat-x, repeat-y, repeat-y;
+  background-position: 0 0, 0 100%, 0 0, 100% 0;
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--accent) 75%, transparent));
+  animation: md-chase 1.5s steps(3) infinite;
+}
+@keyframes md-chase {
+  from { background-position: 0 0,      0 100%,      0 0,     100% 0; }
+  to   { background-position: 14px 0, -14px 100%,  0 14px,  100% -14px; }
+}
+
+/* The smaller surfaces take the frame but not the chase — a running ring behind
+   every row of a long list is both visual noise and a repaint per card. */
+[data-aesthetic="millennium"] .entry-card,
+[data-aesthetic="millennium"] .note-card,
+[data-aesthetic="millennium"] .chart-wrap,
+[data-aesthetic="millennium"] .superset-group,
+[data-aesthetic="millennium"] .aesthetic-card,
+[data-aesthetic="millennium"] .home-popup,
+[data-aesthetic="millennium"] .rest-timer-widget {
+  padding: 18px;
+  background: var(--md-panel);
+  border: none;
+  border-radius: var(--radius);
+  box-shadow: var(--md-steps), 0 5px 20px rgba(0, 0, 0, 0.5);
+}
+/* Grid tiles get the tight ramp and NO extra padding: .workout-cell is
+   aspect-ratio:1 in a 1fr grid, and over-padding makes it grow past its track. */
+[data-aesthetic="millennium"] .workout-cell,
+[data-aesthetic="millennium"] .cal-cell {
+  background: var(--md-panel);
+  border: none;
+  border-radius: var(--radius);
+  box-shadow: var(--md-steps-tight), 0 4px 14px rgba(0, 0, 0, 0.45);
+}
+[data-aesthetic="millennium"] .panel-done,
+[data-aesthetic="millennium"] .workout-cell.done {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--good) 26%, var(--surface2)) 0%,
+    color-mix(in srgb, var(--good) 14%, var(--surface)) 100%);
+}
+[data-aesthetic="millennium"] .modal-overlay {
+  background: color-mix(in srgb, var(--bg) 78%, transparent);
+}
+
+/* ---------- Bars, with a row of chasing bulbs on the inner edge ---------- */
+[data-aesthetic="millennium"] .topbar {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--surface) 90%, #000000) 0%,
+    color-mix(in srgb, var(--bg) 88%, #000000) 100%);
+  border-bottom: none;
+  box-shadow: 0 3px 18px rgba(0, 0, 0, 0.7);
+  z-index: 20;
+}
+[data-aesthetic="millennium"] .tabbar {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--bg) 88%, #000000) 0%,
+    color-mix(in srgb, var(--surface) 90%, #000000) 100%);
+  border-top: none;
+  box-shadow: 0 -3px 18px rgba(0, 0, 0, 0.75);
+  z-index: 30;
+}
+[data-aesthetic="millennium"] .toast { z-index: 60; }
+/* steps() rather than a linear slide: the bulbs jump one socket at a time, the
+   way a real chaser fires, instead of the whole strip sliding sideways. */
+[data-aesthetic="millennium"] .topbar::after,
+[data-aesthetic="millennium"] .tabbar::after {
+  content: '';
+  position: absolute; left: 0; right: 0; height: 7px;
+  pointer-events: none;
+  background-image: radial-gradient(circle 3px at 9px 3.5px,
+    var(--md-bulb) 0%, var(--md-bulb) 40%, transparent 55%);
+  background-size: 27px 7px;
+  background-repeat: repeat-x;
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--accent) 70%, transparent));
+  animation: md-bulb-run 1.2s steps(3) infinite;
+}
+[data-aesthetic="millennium"] .topbar::after { bottom: -3px; }
+[data-aesthetic="millennium"] .tabbar::after {
+  top: -3px;
+  background-image: radial-gradient(circle 3px at 9px 3.5px,
+    var(--md-bulb-alt) 0%, var(--md-bulb-alt) 40%, transparent 55%);
+}
+@keyframes md-bulb-run { to { background-position-x: 27px; } }
+[data-aesthetic="millennium"] .tabbar button.active {
+  color: var(--md-bulb);
+  text-shadow: 0 0 12px color-mix(in srgb, var(--accent) 80%, transparent);
+}
+
+/* ---------- Lettering: bulb-sign headings ---------- */
+[data-aesthetic="millennium"] .topbar .brand {
+  color: var(--md-bulb);
+  letter-spacing: 0.02em;
+  text-shadow:
+    0 0 6px color-mix(in srgb, var(--accent) 90%, transparent),
+    0 0 22px color-mix(in srgb, var(--accent) 60%, transparent),
+    0 0 44px color-mix(in srgb, var(--good) 45%, transparent);
+}
+[data-aesthetic="millennium"] .topbar .brand span {
+  color: var(--md-bulb-alt);
+  text-shadow:
+    0 0 6px color-mix(in srgb, var(--good) 90%, transparent),
+    0 0 22px color-mix(in srgb, var(--good) 60%, transparent);
+}
+[data-aesthetic="millennium"] .section-title {
+  display: flex; align-items: center; gap: 12px;
+  color: var(--md-bulb);
+  text-transform: uppercase; letter-spacing: 0.04em;
+  text-shadow:
+    0 0 8px color-mix(in srgb, var(--accent) 85%, transparent),
+    0 0 26px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+/* A run of bulbs trailing the heading, same socket spacing as the bars. */
+[data-aesthetic="millennium"] .section-title::after {
+  content: '';
+  flex: 1; height: 7px;
+  background-image: radial-gradient(circle 2.5px at 8px 3.5px,
+    var(--md-bulb) 0%, var(--md-bulb) 40%, transparent 55%);
+  background-size: 22px 7px;
+  background-repeat: repeat-x;
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--accent) 70%, transparent));
+}
+/* Text sitting on the room rather than on a panel has to carry its own separation.
+   The empty states are the worst case — faint, centred, and landing right where the
+   mirrorball hangs. Lifted a step and shadowed; anything inside a panel is already
+   covered by the surface under it and needs none of this. */
+[data-aesthetic="millennium"] .empty-state {
+  color: var(--text-dim);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.95), 0 0 14px rgba(0, 0, 0, 0.85);
+}
+[data-aesthetic="millennium"] .subtle-label {
+  color: var(--md-bulb-alt);
+  text-transform: uppercase; letter-spacing: 0.14em; font-weight: 600;
+  text-shadow: 0 0 10px color-mix(in srgb, var(--good) 60%, transparent);
+}
+
+/* ---------- Controls ----------
+   ORDER MATTERS: `[data-aesthetic] .btn` and `[data-aesthetic] .btn-primary` are
+   equal specificity and every .btn-primary also carries .btn, so the neutral
+   plate must come FIRST or it beats the variants. .btn-danger/.btn-good are
+   restated below for the same reason — this theme's .btn outranks the base
+   rules for them in styles.css. */
+[data-aesthetic="millennium"] .btn,
+[data-aesthetic="millennium"] .icon-btn,
+[data-aesthetic="millennium"] .subnav button,
+[data-aesthetic="millennium"] .rt-btn,
+[data-aesthetic="millennium"] .rest-timer-fab,
+[data-aesthetic="millennium"] .week-selector .cycle-btns button {
+  background: var(--md-plate);
+  border: none;
+  border-radius: 999px;   /* pill hardware, straight off the lounge furniture */
+  color: var(--text);
+  box-shadow:
+    inset 0 0 0 2px var(--md-ring-outer),
+    inset 0 0 0 4px color-mix(in srgb, var(--md-ring-mid) 70%, var(--surface)),
+    0 3px 12px rgba(0, 0, 0, 0.5);
+  /* Deliberately NO padding override here. .icon-btn is a fixed 30x30 box,
+     .rest-timer-fab a fixed 52x52 one and .rt-btn has its own `padding: 0 9px`
+     — a blanket `padding: 10px 18px` on this shared rule ate the whole content
+     box of the icon buttons and collapsed their SVGs to zero width. */
+}
+[data-aesthetic="millennium"] .btn-primary {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--accent) 55%, #ffffff) 0%,
+    var(--accent) 46%,
+    color-mix(in srgb, var(--accent) 82%, #000000) 100%);
+  color: #14060f;
+  font-weight: 700;
+  box-shadow:
+    inset 0 0 0 2px var(--md-bulb),
+    inset 0 0 0 5px var(--good),
+    0 0 22px color-mix(in srgb, var(--accent) 55%, transparent),
+    0 3px 12px rgba(0, 0, 0, 0.5);
+}
+[data-aesthetic="millennium"] .btn-good {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--good) 55%, #ffffff) 0%,
+    var(--good) 46%,
+    color-mix(in srgb, var(--good) 82%, #000000) 100%);
+  color: #14060f;
+  box-shadow:
+    inset 0 0 0 2px var(--md-bulb-alt),
+    inset 0 0 0 5px var(--accent),
+    0 0 22px color-mix(in srgb, var(--good) 50%, transparent),
+    0 3px 12px rgba(0, 0, 0, 0.5);
+}
+[data-aesthetic="millennium"] .btn-danger {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--bad) 50%, #ffffff) 0%,
+    var(--bad) 46%,
+    color-mix(in srgb, var(--bad) 82%, #000000) 100%);
+  color: #1a0409;
+  box-shadow:
+    inset 0 0 0 2px color-mix(in srgb, var(--bad) 30%, #ffffff),
+    inset 0 0 0 5px color-mix(in srgb, var(--bad) 60%, #000000),
+    0 3px 12px rgba(0, 0, 0, 0.5);
+}
+[data-aesthetic="millennium"] .btn-ghost {
+  background: none; box-shadow: none; color: var(--text-dim);
+}
+[data-aesthetic="millennium"] .subnav button.active,
+[data-aesthetic="millennium"] .unit-toggle button.active {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--accent) 55%, #ffffff) 0%,
+    var(--accent) 100%);
+  color: #14060f; font-weight: 700;
+}
+[data-aesthetic="millennium"] .unit-toggle {
+  border: none; border-radius: 999px; overflow: hidden;
+  box-shadow: inset 0 0 0 2px var(--md-ring-outer);
+}
+[data-aesthetic="millennium"] .unit-toggle button {
+  background: var(--md-plate); color: var(--text-dim); box-shadow: none;
+}
+[data-aesthetic="millennium"] .plate,
+[data-aesthetic="millennium"] .pill,
+[data-aesthetic="millennium"] .tag-pill,
+[data-aesthetic="millennium"] .exercise-chip {
+  background: var(--md-plate);
+  border: none;
+  box-shadow: inset 0 0 0 2px var(--md-ring-mid);
+}
+
+/* ---------- Inputs: dark wells cut into the lit panel ---------- */
+[data-aesthetic="millennium"] input[type="text"],
+[data-aesthetic="millennium"] input[type="number"],
+[data-aesthetic="millennium"] input[type="date"],
+[data-aesthetic="millennium"] input[type="time"],
+[data-aesthetic="millennium"] select,
+[data-aesthetic="millennium"] textarea,
+[data-aesthetic="millennium"] .note-editor {
+  background: color-mix(in srgb, var(--bg) 82%, #000000);
+  border: none;
+  border-radius: 12px;
+  color: var(--text);
+  box-shadow:
+    inset 0 0 0 2px color-mix(in srgb, var(--md-ring-mid) 55%, var(--surface)),
+    inset 0 3px 8px rgba(0, 0, 0, 0.6);
+}
+[data-aesthetic="millennium"] input::placeholder,
+[data-aesthetic="millennium"] textarea::placeholder { color: var(--text-faint); }
+[data-aesthetic="millennium"] input:focus,
+[data-aesthetic="millennium"] select:focus,
+[data-aesthetic="millennium"] textarea:focus {
+  outline-color: var(--accent);
+  box-shadow:
+    inset 0 0 0 2px var(--accent),
+    inset 0 3px 8px rgba(0, 0, 0, 0.6),
+    var(--md-glow);
+}
+
+/* ---------- Reduced motion: the room stays lit, nothing moves ----------
+   Every frame, bulb and light spot is painted by a static layer underneath its
+   animation, so stopping them all costs the theme nothing but the motion. */
+@media (prefers-reduced-motion: reduce) {
+  [data-aesthetic="millennium"] body::before,
+  [data-aesthetic="millennium"] #app::before,
+  [data-aesthetic="millennium"] #app::after,
+  [data-aesthetic="millennium"] .topbar::after,
+  [data-aesthetic="millennium"] .tabbar::after,
+  [data-aesthetic="millennium"] .panel::before,
+  [data-aesthetic="millennium"] .modal-box::before { animation: none; }
+  [data-aesthetic="millennium"] #app::after { opacity: 0; }
+}

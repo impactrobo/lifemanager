@@ -172,6 +172,45 @@ const AESTHETIC_ACCENTS = {
     lime:    { label: 'Toxic Lime', value: '#b8ff3d' },
     silver:  { label: 'Pure Chrome',value: '#c9d4e0' },
   },
+  // Millennium Disco is a MAIN COLOR aesthetic (see FULL_PALETTE_AESTHETICS): each entry is a
+  // whole lit room, not a tint. Two tokens do double duty in theme.css — `accent` and `good` are
+  // the two ends of the stepped border ramp, and the middle step is color-mix()'d between them,
+  // so picking a vibe restyles every frame in the app. That does mean `--good` (the done/confirm
+  // colour) is the second disco hue rather than a green; same trade C.R.E.A.M makes.
+  millennium: {
+    warm: {
+      label: 'Warm Vibe', accent: '#ff7a18',
+      bg: '#1a0511', surface: '#2e0a1e', surface2: '#3d1029',
+      border: '#8a2a52', borderSoft: '#4f1533',
+      text: '#fff0f6', textDim: '#e6a9c4', textFaint: '#ab7291',
+      good: '#ff2d95', goodSoft: '#420a26',
+      resetBorder: '#fff0f6', resetBg: '#3d1029', resetText: '#fff0f6',
+    },
+    cool: {
+      label: 'Cool Vibe', accent: '#2f9dff',
+      bg: '#04101f', surface: '#0a2039', surface2: '#0f2c4e',
+      border: '#2e639b', borderSoft: '#173c64',
+      text: '#eaf6ff', textDim: '#a9caea', textFaint: '#6e93b8',
+      good: '#9fe8ff', goodSoft: '#0a3243',
+      resetBorder: '#eaf6ff', resetBg: '#0f2c4e', resetText: '#eaf6ff',
+    },
+    acid: {
+      label: 'Acid Vibe', accent: '#b6ff1a',
+      bg: '#0a1204', surface: '#17260b', surface2: '#203312',
+      border: '#527f1e', borderSoft: '#2d4d13',
+      text: '#f3ffe2', textDim: '#c1dc9e', textFaint: '#849f66',
+      good: '#ffe23d', goodSoft: '#2c3a09',
+      resetBorder: '#f3ffe2', resetBg: '#203312', resetText: '#f3ffe2',
+    },
+    ultraviolet: {
+      label: 'Ultraviolet', accent: '#a855f7',
+      bg: '#0d0420', surface: '#1c0c3a', surface2: '#281351',
+      border: '#6033a3', borderSoft: '#381c6b',
+      text: '#f4ecff', textDim: '#c3abea', textFaint: '#8d75b7',
+      good: '#22e0e0', goodSoft: '#0b3742',
+      resetBorder: '#f4ecff', resetBg: '#281351', resetText: '#f4ecff',
+    },
+  },
   metalheart: {
     cerulean: { label: 'Cerulean',    value: '#1fa8e0' },
     viridian: { label: 'Viridian',    value: '#18d6a8' },
@@ -233,6 +272,11 @@ const AESTHETICS = {
   // the cable field's parallax. The field renders static without it, so this stays a pure
   // enhancement — see aesthetics/metalheart/fx.ts.
   metalheart:   { label: 'Metalheart',    desc: 'Chrome tendrils in a black room — gunmetal glass, cerulean and viridian rim light, survey marks over grime.', group: 'Maximalist', external: true, fx: true },
+  // No `fx: true` here on purpose: everything that moves (the ball, its light spots, the floor
+  // sweep, the chase bulbs) is a CSS animation. A mirror ball never stops, and an always-on rAF
+  // loop would break the demand-driven rule every FX module is held to — CSS is the right tool
+  // for permanent ambient motion, and it pauses itself when the tab is hidden.
+  millennium:   { label: 'Millennium Disco', desc: 'Mirrorball light on a lit checkerboard floor — stepped neon frames, running bulbs, and a vibe you pick below.', group: 'Maximalist', external: true },
 };
 const AESTHETIC_GROUP_ORDER = ['Maximalist', 'Vibrant', 'Contrast', 'Light'];
 // Which groups are expanded in the settings panel right now — session-only (not persisted),
@@ -360,7 +404,7 @@ function currentAccentKey() {
 const TERMINAL_PALETTE_VARS = ['--bg', '--surface', '--surface2', '--border', '--border-soft', '--text', '--text-dim', '--text-faint', '--good', '--good-soft', '--reset-border', '--reset-bg', '--reset-text'];
 // Aesthetics whose accent-palette entries are full mini-palettes (see TERMINAL_PALETTE_VARS above)
 // rather than a single `value` color — Retro Terminal's phosphor colors and Four Symbols' guardians.
-const FULL_PALETTE_AESTHETICS = new Set(['terminal', 'sixiang', 'cream']);
+const FULL_PALETTE_AESTHETICS = new Set(['terminal', 'sixiang', 'cream', 'millennium']);
 // What the picker calls itself for each full-palette aesthetic. Everything else gets the
 // default "ACCENT COLOR" heading — this map is only for aesthetics where the choice repaints
 // the whole app rather than tinting one colour.
@@ -368,6 +412,7 @@ const PALETTE_PICKER_COPY = {
   terminal: { label: 'MAIN COLOR', note: 'Recolors the whole terminal — background, borders and every shade of text.' },
   sixiang:  { label: 'GUARDIAN',   note: 'Choose your guardian — each recolors the whole app, background, borders and every shade of text.' },
   cream:    { label: 'MAIN COLOR', note: 'Swap the suit between regal purple and dollar green — gold stays, and the button colour swaps to whichever hue the suit is not.' },
+  millennium: { label: 'VIBE', note: 'Relights the whole room — floor, frames, bulbs and every shade of text. Each vibe is a pair of hues, and the stepped frames run between them.' },
 };
 function applyAccentColor() {
   const aesthetic = currentAesthetic();
