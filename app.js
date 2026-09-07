@@ -248,6 +248,45 @@ const AESTHETIC_ACCENTS = {
     blood:   { label: 'Blood Red',     value: '#ff3b3b' },
     ghost:   { label: 'Candle Cream',  value: '#f5e6c8' },
   },
+  // Space Highway is a MAIN COLOR aesthetic (see FULL_PALETTE_AESTHETICS): each entry is the
+  // sector of space the ring-highway is passing through — a whole deep-space palette, not a
+  // tint. `accent` is the dominant nebula hue and `good` a harmonised second light; the road,
+  // Saturn's limb and the cars are baked into scene.svg and stay constant, so what a sector
+  // swaps is the backdrop wash, the star and swirl colour, and every shade of UI chrome.
+  spacehighway: {
+    andromeda: {
+      label: 'Andromeda Blue', accent: '#3fb4e6',
+      bg: '#050912', surface: '#0e1626', surface2: '#141f33',
+      border: '#2c4059', borderSoft: '#1b2a3f',
+      text: '#e6f1fb', textDim: '#93accb', textFaint: '#586d89',
+      good: '#48d0a4', goodSoft: '#0c2a22',
+      resetBorder: '#e6f1fb', resetBg: '#141f33', resetText: '#e6f1fb',
+    },
+    violet: {
+      label: 'Violet Nebula', accent: '#a875f0',
+      bg: '#0a0518', surface: '#180f2e', surface2: '#1f153b',
+      border: '#402f66', borderSoft: '#281b45',
+      text: '#f0eafc', textDim: '#b6a6d6', textFaint: '#7a6aa0',
+      good: '#46cfc6', goodSoft: '#0c2a29',
+      resetBorder: '#f0eafc', resetBg: '#1f153b', resetText: '#f0eafc',
+    },
+    rose: {
+      label: 'Rose Quartz', accent: '#ff6f9c',
+      bg: '#12040d', surface: '#260b1b', surface2: '#331025',
+      border: '#63304a', borderSoft: '#3d1c30',
+      text: '#fdeaf1', textDim: '#dca9c1', textFaint: '#9c6e84',
+      good: '#f2b34c', goodSoft: '#33280c',
+      resetBorder: '#fdeaf1', resetBg: '#331025', resetText: '#fdeaf1',
+    },
+    aurora: {
+      label: 'Aurora', accent: '#3fd992',
+      bg: '#03100c', surface: '#0b2019', surface2: '#102a21',
+      border: '#265041', borderSoft: '#163229',
+      text: '#e4f7ee', textDim: '#9ac4b2', textFaint: '#5f8574',
+      good: '#6fb6ff', goodSoft: '#0d2a3a',
+      resetBorder: '#e4f7ee', resetBg: '#102a21', resetText: '#e4f7ee',
+    },
+  },
 };
 function prefersDarkTheme() {
   const explicit = document.documentElement.dataset.theme;
@@ -300,6 +339,10 @@ const AESTHETICS = {
   // Third ambient FX module. fx.js writes one offset pair, --lm-px/--lm-py, and each of the
   // four wall planes multiplies it by its own depth fraction — see aesthetics/liminal/fx.ts.
   liminal:      { label: 'Liminal',       desc: 'You have been here before. Mono-yellow wallpaper down four doorways, lit ceiling panels, and one fluorescent that keeps going.', group: 'Maximalist', external: true, fx: true },
+  // MAIN COLOR aesthetic (see FULL_PALETTE_AESTHETICS) — the SECTOR picker swaps the whole
+  // deep-space palette. Fourth ambient FX module: fx.js writes one offset pair --sh-px/--sh-py
+  // and each scene plane multiplies it by its own depth fraction — see aesthetics/spacehighway/fx.ts.
+  spacehighway: { label: 'Space Highway', desc: "Cruising one of Saturn's rings where it's been paved into a highway — banked concrete to a vanishing point, guardrail posts, UFOs in the star field, a cosmic swirl overhead.", group: 'Maximalist', external: true, fx: true },
 };
 const AESTHETIC_GROUP_ORDER = ['Maximalist', 'Vibrant', 'Contrast', 'Light'];
 // Which groups are expanded in the settings panel right now — session-only (not persisted),
@@ -427,7 +470,7 @@ function currentAccentKey() {
 const TERMINAL_PALETTE_VARS = ['--bg', '--surface', '--surface2', '--border', '--border-soft', '--text', '--text-dim', '--text-faint', '--good', '--good-soft', '--reset-border', '--reset-bg', '--reset-text'];
 // Aesthetics whose accent-palette entries are full mini-palettes (see TERMINAL_PALETTE_VARS above)
 // rather than a single `value` color — Retro Terminal's phosphor colors and Four Symbols' guardians.
-const FULL_PALETTE_AESTHETICS = new Set(['terminal', 'sixiang', 'cream', 'millennium']);
+const FULL_PALETTE_AESTHETICS = new Set(['terminal', 'sixiang', 'cream', 'millennium', 'spacehighway']);
 // What the picker calls itself for each full-palette aesthetic. Everything else gets the
 // default "ACCENT COLOR" heading — this map is only for aesthetics where the choice repaints
 // the whole app rather than tinting one colour.
@@ -436,6 +479,7 @@ const PALETTE_PICKER_COPY = {
   sixiang:  { label: 'GUARDIAN',   note: 'Choose your guardian — each recolors the whole app, background, borders and every shade of text.' },
   cream:    { label: 'MAIN COLOR', note: 'Swap the suit between regal purple and dollar green — gold stays, and the button colour swaps to whichever hue the suit is not.' },
   millennium: { label: 'VIBE', note: 'Relights the whole room — floor, frames, bulbs and every shade of text. Each vibe is a pair of hues, and the stepped frames run between them.' },
+  spacehighway: { label: 'SECTOR', note: "Pick the sector of space the highway runs through — it recolours everything from the deep-space backdrop and the star field to every shade of text. The road, Saturn and the cars stay as they are." },
 };
 function applyAccentColor() {
   const aesthetic = currentAesthetic();

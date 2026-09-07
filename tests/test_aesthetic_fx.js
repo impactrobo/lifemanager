@@ -276,8 +276,15 @@ async function checkAmbientModule(page, key, baseProps) {
   console.log('non-fx aesthetic: no canvas (good)');
 
   // Baseline for the ambient check below: what is already inline on <html> with no FX module
-  // running (applyAccentColor always writes --accent, so this is never empty).
-  const baseProps = await inlineCustomProps(page);
+  // running, PLUS the full-palette var names. applyAccentColor() always writes --accent, and a
+  // MAIN COLOR aesthetic (one in FULL_PALETTE_AESTHETICS — e.g. Space Highway, which is also an
+  // fx aesthetic) writes its whole palette inline on <html> synchronously on switch. Folding
+  // those names in here means an ambient module's "own" properties come out as just its
+  // parallax vars, whenever its lazy import happens to land, rather than the test racing the
+  // palette write or mistaking it for the effect.
+  const paletteVars = await page.evaluate(() =>
+    (typeof TERMINAL_PALETTE_VARS !== 'undefined' ? TERMINAL_PALETTE_VARS : []));
+  const baseProps = [...new Set((await inlineCustomProps(page)).concat(paletteVars))].sort();
 
   for (const key of fxKeys) {
     console.log(`\n--- ${key} ---`);

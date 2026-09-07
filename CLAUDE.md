@@ -119,8 +119,8 @@ Purely CSS effects (the Hunny bee, Y2K's glints, Draconic's button flames) need 
 
 ## MAIN COLOR aesthetics (full-palette swap, not an accent tint)
 Most aesthetics' `AESTHETIC_ACCENTS` entries are `{label, value}` and picking one only sets
-`--accent`. Aesthetics listed in `FULL_PALETTE_AESTHETICS` (`terminal`, `sixiang`, `cream`)
-instead give each entry a full mini-palette — `applyAccentColor()` writes the whole
+`--accent`. Aesthetics listed in `FULL_PALETTE_AESTHETICS` (`terminal`, `sixiang`, `cream`, `millennium`,
+`spacehighway`) instead give each entry a full mini-palette — `applyAccentColor()` writes the whole
 `TERMINAL_PALETTE_VARS` list inline on `<html>`, and clears it again when you leave. Picker
 wording comes from `PALETTE_PICKER_COPY`; entries can set `swatch` to override the chip colour
 (C.R.E.A.M needs this — both its palettes share the same gold accent).
