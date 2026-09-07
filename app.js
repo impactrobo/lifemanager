@@ -211,6 +211,13 @@ const AESTHETIC_ACCENTS = {
       resetBorder: '#f4ecff', resetBg: '#281351', resetText: '#f4ecff',
     },
   },
+  runic: {
+    rune:   { label: 'Rune Green',  value: '#4fe08c' },
+    ember:  { label: 'Forge Ember', value: '#ff8c3a' },
+    frost:  { label: 'Frostbite',   value: '#6fd8ff' },
+    blood:  { label: 'Blood Oath',  value: '#e0483f' },
+    silver: { label: 'Moon Silver', value: '#c8d2d8' },
+  },
   metalheart: {
     cerulean: { label: 'Cerulean',    value: '#1fa8e0' },
     viridian: { label: 'Viridian',    value: '#18d6a8' },
@@ -277,6 +284,10 @@ const AESTHETICS = {
   // loop would break the demand-driven rule every FX module is held to — CSS is the right tool
   // for permanent ambient motion, and it pauses itself when the tab is hidden.
   millennium:   { label: 'Millennium Disco', desc: 'Mirrorball light on a lit checkerboard floor — stepped neon frames, running bulbs, and a vibe you pick below.', group: 'Maximalist', external: true },
+  // Second ambient FX module (after Metalheart): fx.js draws nothing, it only writes
+  // --rn-px/--rn-py so theme.css can parallax the sword. The sword still hangs there without
+  // it — see aesthetics/runic/fx.ts.
+  runic:        { label: 'Runic',         desc: 'Elder Futhark carved into a slate wall and waking rune by rune — oak panels, silver filigree, and a rune-lit blade in the dark.', group: 'Maximalist', external: true, fx: true },
 };
 const AESTHETIC_GROUP_ORDER = ['Maximalist', 'Vibrant', 'Contrast', 'Light'];
 // Which groups are expanded in the settings panel right now — session-only (not persisted),

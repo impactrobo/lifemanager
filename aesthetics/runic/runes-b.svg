@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" width="640" height="640">
+<!--
+  Runic — ignite phase B — one third of the glyphs, lit.
+
+  GENERATED AS A SET. runes-carved.svg and runes-a/b/c.svg all come from one coordinate
+  table and MUST stay in lockstep: the carved file draws every glyph, and a/b/c each draw a
+  third of the same glyphs at identical positions so the lit ones land exactly on their own
+  carving. Edit one by hand and you get double-vision where they disagree.
+
+  The three lit files are the ignite phases. theme.css cross-fades between them on one
+  element by animating opacity and swapping background-image during the dark beat, which is
+  why they are separate files rather than groups inside one document — CSS background-image
+  can't address a group.
+
+  Glyphs are Elder Futhark, decorative rather than spelling anything. Every rune in the
+  alphabet is built from straight staves, so these are all plain polyline paths.
+-->
+<defs>
+  <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+    <feGaussianBlur stdDeviation="6"/>
+  </filter>
+</defs>
+<g fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <g stroke="#2fe08a" stroke-width="9" opacity="0.55" filter="url(#glow)">
+  <g transform="translate(224,82.7) scale(0.452)"><path d="M14,0 V60"/></g>
+  <g transform="translate(301.3,173.3) scale(0.638)"><path d="M18,4 L30,26 L18,48 L6,26 Z"/></g>
+  <g transform="translate(32,309.3) scale(0.551)"><path d="M8,0 V60 M8,2 L24,12 L8,24 M8,24 L26,58"/></g>
+  <g transform="translate(528,408) scale(0.592)"><path d="M14,60 V10 M2,22 L14,8 L26,22"/></g>
+  <g transform="translate(426.7,538.7) scale(0.476)"><path d="M6,8 L18,18 L6,28 M30,32 L18,42 L30,52"/></g>
+  <g transform="translate(13.3,157.3) scale(0.487)"><path d="M6,0 V60 M30,0 V60 M6,22 L30,38"/></g>
+  <g transform="translate(173.3,421.3) scale(0.499)"><path d="M6,0 V60 M30,0 V60 M6,6 L30,26 M30,6 L6,26"/></g>
+  </g>
+  <g stroke="#8dffc4" stroke-width="4">
+  <g transform="translate(224,82.7) scale(0.452)"><path d="M14,0 V60"/></g>
+  <g transform="translate(301.3,173.3) scale(0.638)"><path d="M18,4 L30,26 L18,48 L6,26 Z"/></g>
+  <g transform="translate(32,309.3) scale(0.551)"><path d="M8,0 V60 M8,2 L24,12 L8,24 M8,24 L26,58"/></g>
+  <g transform="translate(528,408) scale(0.592)"><path d="M14,60 V10 M2,22 L14,8 L26,22"/></g>
+  <g transform="translate(426.7,538.7) scale(0.476)"><path d="M6,8 L18,18 L6,28 M30,32 L18,42 L30,52"/></g>
+  <g transform="translate(13.3,157.3) scale(0.487)"><path d="M6,0 V60 M30,0 V60 M6,22 L30,38"/></g>
+  <g transform="translate(173.3,421.3) scale(0.499)"><path d="M6,0 V60 M30,0 V60 M6,6 L30,26 M30,6 L6,26"/></g>
+  </g>
+</g>
+</svg>

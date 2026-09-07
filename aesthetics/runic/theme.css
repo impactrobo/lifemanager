@@ -1,0 +1,429 @@
+@import url('https://fonts.googleapis.com/css2?family=Metamorphous&family=Alegreya:wght@400;500;700;800&display=swap');
+
+/* ============================================================================
+   Aesthetic: Runic — a slate wall carved with Elder Futhark, oak panels bolted
+   to it, silver filigree, and a rune-lit sword hanging in the left of the room.
+
+   ---- The material split ----
+   Every colour in the brief has exactly one job, which is what keeps four
+   materials from turning to mud:
+     grey slate    the room       -- --bg and the backdrop layers
+     aged oak      the furniture  -- --surface / --surface2, every panel and card
+     silver        the metalwork  -- filigree, borders, the blade
+     green         the magic      -- --accent, the rune glow, the sword's light
+   Surfaces are all DARK with light text, so none of the scoped light/dark token
+   inversion documented in Y2K's header applies here.
+
+   ---- The four backdrop layers ----
+   body::after   (z -2)  slate wash + grain + carved runes + vignette   static
+   body::before  (z -1)  the runes igniting, phase by phase             opacity
+   #app::before  (z -1)  the sword                                      parallax
+   #app::after           unused, and worth leaving that way for headroom
+   The -2/-1 split is load-bearing: two pseudo-elements at the SAME z-index paint
+   in tree order, so an opaque ::after would bury ::before. All are
+   `position: fixed` rather than background-attachment, which is broken on iOS
+   Safari. #app::before is hosted inside #app's own stacking context so it lands
+   above the body layers and below the app's content.
+
+   ---- Sequential rune ignition ----
+   One element does all three phases. The obvious build — a lit layer per phase,
+   each fading on its own schedule — needs three elements and there is one spare.
+   So `opacity` is the only thing animating continuously (compositor, no repaint)
+   and `background-image` swaps between runes-a/b/c DURING the dark beat, where
+   the flip can't be seen. background-image isn't interpolable, so it flips
+   discretely at the midpoint between keyframes — normally a nuisance, exactly
+   what's wanted here. Six repaints per 15s cycle.
+
+   The lit glyphs sit at identical coordinates to the carved ones in
+   runes-carved.svg, so a lit rune lands exactly on its own carving. All four
+   files are generated together by `node aesthetics/runic/runes.gen.js` — edit
+   the layout there and re-run, never the SVGs by hand, or they drift apart and
+   the mismatch shows as double-vision. The tile size and background-position of
+   the carved layer and the ignite layer must always match too (640px, 0 0).
+
+   ---- The sword ----
+   aesthetics/runic/fx.ts writes --rn-px / --rn-py and nothing else. The
+   translate3d() below falls back to 0px, so the sword still hangs there — just
+   still — with no JS at all, on a file:// page where ES modules cannot be
+   imported, or before the lazy import lands. Never make it depend on those.
+   Runes deliberately do NOT parallax: they are carved into the wall, and having
+   the lit layer drift off its own carving would be an obvious mistake.
+
+   External aesthetic — lazily loaded, everything scoped under
+   [data-aesthetic="runic"]. Fonts @imported here rather than added to the shared
+   <link>: Metamorphous (carved medieval display) and Alegreya (a serif with real
+   weights that survives 15px body copy). Neither is used elsewhere — check the
+   other theme.css @imports and the --font-head blocks in styles.css before
+   swapping.
+
+   Picker swatch `.aesthetic-preview-runic` lives in styles.css, not here — the
+   picker renders while a different aesthetic is still active. Positioning of
+   .topbar/.tabbar is never touched; they need their sticky/fixed from styles.css.
+   ============================================================================ */
+
+:root[data-aesthetic="runic"] {
+  --bg: #14181a;
+  --surface: #34251a;
+  --surface2: #43301f;
+  --border: #7a5c39;
+  --border-soft: #4a3624;
+  --text: #f0e6d6;
+  --text-dim: #bfae95;
+  --text-faint: #8a7a66;
+
+  --accent-dim: color-mix(in srgb, var(--accent) 55%, var(--border));
+  --accent-soft: color-mix(in srgb, var(--accent) 18%, var(--surface));
+  --good: #4fe08c;
+  --good-soft: #12331f;
+  --bad: #d6432f;
+  --bad-soft: #3a1410;
+  --warn: #d99a2b;
+  --reset-border: #c8d2d8;
+  --reset-bg: #43301f;
+  --reset-text: #f0e6d6;
+  --myo: #a97cd6;
+  --goldenrod: #d4a53a;
+  --savings: #5b8fd6;
+  --savings-soft: color-mix(in srgb, var(--savings) 20%, var(--surface));
+  --font-head: 'Metamorphous', 'Cinzel', serif;
+  --font-body: 'Alegreya', 'Georgia', serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --radius: 4px;   /* carved and joined, not moulded */
+
+  /* Silver: fixed, not themed. It's the metalwork, and the filigree SVG can't be
+     recoloured from here anyway (referenced by url()), so the CSS silver has to
+     agree with the silver drawn inside that file. */
+  --rn-silver: #c8d2d8;
+  --rn-silver-dim: #7d8b93;
+  --rn-silver-dark: #434f56;
+  /* Oak, lifted off --surface so the accent picker still moves the furniture. */
+  --rn-oak: linear-gradient(180deg,
+      color-mix(in srgb, var(--surface2) 88%, #ffffff) 0%,
+      var(--surface2) 22%,
+      var(--surface) 70%,
+      color-mix(in srgb, var(--surface) 82%, #000000) 100%);
+  /* Grain: three periods that don't share a common factor, so the planks never
+     visibly repeat. A single repeating-linear-gradient reads as corduroy. */
+  --rn-grain:
+      repeating-linear-gradient(90deg,
+        rgba(0, 0, 0, 0.12) 0 1px, rgba(0, 0, 0, 0) 1px 11px),
+      repeating-linear-gradient(90deg,
+        rgba(255, 226, 184, 0.035) 0 1px, rgba(0, 0, 0, 0) 1px 19px),
+      repeating-linear-gradient(90deg,
+        rgba(0, 0, 0, 0.07) 0 3px, rgba(0, 0, 0, 0) 3px 43px);
+  --rn-filigree: url('filigree.svg');
+  --rn-glow: 0 0 16px color-mix(in srgb, var(--accent) 45%, transparent);
+  /* Iron banding around a wood panel: a dark rim, a silver hairline, a lit inner edge. */
+  --rn-band:
+      inset 0 0 0 1px var(--rn-silver-dark),
+      inset 0 0 0 2px color-mix(in srgb, var(--rn-silver) 55%, transparent),
+      inset 0 1px 0 2px rgba(255, 232, 196, 0.10);
+}
+
+/* ---------- The slate wall ---------- */
+[data-aesthetic="runic"] body { background-color: var(--bg); }
+
+/* Layers paint first-on-top. The left-hand fade is listed ABOVE the carved runes
+   so it wipes them off the left third of the wall, which is where the sword
+   hangs — the brief is runes lining the REST of the background. Doing it with an
+   opaque gradient in --bg rather than a mask keeps the vignette and the stone
+   grain unaffected; a mask applies to the whole element. */
+[data-aesthetic="runic"] body::after {
+  content: '';
+  position: fixed; inset: 0; z-index: -2; pointer-events: none;
+  background-image:
+    radial-gradient(125% 85% at 50% 18%, rgba(0, 0, 0, 0) 34%, rgba(0, 0, 0, 0.78) 100%),
+    linear-gradient(to right, var(--bg) 0%, rgba(0, 0, 0, 0) 26%),
+    url('runes-carved.svg'),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23n)' opacity='0.42'/%3E%3C/svg%3E"),
+    repeating-linear-gradient(4deg,
+      rgba(255, 255, 255, 0.018) 0 2px, rgba(0, 0, 0, 0.05) 2px 9px),
+    linear-gradient(165deg, #1c2124 0%, #14181a 46%, #0f1214 100%);
+  background-size: auto, auto, 640px 640px, 220px 220px, auto, auto;
+  background-position: center, center, 0 0, 0 0, center, center;
+  background-repeat: no-repeat, no-repeat, repeat, repeat, repeat, no-repeat;
+}
+
+/* The runes waking. Masked rather than gradient-wiped on the left, because this
+   layer has to stay transparent where nothing is lit — an opaque --bg gradient
+   over it would paint a solid block instead of hiding anything. The mask matches
+   the wipe on the carved layer above so both stop at the same place. */
+[data-aesthetic="runic"] body::before {
+  content: '';
+  position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background-size: 640px 640px;
+  background-position: 0 0;
+  background-repeat: repeat;
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 26%);
+          mask-image: linear-gradient(to right, transparent 0%, #000 26%);
+  opacity: 0;
+  animation: rn-ignite 15s ease-in-out infinite;
+}
+@keyframes rn-ignite {
+  0%,  2%  { opacity: 0;    background-image: url('runes-a.svg'); }
+  10%      { opacity: 0.85; background-image: url('runes-a.svg'); }
+  28%      { opacity: 0;    background-image: url('runes-a.svg'); }
+  /* dark beat — the swap to the next phase happens in here, unseen */
+  35%      { opacity: 0;    background-image: url('runes-b.svg'); }
+  43%      { opacity: 0.85; background-image: url('runes-b.svg'); }
+  61%      { opacity: 0;    background-image: url('runes-b.svg'); }
+  68%      { opacity: 0;    background-image: url('runes-c.svg'); }
+  76%      { opacity: 0.85; background-image: url('runes-c.svg'); }
+  94%      { opacity: 0;    background-image: url('runes-c.svg'); }
+  100%     { opacity: 0;    background-image: url('runes-c.svg'); }
+}
+
+[data-aesthetic="runic"] #app { position: relative; z-index: 1; }
+
+/* The sword: over the left of the room, its centre about a third of the way in.
+
+   CROPPED BY THE BOX, not by the artwork. The element is shorter than the image
+   (300px against the sword's natural 336px at this width) and the background is
+   anchored to the top, so the pommel falls outside the padding box and is simply
+   never painted — "a portion of the blade and hilt", per the brief. The mask
+   fades the last stretch out so the cut reads as the blade losing itself in the
+   dark rather than as a clipped image.
+
+   Sized down hard from the first pass. At 200x560 it filled the viewport and read
+   as a pillar the UI was stacked on top of; it has to be scenery. Top clears the
+   sticky topbar (~52px, z-index 20) so the visible run of blade starts below the
+   bar instead of being eaten by it. */
+[data-aesthetic="runic"] #app::before {
+  content: '';
+  position: fixed; z-index: -1; pointer-events: none;
+  left: 16%; top: 30px; width: 120px; height: 300px;
+  background: url('sword.svg') center top / 120px 336px no-repeat;
+  -webkit-mask-image: linear-gradient(to bottom, #000 68%, transparent 100%);
+          mask-image: linear-gradient(to bottom, #000 68%, transparent 100%);
+  opacity: 0.8;
+  transform: translate3d(var(--rn-px, 0px), var(--rn-py, 0px), 0);
+  will-change: transform;
+}
+
+/* ---------- Oak panels, iron-banded, filigree along the foot ---------- */
+[data-aesthetic="runic"] .panel,
+[data-aesthetic="runic"] .modal-box {
+  position: relative;
+  padding: 16px 16px 30px;   /* room at the foot for the filigree */
+  background: var(--rn-grain), var(--rn-oak);
+  border: 1px solid #17100a;
+  border-radius: var(--radius);
+  box-shadow: var(--rn-band), 0 5px 18px rgba(0, 0, 0, 0.6);
+}
+[data-aesthetic="runic"] .panel::after,
+[data-aesthetic="runic"] .modal-box::after {
+  content: '';
+  position: absolute; left: 12px; right: 12px; bottom: 8px; height: 12px;
+  pointer-events: none;
+  background: var(--rn-filigree) repeat-x center / auto 12px;
+  opacity: 0.6;
+}
+/* Smaller surfaces take the oak and the banding but no filigree — a silver strip
+   inside every row of a long list is noise, and the extra bottom padding it needs
+   would waste a lot of vertical space on a phone. */
+[data-aesthetic="runic"] .entry-card,
+[data-aesthetic="runic"] .note-card,
+[data-aesthetic="runic"] .chart-wrap,
+[data-aesthetic="runic"] .superset-group,
+[data-aesthetic="runic"] .aesthetic-card,
+[data-aesthetic="runic"] .home-popup,
+[data-aesthetic="runic"] .rest-timer-widget,
+[data-aesthetic="runic"] .workout-cell,
+[data-aesthetic="runic"] .cal-cell {
+  background: var(--rn-grain), var(--rn-oak);
+  border: 1px solid #17100a;
+  border-radius: var(--radius);
+  box-shadow: var(--rn-band), 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+[data-aesthetic="runic"] .panel-done,
+[data-aesthetic="runic"] .workout-cell.done {
+  border-color: color-mix(in srgb, var(--good) 60%, #000000);
+  box-shadow: var(--rn-band), 0 0 16px color-mix(in srgb, var(--good) 30%, transparent),
+    0 4px 12px rgba(0, 0, 0, 0.5);
+}
+[data-aesthetic="runic"] .modal-overlay {
+  background: color-mix(in srgb, var(--bg) 80%, transparent);
+}
+
+/* ---------- Bars ---------- */
+[data-aesthetic="runic"] .topbar {
+  background: linear-gradient(180deg, #232a2d 0%, #171c1f 60%, #101416 100%);
+  border-bottom: 1px solid #000;
+  box-shadow: 0 3px 16px rgba(0, 0, 0, 0.7);
+  z-index: 20;
+}
+/* The filigree band under the header the brief asks for. */
+[data-aesthetic="runic"] .topbar::after {
+  content: '';
+  position: absolute; left: 0; right: 0; bottom: -11px; height: 12px;
+  pointer-events: none;
+  background: var(--rn-filigree) repeat-x center / auto 12px;
+  opacity: 0.8;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.85));
+}
+[data-aesthetic="runic"] .tabbar {
+  background: linear-gradient(180deg, #101416 0%, #171c1f 40%, #232a2d 100%);
+  border-top: 1px solid #000;
+  box-shadow: 0 -3px 16px rgba(0, 0, 0, 0.75);
+  z-index: 30;
+}
+[data-aesthetic="runic"] .tabbar button.active {
+  color: var(--accent);
+  text-shadow: 0 0 12px color-mix(in srgb, var(--accent) 70%, transparent);
+}
+[data-aesthetic="runic"] .toast { z-index: 60; }
+
+/* ---------- Lettering ---------- */
+[data-aesthetic="runic"] .topbar .brand {
+  color: var(--rn-silver);
+  letter-spacing: 0.03em;
+  text-shadow: 0 1px 2px #000, 0 0 18px rgba(200, 210, 216, 0.25);
+}
+[data-aesthetic="runic"] .topbar .brand span {
+  color: var(--accent);
+  text-shadow: 0 0 14px color-mix(in srgb, var(--accent) 70%, transparent);
+}
+/* Section titles get the filigree as their trailing rule — the same strip as the
+   header band, so the accenting reads as one system. */
+[data-aesthetic="runic"] .section-title {
+  display: flex; align-items: center; gap: 12px;
+  color: var(--rn-silver);
+  letter-spacing: 0.02em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+}
+[data-aesthetic="runic"] .section-title::after {
+  content: '';
+  flex: 1; height: 12px;
+  background: var(--rn-filigree) repeat-x center / auto 12px;
+  opacity: 0.7;
+}
+[data-aesthetic="runic"] .subtle-label {
+  color: color-mix(in srgb, var(--accent) 55%, var(--text-faint));
+  text-transform: uppercase; letter-spacing: 0.14em; font-weight: 700;
+}
+/* Text sitting on the wall rather than on a panel needs its own separation — an
+   igniting rune passing behind faint centred text swallows it. */
+[data-aesthetic="runic"] .empty-state {
+  color: var(--text-dim);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.95), 0 0 14px rgba(0, 0, 0, 0.85);
+}
+
+/* ---------- Controls: iron fittings ----------
+   ORDER MATTERS: `[data-aesthetic] .btn` and `[data-aesthetic] .btn-primary` are
+   equal specificity and every .btn-primary also carries .btn, so the neutral
+   plate must come FIRST or it beats the variants. .btn-danger/.btn-good are
+   restated below for the same reason — this theme's .btn outranks the base rules
+   for them in styles.css. No `padding` on this shared rule: .icon-btn is a fixed
+   30x30 box, .rest-timer-fab 52x52 and .rt-btn has its own padding, and a
+   blanket value collapses their icons. */
+[data-aesthetic="runic"] .btn,
+[data-aesthetic="runic"] .icon-btn,
+[data-aesthetic="runic"] .subnav button,
+[data-aesthetic="runic"] .rt-btn,
+[data-aesthetic="runic"] .rest-timer-fab,
+[data-aesthetic="runic"] .week-selector .cycle-btns button {
+  background: linear-gradient(180deg, #4d5a61 0%, #333e45 45%, #232c31 55%, #3b464d 100%);
+  border: 1px solid #12181b;
+  color: var(--text);
+  box-shadow:
+    inset 0 1px 0 rgba(230, 242, 248, 0.22),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.6),
+    0 2px 6px rgba(0, 0, 0, 0.55);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.85);
+}
+[data-aesthetic="runic"] .btn-primary {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--accent) 55%, #ffffff) 0%,
+    var(--accent) 45%,
+    color-mix(in srgb, var(--accent) 72%, #000000) 100%);
+  border-color: color-mix(in srgb, var(--accent) 50%, #000000);
+  color: #0c2016;
+  font-weight: 700;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.4);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    var(--rn-glow),
+    0 2px 6px rgba(0, 0, 0, 0.55);
+}
+[data-aesthetic="runic"] .btn-good {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--good) 55%, #ffffff) 0%,
+    var(--good) 45%,
+    color-mix(in srgb, var(--good) 72%, #000000) 100%);
+  border-color: color-mix(in srgb, var(--good) 50%, #000000);
+  color: #0c2016;
+}
+[data-aesthetic="runic"] .btn-danger {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--bad) 50%, #ffffff) 0%,
+    var(--bad) 45%,
+    color-mix(in srgb, var(--bad) 72%, #000000) 100%);
+  border-color: color-mix(in srgb, var(--bad) 50%, #000000);
+  color: #2a0906;
+}
+[data-aesthetic="runic"] .btn-ghost {
+  background: none; border-color: transparent; box-shadow: none; text-shadow: none;
+  color: var(--text-dim);
+}
+[data-aesthetic="runic"] .subnav button.active,
+[data-aesthetic="runic"] .unit-toggle button.active {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--accent) 55%, #ffffff) 0%, var(--accent) 100%);
+  color: #0c2016; font-weight: 700;
+}
+[data-aesthetic="runic"] .unit-toggle { border-color: #12181b; }
+[data-aesthetic="runic"] .unit-toggle button {
+  background: linear-gradient(180deg, #435057 0%, #283136 100%);
+  color: var(--text-dim);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.85);
+}
+[data-aesthetic="runic"] .plate,
+[data-aesthetic="runic"] .pill,
+[data-aesthetic="runic"] .tag-pill,
+[data-aesthetic="runic"] .exercise-chip {
+  background: linear-gradient(180deg, #435057 0%, #283136 100%);
+  border-color: #12181b;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.85);
+}
+
+/* ---------- Inputs: cut into the oak ----------
+   Lighting inverted from the raised fittings above — shadow along the TOP inner
+   edge, a lit line along the BOTTOM. That inversion is what makes a field look
+   sunken rather than merely dark. */
+[data-aesthetic="runic"] input[type="text"],
+[data-aesthetic="runic"] input[type="number"],
+[data-aesthetic="runic"] input[type="date"],
+[data-aesthetic="runic"] input[type="time"],
+[data-aesthetic="runic"] select,
+[data-aesthetic="runic"] textarea,
+[data-aesthetic="runic"] .note-editor {
+  background: linear-gradient(180deg, #1c1309 0%, #241a0f 62%, #2b2013 100%);
+  border: 1px solid #0d0905;
+  border-radius: var(--radius);
+  color: var(--text);
+  box-shadow:
+    inset 0 3px 7px rgba(0, 0, 0, 0.75),
+    inset 0 -1px 0 rgba(255, 226, 184, 0.14),
+    0 1px 0 rgba(255, 232, 196, 0.08);
+}
+[data-aesthetic="runic"] input::placeholder,
+[data-aesthetic="runic"] textarea::placeholder { color: var(--text-faint); }
+[data-aesthetic="runic"] input:focus,
+[data-aesthetic="runic"] select:focus,
+[data-aesthetic="runic"] textarea:focus {
+  outline-color: var(--accent);
+  box-shadow:
+    inset 0 3px 7px rgba(0, 0, 0, 0.75),
+    0 0 0 1px color-mix(in srgb, var(--accent) 50%, transparent),
+    var(--rn-glow);
+}
+
+/* ---------- Reduced motion ----------
+   The sword's parallax is stopped inside fx.ts (it never starts the rAF loop).
+   The ignite layer is the one thing with nothing painted underneath it, so
+   stopping its animation has to also hide it, or it freezes mid-cycle with one
+   phase stuck on at whatever opacity it happened to reach. The carved runes stay
+   visible either way. */
+@media (prefers-reduced-motion: reduce) {
+  [data-aesthetic="runic"] body::before { animation: none; opacity: 0; }
+}

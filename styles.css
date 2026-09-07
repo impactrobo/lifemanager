@@ -529,6 +529,7 @@ select { -webkit-appearance: none; appearance: none; background-image: linear-gr
 .aesthetic-preview-metalheart { background: linear-gradient(160deg, #04080a 6%, #35454e 26%, #eaf6fa 46%, #131d23 54%, #1fa8e0 76%, #18d6a8 96%); }
 /* Hard stops, not a blend — this one's whole motif is stepped bands of solid colour. */
 .aesthetic-preview-millennium { background: linear-gradient(135deg, #1a0511 0 18%, #ff2d95 18% 38%, #ff7a18 38% 55%, #ffe23d 55% 68%, #2f9dff 68% 84%, #a855f7 84% 100%); }
+.aesthetic-preview-runic { background: linear-gradient(150deg, #14181a 6%, #34251a 30%, #7a5c39 48%, #c8d2d8 62%, #4fe08c 84%, #12331f 98%); }
 .aesthetic-card-name { font-weight: 700; font-size: 13px; }
 .aesthetic-card-desc { font-size: 11px; color: var(--text-faint); margin-top: 2px; line-height: 1.4; }
 .aesthetic-card-check { position: absolute; right: 10px; top: 10px; }
