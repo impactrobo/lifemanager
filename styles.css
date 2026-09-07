@@ -575,6 +575,9 @@ select { -webkit-appearance: none; appearance: none; background-image: linear-gr
 /* The view out of the windshield, top to bottom: deep space, nebula, the lit horizon, neon
    asphalt, then the black dash. Retinted per SECTOR at runtime; this is the default. */
 .aesthetic-preview-spacehighway { background: linear-gradient(180deg, #05070f 0 20%, #a875f0 20% 34%, #3fb4e6 34% 44%, #cfe8ff 44% 50%, #262e3a 50% 74%, #05070b 74% 100%); }
+/* The Sanic default, read as a run left to right: night sky, the blue itself, his white
+   glove, a ring, then the red of the shoes. Retinted per CHARACTER at runtime; this is the default. */
+.aesthetic-preview-hedge { background: linear-gradient(150deg, #050d22 6%, #3d82ff 32%, #eef4ff 50%, #ffce3a 68%, #ef4b23 88%, #150404 100%); }
 .aesthetic-card-name { font-weight: 700; font-size: 13px; }
 .aesthetic-card-desc { font-size: 11px; color: var(--text-faint); margin-top: 2px; line-height: 1.4; }
 .aesthetic-card-check { position: absolute; right: 10px; top: 10px; }

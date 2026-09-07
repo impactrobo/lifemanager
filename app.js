@@ -287,6 +287,93 @@ const AESTHETIC_ACCENTS = {
       resetBorder: '#e4f7ee', resetBg: '#102a21', resetText: '#e4f7ee',
     },
   },
+  // Hedge is a MAIN COLOR aesthetic (see FULL_PALETTE_AESTHETICS): each entry is a character,
+  // and each character is the three colours they're actually drawn in. Colour 1 becomes
+  // `accent` (the signature hue), colour 3 — or, where that colour is red or white and would
+  // collide with --bad / --text, an eye or trim colour from the same character — becomes
+  // `good`, and white is the text. The backdrop is that character's hue taken almost to black,
+  // so the whole scene shifts, not just the trim. --bad stays a fixed crimson in theme.css on
+  // purpose: three of these characters are red, and an error state has to stay separable from
+  // the accent it's sitting next to.
+  // Every entry carries an explicit `swatch`: the picker chip is a three-band diagonal of the
+  // character's own three colours, not just their accent, because four of the eight are some
+  // kind of red or pink and the accent alone made them indistinguishable in the grid. It's a
+  // gradient rather than a colour, which styles.css's `.accent-swatch.active` ring can't use
+  // (box-shadow needs a colour) — theme.css re-states that rule for this aesthetic.
+  hedge: {
+    sanic: {
+      label: 'Sanic', accent: '#3d82ff',
+      swatch: 'linear-gradient(135deg, #3d82ff 0 38%, #ffffff 38% 62%, #e0342a 62% 100%)',
+      bg: '#050d22', surface: '#12244f', surface2: '#1b3269',
+      border: '#2f4c85', borderSoft: '#1d3159',
+      text: '#eef4ff', textDim: '#9fb6dd', textFaint: '#64789e',
+      good: '#ffce3a', goodSoft: '#33290a',
+      resetBorder: '#eef4ff', resetBg: '#1b3269', resetText: '#eef4ff',
+    },
+    tales: {
+      label: 'Tales', accent: '#ffb01f',
+      swatch: 'linear-gradient(135deg, #ffb01f 0 38%, #ffffff 38% 62%, #e0342a 62% 100%)',
+      bg: '#150e04', surface: '#3a2810', surface2: '#4d3614',
+      border: '#7a5a1c', borderSoft: '#4b360f',
+      text: '#fff6e3', textDim: '#d9c294', textFaint: '#9c8659',
+      good: '#4fc3f7', goodSoft: '#0b2a3a',
+      resetBorder: '#fff6e3', resetBg: '#4d3614', resetText: '#fff6e3',
+    },
+    toughguy: {
+      label: 'Tough Guy', accent: '#ef4b23',
+      swatch: 'linear-gradient(135deg, #ef4b23 0 38%, #ffffff 38% 62%, #34c96a 62% 100%)',
+      bg: '#150404', surface: '#3a100c', surface2: '#4d1611',
+      border: '#7d2a22', borderSoft: '#4d1a15',
+      text: '#ffeeea', textDim: '#d8a99f', textFaint: '#9c6f66',
+      good: '#34c96a', goodSoft: '#0c2b18',
+      resetBorder: '#ffeeea', resetBg: '#4d1611', resetText: '#ffeeea',
+    },
+    shade: {
+      label: 'Shade', accent: '#ff1f45',
+      swatch: 'linear-gradient(135deg, #16161a 0 38%, #ff1f45 38% 62%, #ffffff 62% 100%)',
+      bg: '#060607', surface: '#17171c', surface2: '#25252c',
+      border: '#3d3d45', borderSoft: '#26262c',
+      text: '#f2f3f6', textDim: '#a9abb4', textFaint: '#6e7079',
+      good: '#ffc53d', goodSoft: '#33280c',
+      resetBorder: '#f2f3f6', resetBg: '#25252c', resetText: '#f2f3f6',
+    },
+    egbert: {
+      label: 'Egbert', accent: '#f4b41a',
+      swatch: 'linear-gradient(135deg, #c3211c 0 38%, #16161a 38% 62%, #f4b41a 62% 100%)',
+      bg: '#100405', surface: '#300e10', surface2: '#411518',
+      border: '#8a5a1e', borderSoft: '#5a3712',
+      text: '#fdf1de', textDim: '#d3b895', textFaint: '#96805f',
+      good: '#4aa3d9', goodSoft: '#0c2634',
+      resetBorder: '#fdf1de', resetBg: '#411518', resetText: '#fdf1de',
+    },
+    rogue: {
+      label: 'Rogue', accent: '#ff5fa2',
+      swatch: 'linear-gradient(135deg, #ffffff 0 38%, #ff5fa2 38% 62%, #4a2472 62% 100%)',
+      bg: '#12061f', surface: '#2a1445', surface2: '#381c5b',
+      border: '#573082', borderSoft: '#381e57',
+      text: '#fbeefb', textDim: '#c3a8d8', textFaint: '#8b74a2',
+      good: '#34d3c0', goodSoft: '#08302c',
+      resetBorder: '#fbeefb', resetBg: '#381c5b', resetText: '#fbeefb',
+    },
+    rosie: {
+      label: 'Rosie', accent: '#ff5c8a',
+      swatch: 'linear-gradient(135deg, #ff5c8a 0 38%, #e0342a 38% 62%, #ffffff 62% 100%)',
+      bg: '#1a0510', surface: '#3a0d23', surface2: '#4d1330',
+      border: '#8a2a4d', borderSoft: '#571a30',
+      text: '#ffeef4', textDim: '#e0adc0', textFaint: '#a17183',
+      good: '#4fd07d', goodSoft: '#0c2c1a',
+      resetBorder: '#ffeef4', resetBg: '#4d1330', resetText: '#ffeef4',
+    },
+    kos: {
+      label: 'K-Os', accent: '#55d4ff',
+      swatch: 'linear-gradient(135deg, #55d4ff 0 38%, #a6e22e 38% 62%, #ffffff 62% 100%)',
+      bg: '#03151a', surface: '#093740', surface2: '#0d4655',
+      border: '#1d6d80', borderSoft: '#114452',
+      text: '#e8fbff', textDim: '#97c6d3', textFaint: '#5f8a97',
+      good: '#a6e22e', goodSoft: '#1b2e08',
+      resetBorder: '#e8fbff', resetBg: '#0d4655', resetText: '#e8fbff',
+    },
+  },
 };
 function prefersDarkTheme() {
   const explicit = document.documentElement.dataset.theme;
@@ -343,6 +430,12 @@ const AESTHETICS = {
   // deep-space palette. Fourth ambient FX module: fx.js writes one offset pair --sh-px/--sh-py
   // and each scene plane multiplies it by its own depth fraction — see aesthetics/spacehighway/fx.ts.
   spacehighway: { label: 'Space Highway', desc: 'Behind the wheel on a neon highway running into deep space — lane lines streaming past, a cosmic swirl through the windshield, a saucer now and then, and an alien nodding on the dash.', group: 'Maximalist', external: true, fx: true },
+  // MAIN COLOR aesthetic (see FULL_PALETTE_AESTHETICS) — the CHARACTER picker swaps the whole
+  // palette to whoever you picked. Fifth ambient FX module: fx.js draws nothing, it writes one
+  // offset pair --hg-px/--hg-py into the ring's `translate` while the spin stays a CSS
+  // animation on `rotate`, so the ring still hangs and still turns with the module absent —
+  // see aesthetics/hedge/fx.ts.
+  hedge:        { label: 'Hedge',         desc: 'Gotta go fast — a gold ring turning over a drift of out-of-focus lights, menu bars scanned with stripes inside a bright inner border, and hard italic headers. Pick your character below and the whole scene changes colour.', group: 'Maximalist', external: true, fx: true },
 };
 const AESTHETIC_GROUP_ORDER = ['Maximalist', 'Vibrant', 'Contrast', 'Light'];
 // Which groups are expanded in the settings panel right now — session-only (not persisted),
@@ -470,7 +563,7 @@ function currentAccentKey() {
 const TERMINAL_PALETTE_VARS = ['--bg', '--surface', '--surface2', '--border', '--border-soft', '--text', '--text-dim', '--text-faint', '--good', '--good-soft', '--reset-border', '--reset-bg', '--reset-text'];
 // Aesthetics whose accent-palette entries are full mini-palettes (see TERMINAL_PALETTE_VARS above)
 // rather than a single `value` color — Retro Terminal's phosphor colors and Four Symbols' guardians.
-const FULL_PALETTE_AESTHETICS = new Set(['terminal', 'sixiang', 'cream', 'millennium', 'spacehighway']);
+const FULL_PALETTE_AESTHETICS = new Set(['terminal', 'sixiang', 'cream', 'millennium', 'spacehighway', 'hedge']);
 // What the picker calls itself for each full-palette aesthetic. Everything else gets the
 // default "ACCENT COLOR" heading — this map is only for aesthetics where the choice repaints
 // the whole app rather than tinting one colour.
@@ -479,6 +572,7 @@ const PALETTE_PICKER_COPY = {
   sixiang:  { label: 'GUARDIAN',   note: 'Choose your guardian — each recolors the whole app, background, borders and every shade of text.' },
   cream:    { label: 'MAIN COLOR', note: 'Swap the suit between regal purple and dollar green — gold stays, and the button colour swaps to whichever hue the suit is not.' },
   millennium: { label: 'VIBE', note: 'Relights the whole room — floor, frames, bulbs and every shade of text. Each vibe is a pair of hues, and the stepped frames run between them.' },
+  hedge: { label: 'CHARACTER', note: "Pick who you're playing as — each one repaints the whole app in the three colours they're drawn in, from the backdrop and borders to every shade of text." },
   spacehighway: { label: 'SECTOR', note: "Pick the sector of space the highway runs through — it recolours everything from the deep-space backdrop and the star field to every shade of text. The road, Saturn and the cars stay as they are." },
 };
 function applyAccentColor() {

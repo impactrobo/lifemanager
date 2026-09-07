@@ -120,10 +120,15 @@ Purely CSS effects (the Hunny bee, Y2K's glints, Draconic's button flames) need 
 ## MAIN COLOR aesthetics (full-palette swap, not an accent tint)
 Most aesthetics' `AESTHETIC_ACCENTS` entries are `{label, value}` and picking one only sets
 `--accent`. Aesthetics listed in `FULL_PALETTE_AESTHETICS` (`terminal`, `sixiang`, `cream`, `millennium`,
-`spacehighway`) instead give each entry a full mini-palette — `applyAccentColor()` writes the whole
+`spacehighway`, `hedge`) instead give each entry a full mini-palette — `applyAccentColor()` writes the whole
 `TERMINAL_PALETTE_VARS` list inline on `<html>`, and clears it again when you leave. Picker
 wording comes from `PALETTE_PICKER_COPY`; entries can set `swatch` to override the chip colour
-(C.R.E.A.M needs this — both its palettes share the same gold accent).
+(C.R.E.A.M needs this — both its palettes share the same gold accent). `swatch` may also be a
+**gradient** — Hedge's chips are three-band diagonals of each character's own colours, because
+four of its eight are some kind of red and their accents alone were indistinguishable. A
+gradient there breaks `styles.css`'s selected-chip ring (`box-shadow: … var(--sw)` needs a
+colour, and the whole declaration is dropped), so a theme doing this must re-state
+`.accent-swatch.active` itself — see the bottom of `aesthetics/hedge/theme.css`.
 
 To make a theme actually respond to the swap, its `theme.css` must **derive** hue-dependent
 surfaces from `--bg` / `--surface` / `--surface2` via `color-mix()` rather than hardcoding hex.

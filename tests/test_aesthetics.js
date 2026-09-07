@@ -7,7 +7,7 @@ const path = require('path');
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
 // Update this number whenever an aesthetic is added or removed — that's the point of this test.
-const EXPECTED_AESTHETIC_COUNT = 21;
+const EXPECTED_AESTHETIC_COUNT = 22;
 
 (async () => {
   const browser = await chromium.launch({ executablePath: process.env.PW_CHROMIUM_PATH || undefined });

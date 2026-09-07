@@ -1,0 +1,487 @@
+@import url('https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,600;0,700;1,800;1,900&family=Nunito:wght@400;600;700;800&display=swap');
+
+/* ============================================================================
+   Aesthetic: Hedge — a cartoon-speed shell built out of one character's three
+   colours. Everything here is chrome: bevelled sticker panels, hard italic
+   lettering that leans the way the character runs, and controls with a real
+   bottom edge that gets pressed out from under them.
+
+   ---- MAIN COLOR: the CHARACTER picker ----
+   This is a FULL_PALETTE aesthetic (see app.js > FULL_PALETTE_AESTHETICS), so
+   --bg / --surface / --surface2 / --border / --border-soft / --text* / --good /
+   --good-soft / --reset-* / --accent all arrive INLINE on <html> from
+   applyAccentColor(), one set per character. Only hue-independent and derived
+   tokens live in the block below. That means every rule in this file has to
+   derive its colour from those tokens via color-mix() — a hardcoded hex here
+   would survive the character swap and stick out under the other seven.
+
+   --bad is deliberately fixed rather than swapped: three of these characters
+   are red (Tough Guy, Shade, Egbert), and a delete button has to stay readable
+   as a delete button next to a red accent. It's pulled toward crimson so it
+   never reads as "the accent, but bigger".
+
+   ---- The four scene layers ----
+   body::after   (z -3)  the bokeh field, drifting                 translate
+   #app::after   (z -2)  the warm pool the ring floats in          parallax
+   #app::before  (z -1)  the ring itself, spinning + drop-shadowed parallax
+   panel stripes         the horizontal fill inside the inset border
+   All four are spoken for. The #app pair lives inside #app's own stacking
+   context, so both sit above the body layer and below the app content however
+   they order against each other; the pool has to land UNDER the ring and OVER
+   the bokeh, which is what the -2/-1 split buys. Everything is `position: fixed`
+   rather than background-attachment, which is broken on iOS Safari.
+
+   ---- Why the ring uses `translate` and `rotate`, not `transform` ----
+   The spin animates `rotate` and fx.ts writes `--hg-px`/`--hg-py` into
+   `translate`. These are separate CSS properties that compose, so neither
+   clobbers the other — a single `transform` would have to carry both, and the
+   animation would win every frame. The fallbacks are `0px`, so with no JS at all
+   (or over `file://`, where ES modules can't be imported) the ring still hangs
+   there and still spins; only the drift is missing. Never make it depend on the
+   module. `rotate: y` with no perspective on the parent is an ORTHOGRAPHIC spin,
+   which is exactly what a 2D ring sprite does — and it keeps #app free of a
+   `perspective` that would apply to every transformed thing inside it.
+
+   External aesthetic — lazily loaded, everything scoped under
+   [data-aesthetic="hedge"]. Fonts @imported here rather than added to the shared
+   <link>: Archivo at 900 italic is the closest free stand-in for the forward
+   lean of the logo lettering, and Nunito is the rounded-but-plain sans that
+   survives 15px body copy under it. Neither is used elsewhere — check the other
+   theme.css @imports before swapping either out.
+
+   Picker swatch `.aesthetic-preview-hedge` lives in styles.css, not here — the
+   picker renders while a different aesthetic is still active. Positioning of
+   .topbar/.tabbar is never touched; they need their sticky/fixed from styles.css.
+   ============================================================================ */
+
+:root[data-aesthetic="hedge"] {
+  /* Palette-supplied tokens arrive inline — see the header. Derived only here. */
+  --accent-dim: color-mix(in srgb, var(--accent) 55%, var(--border));
+  --accent-soft: color-mix(in srgb, var(--accent) 18%, var(--surface));
+  --bad: #e8265e;
+  --bad-soft: color-mix(in srgb, #e8265e 22%, var(--surface));
+  --warn: #ff8a1f;
+  --myo: #b98cff;
+  --goldenrod: #ffc93a;
+  --savings: #4d9bff;
+  --savings-soft: color-mix(in srgb, var(--savings) 20%, var(--surface));
+  --font-head: 'Archivo', 'Arial Black', 'Helvetica Neue', sans-serif;
+  --font-body: 'Nunito', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --radius: 14px;   /* moulded plastic, not machined metal */
+
+  /* ---- The ink line ----
+     Cartoon art is drawn with a black outline around every shape, and that one
+     line is what keeps eight saturated palettes from turning to mush. Mixed from
+     --bg rather than literal black so it carries the character's hue. */
+  --hg-ink: color-mix(in srgb, var(--bg) 26%, #000000);
+  --hg-ink-soft: color-mix(in srgb, var(--bg) 60%, #000000);
+
+  /* ---- Sticker panel ----
+     Lit from the top like a moulded plastic tile: a bright lip, the body, then a
+     darker foot. The accent bleeds into the top so the panel belongs to whoever
+     is selected instead of being neutral grey with a coloured button on it. */
+  --hg-panel: linear-gradient(180deg,
+      color-mix(in srgb, var(--surface2) 84%, var(--accent)) 0%,
+      var(--surface2) 26%,
+      var(--surface) 74%,
+      color-mix(in srgb, var(--surface) 84%, #000000) 100%);
+  --hg-plate: linear-gradient(180deg,
+      color-mix(in srgb, var(--surface2) 74%, var(--accent)) 0%,
+      var(--surface2) 52%,
+      color-mix(in srgb, var(--surface) 88%, #000000) 100%);
+  /* ---- The internal border (refs 8, 9) ----
+     A menu bar in these games is drawn as an ink outline, a gap of flat colour,
+     then a bright line, and only then the striped body. Inset box-shadows paint
+     FIRST-LISTED ON TOP and each one is a solid band from the edge inward, so
+     three of them stacked at 2px / 5px / 7px spread leave exactly that: 0-2 ink,
+     2-5 gap, 5-7 the bright inner line. Changing the order collapses it into one
+     flat border, which is the failure mode to watch for if these get reshuffled. */
+  --hg-edge:
+      inset 0 0 0 2px var(--hg-ink),
+      inset 0 0 0 5px color-mix(in srgb, var(--surface) 80%, #000000),
+      inset 0 0 0 7px color-mix(in srgb, var(--accent) 68%, #ffffff),
+      inset 0 8px 10px -8px color-mix(in srgb, #ffffff 40%, transparent),
+      0 7px 20px rgba(0, 0, 0, 0.6);
+  /* Same construction at tile scale, one step thinner — a 7px reveal on a square
+     cell eats the icon's room and the aspect-ratio:1 box would grow to fit. */
+  --hg-edge-tight:
+      inset 0 0 0 2px var(--hg-ink),
+      inset 0 0 0 3px color-mix(in srgb, var(--surface) 80%, #000000),
+      inset 0 0 0 4px color-mix(in srgb, var(--accent) 55%, #ffffff),
+      0 5px 14px rgba(0, 0, 0, 0.55);
+  /* ---- The stripe fill (refs 8, 9) ----
+     HORIZONTAL, not diagonal: every menu bar in both references is scanned across
+     with thin dark lines. 5px period at 2px on, which survives being scaled by a
+     phone's device-pixel-ratio without moiring the way a 2px/3px period does. */
+  --hg-stripe: repeating-linear-gradient(180deg,
+      rgba(0, 0, 0, 0.20) 0 2px,
+      rgba(0, 0, 0, 0) 2px 5px);
+  /* The pressable foot under every control — a solid ink edge, not a blur, so a
+     button reads as a physical thing sitting on the surface. */
+  --hg-foot: 0 3px 0 var(--hg-ink), 0 4px 10px rgba(0, 0, 0, 0.45);
+  --hg-glow: 0 0 18px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+/* ---------- The room ---------- */
+[data-aesthetic="hedge"] body {
+  background-color: var(--bg);
+  background-image: radial-gradient(120% 80% at 50% 0%,
+      color-mix(in srgb, var(--accent) 12%, transparent) 0%,
+      transparent 62%);
+  background-attachment: scroll;   /* fixed is broken on iOS Safari */
+}
+
+/* ---------- The bokeh field (ref 8) ----------
+   Out-of-focus lights drifting behind the menu. Two kinds, because a field of
+   nothing but soft discs reads as fog: DISCS fade from a solid centre, RINGS are
+   hollow with a bright edge, which is what an out-of-focus point light actually
+   looks like through a lens. Sizes and colours are mixed on purpose — the eye
+   picks up on a repeated radius much faster than a repeated colour.
+
+   All of them are one element's background-image, so the whole field costs a
+   single composited layer. It's inset -60px and drifts 26px, so the drift can
+   never expose an edge. Colours come from the character via color-mix, so the
+   field re-tints with everything else.
+
+   `translate` (not background-position) does the drifting: background-position
+   repaints the gradient stack every frame, translate is compositor-only. */
+[data-aesthetic="hedge"] body::after {
+  content: '';
+  position: fixed; inset: -60px; z-index: -3; pointer-events: none;
+  background-image:
+    radial-gradient(circle 62px at 12% 18%, color-mix(in srgb, var(--accent) 26%, transparent) 0%, transparent 70%),
+    radial-gradient(circle 34px at 27% 9%,  color-mix(in srgb, var(--text) 15%, transparent) 0%, transparent 68%),
+    radial-gradient(circle 78px at 84% 13%, color-mix(in srgb, var(--good) 18%, transparent) 0%, transparent 72%),
+    radial-gradient(circle 46px at 68% 26%, color-mix(in srgb, var(--bad) 16%, transparent) 0%, transparent 70%),
+    radial-gradient(circle 92px at 8% 47%,  color-mix(in srgb, var(--good) 13%, transparent) 0%, transparent 74%),
+    radial-gradient(circle 40px at 46% 39%, color-mix(in srgb, var(--text) 10%, transparent) 0%, transparent 68%),
+    radial-gradient(circle 120px at 92% 52%, color-mix(in srgb, var(--accent) 16%, transparent) 0%, transparent 76%),
+    radial-gradient(circle 30px at 22% 63%, color-mix(in srgb, var(--bad) 20%, transparent) 0%, transparent 66%),
+    radial-gradient(circle 70px at 58% 74%, color-mix(in srgb, var(--accent) 15%, transparent) 0%, transparent 72%),
+    radial-gradient(circle 50px at 14% 88%, color-mix(in srgb, var(--good) 16%, transparent) 0%, transparent 70%),
+    radial-gradient(circle 96px at 80% 92%, color-mix(in srgb, var(--text) 9%, transparent) 0%, transparent 74%),
+    /* hollow ones: a bright rim, nothing in the middle */
+    radial-gradient(circle 54px at 36% 22%, transparent 0 62%, color-mix(in srgb, var(--text) 22%, transparent) 66% 80%, transparent 84%),
+    radial-gradient(circle 38px at 74% 45%, transparent 0 60%, color-mix(in srgb, var(--accent) 34%, transparent) 64% 80%, transparent 84%),
+    radial-gradient(circle 66px at 30% 79%, transparent 0 64%, color-mix(in srgb, var(--good) 26%, transparent) 68% 82%, transparent 86%),
+    radial-gradient(circle 26px at 90% 33%, transparent 0 58%, color-mix(in srgb, var(--text) 26%, transparent) 62% 80%, transparent 84%);
+  animation: hg-drift 44s ease-in-out infinite;
+}
+@keyframes hg-drift {
+  0%, 100% { translate: 0 0; }
+  33%      { translate: -18px 10px; }
+  66%      { translate: 14px -12px; }
+}
+
+[data-aesthetic="hedge"] #app { position: relative; z-index: 1; }
+
+/* ---------- The ring (ref 10) ----------
+   Hung off the right edge with its centre about three-quarters of the way in,
+   below the sticky topbar so it appears to come out from behind the bar rather
+   than being cut off by it. `right` is negative on purpose: the ring is wider
+   than the margin beside the reading column, so the only way to keep its centre
+   in frame at 390px is to hang its outer edge off the viewport.
+
+   The shadow is a `drop-shadow()` filter rather than a second element: it follows
+   the ring's actual alpha, hole included, and it foreshortens WITH the spin,
+   which a static ellipse underneath could never do.
+
+   Held down to 0.5 opacity deliberately — at full strength a spinning gold object
+   directly behind body copy is impossible to read past. */
+[data-aesthetic="hedge"] #app::before {
+  content: '';
+  position: fixed; z-index: -1; pointer-events: none;
+  right: -72px; top: 96px; width: 300px; height: 300px;
+  background: url('ring.svg') center / contain no-repeat;
+  opacity: 0.5;
+  filter: drop-shadow(9px 14px 10px rgba(0, 0, 0, 0.6));
+  translate: var(--hg-px, 0px) var(--hg-py, 0px);
+  animation: hg-spin 7s linear infinite;
+  will-change: rotate, translate;
+}
+@keyframes hg-spin {
+  from { rotate: y 0turn; }
+  to   { rotate: y 1turn; }
+}
+
+/* The warm pool the ring floats in — light bouncing off it onto the backdrop.
+   z-index -2 against the ring's -1: both sit inside #app's stacking context, so
+   they order against each other while both stay above the bokeh and below the
+   app's content. Parallaxes at 45% of the ring's travel because it's painted on
+   the far wall and nearer things move more; matching the rates would glue the
+   light to the ring and kill the depth. Gold rather than var(--accent): ring.svg's
+   own gold can't be recoloured through url(), so an accent-tinted pool would put
+   a blue or pink light under a gold ring. */
+[data-aesthetic="hedge"] #app::after {
+  content: '';
+  position: fixed; z-index: -2; pointer-events: none;
+  right: -120px; top: 40px; width: 400px; height: 420px;
+  background-image:
+    radial-gradient(46% 40% at 52% 50%, rgba(255, 200, 80, 0.16) 0%, rgba(255, 200, 80, 0) 72%),
+    radial-gradient(30% 24% at 58% 66%, rgba(255, 170, 40, 0.13) 0%, rgba(255, 170, 40, 0) 74%);
+  translate: calc(var(--hg-px, 0px) * 0.45) calc(var(--hg-py, 0px) * 0.45);
+  will-change: translate;
+}
+
+/* ---------- Sticker panels ---------- */
+[data-aesthetic="hedge"] .panel,
+[data-aesthetic="hedge"] .entry-card,
+[data-aesthetic="hedge"] .note-card,
+[data-aesthetic="hedge"] .chart-wrap,
+[data-aesthetic="hedge"] .modal-box,
+[data-aesthetic="hedge"] .superset-group,
+[data-aesthetic="hedge"] .aesthetic-card,
+[data-aesthetic="hedge"] .home-popup,
+[data-aesthetic="hedge"] .rest-timer-widget {
+  background: var(--hg-stripe), var(--hg-panel);
+  border: none;                 /* the outline is the first inset shadow */
+  border-radius: var(--radius);
+  box-shadow: var(--hg-edge);
+}
+[data-aesthetic="hedge"] .panel-done,
+[data-aesthetic="hedge"] .workout-cell.done {
+  background: var(--hg-stripe), linear-gradient(180deg,
+    color-mix(in srgb, var(--good) 30%, var(--surface2)) 0%,
+    color-mix(in srgb, var(--good) 12%, var(--surface)) 100%);
+  box-shadow:
+    inset 0 0 0 2px var(--hg-ink),
+    inset 0 0 0 5px color-mix(in srgb, var(--surface) 80%, #000000),
+    inset 0 0 0 7px color-mix(in srgb, var(--good) 75%, #ffffff),
+    0 7px 20px rgba(0, 0, 0, 0.6);
+}
+[data-aesthetic="hedge"] .modal-overlay {
+  background: color-mix(in srgb, var(--bg) 78%, transparent);
+}
+/* Grid tiles: .workout-cell is aspect-ratio:1 inside repeat(3, 1fr). No extra
+   padding here — the square breaks and the third column runs off screen. */
+[data-aesthetic="hedge"] .workout-cell,
+[data-aesthetic="hedge"] .cal-cell {
+  background: var(--hg-stripe), var(--hg-plate);
+  border: none;
+  border-radius: var(--radius);
+  box-shadow: var(--hg-edge-tight);
+}
+
+/* ---------- Bars ----------
+   `position` is never touched on these two — they carry sticky/fixed from
+   styles.css and lose their pinning if it is. z-index only. */
+[data-aesthetic="hedge"] .topbar {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--surface2) 80%, var(--accent)) 0%,
+    var(--surface) 70%,
+    color-mix(in srgb, var(--bg) 60%, #000000) 100%);
+  border-bottom: none;
+  box-shadow:
+    inset 0 -3px 0 var(--accent),
+    0 3px 14px rgba(0, 0, 0, 0.6);
+  z-index: 20;
+}
+[data-aesthetic="hedge"] .tabbar {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--surface) 88%, var(--accent)) 0%,
+    color-mix(in srgb, var(--bg) 70%, #000000) 100%);
+  border-top: none;
+  box-shadow: 0 -3px 20px rgba(0, 0, 0, 0.7);
+  z-index: 30;
+}
+/* The accent rail along the top edge of the tabbar, matching the topbar's. */
+[data-aesthetic="hedge"] .tabbar::before {
+  content: '';
+  position: absolute; left: 0; right: 0; top: 0; height: 3px;
+  pointer-events: none;
+  background: var(--accent);
+}
+[data-aesthetic="hedge"] .tabbar button {
+  background: none;
+  border-radius: 10px;
+  color: var(--text-faint);
+}
+[data-aesthetic="hedge"] .tabbar button.active {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+[data-aesthetic="hedge"] .toast { z-index: 60; }
+
+/* ---------- Lettering ----------
+   Italic 900 with a hard ink outline drawn in four text-shadows — the lettering
+   is the loudest thing in the theme and it leans the way the character runs.
+   -webkit-text-stroke would be one declaration instead of four, but it eats into
+   the glyph rather than sitting outside it and thins the counters at 13px. */
+[data-aesthetic="hedge"] .topbar .brand {
+  font-family: var(--font-head);
+  font-style: italic; font-weight: 900;
+  letter-spacing: 0.01em;
+  color: var(--text);
+  text-shadow:
+    1px 1px 0 var(--hg-ink), -1px 1px 0 var(--hg-ink),
+    1px -1px 0 var(--hg-ink), -1px -1px 0 var(--hg-ink),
+    0 3px 0 var(--hg-ink);
+}
+[data-aesthetic="hedge"] .topbar .brand span { color: var(--accent); }
+[data-aesthetic="hedge"] .section-title {
+  display: flex; align-items: center; gap: 10px;
+  font-family: var(--font-head);
+  font-style: italic; font-weight: 900;
+  text-transform: uppercase; letter-spacing: 0.02em; font-size: 17px;
+  color: var(--text);
+  text-shadow:
+    1px 1px 0 var(--hg-ink), -1px 1px 0 var(--hg-ink),
+    1px -1px 0 var(--hg-ink), -1px -1px 0 var(--hg-ink),
+    0 3px 0 var(--hg-ink);
+}
+/* Speed streak trailing the heading: three skewed bars thinning out, the shape a
+   sprite leaves behind it. Drawn with one gradient on a skewed box. */
+[data-aesthetic="hedge"] .section-title::after {
+  content: '';
+  flex: 1; height: 10px;
+  transform: skewX(-22deg);
+  background:
+    linear-gradient(90deg,
+      var(--accent) 0 14px, transparent 14px 22px,
+      color-mix(in srgb, var(--accent) 62%, transparent) 22px 32px, transparent 32px 40px,
+      color-mix(in srgb, var(--accent) 30%, transparent) 40px 46px, transparent 46px);
+}
+[data-aesthetic="hedge"] .subtle-label {
+  color: color-mix(in srgb, var(--accent) 34%, var(--text-dim));
+  text-transform: uppercase; letter-spacing: 0.1em; font-weight: 800;
+}
+[data-aesthetic="hedge"] .empty-state { color: var(--text-dim); }
+
+/* ---------- Controls ----------
+   ORDER MATTERS: [data-aesthetic] .btn and [data-aesthetic] .btn-primary are
+   equal specificity (0,2,0) and every .btn-primary also carries .btn, so the
+   neutral plate must come FIRST. .btn-danger / .btn-good are restated below
+   because this theme's .btn outranks styles.css's rules for them.
+   NO padding on the shared rule — .icon-btn is a fixed 30x30 box, .rest-timer-fab
+   52x52, .rt-btn has its own padding; a blanket value collapses their SVGs. */
+[data-aesthetic="hedge"] .btn,
+[data-aesthetic="hedge"] .icon-btn,
+[data-aesthetic="hedge"] .subnav button,
+[data-aesthetic="hedge"] .rt-btn,
+[data-aesthetic="hedge"] .rest-timer-fab,
+[data-aesthetic="hedge"] .week-selector .cycle-btns button {
+  background: var(--hg-stripe), var(--hg-plate);
+  border: 2px solid var(--hg-ink);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-weight: 800;
+  box-shadow: var(--hg-foot);
+  transition: transform 0.06s, box-shadow 0.06s;
+}
+/* Pressed = the foot goes away and the button drops onto it. */
+[data-aesthetic="hedge"] .btn:active,
+[data-aesthetic="hedge"] .icon-btn:active,
+[data-aesthetic="hedge"] .subnav button:active,
+[data-aesthetic="hedge"] .rt-btn:active,
+[data-aesthetic="hedge"] .rest-timer-fab:active,
+[data-aesthetic="hedge"] .week-selector .cycle-btns button:active {
+  transform: translateY(3px);
+  box-shadow: 0 0 0 var(--hg-ink), 0 1px 4px rgba(0, 0, 0, 0.45);
+}
+[data-aesthetic="hedge"] .btn-primary {
+  background: var(--hg-stripe), linear-gradient(180deg,
+    color-mix(in srgb, var(--accent) 66%, #ffffff) 0%,
+    var(--accent) 44%,
+    color-mix(in srgb, var(--accent) 80%, #000000) 100%);
+  border-color: var(--hg-ink);
+  color: var(--hg-ink);
+  box-shadow: var(--hg-foot), var(--hg-glow);
+}
+[data-aesthetic="hedge"] .btn-good {
+  background: var(--hg-stripe), linear-gradient(180deg,
+    color-mix(in srgb, var(--good) 66%, #ffffff) 0%,
+    var(--good) 44%,
+    color-mix(in srgb, var(--good) 80%, #000000) 100%);
+  border-color: var(--hg-ink);
+  color: var(--hg-ink);
+  box-shadow: var(--hg-foot);
+}
+[data-aesthetic="hedge"] .btn-danger {
+  background: var(--hg-stripe), linear-gradient(180deg,
+    color-mix(in srgb, var(--bad) 60%, #ffffff) 0%,
+    var(--bad) 44%,
+    color-mix(in srgb, var(--bad) 80%, #000000) 100%);
+  border-color: var(--hg-ink);
+  color: #23020c;
+  box-shadow: var(--hg-foot);
+}
+[data-aesthetic="hedge"] .btn-ghost {
+  background: none; border-color: transparent; box-shadow: none; color: var(--text-dim);
+}
+[data-aesthetic="hedge"] .subnav button.active,
+[data-aesthetic="hedge"] .unit-toggle button.active {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--accent) 58%, #ffffff) 0%, var(--accent) 100%);
+  border-color: var(--hg-ink);
+  color: var(--hg-ink); font-weight: 800;
+}
+[data-aesthetic="hedge"] .unit-toggle {
+  border: 2px solid var(--hg-ink);
+  border-radius: var(--radius); overflow: hidden;
+}
+[data-aesthetic="hedge"] .unit-toggle button {
+  background: var(--hg-plate); color: var(--text-dim);
+  border: none; box-shadow: none; transform: none;
+}
+[data-aesthetic="hedge"] .plate,
+[data-aesthetic="hedge"] .pill,
+[data-aesthetic="hedge"] .tag-pill,
+[data-aesthetic="hedge"] .exercise-chip {
+  background: var(--hg-plate);
+  border: 2px solid var(--hg-ink-soft);
+  border-radius: 999px;   /* everything in this world is capsule-shaped */
+}
+
+/* ---------- Inputs: wells cut into the plastic ---------- */
+[data-aesthetic="hedge"] input[type="text"],
+[data-aesthetic="hedge"] input[type="number"],
+[data-aesthetic="hedge"] input[type="date"],
+[data-aesthetic="hedge"] input[type="time"],
+[data-aesthetic="hedge"] select,
+[data-aesthetic="hedge"] textarea,
+[data-aesthetic="hedge"] .note-editor {
+  background: color-mix(in srgb, var(--bg) 80%, #000000);
+  border: 2px solid var(--hg-ink);
+  border-radius: 10px;
+  color: var(--text);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+[data-aesthetic="hedge"] input::placeholder,
+[data-aesthetic="hedge"] textarea::placeholder { color: var(--text-faint); }
+[data-aesthetic="hedge"] input:focus,
+[data-aesthetic="hedge"] select:focus,
+[data-aesthetic="hedge"] textarea:focus {
+  outline-color: var(--accent);
+  border-color: var(--accent);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.5), var(--hg-glow);
+}
+
+/* ---------- CHARACTER swatches ----------
+   Each chip's --sw is a three-band GRADIENT of that character's colours (see
+   AESTHETIC_ACCENTS.hedge in app.js), not a single colour. styles.css draws the
+   selected ring with `box-shadow: ... 0 0 0 5px var(--sw)`, and a gradient in a
+   box-shadow makes the whole declaration invalid — the ring would silently
+   vanish. So the selected state is re-stated here in the accent instead. */
+[data-aesthetic="hedge"] .accent-swatch {
+  border: 2px solid var(--hg-ink);
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.22);
+}
+[data-aesthetic="hedge"] .accent-swatch.active {
+  border-color: var(--text);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.22),
+    0 0 0 3px var(--bg),
+    0 0 0 5px var(--accent);
+}
+
+/* ---------- Reduced motion: everything stays, nothing moves ----------
+   Both animated layers sit where they start (the bokeh field's keyframes begin
+   at 0 0, the ring's at 0turn — face-on), so stopping them costs only the motion
+   and never leaves a layer parked somewhere it can't be seen. The ring's parallax
+   is stopped inside fx.ts as well: it never starts the rAF loop. */
+@media (prefers-reduced-motion: reduce) {
+  [data-aesthetic="hedge"] body::after,
+  [data-aesthetic="hedge"] #app::before { animation: none; }
+}
