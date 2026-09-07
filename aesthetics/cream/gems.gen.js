@@ -31,9 +31,9 @@
  * a plain colour, which every engine handles), averaged from that render's own most-saturated
  * pixels so the drop-shadow halo matches the rendered hue. Pasted into theme.css by hand.
  *
- * Chromium (a devDependency via Playwright) does the decode, resize, composite and PNG encode,
- * so this needs no image library. The `*-clear-diamond.png` set is deliberately left alone:
- * it's kept in the repo unused, for a future variant.
+ * Chromium (a devDependency via Playwright) does the decode, resize, composite and WebP encode,
+ * so this needs no image library. Source series is `SERIES` below — the other one stays in the
+ * repo unused.
  */
 
 const fs = require('fs');
@@ -47,6 +47,10 @@ const PAD = 2;
 
 const DIR = __dirname;
 const COLOURS = ['green', 'yellow', 'magenta', 'red', 'cyan', 'blue', 'white'];
+/** Which render series to build from. The `clear` stones are brighter and more saturated than
+ *  `twopiece` — twopiece read too dark on the dark pinstripe backdrop on mobile. The `twopiece`
+ *  PNGs stay in the repo unused, for a future variant. */
+const SERIES = 'clear';
 
 (async () => {
   const browser = await chromium.launch();
@@ -54,7 +58,7 @@ const COLOURS = ['green', 'yellow', 'magenta', 'red', 'cyan', 'blue', 'white'];
   await page.goto('about:blank');
 
   for (const colour of COLOURS) {
-    const src = path.join(DIR, `${colour}-twopiece-diamond.png`);
+    const src = path.join(DIR, `${colour}-${SERIES}-diamond.png`);
     if (!fs.existsSync(src)) throw new Error(`missing source render: ${src}`);
     const b64 = fs.readFileSync(src).toString('base64');
 
@@ -135,22 +139,26 @@ const COLOURS = ['green', 'yellow', 'magenta', 'red', 'cyan', 'blue', 'white'];
       sg.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, outW, outH);
 
       // --- bake the crown scrim ---
-      // The table facet blows out to near-white right where the tile's icon + label land. Darken
-      // a soft ellipse over the upper-middle of the stone, clipped to the stone's own alpha
-      // (source-atop) so it never shows as a rectangle and never darkens the transparent
-      // surround. Tuned by eye against the 114px tile — see t-*.png from the dev screenshots.
+      // The `clear` renders blow out to near-white across the whole crown — the table facet AND
+      // the girdle line — which is exactly the band the tile's icon (upper crown) and label
+      // (lower crown / girdle) sit on. Darken a soft ellipse covering both, clipped to the
+      // stone's own alpha (source-atop) so it never shows as a rectangle and never touches the
+      // transparent surround. Centre is high (0.30) and the ellipse tall-ish so it reaches from
+      // the icon down past the label; the pavilion below stays at full brightness. Tuned by eye
+      // against the 114px tile.
       sg.save();
       sg.globalCompositeOperation = 'source-atop';
-      const cx = outW * 0.5, cy = outH * 0.4;
-      const grad = sg.createRadialGradient(cx, cy, 0, cx, cy, outW * 0.5);
-      grad.addColorStop(0, 'rgba(0,0,0,0.5)');
-      grad.addColorStop(0.55, 'rgba(0,0,0,0.26)');
+      const cx = outW * 0.5, cy = outH * 0.30;
+      const SQUASH = 0.72;
+      const grad = sg.createRadialGradient(cx, cy, 0, cx, cy, outW * 0.56);
+      grad.addColorStop(0, 'rgba(0,0,0,0.6)');
+      grad.addColorStop(0.5, 'rgba(0,0,0,0.34)');
       grad.addColorStop(0.82, 'rgba(0,0,0,0)');
       sg.fillStyle = grad;
       sg.save();
-      sg.scale(1, 0.62); // squash the circle into a wide ellipse over the crown
+      sg.scale(1, SQUASH); // squash the circle into a wide ellipse over the crown
       sg.beginPath();
-      sg.arc(cx, cy / 0.62, outW * 0.5, 0, Math.PI * 2);
+      sg.arc(cx, cy / SQUASH, outW * 0.56, 0, Math.PI * 2);
       sg.fill();
       sg.restore();
       sg.restore();

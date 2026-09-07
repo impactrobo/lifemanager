@@ -248,10 +248,11 @@
    ::before that fills it — the same approach as Draconic's claw, and for the same reason:
    clip-path would take the border and shadow with it and squeeze the label.
 
-   Each stone is a Blender render (`<colour>-twopiece-diamond.png`, 1080x1080 RGBA) cropped to
-   its own alpha bounds, downscaled and scrim-baked to `gem-<colour>.webp` by gems.gen.js. Run
-   that script, never hand-edit the output. The `*-clear-diamond.png` series is kept in the repo
-   unused, for a future variant.
+   Each stone is a Blender render (`<colour>-clear-diamond.png`, 1080x1080 RGBA) cropped to its
+   own alpha bounds, downscaled and scrim-baked to `gem-<colour>.webp` by gems.gen.js. Run that
+   script, never hand-edit the output. Series is set by `SERIES` in the generator — the darker
+   `*-twopiece-diamond.png` set read too dim on the pinstripe backdrop on mobile and is kept in
+   the repo unused.
 
    THE URL GOES STRAIGHT IN THE RULE — no `--gem-img` custom property, and the crown scrim is
    baked into the image rather than a masked `::after`. Both started as a fix for a "blank on
@@ -327,12 +328,12 @@
    stone it always had. url() goes on ::before directly, not via a custom property. Every
    --gem-glow except white's is printed by gems.gen.js, averaged from that render's own
    most-saturated pixels — white has no hue to find, so it gets a neutral. */
-[data-aesthetic="cream"] .workout-grid > .home-tile:nth-child(1) { --gem-glow: rgba(82, 235, 59, 0.75); }
-[data-aesthetic="cream"] .workout-grid > .home-tile:nth-child(2) { --gem-glow: rgba(235, 227, 46, 0.75); }
-[data-aesthetic="cream"] .workout-grid > .home-tile:nth-child(3) { --gem-glow: rgba(220, 87, 235, 0.75); }
-[data-aesthetic="cream"] .workout-grid > .home-tile:nth-child(4) { --gem-glow: rgba(235, 65, 46, 0.75); }
-[data-aesthetic="cream"] .workout-grid > .home-tile:nth-child(5) { --gem-glow: rgba(56, 227, 235, 0.75); }
-[data-aesthetic="cream"] .workout-grid > .home-tile:nth-child(6) { --gem-glow: rgba(43, 99, 235, 0.75); }
+[data-aesthetic="cream"] .workout-grid > .home-tile:nth-child(1) { --gem-glow: rgba(77, 235, 48, 0.75); }
+[data-aesthetic="cream"] .workout-grid > .home-tile:nth-child(2) { --gem-glow: rgba(235, 222, 43, 0.75); }
+[data-aesthetic="cream"] .workout-grid > .home-tile:nth-child(3) { --gem-glow: rgba(232, 88, 235, 0.75); }
+[data-aesthetic="cream"] .workout-grid > .home-tile:nth-child(4) { --gem-glow: rgba(235, 73, 57, 0.75); }
+[data-aesthetic="cream"] .workout-grid > .home-tile:nth-child(5) { --gem-glow: rgba(65, 233, 235, 0.75); }
+[data-aesthetic="cream"] .workout-grid > .home-tile:nth-child(6) { --gem-glow: rgba(52, 103, 235, 0.75); }
 /* A seventh stone, in case the grid ever grows — the set is seven after all. */
 [data-aesthetic="cream"] .workout-grid > .home-tile:nth-child(7) { --gem-glow: rgba(240, 240, 248, 0.7); }
 [data-aesthetic="cream"] .workout-grid > .home-tile:nth-child(1)::before { background-image: url('gem-green.webp'); }
