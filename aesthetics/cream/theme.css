@@ -8,11 +8,11 @@
         DARKEST down the centre column. That's deliberate — the content sits in
         the middle, so the darkest band is exactly where cream text needs it.
      2. Home tiles become brilliant-cut gems, each a different stone — seven
-        Blender renders, cropped and downscaled to gem-<colour>.webp by
-        gems.gen.js. (These replaced a CSS-only gem: a gem.svg mask over stacked
-        conic-gradient facets. The renders carry real internal reflection and
-        dispersion, and the PNG alpha is its own silhouette, so the mask and the
-        gradients both went.)
+        Blender renders, cropped / downscaled / scrim-baked to gem-<colour>.webp
+        by gems.gen.js. (These replaced a CSS-only gem: a gem.svg mask over
+        stacked conic-gradient facets. The renders carry real internal reflection
+        and dispersion, and the WebP alpha is its own silhouette, so the mask and
+        the gradients both went.)
      3. Gold buttons carry a static sparkle field plus a travelling sheen — both
         pure CSS. (A JS tap-glitter module lived here briefly and was removed: on a
         data-entry app you tap constantly, and a burst on every press stopped being
@@ -249,20 +249,26 @@
    clip-path would take the border and shadow with it and squeeze the label.
 
    Each stone is a Blender render (`<colour>-twopiece-diamond.png`, 1080x1080 RGBA) cropped to
-   its own alpha bounds and downscaled to `gem-<colour>.webp` by gems.gen.js. Run that script,
-   never hand-edit the .webp — and the raw exports are 5.4 MB for the set against 188 KB for the
-   derivatives, so the theme must load the .webp files. The `*-clear-diamond.png` series is kept
-   in the repo unused, for a future variant.
+   its own alpha bounds, downscaled and scrim-baked to `gem-<colour>.webp` by gems.gen.js. Run
+   that script, never hand-edit the output. The `*-clear-diamond.png` series is kept in the repo
+   unused, for a future variant.
+
+   THE URL GOES STRAIGHT IN THE RULE — no `--gem-img` custom property, and the crown scrim is
+   baked into the image rather than a masked `::after`. Both started as a fix for a "blank on
+   iOS" scare that turned out to be first-load latency, not a paint bug — but both are kept
+   because they're simpler and because the tile now fetches each gem ONCE (a background) instead
+   of twice (background + mask). Format is WebP: ~20 KB each / 140 KB for the set against
+   ~900 KB as PNG, supported everywhere this app runs.
 
    THE STONE IS WIDE AND SQUAT — 874x565 after cropping, where the CSS gem it replaced was a
    tall point filling the square. So it's sized to the tile's full width and parked low: in a
-   ~110px tile that's 110x71, with clear space above the table and below the culet, and the
-   content padded to sit on the CROWN just above the girdle where the stone is widest and
-   brightest behind the label.
+   ~114px tile that's 114x74, with clear space above the table and below the culet, and the
+   content padded to sit on the CROWN just above the girdle where the stone is widest.
 
    Gem assignment is by POSITION (nth-child), not by section, so reordering or hiding sections
    on the Home screen reshuffles which stone a section gets. That's intentional — the grid always
-   reads as a full set. Each tile sets only --gem-img and --gem-glow. */
+   reads as a full set. Each tile sets its own gem image on ::before, plus --gem-glow (a plain
+   colour — those, unlike url()s, survive being a custom property everywhere). */
 [data-aesthetic="cream"] .workout-cell.home-tile {
   background: none;
   border: none;
@@ -285,13 +291,16 @@
   height: 24px !important;
   /* Two shadows, not one: the offset drop gives it weight, the tight zero-offset one wraps the
      glyph in a dark halo so its white strokes still separate where they cross the crown's
-     specular. The scrim below does most of the work, this covers the brightest sparkles. */
+     specular. The scrim baked into each PNG does most of the work; this covers the brightest
+     sparkles that survive it. */
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.9)) drop-shadow(0 0 3px rgba(0, 0, 0, 0.85));
 }
+/* The stone. background-image is set per nth-child below (straight url(), no custom property);
+   everything shape-independent lives here. The crown scrim that keeps white icons legible is
+   baked into each PNG by gems.gen.js, so there is no ::after. */
 [data-aesthetic="cream"] .workout-cell.home-tile::before {
   content: '';
   position: absolute; inset: 0; z-index: 0; pointer-events: none;
-  background-image: var(--gem-img, none);
   background-repeat: no-repeat;
   /* Full tile width at the render's own aspect, parked low enough that the crown lands under
      the icon and label rather than the pavilion's dark converging facets. */
@@ -305,22 +314,6 @@
 [data-aesthetic="cream"] .workout-cell.home-tile:active::before {
   filter: drop-shadow(0 0 16px var(--gem-glow)) brightness(1.22);
 }
-/* A scrim, so white content survives the crown.
-   The renders carry a big blown-out specular across the table facet, which is exactly where the
-   icon lands — white-on-white, and the Exercise dumbbell all but disappeared. (The CSS gem this
-   replaced had the opposite problem: gold-on-gold, which is why the icons went white.)
-   Rather than move the content off the widest part of the stone, this darkens the middle of the
-   stone itself — and it's clipped by the GEM IMAGE USED AS ITS OWN MASK, at the identical
-   size/position as ::before, so the shading stops exactly at the silhouette and never shows as
-   a rectangle. Keep the two in sync if either is repositioned. */
-[data-aesthetic="cream"] .workout-cell.home-tile::after {
-  content: '';
-  position: absolute; inset: 0; z-index: 0; pointer-events: none;
-  background-image: radial-gradient(ellipse 58% 30% at 50% 41%,
-    rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0.26) 55%, rgba(0, 0, 0, 0) 76%);
-  -webkit-mask: var(--gem-img, none) center 60% / 100% auto no-repeat;
-          mask: var(--gem-img, none) center 60% / 100% auto no-repeat;
-}
 [data-aesthetic="cream"] .workout-cell.home-tile > * { position: relative; z-index: 1; }
 [data-aesthetic="cream"] .workout-cell.home-tile .wname {
   color: #fffbef;
@@ -331,16 +324,24 @@
   text-shadow: 0 1px 2px rgba(0,0,0,0.95), 0 0 8px rgba(0,0,0,0.85);
 }
 /* The set. Colour order is preserved from the CSS gems these replaced, so a section keeps the
-   stone it always had. Every --gem-glow except white's is printed by gems.gen.js, averaged from
-   that render's own most-saturated pixels — white has no hue to find, so it gets a neutral. */
-[data-aesthetic="cream"] .workout-grid > .home-tile:nth-child(1) { --gem-img: url('gem-green.webp');   --gem-glow: rgba(82, 235, 59, 0.75); }
-[data-aesthetic="cream"] .workout-grid > .home-tile:nth-child(2) { --gem-img: url('gem-yellow.webp');  --gem-glow: rgba(235, 227, 46, 0.75); }
-[data-aesthetic="cream"] .workout-grid > .home-tile:nth-child(3) { --gem-img: url('gem-magenta.webp'); --gem-glow: rgba(220, 87, 235, 0.75); }
-[data-aesthetic="cream"] .workout-grid > .home-tile:nth-child(4) { --gem-img: url('gem-red.webp');     --gem-glow: rgba(235, 65, 46, 0.75); }
-[data-aesthetic="cream"] .workout-grid > .home-tile:nth-child(5) { --gem-img: url('gem-cyan.webp');    --gem-glow: rgba(56, 227, 235, 0.75); }
-[data-aesthetic="cream"] .workout-grid > .home-tile:nth-child(6) { --gem-img: url('gem-blue.webp');    --gem-glow: rgba(43, 99, 235, 0.75); }
+   stone it always had. url() goes on ::before directly, not via a custom property. Every
+   --gem-glow except white's is printed by gems.gen.js, averaged from that render's own
+   most-saturated pixels — white has no hue to find, so it gets a neutral. */
+[data-aesthetic="cream"] .workout-grid > .home-tile:nth-child(1) { --gem-glow: rgba(82, 235, 59, 0.75); }
+[data-aesthetic="cream"] .workout-grid > .home-tile:nth-child(2) { --gem-glow: rgba(235, 227, 46, 0.75); }
+[data-aesthetic="cream"] .workout-grid > .home-tile:nth-child(3) { --gem-glow: rgba(220, 87, 235, 0.75); }
+[data-aesthetic="cream"] .workout-grid > .home-tile:nth-child(4) { --gem-glow: rgba(235, 65, 46, 0.75); }
+[data-aesthetic="cream"] .workout-grid > .home-tile:nth-child(5) { --gem-glow: rgba(56, 227, 235, 0.75); }
+[data-aesthetic="cream"] .workout-grid > .home-tile:nth-child(6) { --gem-glow: rgba(43, 99, 235, 0.75); }
 /* A seventh stone, in case the grid ever grows — the set is seven after all. */
-[data-aesthetic="cream"] .workout-grid > .home-tile:nth-child(7) { --gem-img: url('gem-white.webp');   --gem-glow: rgba(240, 240, 248, 0.7); }
+[data-aesthetic="cream"] .workout-grid > .home-tile:nth-child(7) { --gem-glow: rgba(240, 240, 248, 0.7); }
+[data-aesthetic="cream"] .workout-grid > .home-tile:nth-child(1)::before { background-image: url('gem-green.webp'); }
+[data-aesthetic="cream"] .workout-grid > .home-tile:nth-child(2)::before { background-image: url('gem-yellow.webp'); }
+[data-aesthetic="cream"] .workout-grid > .home-tile:nth-child(3)::before { background-image: url('gem-magenta.webp'); }
+[data-aesthetic="cream"] .workout-grid > .home-tile:nth-child(4)::before { background-image: url('gem-red.webp'); }
+[data-aesthetic="cream"] .workout-grid > .home-tile:nth-child(5)::before { background-image: url('gem-cyan.webp'); }
+[data-aesthetic="cream"] .workout-grid > .home-tile:nth-child(6)::before { background-image: url('gem-blue.webp'); }
+[data-aesthetic="cream"] .workout-grid > .home-tile:nth-child(7)::before { background-image: url('gem-white.webp'); }
 
 /* ---------- Reduced motion ---------- */
 @media (prefers-reduced-motion: reduce) {

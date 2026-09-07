@@ -30,10 +30,9 @@ see `tests/README.md` for that.
 - [x] Import that file back in → "Backup restored" → data intact
 
 ## Aesthetics
-- [ ] C.R.E.A.M's Home tiles: the chaos emeralds are `.webp` (`aesthetics/cream/gem-*.webp`).
-      Confirm they actually render on your iOS version — WebP needs Safari 14+, and a browser
-      that can't decode it shows nothing at all, not a broken-image icon. Check the glow halo
-      follows the stone's outline rather than a square, and that the icon + label are readable
-      over the crown in daylight.
+- [ ] C.R.E.A.M's Home tiles: the chaos emeralds (`aesthetics/cream/gem-*.webp`) were slow to
+      first-load on the phone even after the update toast — confirm they now appear promptly, and
+      that once cached the tab switch to C.R.E.A.M shows them immediately. Glow halo should follow
+      the stone's outline, not a square; icon + label readable over the crown in daylight.
 
 ## Add future items below as new features ship
