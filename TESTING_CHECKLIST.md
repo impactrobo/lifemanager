@@ -29,4 +29,11 @@ see `tests/README.md` for that.
 - [x] Export → share sheet → Save to Files → reopen the file → valid JSON, on real iOS Safari
 - [x] Import that file back in → "Backup restored" → data intact
 
+## Aesthetics
+- [ ] C.R.E.A.M's Home tiles: the chaos emeralds are `.webp` (`aesthetics/cream/gem-*.webp`).
+      Confirm they actually render on your iOS version — WebP needs Safari 14+, and a browser
+      that can't decode it shows nothing at all, not a broken-image icon. Check the glow halo
+      follows the stone's outline rather than a square, and that the icon + label are readable
+      over the crown in daylight.
+
 ## Add future items below as new features ship
