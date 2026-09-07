@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 48" width="36" height="48">
+<!--
+  Liminal — the wallpaper tile.
+
+  The arrow/chevron motif broken by vertical rules, off the right-hand wall of the first
+  reference. Tiles seamlessly: the vertical rule sits on x=0 so it meets its neighbour at x=36,
+  and the chevrons are clear of both edges.
+
+  DRAWN IN NEUTRAL ALPHA, not in yellow. Every stroke here is black or white at low opacity, so
+  the tile darkens and lightens whatever colour it's laid over instead of carrying a colour of
+  its own. That matters because it's referenced by url() and page CSS can't reach inside it —
+  neutral alpha is what lets the same file sit over the near wall, the mid wall and the far wall
+  at three different brightnesses, and keeps it correct if the wall colour is ever retuned.
+
+  The white pass offset a pixel down-right of the dark one is what makes it read as embossed
+  wallpaper rather than as printed line art.
+-->
+<g fill="none" stroke-linecap="square">
+  <!-- Dark pass -->
+  <g stroke="rgba(0,0,0,0.085)" stroke-width="1.4">
+    <path d="M0.7,0 V48"/>
+    <path d="M6,14 L18,6 L30,14"/>
+    <path d="M6,28 L18,20 L30,28"/>
+    <path d="M6,42 L18,34 L30,42"/>
+  </g>
+  <!-- Highlight pass, offset, for the embossed edge -->
+  <g stroke="rgba(255,255,255,0.10)" stroke-width="1.1" transform="translate(1,1.2)">
+    <path d="M0.7,0 V48"/>
+    <path d="M6,14 L18,6 L30,14"/>
+    <path d="M6,28 L18,20 L30,28"/>
+    <path d="M6,42 L18,34 L30,42"/>
+  </g>
+</g>
+</svg>

@@ -530,6 +530,8 @@ select { -webkit-appearance: none; appearance: none; background-image: linear-gr
 /* Hard stops, not a blend — this one's whole motif is stepped bands of solid colour. */
 .aesthetic-preview-millennium { background: linear-gradient(135deg, #1a0511 0 18%, #ff2d95 18% 38%, #ff7a18 38% 55%, #ffe23d 55% 68%, #2f9dff 68% 84%, #a855f7 84% 100%); }
 .aesthetic-preview-runic { background: linear-gradient(150deg, #14181a 6%, #34251a 30%, #7a5c39 48%, #c8d2d8 62%, #4fe08c 84%, #12331f 98%); }
+/* Nested bands, not a blend — the swatch is the corridor seen end-on. */
+.aesthetic-preview-liminal { background: linear-gradient(180deg, #fffdf0 0 10%, #d9cf9c 10% 30%, #d3c88a 30% 48%, #cdc079 48% 66%, #c6b96b 66% 86%, #86793f 86% 100%); }
 .aesthetic-card-name { font-weight: 700; font-size: 13px; }
 .aesthetic-card-desc { font-size: 11px; color: var(--text-faint); margin-top: 2px; line-height: 1.4; }
 .aesthetic-card-check { position: absolute; right: 10px; top: 10px; }

@@ -1,0 +1,442 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+
+/* ============================================================================
+   Aesthetic: Liminal — the Backrooms. A mono-yellow room seen through four
+   successive doorways, lit by fluorescent panels, one of which is going.
+
+   ---- This is a LIGHT theme ----
+   Both the walls (mid yellow) and the panels (pale lit diffusers) are light, so
+   text is dark EVERYWHERE and none of the scoped light/dark token inversion
+   documented in Y2K's header applies. That is the whole reason the panels are
+   lit ceiling tiles rather than more wall: in the references everything is one
+   yellow, which is the point photographically and unreadable as a UI. The
+   diffuser panels give the surfaces their own value without leaving the room.
+
+   ---- The corridor: four planes, one offset pair ----
+   body::after   (z -2)  the far room        parallax x0.12
+   body::before  (z -1)  far doorway         parallax x0.32
+   #app::after   (z -2)  middle doorway      parallax x0.62
+   #app::before  (z -1)  near doorway        parallax x1.00
+   Paint order back to front is exactly that list. The -2/-1 split inside each
+   pair is load-bearing — two pseudo-elements at the SAME z-index paint in tree
+   order, so an opaque ::after would bury ::before — and the #app pair sits inside
+   #app's own stacking context, which puts both above the body pair and below the
+   app's content however they order against each other.
+
+   fx.ts writes ONE offset pair and each plane multiplies it by its own depth
+   fraction with calc(). That differential is the entire illusion: matching the
+   rates would slide the frames as a single flat picture. Every translate3d()
+   falls back to 0px, so the corridor still renders — just still — with no JS, on
+   a file:// page where ES modules can't be imported, or before the lazy import
+   lands. Never make a plane's visibility depend on those properties.
+
+   ---- How a doorway is cut ----
+   Each of the three near planes is a full-viewport wall with a rectangular hole
+   masked out of it, anchored to the BOTTOM (a doorway meets the floor; a
+   centred hole reads as a window). The hole is cut with the two-layer mask pair
+   — full rect XOR inner rect, which for a contained rect is exactly "full minus
+   inner" — the same primitive Millennium's bulb ring uses. Holes shrink with
+   depth (66% / 48% / 33% wide) so the jambs stack up as nested bands down the
+   left and right of the screen, which is what sells the corridor at a phone
+   width where content covers the middle.
+
+   `filter: drop-shadow()` on a masked element outlines the MASK, not the box, so
+   one declaration puts a soft dark edge around every doorway opening. It is
+   static, so it rasterises once.
+
+   ---- The flicker ----
+   One light, rarely, per the brief. It's done by flickering the far room's
+   OPACITY over the dark body colour rather than by animating a light's
+   brightness: opacity is a compositor property, and the far room is the only
+   plane whose lights are far enough away that dimming the whole plane reads as a
+   tube stuttering rather than as the screen dimming. `steps(1, end)` means the
+   value never interpolates — it holds and jumps, which is both what a failing
+   fluorescent actually does and the reason this costs a handful of composites
+   per 26s instead of a repaint per frame.
+
+   External aesthetic — lazily loaded, everything scoped under
+   [data-aesthetic="liminal"]. One font for headings AND body on purpose: IBM
+   Plex Sans is institutional, unremarkable and completely at home on office
+   signage, and using a single family for both is the typographic version of what
+   this place is. Headings separate themselves by weight, tracking and caps
+   rather than by having a voice of their own.
+
+   Picker swatch `.aesthetic-preview-liminal` lives in styles.css, not here — the
+   picker renders while a different aesthetic is still active. Positioning of
+   .topbar/.tabbar is never touched; they need their sticky/fixed from styles.css.
+   ============================================================================ */
+
+:root[data-aesthetic="liminal"] {
+  --bg: #ab9d4c;   /* matched to --lm-wall-near: the wall you actually stand against */
+  --surface: #f4f0d2;
+  --surface2: #e7e1bb;
+  --border: #a2984e;
+  --border-soft: #c0b573;
+  --text: #322d16;
+  --text-dim: #5f5730;
+  --text-faint: #8a8050;
+
+  --accent-dim: color-mix(in srgb, var(--accent) 55%, var(--border));
+  --accent-soft: color-mix(in srgb, var(--accent) 20%, var(--surface));
+  --good: #5f8a2f;
+  --good-soft: #dfe9c6;
+  --bad: #b03a28;
+  --bad-soft: #f2d8d2;
+  --warn: #c9871c;
+  --reset-border: #322d16;
+  --reset-bg: #e7e1bb;
+  --reset-text: #322d16;
+  --myo: #7a5aa8;
+  --goldenrod: #9a7a12;
+  --savings: #3f6ba8;
+  --savings-soft: color-mix(in srgb, var(--savings) 16%, var(--surface));
+  --font-head: 'IBM Plex Sans', 'Inter', sans-serif;
+  --font-body: 'IBM Plex Sans', 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --radius: 2px;   /* nothing in this building has a nice corner */
+
+  /* Wall values by depth. Distance drains contrast and drifts things paler and
+     greyer here, not darker — the far end of a fluorescent corridor is hazier
+     than the near end, not dimmer. */
+  --lm-wall-near: #ab9d4c;
+  --lm-wall-mid: #c0b365;
+  --lm-wall-far: #d2c785;
+  --lm-wall-deep: #e6dcaa;
+  --lm-paper: url('wall.svg');
+  /* A lit fluorescent tube behind its diffuser. */
+  --lm-tube: color-mix(in srgb, var(--accent) 22%, #fffdf0);
+  --lm-doorshadow: drop-shadow(0 0 3px rgba(46, 38, 8, 0.62)) drop-shadow(0 0 16px rgba(46, 38, 8, 0.34));
+}
+
+/* ---------- The far room ----------
+   No hole in this one: it's the wall at the end, with its own ceiling light and
+   the floor running up to it. Also the flicker layer, so the body colour beneath
+   has to be the dark the room drops to when the tube stutters. */
+[data-aesthetic="liminal"] body { background-color: #6b6330; }
+[data-aesthetic="liminal"] body::after {
+  content: '';
+  position: fixed; inset: -6%; z-index: -2; pointer-events: none;
+  background-image:
+    /* the ceiling tube at the far end, and its spill down the wall */
+    radial-gradient(30% 1.9% at 50% 12%, #fffdf0 0%, #fffdf0 52%, rgba(255, 253, 235, 0) 100%),
+    radial-gradient(52% 9% at 50% 12%, rgba(255, 252, 226, 0.72) 0%, rgba(255, 252, 226, 0) 74%),
+    radial-gradient(84% 40% at 50% 17%, rgba(255, 250, 214, 0.44) 0%, rgba(255, 250, 214, 0) 78%),
+    /* floor: the carpet, catching the light */
+    linear-gradient(180deg,
+      rgba(0, 0, 0, 0) 60%,
+      rgba(146, 124, 60, 0.62) 64%,
+      rgba(124, 104, 46, 0.55) 72%,
+      rgba(88, 72, 28, 0.66) 100%),
+    var(--lm-paper),
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--lm-wall-deep) 88%, #ffffff) 0%,
+      var(--lm-wall-deep) 40%,
+      color-mix(in srgb, var(--lm-wall-deep) 86%, #000000) 100%);
+  background-size: auto, auto, auto, auto, 36px 48px, auto;
+  background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, repeat, no-repeat;
+  transform: translate3d(calc(var(--lm-px, 0px) * 0.12), calc(var(--lm-py, 0px) * 0.12), 0);
+  animation: lm-flicker 26s steps(1, end) infinite;
+  will-change: transform, opacity;
+}
+/* Held at 1 for 23 of every 26 seconds, then one tube gives up for about a
+   second. Discrete by construction — no interpolation, so it reads as a failing
+   ballast and not as a fade. */
+@keyframes lm-flicker {
+  0%, 88%   { opacity: 1; }
+  88.4%     { opacity: 0.34; }
+  88.9%     { opacity: 1; }
+  89.6%     { opacity: 0.5; }
+  90.1%     { opacity: 0.92; }
+  90.5%     { opacity: 0.28; }
+  91.4%     { opacity: 1; }
+  92.1%     { opacity: 0.62; }
+  92.6%, 100% { opacity: 1; }
+}
+
+/* ---------- Far doorway ---------- */
+[data-aesthetic="liminal"] body::before {
+  content: '';
+  position: fixed; inset: -6%; z-index: -1; pointer-events: none;
+  background-image:
+    radial-gradient(21% 1.6% at 50% 17%, #fffdf0 0%, #fffdf0 50%, rgba(255, 253, 235, 0) 100%),
+    radial-gradient(40% 8% at 50% 17%, rgba(255, 252, 226, 0.6) 0%, rgba(255, 252, 226, 0) 76%),
+    var(--lm-paper),
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--lm-wall-far) 92%, #ffffff) 0%,
+      var(--lm-wall-far) 46%,
+      color-mix(in srgb, var(--lm-wall-far) 84%, #000000) 100%);
+  background-size: auto, auto, 36px 48px, auto;
+  background-repeat: no-repeat, no-repeat, repeat, no-repeat;
+  -webkit-mask-image: linear-gradient(#000 0 0), linear-gradient(#000 0 0);
+          mask-image: linear-gradient(#000 0 0), linear-gradient(#000 0 0);
+  -webkit-mask-size: 100% 100%, 33% 58%;
+          mask-size: 100% 100%, 33% 58%;
+  -webkit-mask-position: center top, center bottom;
+          mask-position: center top, center bottom;
+  -webkit-mask-repeat: no-repeat, no-repeat;
+          mask-repeat: no-repeat, no-repeat;
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  filter: var(--lm-doorshadow);
+  transform: translate3d(calc(var(--lm-px, 0px) * 0.32), calc(var(--lm-py, 0px) * 0.32), 0);
+  will-change: transform;
+}
+
+[data-aesthetic="liminal"] #app { position: relative; z-index: 1; }
+
+/* ---------- Middle doorway ---------- */
+[data-aesthetic="liminal"] #app::after {
+  content: '';
+  position: fixed; inset: -6%; z-index: -2; pointer-events: none;
+  background-image:
+    radial-gradient(24% 1.8% at 50% 13%, #fffdf0 0%, #fffdf0 50%, rgba(255, 253, 235, 0) 100%),
+    radial-gradient(45% 9% at 50% 13%, rgba(255, 252, 226, 0.62) 0%, rgba(255, 252, 226, 0) 76%),
+    var(--lm-paper),
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--lm-wall-mid) 92%, #ffffff) 0%,
+      var(--lm-wall-mid) 46%,
+      color-mix(in srgb, var(--lm-wall-mid) 82%, #000000) 100%);
+  background-size: auto, auto, 36px 48px, auto;
+  background-repeat: no-repeat, no-repeat, repeat, no-repeat;
+  -webkit-mask-image: linear-gradient(#000 0 0), linear-gradient(#000 0 0);
+          mask-image: linear-gradient(#000 0 0), linear-gradient(#000 0 0);
+  -webkit-mask-size: 100% 100%, 48% 74%;
+          mask-size: 100% 100%, 48% 74%;
+  -webkit-mask-position: center top, center bottom;
+          mask-position: center top, center bottom;
+  -webkit-mask-repeat: no-repeat, no-repeat;
+          mask-repeat: no-repeat, no-repeat;
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  filter: var(--lm-doorshadow);
+  transform: translate3d(calc(var(--lm-px, 0px) * 0.62), calc(var(--lm-py, 0px) * 0.62), 0);
+  will-change: transform;
+}
+
+/* ---------- Near doorway: the wall you are standing in ---------- */
+[data-aesthetic="liminal"] #app::before {
+  content: '';
+  position: fixed; inset: -6%; z-index: -1; pointer-events: none;
+  background-image:
+    radial-gradient(28% 2px at 50% 7%, #fffdf0 0%, #fffdf0 50%, rgba(255, 253, 235, 0) 100%),
+    radial-gradient(52% 10% at 50% 7%, rgba(255, 252, 226, 0.64) 0%, rgba(255, 252, 226, 0) 76%),
+    var(--lm-paper),
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--lm-wall-near) 94%, #ffffff) 0%,
+      var(--lm-wall-near) 44%,
+      color-mix(in srgb, var(--lm-wall-near) 78%, #000000) 100%);
+  background-size: auto, auto, 36px 48px, auto;
+  background-repeat: no-repeat, no-repeat, repeat, no-repeat;
+  -webkit-mask-image: linear-gradient(#000 0 0), linear-gradient(#000 0 0);
+          mask-image: linear-gradient(#000 0 0), linear-gradient(#000 0 0);
+  -webkit-mask-size: 100% 100%, 66% 88%;
+          mask-size: 100% 100%, 66% 88%;
+  -webkit-mask-position: center top, center bottom;
+          mask-position: center top, center bottom;
+  -webkit-mask-repeat: no-repeat, no-repeat;
+          mask-repeat: no-repeat, no-repeat;
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  filter: var(--lm-doorshadow);
+  transform: translate3d(var(--lm-px, 0px), var(--lm-py, 0px), 0);
+  will-change: transform;
+}
+
+/* ---------- Panels: lit ceiling diffusers ----------
+   The one thing in here that isn't wall. A pale acrylic sheet with a tube behind
+   it: brightest just inside the top edge, falling off downward, with the thin
+   metal grid of the frame around it. */
+[data-aesthetic="liminal"] .panel,
+[data-aesthetic="liminal"] .modal-box,
+[data-aesthetic="liminal"] .entry-card,
+[data-aesthetic="liminal"] .note-card,
+[data-aesthetic="liminal"] .chart-wrap,
+[data-aesthetic="liminal"] .superset-group,
+[data-aesthetic="liminal"] .aesthetic-card,
+[data-aesthetic="liminal"] .home-popup,
+[data-aesthetic="liminal"] .rest-timer-widget,
+[data-aesthetic="liminal"] .workout-cell,
+[data-aesthetic="liminal"] .cal-cell {
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--lm-tube) 70%, var(--surface)) 0%,
+      var(--surface) 34%,
+      color-mix(in srgb, var(--surface) 88%, var(--bg)) 100%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    0 0 20px color-mix(in srgb, var(--lm-tube) 45%, transparent),
+    0 2px 6px rgba(60, 50, 12, 0.28);
+}
+[data-aesthetic="liminal"] .panel-done,
+[data-aesthetic="liminal"] .workout-cell.done {
+  border-color: var(--good);
+  background: linear-gradient(180deg, #eef5df 0%, var(--good-soft) 100%);
+}
+[data-aesthetic="liminal"] .modal-overlay {
+  background: rgba(58, 52, 22, 0.55);
+}
+
+/* ---------- Bars: the ceiling, and the floor ---------- */
+[data-aesthetic="liminal"] .topbar {
+  background: linear-gradient(180deg, #f6f2d6 0%, #e6e0b8 62%, #cec489 100%);
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 2px 14px rgba(60, 50, 12, 0.3);
+  z-index: 20;
+}
+/* The tube in the topbar's own diffuser. */
+[data-aesthetic="liminal"] .topbar::after {
+  content: '';
+  position: absolute; left: 8%; right: 8%; top: 3px; height: 3px;
+  pointer-events: none;
+  background: linear-gradient(90deg,
+    rgba(255, 253, 235, 0) 0%, var(--lm-tube) 18%, var(--lm-tube) 82%, rgba(255, 253, 235, 0) 100%);
+  box-shadow: 0 0 16px 3px color-mix(in srgb, var(--lm-tube) 70%, transparent);
+}
+/* The floor is carpet, not ceiling — the one surface in the building that
+   absorbs light instead of throwing it. */
+[data-aesthetic="liminal"] .tabbar {
+  background: linear-gradient(180deg, #9a8c4c 0%, #86793f 45%, #6f6432 100%);
+  border-top: 1px solid #5d5429;
+  box-shadow: 0 -2px 14px rgba(40, 34, 8, 0.4);
+  z-index: 30;
+}
+[data-aesthetic="liminal"] .tabbar button { color: #e8e2c0; }
+[data-aesthetic="liminal"] .tabbar button.active {
+  color: #fffdf0;
+  text-shadow: 0 0 10px color-mix(in srgb, var(--lm-tube) 80%, transparent);
+}
+[data-aesthetic="liminal"] .toast { z-index: 60; }
+
+/* ---------- Lettering: office signage ---------- */
+[data-aesthetic="liminal"] .topbar .brand {
+  color: var(--text);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+[data-aesthetic="liminal"] .topbar .brand span { color: var(--accent); }
+[data-aesthetic="liminal"] .section-title {
+  display: flex; align-items: center; gap: 10px;
+  color: var(--text);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 600;
+  font-size: 15px;
+}
+/* A plain rule, the kind printed on a form. */
+[data-aesthetic="liminal"] .section-title::after {
+  content: '';
+  flex: 1; height: 1px;
+  background: var(--border);
+}
+[data-aesthetic="liminal"] .subtle-label {
+  color: var(--text-dim);
+  text-transform: uppercase; letter-spacing: 0.14em; font-weight: 600;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+/* Text on the wall rather than on a panel: the wallpaper pattern runs behind it,
+   and a light rather than dark shadow is what lifts dark text off a light,
+   patterned ground. */
+[data-aesthetic="liminal"] .empty-state {
+  color: var(--text-dim);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.75), 0 0 10px rgba(255, 253, 235, 0.9);
+}
+
+/* ---------- Controls ----------
+   ORDER MATTERS: `[data-aesthetic] .btn` and `[data-aesthetic] .btn-primary` are
+   equal specificity and every .btn-primary also carries .btn, so the neutral
+   plate must come FIRST or it beats the variants. .btn-danger/.btn-good are
+   restated below for the same reason — this theme's .btn outranks the base rules
+   for them in styles.css. No `padding` on the shared rule: .icon-btn is a fixed
+   30x30 box, .rest-timer-fab 52x52 and .rt-btn has its own, and a blanket value
+   collapses their icons. */
+[data-aesthetic="liminal"] .btn,
+[data-aesthetic="liminal"] .icon-btn,
+[data-aesthetic="liminal"] .subnav button,
+[data-aesthetic="liminal"] .rt-btn,
+[data-aesthetic="liminal"] .rest-timer-fab,
+[data-aesthetic="liminal"] .week-selector .cycle-btns button {
+  background: linear-gradient(180deg, #f2eed0 0%, #e2dcb2 52%, #d2c894 100%);
+  border: 1px solid var(--border);
+  color: var(--text);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 1px 2px rgba(60, 50, 12, 0.25);
+}
+[data-aesthetic="liminal"] .btn-primary {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--accent) 72%, #ffffff) 0%,
+    var(--accent) 55%,
+    color-mix(in srgb, var(--accent) 84%, #000000) 100%);
+  border-color: color-mix(in srgb, var(--accent) 55%, #000000);
+  color: #2a1f04;
+  font-weight: 600;
+}
+[data-aesthetic="liminal"] .btn-good {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--good) 60%, #ffffff) 0%, var(--good) 55%,
+    color-mix(in srgb, var(--good) 84%, #000000) 100%);
+  border-color: color-mix(in srgb, var(--good) 55%, #000000);
+  color: #f2f7e6;
+}
+[data-aesthetic="liminal"] .btn-danger {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--bad) 60%, #ffffff) 0%, var(--bad) 55%,
+    color-mix(in srgb, var(--bad) 84%, #000000) 100%);
+  border-color: color-mix(in srgb, var(--bad) 55%, #000000);
+  color: #fdeeeb;
+}
+[data-aesthetic="liminal"] .btn-ghost {
+  background: none; border-color: transparent; box-shadow: none; color: var(--text-dim);
+}
+[data-aesthetic="liminal"] .subnav button.active,
+[data-aesthetic="liminal"] .unit-toggle button.active {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--accent) 70%, #ffffff) 0%, var(--accent) 100%);
+  color: #2a1f04; font-weight: 600;
+}
+[data-aesthetic="liminal"] .unit-toggle { border-color: var(--border); }
+[data-aesthetic="liminal"] .unit-toggle button {
+  background: linear-gradient(180deg, #eee9c8 0%, #ddd6a8 100%);
+  color: var(--text-dim);
+}
+[data-aesthetic="liminal"] .plate,
+[data-aesthetic="liminal"] .pill,
+[data-aesthetic="liminal"] .tag-pill,
+[data-aesthetic="liminal"] .exercise-chip {
+  background: linear-gradient(180deg, #eee9c8 0%, #ddd6a8 100%);
+  border-color: var(--border);
+}
+
+/* ---------- Inputs: forms nobody will read ---------- */
+[data-aesthetic="liminal"] input[type="text"],
+[data-aesthetic="liminal"] input[type="number"],
+[data-aesthetic="liminal"] input[type="date"],
+[data-aesthetic="liminal"] input[type="time"],
+[data-aesthetic="liminal"] select,
+[data-aesthetic="liminal"] textarea,
+[data-aesthetic="liminal"] .note-editor {
+  background: #fbf8e6;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  box-shadow: inset 0 2px 4px rgba(90, 78, 30, 0.22);
+}
+[data-aesthetic="liminal"] input::placeholder,
+[data-aesthetic="liminal"] textarea::placeholder { color: var(--text-faint); }
+[data-aesthetic="liminal"] input:focus,
+[data-aesthetic="liminal"] select:focus,
+[data-aesthetic="liminal"] textarea:focus {
+  outline-color: var(--accent);
+  box-shadow:
+    inset 0 2px 4px rgba(90, 78, 30, 0.22),
+    0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+/* ---------- Reduced motion ----------
+   The parallax is stopped inside fx.ts (it never starts the rAF loop). The
+   flicker has to be stopped here AND pinned to full opacity, or the far room
+   freezes at whatever step it happened to be on — which could be the dark one. */
+@media (prefers-reduced-motion: reduce) {
+  [data-aesthetic="liminal"] body::after { animation: none; opacity: 1; }
+}

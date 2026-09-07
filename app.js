@@ -211,6 +211,15 @@ const AESTHETIC_ACCENTS = {
       resetBorder: '#f4ecff', resetBg: '#281351', resetText: '#f4ecff',
     },
   },
+  // Liminal's accent is the colour of the tube behind the diffuser — it tints the trim, the
+  // panel glow and the primary controls, and deliberately leaves the yellow walls alone.
+  liminal: {
+    sodium: { label: 'Sodium',      value: '#d98b21' },
+    dead:   { label: 'Dead Green',  value: '#8a9a33' },
+    exit:   { label: 'Exit Sign',   value: '#c0392b' },
+    cool:   { label: 'Cool White',  value: '#7fa6b5' },
+    black:  { label: 'Blacklight',  value: '#7c5cc4' },
+  },
   runic: {
     rune:   { label: 'Rune Green',  value: '#4fe08c' },
     ember:  { label: 'Forge Ember', value: '#ff8c3a' },
@@ -288,6 +297,9 @@ const AESTHETICS = {
   // --rn-px/--rn-py so theme.css can parallax the sword. The sword still hangs there without
   // it — see aesthetics/runic/fx.ts.
   runic:        { label: 'Runic',         desc: 'Elder Futhark carved into a slate wall and waking rune by rune — oak panels, silver filigree, and a rune-lit blade in the dark.', group: 'Maximalist', external: true, fx: true },
+  // Third ambient FX module. fx.js writes one offset pair, --lm-px/--lm-py, and each of the
+  // four wall planes multiplies it by its own depth fraction — see aesthetics/liminal/fx.ts.
+  liminal:      { label: 'Liminal',       desc: 'You have been here before. Mono-yellow wallpaper down four doorways, lit ceiling panels, and one fluorescent that keeps going.', group: 'Maximalist', external: true, fx: true },
 };
 const AESTHETIC_GROUP_ORDER = ['Maximalist', 'Vibrant', 'Contrast', 'Light'];
 // Which groups are expanded in the settings panel right now — session-only (not persisted),
