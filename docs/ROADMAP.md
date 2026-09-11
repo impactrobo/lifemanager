@@ -62,9 +62,10 @@ before starting any of these.
 - **Health & Diet:** a weight-trend trailing average (the current chart is raw logged points),
   and a way to log incidental cardio calories from a wearable import rather than typing them in.
 - **Budget:** multi-month or year-over-year trend view (currently one month at a time via the
-  cycle arrows, with no rollup); a "goal" amount per savings-flagged recurring charge (e.g. "Roth
-  IRA — $250/mo toward a $7,000/yr cap") to show progress against the cap, not just the flat
-  monthly figure.
+  cycle arrows, with no rollup); a longer-horizon "cap" amount per savings-flagged recurring
+  charge (e.g. "Roth IRA — $250/mo toward a $7,000/yr cap") to show progress against a multi-month
+  target, distinct from the monthly contributed/planned fill the budget bar already shows (see
+  "Budget: savings/investment goal-progress fill" in Recently Shipped).
 - **Schedule:** a way to see the week at a glance across multiple named schedules, not just one
   active schedule's daily anchors + a plain calendar.
 - **Web Push reminders — client side shipped 2026-09-10, backend still to deploy.** Settings has
@@ -269,6 +270,19 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Budget: savings/investment goal-progress fill.** The isSavings recurring-charge flag already
+  reserved a slice of the budget bar (`.budget-bar-savings`); it now reads as an actual goal
+  rather than a flat "this counts as spent" block. That slice renders as a light diagonal-hatch
+  outline for the full planned allocation (every active isSavings charge, summed), with a solid
+  `--savings`-colored fill drawn on top that only grows as each charge gets checked off
+  "contributed" for the month, via a new **SAVINGS PROGRESS** panel on the Budget overview screen
+  (one row per active isSavings charge with a checkbox, right under the bar). New state:
+  `STATE.budget.savingsCompletions`, keyed `'YYYY-MM'` -> array of contributed charge ids
+  (`toggleSavingsCompletion()`, `budgetRecurringSavingsCompletedTotal()`); merged/migrated in
+  `loadState()` and the one-time init block like every other budget sub-field. The legend and bar
+  tooltip both show `completed / planned` rather than just the planned total. Covered by the new
+  `tests/test_budget_savings_progress.js` (helper math, the checkbox actually mutating state, the
+  DOM fill width, persistence across reload, unchecking removing the fill).
 - **Cartomancer aesthetic — 23 aesthetics.** Trading-card-frame styling: thick colored card
   border + rounded corners + a "rules text box" surface tint on every panel, section titles as a
   filled "typeline bar", a generic masked mana-pip glyph (`mana-pip.svg`, own art — not any

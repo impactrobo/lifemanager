@@ -1177,6 +1177,10 @@ function defaultLifeState() {
 // ...}], one-off entries logged as they happen rather than a fixed monthly figure. savingsPlan
 // is a simple two-way planning figure (see updateSavingsPlan()) — `mode` says which of
 // amount/percent was last typed; the other is always derived live from recurringIncomeMonthlyTotal().
+// savingsCompletions is also keyed by 'YYYY-MM', each value a flat array of isSavings recurring
+// charge ids the user has actually confirmed contributing that month — this is what lets the
+// savings slice of the budget bar fill in progressively (see renderBudgetBar()) instead of just
+// showing as a flat reserved block the moment a charge is flagged isSavings.
 function defaultBudgetState() {
   return {
     recurringIncome: [], // [{id, name, amount, frequency: 'weekly'|'biweekly'|'monthly', active}]
@@ -1184,6 +1188,7 @@ function defaultBudgetState() {
     incomeLog: {},
     incidentals: {},
     savingsPlan: { mode: 'percent', value: null },
+    savingsCompletions: {},
   };
 }
 // Weekly/bi-weekly amounts convert to a monthly-equivalent for budgeting math (52 weeks or 26
@@ -1505,6 +1510,7 @@ function loadState() {
         recurringIncome: parsed.budget.recurringIncome || [],
         incomeLog: parsed.budget.incomeLog || {},
         incidentals: parsed.budget.incidentals || {},
+        savingsCompletions: parsed.budget.savingsCompletions || {},
       }) : base.budget,
     });
   } catch (e) {
@@ -1971,6 +1977,7 @@ function updateAllTMs() {
     STATE.settings.budgetIncomeMigrated = true;
   }
   if (!STATE.budget.savingsPlan || typeof STATE.budget.savingsPlan !== 'object') STATE.budget.savingsPlan = { mode: 'percent', value: null };
+  if (!STATE.budget.savingsCompletions || typeof STATE.budget.savingsCompletions !== 'object') STATE.budget.savingsCompletions = {};
 
   // ---- Notes tag migration (one-time) ----
   // Folds the five former built-in tags (idea/todo/win/issue/reflect) into customNoteTags so
@@ -8359,6 +8366,32 @@ function budgetRecurringExpenseTotal() {
 function budgetRecurringSavingsTotal() {
   return STATE.budget.recurring.filter(r => r.active && r.isSavings).reduce((s, r) => s + (Number(r.amount) || 0), 0);
 }
+// A savings-flagged recurring charge reserves its slice every month automatically, but it isn't
+// necessarily actually *done* yet — savingsCompletions tracks, per month, which of those charges
+// the user has confirmed contributing, so the budget bar can show a lighter "planned" outline
+// that fills solid as each one gets checked off, rather than treating the whole slice as complete
+// the instant a charge is flagged isSavings.
+function budgetSavingsCompletionIds(key) {
+  return STATE.budget.savingsCompletions[key] || [];
+}
+function isSavingsCompletedForMonth(key, id) {
+  return budgetSavingsCompletionIds(key).includes(id);
+}
+function budgetRecurringSavingsCompletedTotal(key) {
+  const doneIds = budgetSavingsCompletionIds(key);
+  return STATE.budget.recurring
+    .filter(r => r.active && r.isSavings && doneIds.includes(r.id))
+    .reduce((s, r) => s + (Number(r.amount) || 0), 0);
+}
+function toggleSavingsCompletion(key, id, checked) {
+  if (!STATE.budget.savingsCompletions[key]) STATE.budget.savingsCompletions[key] = [];
+  const arr = STATE.budget.savingsCompletions[key];
+  const idx = arr.indexOf(id);
+  if (checked && idx === -1) arr.push(id);
+  else if (!checked && idx !== -1) arr.splice(idx, 1);
+  saveState();
+  render();
+}
 // Every active recurring income source converted to its monthly-equivalent and summed — the
 // steady figure the budget bar starts from each month, replacing the old flat monthlyIncome.
 function recurringIncomeMonthlyTotal() {
@@ -8600,20 +8633,48 @@ function renderRecurringRow(r) {
   </div>`;
 }
 
+// ---- Savings progress: one row per active isSavings recurring charge, checked off once
+// contributed for the current month. This is what actually moves budgetRecurringSavingsCompletedTotal()
+// and, in turn, the solid fill layer on the budget bar's savings slice.
+function renderSavingsProgressSection(key) {
+  const savingsCharges = STATE.budget.recurring.filter(r => r.active && r.isSavings);
+  if (!savingsCharges.length) return '';
+  const completedTotal = budgetRecurringSavingsCompletedTotal(key);
+  const plannedTotal = budgetRecurringSavingsTotal();
+  return `
+    <div class="row" style="margin:18px 0 8px;">
+      <div class="subtle-label" style="margin-bottom:0;">SAVINGS PROGRESS</div>
+      <span class="mono" style="font-size:13px; font-weight:700; color:var(--savings);">${fmtMoney(completedTotal)} / ${fmtMoney(plannedTotal)}</span>
+    </div>
+    <div class="panel">
+      ${savingsCharges.map(r => `<label style="display:flex; align-items:center; gap:8px; font-size:13px; padding:5px 0; cursor:pointer;">
+        <input type="checkbox" ${isSavingsCompletedForMonth(key, r.id) ? 'checked' : ''} onchange="toggleSavingsCompletion('${key}','${r.id}', this.checked)">
+        <span style="flex:1;">${escapeHtml(r.name)}</span>
+        <span class="mono" style="color:var(--text-dim);">${fmtMoney(r.amount)}</span>
+      </label>`).join('')}
+      <div style="font-size:11px; color:var(--text-faint); margin-top:6px;">Check off each contribution as you actually make it — the savings slice of the bar above fills in to match.</div>
+    </div>`;
+}
 // ---- The budget bar: income width, a red line marking the recurring-reserved slice, and a
 // growing fill for incidentals logged so far. Percentages are clamped purely for the visual
 // (a maxed-out bar), while the remaining/over-budget text always uses the real dollar totals.
+// The savings slice is itself two-layer: a light outline for the full planned allocation
+// (every active isSavings charge) with a solid fill on top that grows as those charges get
+// checked off as contributed for the month (see budgetRecurringSavingsCompletedTotal() /
+// toggleSavingsCompletion()) — a real goal-progress fill, not just a flat reserved block.
 function renderBudgetBar(key) {
   const totalIncome = budgetTotalIncome(key);
   const recurringTotal = budgetRecurringTotal();
   const recurringExpenseTotal = budgetRecurringExpenseTotal();
   const recurringSavingsTotal = budgetRecurringSavingsTotal();
+  const recurringSavingsCompleted = budgetRecurringSavingsCompletedTotal(key);
   const incidentalsTotal = budgetIncidentalsTotal(key);
   const remaining = totalIncome - recurringTotal - incidentalsTotal;
   const overBudget = remaining < 0;
   const safeIncome = totalIncome > 0 ? totalIncome : 1;
   const recurringExpensePct = totalIncome > 0 ? Math.max(0, Math.min(100, recurringExpenseTotal / safeIncome * 100)) : 0;
   const recurringSavingsPct = totalIncome > 0 ? Math.max(0, Math.min(100 - recurringExpensePct, recurringSavingsTotal / safeIncome * 100)) : 0;
+  const recurringSavingsFillPct = recurringSavingsTotal > 0 ? Math.max(0, Math.min(recurringSavingsPct, recurringSavingsCompleted / safeIncome * 100)) : 0;
   const recurringPct = recurringExpensePct + recurringSavingsPct;
   const incidentalsPct = totalIncome > 0 ? Math.max(0, Math.min(100 - recurringPct, incidentalsTotal / safeIncome * 100)) : 0;
   const baseIncome = recurringIncomeMonthlyTotal();
@@ -8628,12 +8689,13 @@ function renderBudgetBar(key) {
     <div class="budget-bar ${overBudget ? 'budget-bar-over' : ''}">
       <div class="budget-bar-recurring" style="width:${recurringExpensePct}%;"></div>
       <div class="budget-bar-savings" style="left:${recurringExpensePct}%; width:${recurringSavingsPct}%;"></div>
+      ${recurringSavingsFillPct > 0 ? `<div class="budget-bar-savings-fill" style="left:${recurringExpensePct}%; width:${recurringSavingsFillPct}%;" title="Contributed so far: ${fmtMoney(recurringSavingsCompleted)} of ${fmtMoney(recurringSavingsTotal)}"></div>` : ''}
       <div class="budget-bar-incidentals" style="left:${recurringPct}%; width:${incidentalsPct}%;"></div>
       ${recurringPct > 0 ? `<div class="budget-bar-line" style="left:${recurringPct}%;" title="Recurring charges: ${fmtMoney(recurringTotal)}"></div>` : ''}
     </div>
     <div class="budget-bar-legend">
       <span><i class="budget-dot" style="background:var(--bad);"></i>Recurring <b>${fmtMoney(recurringExpenseTotal)}</b></span>
-      ${recurringSavingsTotal > 0 ? `<span><i class="budget-dot" style="background:var(--savings);"></i>Savings/Invest <b>${fmtMoney(recurringSavingsTotal)}</b></span>` : ''}
+      ${recurringSavingsTotal > 0 ? `<span><i class="budget-dot" style="background:var(--savings);"></i>Savings/Invest <b>${fmtMoney(recurringSavingsCompleted)} / ${fmtMoney(recurringSavingsTotal)}</b></span>` : ''}
       <span><i class="budget-dot" style="background:var(--accent);"></i>Incidentals <b>${fmtMoney(incidentalsTotal)}</b></span>
       <span>${overBudget ? `<b style="color:var(--bad);">${fmtMoney(Math.abs(remaining))} over budget</b>` : `Remaining <b style="color:var(--good);">${fmtMoney(remaining)}</b>`}</span>
     </div>`;
@@ -8668,6 +8730,8 @@ function renderBudgetHome() {
 
     <div class="subtle-label" style="margin:18px 0 8px;">THIS MONTH'S FINANCIALS</div>
     <div class="panel">${renderBudgetBar(key)}</div>
+
+    ${renderSavingsProgressSection(key)}
 
     <div class="subtle-label" style="margin:18px 0 8px;">ADD AN INCIDENTAL</div>
     <div class="panel">${renderBudgetIncidentalForm()}</div>

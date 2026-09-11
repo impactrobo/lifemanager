@@ -359,7 +359,11 @@ select { -webkit-appearance: none; appearance: none; background-image: linear-gr
 /* ---------- Budgeting: income bar, recurring-reserved line, incidentals fill ---------- */
 .budget-bar { position: relative; height: 34px; border-radius: 10px; background: var(--surface2); border: 1px solid var(--border-soft); overflow: hidden; }
 .budget-bar-recurring { position: absolute; top: 0; bottom: 0; left: 0; background: var(--bad); opacity: 0.38; }
-.budget-bar-savings { position: absolute; top: 0; bottom: 0; background: var(--savings); opacity: 0.55; }
+.budget-bar-savings { position: absolute; top: 0; bottom: 0; background: repeating-linear-gradient(135deg, var(--savings) 0, var(--savings) 4px, transparent 4px, transparent 8px); opacity: 0.4; }
+/* Solid fill drawn on top of .budget-bar-savings' hatched "planned" outline, growing as
+   isSavings recurring charges get checked off contributed for the month — see
+   toggleSavingsCompletion() / budgetRecurringSavingsCompletedTotal(). */
+.budget-bar-savings-fill { position: absolute; top: 0; bottom: 0; background: var(--savings); box-shadow: 0 0 6px 0 var(--savings); transition: width 0.3s ease; }
 .budget-bar-incidentals { position: absolute; top: 0; bottom: 0; background: var(--accent); }
 .budget-bar-line { position: absolute; top: -2px; bottom: -2px; width: 3px; background: var(--bad); }
 .budget-bar-over { box-shadow: 0 0 0 2px var(--bad) inset; }

@@ -184,6 +184,8 @@ interface BudgetState {
   incidentals: Record<string, Array<{ id: string; date: string; amount: number; category: string; note: string }>>;
   /** mode: 'percent' | 'amount' — which field the user last typed */
   savingsPlan: { mode: string; value: number | null };
+  /** 'YYYY-MM' -> ids of isSavings recurring charges marked contributed for that month */
+  savingsCompletions: Record<string, string[]>;
 }
 
 interface ScheduleAnchor { id: string; start: string; end: string; label: string; detail?: string }
