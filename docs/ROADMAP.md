@@ -255,6 +255,18 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Home edit mode: boxes no longer act on a plain tap** — `renderHomeSectionsGrid()` already
+  stripped the navigation `onclick` out of a section tile's edit-mode markup, but a box (RIGHT
+  NOW/WORKOUTS/Reminders/...) kept its full normal markup — including onclick — underneath the
+  drag wrapper. A tap with no real drag motion never triggers a reorder, but the browser still
+  fired a completely normal click into whatever that box's own handler did (jump to Schedule,
+  toggle an anchor done, fire a LOG button) — easy to trigger by accident while trying to
+  drag-reorder. One delegated, capturing click listener on `#app` (added once — the element
+  itself survives every render, only its contents get replaced) now kills any click landing
+  inside `.home-edit-box` while `HOME_EDIT_MODE` is true, excluding the hide (X) button so that
+  keeps working. Also confirmed (already implemented, just verified): the edit button itself
+  gets `.home-edit-toggle-active` (accent border/background/text) while active — no styling pass
+  requested beyond that yet. `test_home.js` extended to cover both with real `.click()`s.
 - **Diet: expanded food database + micronutrients + custom foods (2026-09-11)** — `FOOD_DB`
   grew from 83 to 122 foods (steered by the person: more meat/chicken/poultry/fish varieties,
   more veggies, several cheeses, and a new "Sauces & Condiments" `MEAL_CATEGORIES` entry —

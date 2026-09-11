@@ -8064,6 +8064,25 @@ function onHomeDragEnd(evt) {
   if (!moved || !currentTarget) return;
   reorderHomeList(listKey, id, currentTarget.getAttribute('data-home-drag-id'));
 }
+// Edit mode strips the navigation onclick out of the *non-edit* section-tile markup entirely
+// (see renderHomeSectionsGrid()), but a box (RIGHT NOW / WORKOUTS / Reminders / ...) keeps its
+// full normal markup underneath the drag wrapper, onclick attributes included. A plain tap with
+// no real drag motion never calls reorderHomeList() (see `moved` above), but the browser still
+// fires a completely normal click afterward that bubbles straight into whatever that box's own
+// onclick does — jump to Schedule, toggle an anchor done, fire a LOG button — right when someone
+// is trying to reorder/hide things, not act on them. One delegated, capturing listener on #app
+// (which survives every render — only its *contents* get replaced, see the render() docs) kills
+// that click before it reaches any inline onclick on a box's own descendants, while leaving drag
+// (pointerdown-based, untouched here) and the hide (X) button working — same exclusion
+// startHomeDrag() above already makes for the X, so it stays consistent with that.
+document.getElementById('app').addEventListener('click', (e) => {
+  if (!HOME_EDIT_MODE) return;
+  const target = /** @type {any} */ (e.target);
+  if (!target.closest('.home-edit-box')) return;
+  if (target.closest('.home-edit-x')) return;
+  e.stopPropagation();
+  e.preventDefault();
+}, true);
 function renderHome() {
   const now = new Date();
   const dateStr = now.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
