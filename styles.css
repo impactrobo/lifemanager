@@ -596,6 +596,10 @@ select { -webkit-appearance: none; appearance: none; background-image: linear-gr
 }
 .aesthetic-group-header svg { width: 14px; height: 14px; }
 .aesthetic-group-list { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+/* The accent/palette picker, inlined right after the active card in its group instead of one
+   fixed spot at the bottom of Settings — see aestheticGroupCardsHtml() in app.js. Indented +
+   accent-bordered so it reads as attached to the card above it, not just another list item. */
+.accent-picker-inline { background: var(--surface); border: 1px solid var(--accent); border-radius: var(--radius); padding: 12px; margin-left: 14px; }
 .disabled-block { opacity: 0.35; pointer-events: none; }
 
 /* ---------- Aesthetic: Retro Terminal — phosphor-green CLI on near-black, scanlines, sharp corners ---------- */

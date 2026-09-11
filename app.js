@@ -441,9 +441,11 @@ const AESTHETICS = {
   hedge:        { label: 'Hedge',         desc: 'Gotta go fast — a gold ring turning over a drift of out-of-focus lights, menu bars scanned with stripes inside a bright inner border, and hard italic headers. Pick your character below and the whole scene changes colour.', group: 'Maximalist', external: true, fx: true },
 };
 const AESTHETIC_GROUP_ORDER = ['Maximalist', 'Vibrant', 'Contrast', 'Light'];
-// Which groups are expanded in the settings panel right now — session-only (not persisted),
-// resets to "everything open" on reload so a chosen aesthetic is never accidentally hidden.
-let AESTHETIC_GROUPS_OPEN = new Set(AESTHETIC_GROUP_ORDER);
+// Which groups are expanded in the settings panel right now — session-only (not persisted).
+// Starts (and is reset by openSetup(), below) all-closed: with 20+ aesthetics across four
+// groups, "everything open" meant a long scroll past every card before reaching anything else in
+// Settings. Collapsed by default trades that for one tap to open whichever group you want.
+let AESTHETIC_GROUPS_OPEN = new Set();
 function currentAesthetic() {
   const key = STATE.settings && STATE.settings.aesthetic;
   // Falls back to the default (Cyberpunk Neon) if the stored choice is a retired aesthetic (e.g.
@@ -531,6 +533,24 @@ function toggleAestheticGroup(name) {
   if (AESTHETIC_GROUPS_OPEN.has(name)) AESTHETIC_GROUPS_OPEN.delete(name);
   else AESTHETIC_GROUPS_OPEN.add(name);
   renderAestheticOptions();
+  // The group just opened (or closed) may be the one holding the active aesthetic's inline
+  // accent picker (see aestheticGroupCardsHtml()) — repopulate it now that its container has
+  // just been freshly created (or discarded). renderAccentSwatches() no-ops safely if the
+  // #accentSwatchGrid it looks for isn't currently in the DOM (group collapsed).
+  renderAccentSwatches();
+}
+// Cards for one group, with the ACCENT COLOR / MAIN COLOR / etc. picker inlined directly after
+// whichever card is the currently active aesthetic — instead of one picker in a fixed spot at
+// the bottom of the whole screen, it now travels with the selection so there's no separate
+// scroll down to it. See renderAccentSwatches() for what fills the (initially empty) picker ids.
+function aestheticGroupCardsHtml(keys) {
+  const active = currentAesthetic();
+  return keys.map(key => aestheticCardHtml(key) + (key === active ? `
+    <div class="accent-picker-inline">
+      <div class="subtle-label" id="accentColorLabel" style="margin-bottom:6px;">ACCENT COLOR</div>
+      <div id="accentColorNote" style="font-size:11px; color:var(--text-faint); margin-bottom:10px;"></div>
+      <div class="accent-swatch-grid" id="accentSwatchGrid"></div>
+    </div>` : '')).join('');
 }
 function renderAestheticOptions() {
   const wrap = document.getElementById('aestheticOptions');
@@ -544,7 +564,7 @@ function renderAestheticOptions() {
       <button class="aesthetic-group-header" onclick="toggleAestheticGroup('${groupName}')">
         <span>${groupName}</span>${open ? icon('up') : icon('down')}
       </button>
-      ${open ? `<div class="aesthetic-group-list">${keys.map(aestheticCardHtml).join('')}</div>` : ''}
+      ${open ? `<div class="aesthetic-group-list">${aestheticGroupCardsHtml(keys)}</div>` : ''}
     </div>`;
   }
   wrap.innerHTML = html;
@@ -2307,7 +2327,12 @@ function switchTab(tab) {
   pushNavHistory();
   CURRENT_TAB = tab;
   if (tab === 'train') { TRAIN_VIEW = { mode: 'grid', workoutId: null }; TRAIN_TOP_SUBTAB = 'workouts'; }
-  if (tab === 'notes') { NOTES_SUBTAB = 'write'; } // Write is the default landing page for Notes
+  if (tab === 'notes') {
+    // Same stale-edit guard as setNotesSubtab() — a fresh visit to Notes (e.g. via the bottom tab
+    // bar) shouldn't resume an edit left in progress from before you navigated away.
+    if (NOTE_EDIT_ID) { NOTE_EDIT_ID = null; NOTE_DRAFT_PHOTOS = []; NOTES_SELECTED_TAG = 'general'; }
+    NOTES_SUBTAB = 'write'; // Write is the default landing page for Notes
+  }
   if (tab === 'schedule') { SCHEDULE_SUBTAB = 'today'; }
   if (tab === 'budget') { BUDGET_SUBTAB = 'overview'; }
   render();
@@ -2324,6 +2349,7 @@ function openSetup(context) {
   pushNavHistory();
   SETUP_CONTEXT = context;
   CURRENT_TAB = 'setup';
+  AESTHETIC_GROUPS_OPEN.clear(); // every fresh visit to Settings starts with all groups collapsed — see the AESTHETIC_GROUPS_OPEN declaration
   render();
 }
 // Back/Forward mirror a browser's: goBack() undoes the last switchTab()/openSetup() transition
@@ -3842,9 +3868,6 @@ function renderHomeSetup() {
     </div>
     <div class="subtle-label" style="margin:18px 0 10px;">AESTHETIC</div>
     <div class="stack" id="aestheticOptions"></div>
-    <div class="subtle-label" id="accentColorLabel" style="margin:20px 0 6px;">ACCENT COLOR</div>
-    <div id="accentColorNote" style="font-size:11px; color:var(--text-faint); margin-bottom:10px;"></div>
-    <div class="accent-swatch-grid" id="accentSwatchGrid"></div>
     <div class="subtle-label" style="margin:22px 0 10px;">INTERFACE</div>
     <div class="panel">
       <button class="btn btn-block" onclick="resetUI()">RESET UI</button>
@@ -6936,16 +6959,30 @@ function getNoteBodyHtml(n) {
   if (n.bodyHtml !== undefined) return n.bodyHtml;
   return escapeHtml(n.text || '').replace(/\n/g, '<br>'); // legacy plain-text notes
 }
-let NOTES_SELECTED_TAG = 'general';
+let NOTES_SELECTED_TAG = 'general'; // default tag for a new note; saveNote() resets this back to 'general' after each save
 let NOTES_SORT = 'date'; // 'date' | 'tag'
 let NOTES_FILTER_TAG = null; // null = all tags
 let NOTE_DRAFT_PHOTOS = [];
+// Id of the note being edited via editNote() (see the pencil button on each VIEW ALL card), or
+// null when Write is composing a brand new note. saveNote() branches on this; renderNotesWrite()
+// pre-fills from it.
+let NOTE_EDIT_ID = null;
 // Key of the tag whose color palette is currently expanded in Notes Setup (renderNoteTagSetupRow),
 // or null when every row is collapsed. Only one row's palette is open at a time; clicking a row's
 // color dot toggles it via toggleNoteTagPalette, and picking a color or hitting CANCEL closes it.
 let NOTE_TAG_PALETTE_OPEN = null;
 const MAX_NOTE_PHOTOS = 4;
-function setNotesSubtab(t) { NOTES_SUBTAB = t; render(); }
+function setNotesSubtab(t) {
+  // Navigating into Write from somewhere else while an edit was left in progress (e.g. pencil'd a
+  // note, then tapped VIEW ALL instead of CANCEL EDIT, then tapped WRITE again) should land on a
+  // blank compose, not silently resume the stale edit. Only fires on an actual transition, so
+  // re-tapping the already-active WRITE tab never discards an in-progress NEW note's draft.
+  if (t === 'write' && NOTES_SUBTAB !== 'write' && NOTE_EDIT_ID) {
+    NOTE_EDIT_ID = null; NOTE_DRAFT_PHOTOS = []; NOTES_SELECTED_TAG = 'general';
+  }
+  NOTES_SUBTAB = t;
+  render();
+}
 function renderNotes() {
   if (NOTES_SUBTAB === 'setup') return renderNotesSetup(); // already a full .screen with its own header — don't double-wrap
   return `<div class="screen">
@@ -6954,12 +6991,16 @@ function renderNotes() {
   </div>`;
 }
 function renderNotesWrite() {
+  const editing = NOTE_EDIT_ID ? STATE.notes.find(n => n.id === NOTE_EDIT_ID) : null;
   return `
-    <div class="subtle-label" style="margin:14px 0 8px;">NEW NOTE</div>
+    <div class="row" style="margin:14px 0 8px; align-items:center;">
+      <div class="subtle-label" style="margin-bottom:0;">${editing ? 'EDIT NOTE' : 'NEW NOTE'}</div>
+      ${editing ? `<button class="btn btn-ghost btn-sm" onclick="cancelNoteEdit()">CANCEL EDIT</button>` : ''}
+    </div>
     <div class="panel">
       <label class="field" style="margin-bottom:12px;">
         <span class="lbl">Title (optional)</span>
-        <input type="text" id="noteTitle" placeholder="Give it a title...">
+        <input type="text" id="noteTitle" placeholder="Give it a title..." value="${editing ? escapeHtml(editing.title || '') : ''}">
       </label>
       <div class="lbl" style="margin-bottom:6px;">Note</div>
       <div class="rt-toolbar">
@@ -6969,7 +7010,7 @@ function renderNotesWrite() {
         <button type="button" class="rt-btn" onmousedown="event.preventDefault()" onclick="execNoteCmd('insertUnorderedList')" title="Bulleted list">&bull;&nbsp;List</button>
         <button type="button" class="rt-btn" onmousedown="event.preventDefault()" onclick="execNoteCmd('insertOrderedList')" title="Numbered list">1.&nbsp;List</button>
       </div>
-      <div id="noteBody" class="note-editor rich-text" contenteditable="true" data-placeholder="Write it down..."></div>
+      <div id="noteBody" class="note-editor rich-text" contenteditable="true" data-placeholder="Write it down...">${editing ? getNoteBodyHtml(editing) : ''}</div>
     </div>
     <div class="subtle-label" style="margin:16px 0 8px;">PHOTOS</div>
     <div class="photo-thumb-row" id="notePhotoRow"></div>
@@ -6977,7 +7018,7 @@ function renderNotesWrite() {
     <input type="file" id="notePhotoInput" accept="image/*" multiple style="display:none" onchange="handleNotePhotoInput(event)">
     <div class="subtle-label" style="margin:16px 0 10px;">TAG</div>
     <div class="accent-swatch-grid" id="noteTagGrid"></div>
-    <button class="btn btn-primary btn-block" style="margin-top:20px;" onclick="saveNote()">SAVE NOTE</button>
+    <button class="btn btn-primary btn-block" style="margin-top:20px;" onclick="saveNote()">${editing ? 'UPDATE NOTE' : 'SAVE NOTE'}</button>
   `;
 }
 function execNoteCmd(cmd) {
@@ -7036,10 +7077,40 @@ function saveNote() {
   const probe = document.createElement('div');
   probe.innerHTML = bodyHtml;
   if (!probe.textContent.trim() && NOTE_DRAFT_PHOTOS.length === 0) { showToast('Write something or add a photo first'); return; }
-  STATE.notes.push({ id: uid(), date: todayStr(), createdAt: Date.now(), title, bodyHtml, tag: NOTES_SELECTED_TAG, photos: NOTE_DRAFT_PHOTOS.slice() });
+  const editing = NOTE_EDIT_ID ? STATE.notes.find(n => n.id === NOTE_EDIT_ID) : null;
+  if (editing) {
+    editing.title = title;
+    editing.bodyHtml = bodyHtml;
+    editing.tag = NOTES_SELECTED_TAG;
+    editing.photos = NOTE_DRAFT_PHOTOS.slice();
+    delete editing.text; // clear the legacy plain-text field if this was an old pre-rich-text note — bodyHtml now takes over for good, see getNoteBodyHtml()
+  } else {
+    STATE.notes.push({ id: uid(), date: todayStr(), createdAt: Date.now(), title, bodyHtml, tag: NOTES_SELECTED_TAG, photos: NOTE_DRAFT_PHOTOS.slice() });
+  }
   NOTE_DRAFT_PHOTOS = [];
+  NOTES_SELECTED_TAG = 'general'; // reset so the NEXT note starts back at the default tag rather than staying stuck on whatever was picked here
+  NOTE_EDIT_ID = null;
+  if (editing) NOTES_SUBTAB = 'view'; // back to the list after updating, instead of landing in a blank compose form
   saveState();
-  showToast('Note saved');
+  showToast(editing ? 'Note updated' : 'Note saved');
+  render();
+}
+// Opens an existing note in the Write editor, pre-filled — same editor/UI as composing new, just
+// branching saveNote() to update in place. See the pencil button on each VIEW ALL card.
+function editNote(id) {
+  const note = STATE.notes.find(n => n.id === id);
+  if (!note) return;
+  NOTE_EDIT_ID = id;
+  NOTES_SELECTED_TAG = note.tag || 'general';
+  NOTE_DRAFT_PHOTOS = (note.photos || []).slice();
+  NOTES_SUBTAB = 'write';
+  render();
+}
+function cancelNoteEdit() {
+  NOTE_EDIT_ID = null;
+  NOTE_DRAFT_PHOTOS = [];
+  NOTES_SELECTED_TAG = 'general';
+  NOTES_SUBTAB = 'view';
   render();
 }
 function deleteNote(id) {
@@ -7110,7 +7181,10 @@ function renderNoteCard(n) {
         <span class="note-tag-label" style="color:${c}; border-color:${c};">${escapeHtml(label).toUpperCase()}</span>
         <span class="mono" style="font-size:11px; color:var(--text-faint);">${n.date}</span>
       </div>
-      <button class="icon-btn" onclick="deleteNote('${n.id}')">${icon('close')}</button>
+      <div style="display:flex; gap:4px;">
+        <button class="icon-btn" onclick="editNote('${n.id}')">${icon('pencil')}</button>
+        <button class="icon-btn" onclick="deleteNote('${n.id}')">${icon('close')}</button>
+      </div>
     </div>
     ${n.title ? `<div style="font-weight:700; font-size:14px; margin-bottom:4px;">${escapeHtml(n.title)}</div>` : ''}
     <div class="note-body rich-text" style="font-size:13px; color:var(--text);">${safeHtml}</div>

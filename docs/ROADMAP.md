@@ -255,6 +255,21 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Settings: aesthetic groups collapse by default; accent picker moved inline** — every visit to
+  Settings now opens with all four groups (Maximalist/Vibrant/Contrast/Light) collapsed
+  (`AESTHETIC_GROUPS_OPEN.clear()` in `openSetup()`), instead of everything open — with 22
+  aesthetics that was a long scroll before reaching anything else on the page. The ACCENT COLOR /
+  MAIN COLOR / GUARDIAN / etc. picker no longer lives in one fixed section at the bottom of
+  Settings either — it's now inlined (`.accent-picker-inline`) directly after whichever card is
+  the active aesthetic, inside that card's own group, so picking a color never means scrolling
+  away from the theme you're choosing it for.
+- **Notes: edit via a pencil button, and General is a real default again** — VIEW ALL cards get a
+  pencil button (left of the existing X) that opens the same Write editor pre-filled
+  (`editNote()`), branching `saveNote()` to update in place instead of adding a new note; CANCEL
+  EDIT discards changes. Guarded against resuming a stale edit if you navigate away without
+  cancelling (`switchTab()`/`setNotesSubtab()` both clear it on a fresh transition into Write).
+  Separately, `NOTES_SELECTED_TAG` used to stay stuck on whatever tag you last picked instead of
+  defaulting back to General for the next note — `saveNote()` now resets it after every save.
 - **Notes: full-text search on VIEW ALL** — a live search box (title + body, HTML stripped,
   case-insensitive) sits above the existing tag filter/sort controls and combines with both.
   `onNotesSearchInput()` replaces only `#notesResultsList`'s innerHTML on every keystroke rather
