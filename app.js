@@ -28,7 +28,9 @@ const ICONS = {
   repeat: `<svg class="icon-svg" viewBox="0 0 24 24" width="1em" height="1em" aria-hidden="true"><path d="M4 11a8 8 0 0 1 13.9-5.4M20 13a8 8 0 0 1-13.9 5.4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M17.5 3v3.2h-3.2M6.5 21v-3.2h3.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
   clipboard: `<svg class="icon-svg" viewBox="0 0 24 24" width="1em" height="1em" aria-hidden="true"><rect x="5" y="4.5" width="14" height="17" rx="1.8" fill="var(--accent)" fill-opacity=".12" stroke="var(--accent)" stroke-width="1.6"/><rect x="9" y="3" width="6" height="3.4" rx="1" fill="var(--accent)" stroke="var(--accent)" stroke-width="1.2"/><path d="M8.3 12h7.4M8.3 15.3h7.4M8.3 8.7h4" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"/></svg>`,
   lock: `<svg class="icon-svg" viewBox="0 0 24 24" width="1em" height="1em" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="1.8" fill="var(--accent)" fill-opacity=".16" stroke="var(--accent)" stroke-width="1.6"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" fill="none" stroke="var(--accent)" stroke-width="1.6" stroke-linecap="round"/><circle cx="12" cy="15" r="1.6" fill="var(--accent)"/><path d="M12 16.6v2" stroke="var(--accent)" stroke-width="1.6" stroke-linecap="round"/></svg>`,
-  todayArrow: `<svg class="icon-svg" viewBox="0 0 24 24" width="1em" height="1em" aria-hidden="true"><path d="M10.5 4h3v9.5h4L12 20l-5.5-6.5h4z" fill="var(--accent)"/></svg>`,
+  // Generic maritime anchor glyph — not tied to any aesthetic, stroke="currentColor" so a caller
+  // sets its color inline (used per-schedule-color on Calendar cells, see scheduleColorFor()).
+  anchorMark: `<svg class="icon-svg" viewBox="0 0 24 24" width="1em" height="1em" aria-hidden="true"><circle cx="12" cy="4.5" r="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 6.5V19M8.5 10h7M5 14a7 7 0 0 0 7 7 7 7 0 0 0 7-7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M5 14l1.8-1.3M19 14l-1.8-1.3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`,
   scale: `<svg class="icon-svg" viewBox="0 0 24 24" width="1em" height="1em" aria-hidden="true"><path d="M12 4v15M7.5 19h9" stroke="var(--accent)" stroke-width="1.6" stroke-linecap="round"/><path d="M4.5 6.5h15" stroke="var(--accent)" stroke-width="1.6" stroke-linecap="round"/><circle cx="12" cy="4" r="1.3" fill="var(--accent)"/><path d="M4.5 6.5 2 11.5a2.7 2.7 0 0 0 5 0z" fill="var(--accent)" fill-opacity=".22" stroke="var(--accent)" stroke-width="1.3" stroke-linejoin="round"/><path d="M19.5 6.5 17 11.5a2.7 2.7 0 0 0 5 0z" fill="var(--accent)" fill-opacity=".22" stroke="var(--accent)" stroke-width="1.3" stroke-linejoin="round"/></svg>`,
   drumstick: `<svg class="icon-svg" viewBox="0 0 24 24" width="1em" height="1em" aria-hidden="true"><path d="M9 9.5c-2.6 2.6-3.8 6.7-1.6 8.9s6.3 1 8.9-1.6c2.1-2.1 2.6-4.9 1.1-6.4-.8-.8-1.9-.9-2.9-.6.4-1.2.2-2.5-.7-3.4-1.5-1.5-4-1-6.1 1.1-.6.6-1 1.3-1.3 2z" fill="var(--accent)" fill-opacity=".22" stroke="var(--accent)" stroke-width="1.5" stroke-linejoin="round"/><path d="M8.3 15.7 3.5 20.5" stroke="var(--accent)" stroke-width="1.8" stroke-linecap="round"/><circle cx="4.6" cy="19.4" r="1.3" fill="var(--accent)"/></svg>`,
   ruler: `<svg class="icon-svg" viewBox="0 0 24 24" width="1em" height="1em" aria-hidden="true"><g transform="rotate(45 12 12)"><rect x="3" y="9.5" width="18" height="5" rx="1" fill="var(--accent)" fill-opacity=".16" stroke="var(--accent)" stroke-width="1.4"/><path d="M6 9.5v2.2M9.5 9.5v2.2M13 9.5v2.2M16.5 9.5v2.2" stroke="var(--accent)" stroke-width="1.2" stroke-linecap="round"/></g></svg>`,
@@ -2482,7 +2484,17 @@ function switchTab(tab) {
     if (NOTE_EDIT_ID) { NOTE_EDIT_ID = null; NOTE_DRAFT_PHOTOS = []; NOTES_SELECTED_TAG = 'general'; }
     NOTES_SUBTAB = 'write'; // Write is the default landing page for Notes
   }
-  if (tab === 'schedule') { SCHEDULE_SUBTAB = 'today'; }
+  if (tab === 'schedule') {
+    SCHEDULE_SUBTAB = 'calendar';
+    // A fresh visit to Schedule always lands on today's Day view — same unconditional-today
+    // landing the old dedicated TODAY subtab gave, now that Calendar's Day zoom covers it.
+    // In-tab navigation (Setup <-> Calendar, or browsing to another zoom/date) still isn't
+    // affected by this — only actually leaving and re-entering the Schedule tab resets it.
+    CAL_ZOOM = 'day';
+    CAL_SELECTED_DATE = todayStr();
+    const d = new Date();
+    CAL_MONTH = { year: d.getFullYear(), month: d.getMonth() };
+  }
   if (tab === 'budget') { BUDGET_SUBTAB = 'overview'; }
   render();
 }
@@ -2715,8 +2727,9 @@ function renderTabbar() {
       <button class="${NOTES_SUBTAB==='view'?'active':''}" onclick="setNotesSubtab('view')"><span class="ic">${icon('magnify')}</span>VIEW ALL</button>
       <button class="${NOTES_SUBTAB==='setup'?'active':''}" onclick="setNotesSubtab('setup')"><span class="ic">${icon('setup')}</span>SETUP</button>`;
   } else if (CURRENT_TAB === 'schedule') {
+    // TODAY used to be its own subtab here — folded into Calendar's Day zoom (defaults to today
+    // on every fresh visit, see switchTab()) so the bottom bar has one less button.
     sectionBtns = `
-      <button class="${SCHEDULE_SUBTAB==='today'?'active':''}" onclick="setScheduleSubtab('today')"><span class="ic">${icon('todayArrow')}</span>TODAY</button>
       <button class="${SCHEDULE_SUBTAB==='calendar'?'active':''}" onclick="setScheduleSubtab('calendar')"><span class="ic">${icon('schedule')}</span>CALENDAR</button>
       <button class="${SCHEDULE_SUBTAB==='setup'?'active':''}" onclick="setScheduleSubtab('setup')"><span class="ic">${icon('setup')}</span>SETUP</button>`;
   } else if (CURRENT_TAB === 'budget') {
@@ -8157,9 +8170,11 @@ function renderHome() {
 }
 function renderSchedule() {
   if (SCHEDULE_SUBTAB === 'setup') return renderScheduleSetup(); // already a full .screen with its own header — don't double-wrap
+  // Calendar is the only other subtab now — the old dedicated "Today" subtab was folded into
+  // Calendar's Day zoom (see renderCalDay() / renderDailySchedule()), one less bottom-bar button.
   return `<div class="screen">
     <div class="section-title">Schedule</div>
-    ${SCHEDULE_SUBTAB === 'calendar' ? renderScheduleCalendar() : renderLifeDaily()}
+    ${renderScheduleCalendar()}
   </div>`;
 }
 function setScheduleSubtab(t) { SCHEDULE_SUBTAB = t; render(); }
@@ -8249,6 +8264,9 @@ function calWeekBounds(dateStr) {
 // Year uses its own smaller cal-mini-* grid, Day has no grid at all) ----
 function renderScheduleCalendar() {
   ensureCalState();
+  // The schedule-color legend only makes sense where the grid's own anchor icons need decoding —
+  // Day zoom already names its schedule in text (see renderDailySchedule()), so it's redundant there.
+  const legend = CAL_ZOOM !== 'day' ? renderScheduleColorLegend() : '';
   return `
     <div class="unit-toggle cal-zoom-toggle">
       <button class="${CAL_ZOOM==='year'?'active':''}" onclick="calSetZoom('year')">YEAR</button>
@@ -8256,17 +8274,38 @@ function renderScheduleCalendar() {
       <button class="${CAL_ZOOM==='week'?'active':''}" onclick="calSetZoom('week')">WEEK</button>
       <button class="${CAL_ZOOM==='day'?'active':''}" onclick="calSetZoom('day')">DAY</button>
     </div>
+    ${legend}
     ${CAL_ZOOM === 'year' ? renderCalYear()
       : CAL_ZOOM === 'week' ? renderCalWeek()
       : CAL_ZOOM === 'day' ? renderCalDay()
       : renderCalMonth()}`;
+}
+// A fixed rotating palette assigned by a schedule's position in STATE.life.schedules — same
+// "categorical color, no picker UI" convention as BUDGET_CATEGORIES, deliberately not run through
+// the aesthetic system (it needs to stay stable and mutually distinct across N schedules, which a
+// 1-2 color-per-aesthetic token set can't give it). scheduleColorFor() and the legend below both
+// derive from this same array + index, so they can never drift out of sync with each other.
+const SCHEDULE_COLOR_PALETTE = ['#8FD3FF', '#FFD966', '#9BE8B0', '#FF9ED8', '#C9A6FF', '#FFB37D'];
+function scheduleColorFor(scheduleId) {
+  const idx = STATE.life.schedules.findIndex(s => s.id === scheduleId);
+  return SCHEDULE_COLOR_PALETTE[(idx < 0 ? 0 : idx) % SCHEDULE_COLOR_PALETTE.length];
+}
+function renderScheduleColorLegend() {
+  const scheds = STATE.life.schedules;
+  if (!scheds.length) return '';
+  return `<div class="cal-schedule-legend">${scheds.map(s =>
+    `<span><i class="cal-legend-swatch" style="background:${scheduleColorFor(s.id)};"></i>${escapeHtml(s.name || 'Untitled schedule')}</span>`
+  ).join('')}</div>`;
 }
 function renderCalCell(d /* Date */, today) {
   const dStr = dateKey(d.getFullYear(), d.getMonth(), d.getDate());
   const has = remindersOn(dStr).length > 0;
   const isToday = dStr === today;
   const isSelected = dStr === CAL_SELECTED_DATE;
+  const sched = scheduleForDate(d);
+  const schedMark = sched ? `<span class="cal-anchor-icon" style="color:${scheduleColorFor(sched.id)};">${icon('anchorMark')}</span>` : '';
   return `<button class="cal-cell ${isToday?'cal-cell-today':''} ${isSelected?'cal-cell-selected':''}" onclick="calSelectDay('${dStr}')">
+    ${schedMark}
     <span class="cal-daynum">${d.getDate()}</span>
     ${has ? '<span class="cal-dot"></span>' : ''}
   </button>`;
@@ -8315,6 +8354,9 @@ function renderCalWeek() {
     <div class="divider"></div>
     ${renderSelectedDayReminders()}`;
 }
+// Merged view — this used to be the standalone TODAY subtab (renderLifeDaily(), today-only) plus
+// this Calendar's own reminders panel; folding both under one zoom level is the whole point of
+// the merge (one screen for "what's going on this day" instead of two tabs).
 function renderCalDay() {
   ensureCalState();
   const d = new Date(CAL_SELECTED_DATE + 'T00:00:00');
@@ -8327,6 +8369,8 @@ function renderCalDay() {
         <button onclick="calGoToDay(1)">&#8250;</button>
       </div>
     </div>
+    ${renderDailySchedule(CAL_SELECTED_DATE)}
+    <div class="divider"></div>
     ${renderSelectedDayReminders()}`;
 }
 function renderCalYear() {
@@ -8347,6 +8391,8 @@ function renderCalYear() {
 }
 // Compact 12-up month grid for Year zoom — no weekday header row (no room at this size); tapping
 // a day jumps straight to Day zoom (calSelectDayAndZoom), tapping the month label zooms to Month.
+// A schedule's day gets a small colored corner dot rather than the full anchorMark icon Month/Week
+// use — at ~14px a multi-path SVG doesn't read, a flat dot in the same schedule color still does.
 function renderCalMiniMonth(year, month, today) {
   const first = new Date(year, month, 1);
   const startWeekday = first.getDay();
@@ -8358,7 +8404,9 @@ function renderCalMiniMonth(year, month, today) {
     const has = remindersOn(dStr).length > 0;
     const isToday = dStr === today;
     const isSelected = dStr === CAL_SELECTED_DATE;
-    cells += `<button class="cal-mini-cell ${isToday?'cal-mini-today':''} ${isSelected?'cal-mini-selected':''} ${has?'cal-mini-has':''}" onclick="calSelectDayAndZoom('${dStr}','day')">${d}</button>`;
+    const sched = scheduleForDate(new Date(year, month, d));
+    const schedMark = sched ? `<span class="cal-mini-anchor-dot" style="background:${scheduleColorFor(sched.id)};"></span>` : '';
+    cells += `<button class="cal-mini-cell ${isToday?'cal-mini-today':''} ${isSelected?'cal-mini-selected':''} ${has?'cal-mini-has':''}" onclick="calSelectDayAndZoom('${dStr}','day')">${schedMark}${d}</button>`;
   }
   return `<div class="cal-mini-month">
     <div class="cal-mini-month-label" onclick="calZoomToMonth(${year},${month})">${MONTH_NAMES[month].slice(0,3).toUpperCase()}</div>
@@ -8439,12 +8487,14 @@ function todaysReminders() {
   return remindersOn(todayStr());
 }
 function jumpToReminderDay(dateStr) {
+  // switchTab() resets SCHEDULE_SUBTAB/CAL_ZOOM/CAL_SELECTED_DATE/CAL_MONTH to today's Day view —
+  // call it first, then override with the actual target date below (Day zoom shows the day's
+  // reminders and anchors together, which is exactly what tapping a specific reminder wants).
+  goHomeSection('schedule');
   CAL_SELECTED_DATE = dateStr;
   const d = new Date(dateStr + 'T00:00:00');
   CAL_MONTH = { year: d.getFullYear(), month: d.getMonth() };
-  CAL_ZOOM = 'month'; // land on the familiar month+day-panel view regardless of whatever zoom was last left on
-  goHomeSection('schedule'); // switchTab() resets SCHEDULE_SUBTAB to 'today', so set 'calendar' after
-  SCHEDULE_SUBTAB = 'calendar';
+  CAL_ZOOM = 'day';
   render();
 }
 function renderTodaysReminders() {
@@ -8954,21 +9004,32 @@ function todayLifeLog() {
   if (!STATE.life.dailyLog[d]) STATE.life.dailyLog[d] = {};
   return STATE.life.dailyLog[d];
 }
-function renderLifeDaily() {
-  const log = todayLifeLog();
-  const { schedule, blocks } = scheduleBlocksForDate(new Date());
+// Read-only counterpart for an arbitrary date — used by the Calendar Day view below, which
+// renders lots of dates a user just browses past without ever toggling anything, so (unlike
+// todayLifeLog()) this must not write an entry into dailyLog just for having been displayed.
+function lifeLogForDate(dateStr) {
+  return STATE.life.dailyLog[dateStr] || {};
+}
+// Was renderLifeDaily(), hardcoded to `new Date()` under the old dedicated TODAY subtab — now
+// generalized to any date and rendered inside Calendar's Day zoom (see renderCalDay()), so
+// browsing to a past or future day shows that day's anchors/schedule too, not just today's.
+function renderDailySchedule(dateStr) {
+  const log = lifeLogForDate(dateStr);
+  const { schedule, blocks } = scheduleBlocksForDate(new Date(dateStr + 'T00:00:00'));
+  if (!blocks.length) return ''; // no anchors set up at all yet — Setup -> Set Anchors covers this case elsewhere
   const anchorBlocks = blocks.filter(b => b.kind === 'anchor');
   const doneCount = anchorBlocks.filter(b => log[b.anchorId]).length;
+  const isToday = dateStr === todayStr();
   return `
     <div class="panel" style="margin-bottom:14px;">
       <div class="row">
-        <span style="font-size:13px;color:var(--text-dim)">Today's Schedule${schedule && schedule.name ? ` &middot; ${escapeHtml(schedule.name)}` : ''}</span>
+        <span style="font-size:13px;color:var(--text-dim)">${isToday ? 'Today' : 'Day'}'s Schedule${schedule && schedule.name ? ` &middot; ${escapeHtml(schedule.name)}` : ''}</span>
         <span class="mono" style="font-weight:700">${doneCount} / ${anchorBlocks.length}</span>
       </div>
     </div>
     <div class="panel" style="padding:2px 14px;">
       ${blocks.map((b, i) => `
-      <div class="row" ${b.kind==='anchor' ? `onclick="toggleDailyAnchor('${b.anchorId}')" style="cursor:pointer; padding:16px 0; ${i < blocks.length-1 ? 'border-bottom:1px solid var(--border-soft);' : ''}"` : `style="padding:16px 0; ${i < blocks.length-1 ? 'border-bottom:1px solid var(--border-soft);' : ''}"`}>
+      <div class="row" ${b.kind==='anchor' ? `onclick="toggleDailyAnchor('${b.anchorId}','${dateStr}')" style="cursor:pointer; padding:16px 0; ${i < blocks.length-1 ? 'border-bottom:1px solid var(--border-soft);' : ''}"` : `style="padding:16px 0; ${i < blocks.length-1 ? 'border-bottom:1px solid var(--border-soft);' : ''}"`}>
         <div>
           <div style="font-size:13px; font-weight:600;">${escapeHtml(b.label)} <span style="color:var(--text-faint); font-weight:500; font-size:11px;">${fmtBlockTime(b)}</span></div>
           ${b.detail ? `<div style="font-size:11px; color:var(--text-dim); margin-top:2px;">${escapeHtml(b.detail)}</div>` : ''}
@@ -8994,9 +9055,14 @@ function renderPeriodicRow(a) {
     </div>
   </div>`;
 }
-function toggleDailyAnchor(id) {
-  const log = todayLifeLog();
-  log[id] = !log[id];
+// dateStr optional, defaults to today — the Home "RIGHT NOW" card always toggles today's own log
+// (calls this with just an id, same as always); the merged Calendar Day view passes the actual
+// date being viewed explicitly, so marking an anchor done on a past/future day writes into that
+// day's own dailyLog entry rather than always today's.
+function toggleDailyAnchor(id, dateStr) {
+  const d = dateStr || todayStr();
+  if (!STATE.life.dailyLog[d]) STATE.life.dailyLog[d] = {};
+  STATE.life.dailyLog[d][id] = !STATE.life.dailyLog[d][id];
   saveState(); render();
 }
 function markPeriodicDone(id) {

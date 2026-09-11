@@ -272,6 +272,36 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Calendar absorbs the old TODAY subtab; per-schedule color-coded anchor icon.** The dedicated
+  Schedule -> TODAY subtab (`renderLifeDaily()`, hardcoded to `new Date()`) is gone — its content
+  moved into Calendar's Day zoom via a new generalized `renderDailySchedule(dateStr)`, so browsing
+  to a past or future date's Day view shows that day's own anchors/assigned-schedule too, not just
+  today's. One less button on the bottom bar (`HOME/CALENDAR/SETUP`, down from
+  `HOME/TODAY/CALENDAR/SETUP`). `switchTab('schedule')` now resets straight to Day zoom on today
+  (same unconditional-today landing TODAY always gave) rather than the old `'today'` subtab value;
+  in-tab navigation (Setup <-> Calendar, or browsing to another date/zoom) is unaffected.
+  `toggleDailyAnchor(id, dateStr)` gained an optional second argument — the Home "RIGHT NOW" card
+  still calls it with just an id (today, as before), the new Day view passes the date actually
+  being viewed, so marking a past/future day's anchor writes into *that* date's own `dailyLog`
+  entry via a new `lifeLogForDate(dateStr)` (read-only — unlike `todayLifeLog()`, must not create
+  a `dailyLog` entry for every date a user merely browses past).
+  - **Anchor icon on Month/Week/Year cells**: a day with an assigned schedule (`scheduleForDate()`)
+    now shows a small maritime-anchor glyph (new `anchorMark` icon, generic/original, replacing
+    the now-orphaned `todayArrow`), color-coded per schedule — `SCHEDULE_COLOR_PALETTE` +
+    `scheduleColorFor(scheduleId)`, a fixed rotating hex palette assigned by a schedule's position
+    in `STATE.life.schedules`, same "categorical color, no picker UI, not run through the
+    aesthetic system" convention as `BUDGET_CATEGORIES` — deliberately not aesthetic-tokenized
+    since it needs to stay mutually distinct across N schedules. A `renderScheduleColorLegend()`
+    decodes the colors into names, shown above the grid on Year/Month/Week (Day already names its
+    schedule in text, so the legend would be redundant there). Year's mini-month cells get a flat
+    colored dot instead of the full icon — a multi-path SVG doesn't read at ~14px, a solid square
+    still does, same reasoning as the reminder indicator there switching from a dot to
+    accent-colored text.
+  - `tests/test_calendar_anchors.js` covers the bottom-bar button count, the merged Day view
+    actually rendering anchor rows, a future date's own schedule/anchor-toggle being independent
+    of today's, the icon rendering, the legend, `scheduleColorFor()`'s stability, and persistence.
+    `test_calendar.js`/`test_calendar_zoom.js` updated for the new Day-zoom default (both used to
+    assume Month was the default landing zoom).
 - **Calendar: zoom levels (Year / Month / Week / Day).** The Schedule -> Calendar subtab used to
   be month-only, with the reminders-for-the-selected-day panel underneath acting as a de facto
   "day view." Added an explicit `CAL_ZOOM` state (`'year'|'month'|'week'|'day'`, default `'month'`

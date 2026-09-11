@@ -1,6 +1,8 @@
 // test_calendar.js — Schedule -> Calendar subtab: month navigation, selecting a day, adding,
 // editing and deleting a reminder on that day, the "has reminder" dot indicator, today's own
-// highlight, and persistence.
+// highlight, and persistence. Entering Schedule now defaults to Calendar's Day zoom (the old
+// TODAY subtab merged into it — see test_calendar_zoom.js), so this explicitly switches to
+// Month zoom first; that's what the rest of this file has always actually tested.
 const { chromium } = require('playwright');
 const path = require('path');
 
@@ -20,9 +22,10 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   await page.goto(APP_PATH);
   await page.waitForTimeout(300);
 
-  // 1. Navigate to Schedule -> Calendar
+  // 1. Navigate to Schedule -> Calendar -> Month (switchTab() lands on Day zoom by default now)
   await page.evaluate(() => switchTab('schedule'));
   await page.evaluate(() => setScheduleSubtab('calendar'));
+  await page.evaluate(() => calSetZoom('month'));
   await page.waitForTimeout(150);
   const startMonth = await page.evaluate(() => ({ ...CAL_MONTH }));
   console.log('starting CAL_MONTH:', startMonth);
