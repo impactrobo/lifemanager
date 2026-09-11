@@ -20,14 +20,14 @@ committed work until the person actually asks for it — this is a memory aid, n
   Firebase console setup.
 - **Single-user.** There's no concept of multiple people or profiles — one `STATE` object per
   browser (and, with sync on, one Firestore doc per signed-in account).
-- **Reminders don't alert you (yet — Web Push planned).** The Reminders feature (Schedule) is
-  currently a list you look at. Decision made (Sept 2026): add **Web Push** so an installed
-  Home Screen PWA can pop a system notification at a reminder's time. This works on iOS 16.4+
-  **only when the phone has connectivity near the scheduled moment** — it's a server round-trip,
-  not on-device scheduling (the web has no working local-notification-scheduling API on iOS).
-  Offline/exact-timing reliability and a rest-timer notification would need the native wrapper
-  path below; that's explicitly deferred until the Web Push version proves the feature is worth
-  it. See "Web Push reminders" under Ideas and "Native wrapper" below.
+- **Reminders alert you via Web Push — but only with connectivity near the scheduled moment.**
+  Shipped and verified live 2026-09-11 (see "Web Push reminders" under Ideas for the full
+  build/incident history). An installed Home Screen PWA gets a real system notification at a
+  reminder's time on iOS 16.4+, sent by a Cloudflare Worker backend on a 1-minute cron — it's a
+  server round-trip, not on-device scheduling (the web has no working local-notification-
+  scheduling API on iOS), so it can't fire while the phone is offline at that moment. Offline/
+  exact-timing reliability and a rest-timer notification would need the native wrapper path below;
+  that's explicitly deferred until the Web Push version proves the feature is worth it.
 - **Rest timer can be throttled.** It runs on a plain `setInterval`; like any tab-based timer,
   mobile OSes can throttle it once the screen locks or the tab backgrounds. Web Push can't fix
   this well (needs connectivity, adds latency for a 90-second timer) — the real fix is an
