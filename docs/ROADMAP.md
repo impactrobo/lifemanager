@@ -65,7 +65,6 @@ before starting any of these.
   cycle arrows, with no rollup); a "goal" amount per savings-flagged recurring charge (e.g. "Roth
   IRA — $250/mo toward a $7,000/yr cap") to show progress against the cap, not just the flat
   monthly figure.
-- **Notes:** full-text search across notes (currently browse/filter by tag only, via VIEW ALL).
 - **Schedule:** a way to see the week at a glance across multiple named schedules, not just one
   active schedule's daily anchors + a plain calendar.
 - **Web Push reminders — client side shipped 2026-09-10, backend still to deploy.** Settings has
@@ -256,6 +255,11 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Notes: full-text search on VIEW ALL** — a live search box (title + body, HTML stripped,
+  case-insensitive) sits above the existing tag filter/sort controls and combines with both.
+  `onNotesSearchInput()` replaces only `#notesResultsList`'s innerHTML on every keystroke rather
+  than calling the global `render()`, so typing doesn't steal its own focus — same targeted-update
+  trick Meal Builder's food search already used (`onMealSearchInput()` → `#mealFoodPicker`).
 - **Reminders edit inline** — title/time/notes on a Schedule → Calendar reminder card are now
   live inputs (`updateReminderField()`), same convention as Budget's recurring rows, instead of
   add/delete only.

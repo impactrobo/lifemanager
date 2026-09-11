@@ -1,5 +1,5 @@
-// test_notes.js — writing and saving a note (title + rich-text body + tag), the delete
-// confirmation flow, and persistence across a reload.
+// test_notes.js — writing and saving a note (title + rich-text body + tag), full-text search on
+// VIEW ALL, the delete confirmation flow, and persistence across a reload.
 const { chromium } = require('playwright');
 const path = require('path');
 
@@ -51,6 +51,37 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (saved.title !== 'Test note title') throw new Error(`Expected saved title "Test note title", got "${saved.title}"`);
   if (saved.tag !== targetTag) throw new Error(`Expected saved tag "${targetTag}", got "${saved.tag}"`);
   if (!saved.bodyHtml.includes('hello')) throw new Error(`Expected saved bodyHtml to include note text, got "${saved.bodyHtml}"`);
+
+  // 4b. Full-text search on VIEW ALL — matches title, matches body text (HTML tags stripped),
+  // is case-insensitive, and doesn't steal focus from the search box on every keystroke (it
+  // targets #notesResultsList directly rather than calling the global render(), same reason
+  // Meal Builder's food search does — a full render() replaces #app's innerHTML and would reset
+  // the cursor mid-type).
+  await page.evaluate(() => { switchTab('notes'); setNotesSubtab('view'); });
+  await page.waitForTimeout(150);
+  await page.fill('#notesSearchInput', 'TEST NOTE TITLE'); // uppercase, on purpose — case-insensitive check
+  await page.waitForTimeout(100);
+  const titleMatchHtml = await page.evaluate(() => document.getElementById('notesResultsList').innerHTML);
+  console.log('search by title (case-insensitive) finds the note:', titleMatchHtml.includes('Test note title'));
+  if (!titleMatchHtml.includes('Test note title')) throw new Error('Expected searching "TEST NOTE TITLE" to match the note by its title');
+  const focusedAfterTyping = await page.evaluate(() => document.activeElement && document.activeElement.id);
+  if (focusedAfterTyping !== 'notesSearchInput') throw new Error(`Expected focus to stay on #notesSearchInput after typing, got "${focusedAfterTyping}"`);
+
+  await page.fill('#notesSearchInput', 'hello'); // matches the <b>hello</b> body text, not the title
+  await page.waitForTimeout(100);
+  const bodyMatchHtml = await page.evaluate(() => document.getElementById('notesResultsList').innerHTML);
+  if (!bodyMatchHtml.includes('Test note title')) throw new Error('Expected searching body text "hello" to also match the note');
+
+  await page.fill('#notesSearchInput', 'no note has this string in it');
+  await page.waitForTimeout(100);
+  const noMatchText = await page.evaluate(() => document.getElementById('notesResultsList').textContent);
+  console.log('empty-state message for a non-matching search:', noMatchText.trim());
+  if (!noMatchText.includes('match your search')) throw new Error(`Expected a "no notes match your search" empty state, got "${noMatchText.trim()}"`);
+
+  await page.fill('#notesSearchInput', ''); // clear it — everything should come back
+  await page.waitForTimeout(100);
+  const clearedHtml = await page.evaluate(() => document.getElementById('notesResultsList').innerHTML);
+  if (!clearedHtml.includes('Test note title')) throw new Error('Expected clearing the search to restore the note to the results');
 
   // 5. Empty-note guard: saving blank title/body/no photo should NOT add another entry
   await page.evaluate(() => switchTab('notes'));

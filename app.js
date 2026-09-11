@@ -7053,6 +7053,36 @@ function toggleNotesFilter(key) {
   NOTES_FILTER_TAG = (NOTES_FILTER_TAG === key) ? null : key;
   render();
 }
+let NOTES_SEARCH_QUERY = ''; // session-only, same lifetime as NOTES_FILTER_TAG/NOTES_SORT below
+// Plain-text haystack for search: title + body with formatting tags stripped (bodyHtml only ever
+// holds the NOTE_ALLOWED_TAGS allowlist, so this can't pull in anything unsafe — same scratch-div
+// trick sanitizeNoteHtml() already uses, just reading .textContent instead of re-serializing).
+function noteSearchText(n) {
+  const scratch = document.createElement('div');
+  scratch.innerHTML = getNoteBodyHtml(n);
+  return `${n.title || ''} ${scratch.textContent || ''}`.toLowerCase();
+}
+function notesMatchingQuery(notes, query) {
+  const q = (query || '').trim().toLowerCase();
+  if (!q) return notes;
+  return notes.filter(n => noteSearchText(n).includes(q));
+}
+// Live-updates as you type (see onNotesSearchInput()) — it replaces only #notesResultsList's
+// innerHTML, not a full render(), so the search input itself never gets torn down and rebuilt
+// mid-keystroke (the same reason Meal Builder's food search targets #mealFoodPicker instead of
+// calling render() — #app's full innerHTML replacement would steal focus/cursor position).
+function renderNotesSearchRow() {
+  return `<label class="field" style="margin-bottom:12px;">
+    <span class="lbl">Search</span>
+    <input type="text" id="notesSearchInput" placeholder="Search notes…" value="${escapeHtml(NOTES_SEARCH_QUERY)}" oninput="onNotesSearchInput(this.value)">
+  </label>`;
+}
+function onNotesSearchInput(val) {
+  NOTES_SEARCH_QUERY = val;
+  const container = document.getElementById('notesResultsList');
+  if (!container) return;
+  container.innerHTML = renderNotesResultsBody();
+}
 function renderNotesFilterRow() {
   const tagPills = Object.keys(allNoteTags()).map(key => {
     const label = noteTagLabel(key);
@@ -7087,26 +7117,35 @@ function renderNoteCard(n) {
     ${renderPhotoThumbs(n.photos)}
   </div>`;
 }
-function renderNotesView() {
-  const filterRow = renderNotesFilterRow();
+// The filtered+sorted results only — factored out so both the initial render and
+// onNotesSearchInput()'s targeted #notesResultsList replace share one filtering path.
+function renderNotesResultsBody() {
   let notes = STATE.notes.slice();
   if (NOTES_FILTER_TAG) notes = notes.filter(n => n.tag === NOTES_FILTER_TAG);
+  notes = notesMatchingQuery(notes, NOTES_SEARCH_QUERY);
   if (notes.length === 0) {
-    return `${filterRow}${emptyState(STATE.notes.length ? 'No notes with this tag yet.' : 'No notes yet — write your first one on the Write tab.')}`;
+    let msg = 'No notes yet — write your first one on the Write tab.';
+    if (STATE.notes.length) {
+      const searching = !!NOTES_SEARCH_QUERY.trim();
+      if (searching && NOTES_FILTER_TAG) msg = 'No notes match that search in this tag.';
+      else if (searching) msg = 'No notes match your search.';
+      else msg = 'No notes with this tag yet.';
+    }
+    return emptyState(msg);
   }
-  let body;
   if (NOTES_SORT === 'tag') {
-    body = Object.keys(allNoteTags()).map(key => {
+    return Object.keys(allNoteTags()).map(key => {
       const group = notes.filter(n => n.tag === key).sort((a,b) => b.createdAt - a.createdAt);
       if (!group.length) return '';
       return `<div class="subtle-label" style="margin:16px 0 8px; color:${tagColor(key)};">${escapeHtml(noteTagLabel(key)).toUpperCase()} (${group.length})</div>
         <div class="entry-list">${group.map(renderNoteCard).join('')}</div>`;
     }).join('');
-  } else {
-    const sorted = notes.slice().sort((a,b) => b.createdAt - a.createdAt);
-    body = `<div class="entry-list" style="margin-top:14px;">${sorted.map(renderNoteCard).join('')}</div>`;
   }
-  return filterRow + body;
+  const sorted = notes.slice().sort((a,b) => b.createdAt - a.createdAt);
+  return `<div class="entry-list" style="margin-top:14px;">${sorted.map(renderNoteCard).join('')}</div>`;
+}
+function renderNotesView() {
+  return `${renderNotesSearchRow()}${renderNotesFilterRow()}<div id="notesResultsList">${renderNotesResultsBody()}</div>`;
 }
 
 // ================= LIFE TAB =================
