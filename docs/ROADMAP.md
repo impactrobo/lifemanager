@@ -275,6 +275,21 @@ on an architecture split + a large wave of Maximalist aesthetics.
     lookup/browse/search function uses, so a custom food behaves identically to a built-in one
     everywhere, tagged "(yours)" in pickers. Deleting one degrades a meal item referencing it to
     zero macros rather than erroring.
+  - **Diet Log, built the same day.** Discovered while scoping the dashboard: the app had **no
+    itemized per-day food log at all** — Meal Plan is a reusable *weekly template* (Mon–Sun), and
+    Home's "Calories" box is one hand-typed number per day, disconnected from Meal
+    Builder/`FOOD_DB` entirely. `STATE.diet.foodLog['YYYY-MM-DD']` is the real thing: an array of
+    `{id, foodId, qty, unit}` items — the exact shape a saved Meal's items already use, so
+    `computeMealTotals()`/`computeItemMacro()` needed no changes to work on it. Lives at the
+    bottom of the DIET tab (`renderDietLog()`, under the existing TDEE/macro targets, so actual
+    totals sit right next to what you're aiming for): a date-nav header (defaults to today),
+    "log a saved meal at once" (expands every item of a chosen Meal into that day — the quick
+    path for repeat meals) or the same category/search food picker Meal Builder uses
+    (generalized `renderCategoryFoodList()`/`renderFoodSearchResults()` to take which `addFn` a
+    row's click should call, rather than duplicating that markup), then a day's logged items
+    (editable qty/unit, removable) and a TOTALS panel — all 5 macros plus all 8 micronutrients,
+    showing "actual / target" wherever a TDEE or macro target is set. `test_diet_log.js` covers
+    the full lifecycle including date-navigation not leaking between days and persistence.
 - **Settings: aesthetic groups collapse by default; accent picker moved inline** — every visit to
   Settings now opens with all four groups (Maximalist/Vibrant/Contrast/Light) collapsed
   (`AESTHETIC_GROUPS_OPEN.clear()` in `openSetup()`), instead of everything open — with 22

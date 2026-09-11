@@ -157,6 +157,7 @@ interface DietState {
   meals: Meal[];
   mealPlan: DayOfWeekMap<{ id: string; mealId: string | null }>;
   customFoods: CustomFood[];
+  foodLog: Record<string, Array<{ id: string; foodId: string; qty: number | string; unit: string }>>;
 }
 
 interface RecurringIncome {

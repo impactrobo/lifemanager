@@ -1406,6 +1406,10 @@ function defaultState() {
       // User-added foods (added 2026-09-11) — same shape as a FOOD_DB entry plus `custom: true`,
       // picked from and searched alongside FOOD_DB via allFoods(). See "CUSTOM FOODS" section.
       customFoods: [],
+      // What was actually logged eaten on a given date (added 2026-09-11) — 'YYYY-MM-DD' ->
+      // [{id, foodId, qty, unit}], the same item shape as a saved Meal's items. Distinct from
+      // mealPlan above (a reusable weekly TEMPLATE) — this is per real date. See "DIET LOG".
+      foodLog: {},
     },
     budget: defaultBudgetState(),
   };
@@ -1742,6 +1746,7 @@ function updateAllTMs() {
   if (!STATE.diet.mealPlan || typeof STATE.diet.mealPlan !== 'object') STATE.diet.mealPlan = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
   for (let d = 0; d <= 6; d++) { if (!Array.isArray(STATE.diet.mealPlan[d])) STATE.diet.mealPlan[d] = []; }
   if (!Array.isArray(STATE.diet.customFoods)) STATE.diet.customFoods = [];
+  if (!STATE.diet.foodLog || typeof STATE.diet.foodLog !== 'object') STATE.diet.foodLog = {};
   if (!STATE.settings.mealUnitSystem) STATE.settings.mealUnitSystem = 'metric';
   MEAL_UNIT_SYSTEM = STATE.settings.mealUnitSystem;
   if (!STATE.settings.defaultPage) STATE.settings.defaultPage = 'home';
@@ -4473,10 +4478,14 @@ function foodTagHtml(f) {
   if (f.approx) return ' <span style="color:var(--text-faint); font-size:10px;">(approx.)</span>';
   return '';
 }
-function renderCategoryFoodList(catId) {
+// addFn: the global function name a row's click invokes — 'addFoodToMeal' (Meal Builder) or
+// 'addFoodToLog' (Diet Log, see that section) — both take just a foodId, so any function with
+// that shape can be plugged in here without duplicating this list-rendering markup.
+function renderCategoryFoodList(catId, addFn) {
+  addFn = addFn || 'addFoodToMeal';
   const foods = allFoods().filter(f => f.category === catId).slice().sort((a, b) => a.name.localeCompare(b.name));
   return `<div class="panel scroll-box" style="margin-bottom:18px; max-height:280px; overflow-y:auto; padding:6px;">
-    ${foods.map((f, i) => `<div class="row" style="padding:8px 6px; cursor:pointer; ${i < foods.length - 1 ? 'border-bottom:1px solid var(--border-soft);' : ''}" onclick="addFoodToMeal('${f.id}')">
+    ${foods.map((f, i) => `<div class="row" style="padding:8px 6px; cursor:pointer; ${i < foods.length - 1 ? 'border-bottom:1px solid var(--border-soft);' : ''}" onclick="${addFn}('${f.id}')">
       <span style="font-size:13px;">${escapeHtml(f.name)}${foodTagHtml(f)}</span>
       <span style="font-size:11px; color:var(--text-dim); flex-shrink:0;">${Math.round(f.per100.cal)} cal/100${f.base}</span>
     </div>`).join('')}
@@ -4484,14 +4493,15 @@ function renderCategoryFoodList(catId) {
 }
 // Search matches across every category (not just the currently-open one), each row tagged with
 // its category so a match is still identifiable once it's out of its usual category grouping.
-function renderFoodSearchResults(query) {
+function renderFoodSearchResults(query, addFn) {
+  addFn = addFn || 'addFoodToMeal';
   const q = query.trim().toLowerCase();
   const matches = allFoods().filter(f => f.name.toLowerCase().includes(q)).slice().sort((a, b) => a.name.localeCompare(b.name));
   if (!matches.length) {
     return `<div class="panel" style="margin-bottom:18px;"><div style="font-size:12px; color:var(--text-faint); text-align:center; padding:6px 0;">No foods match &quot;${escapeHtml(query.trim())}&quot;.</div></div>`;
   }
   return `<div class="panel scroll-box" style="margin-bottom:18px; max-height:280px; overflow-y:auto; padding:6px;">
-    ${matches.map((f, i) => `<div class="row" style="padding:8px 6px; cursor:pointer; ${i < matches.length - 1 ? 'border-bottom:1px solid var(--border-soft);' : ''}" onclick="addFoodToMeal('${f.id}')">
+    ${matches.map((f, i) => `<div class="row" style="padding:8px 6px; cursor:pointer; ${i < matches.length - 1 ? 'border-bottom:1px solid var(--border-soft);' : ''}" onclick="${addFn}('${f.id}')">
       <span style="font-size:13px;">${escapeHtml(f.name)}${foodTagHtml(f)} <span style="font-size:10px; color:var(--text-faint);">— ${escapeHtml((MEAL_CATEGORIES.find(c => c.id === f.category) || {}).label || '')}</span></span>
       <span style="font-size:11px; color:var(--text-dim); flex-shrink:0;">${Math.round(f.per100.cal)} cal/100${f.base}</span>
     </div>`).join('')}
@@ -4670,6 +4680,160 @@ function renderCustomFoodCard(f) {
       <button class="icon-btn" style="color:var(--bad); flex-shrink:0;" onclick="event.stopPropagation(); deleteCustomFood('${f.id}')" title="Delete">${icon('close')}</button>
     </div>
   </div>`;
+}
+
+// ================= DIET LOG (added 2026-09-11) =================
+// What was actually logged eaten on a given date — STATE.diet.foodLog['YYYY-MM-DD'], an array of
+// {id, foodId, qty, unit} items, the SAME shape a saved Meal's items already use, so
+// computeMealTotals()/computeItemMacro() work on a day's log unchanged. This is deliberately a
+// separate thing from Meal Plan (STATE.diet.mealPlan): that's a reusable weekly TEMPLATE keyed by
+// weekday (0=Sun..6=Sat, recurring every week); this is keyed by real date and only ever holds
+// what actually got logged that day. Lives at the bottom of the DIET tab (renderDietSetup()),
+// under the TDEE/macro targets, so today's actual totals sit right next to what you're aiming for.
+let DIET_LOG_DATE = null; // lazily set to today
+let DIET_LOG_ACTIVE_CATEGORY = null;
+let DIET_LOG_SEARCH_QUERY = '';
+function ensureDietLogState() { if (!DIET_LOG_DATE) DIET_LOG_DATE = todayStr(); }
+function dietLogEntriesFor(dateStr) {
+  if (!STATE.diet.foodLog[dateStr]) STATE.diet.foodLog[dateStr] = [];
+  return STATE.diet.foodLog[dateStr];
+}
+function fmtDateKey(d) { return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
+function goToLogDate(delta) {
+  ensureDietLogState();
+  const d = new Date(DIET_LOG_DATE + 'T00:00:00');
+  d.setDate(d.getDate() + delta);
+  DIET_LOG_DATE = fmtDateKey(d);
+  DIET_LOG_ACTIVE_CATEGORY = null; DIET_LOG_SEARCH_QUERY = '';
+  render();
+}
+function toggleLogCategory(catId) {
+  DIET_LOG_ACTIVE_CATEGORY = DIET_LOG_ACTIVE_CATEGORY === catId ? null : catId;
+  render();
+}
+function addFoodToLog(foodId) {
+  ensureDietLogState();
+  const food = foodById(foodId);
+  if (!food) return;
+  const unit = defaultMealUnitFor(food);
+  dietLogEntriesFor(DIET_LOG_DATE).push({ id: uid(), foodId, qty: defaultQtyForUnit(unit), unit });
+  DIET_LOG_ACTIVE_CATEGORY = null; DIET_LOG_SEARCH_QUERY = '';
+  saveState();
+  render();
+}
+// Expands every item of a saved Meal into today's (or whatever date is showing) log at once —
+// the quick path for "I ate my usual breakfast", instead of re-picking each food individually.
+function logSavedMeal(mealId) {
+  ensureDietLogState();
+  const meal = STATE.diet.meals.find(m => m.id === mealId);
+  if (!meal) return;
+  const entries = dietLogEntriesFor(DIET_LOG_DATE);
+  meal.items.forEach(it => entries.push({ id: uid(), foodId: it.foodId, qty: it.qty, unit: it.unit }));
+  saveState();
+  showToast(`Logged "${meal.name}"`);
+  render();
+}
+function updateLogItemQty(itemId, val) {
+  ensureDietLogState();
+  const item = dietLogEntriesFor(DIET_LOG_DATE).find(it => it.id === itemId);
+  if (!item) return;
+  item.qty = val === '' ? '' : Number(val);
+  saveState();
+  render();
+}
+function updateLogItemUnit(itemId, val) {
+  ensureDietLogState();
+  const item = dietLogEntriesFor(DIET_LOG_DATE).find(it => it.id === itemId);
+  if (!item) return;
+  item.unit = val;
+  saveState();
+  render();
+}
+function removeLogItem(itemId) {
+  ensureDietLogState();
+  STATE.diet.foodLog[DIET_LOG_DATE] = dietLogEntriesFor(DIET_LOG_DATE).filter(it => it.id !== itemId);
+  saveState();
+  render();
+}
+// Same targeted-update reasoning as onMealSearchInput(): patches only the results container, so
+// typing doesn't tear out and rebuild the search input on every keystroke.
+function onLogSearchInput(val) {
+  DIET_LOG_SEARCH_QUERY = val;
+  const container = document.getElementById('dietLogFoodPicker');
+  if (!container) return;
+  container.innerHTML = (val && val.trim()) ? renderFoodSearchResults(val, 'addFoodToLog') : renderLogCategoryPicker();
+}
+function renderLogCategoryPicker() {
+  return `<div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:${DIET_LOG_ACTIVE_CATEGORY ? '8px' : '4px'};">
+      ${MEAL_CATEGORIES.map(c => `<button class="btn btn-sm ${DIET_LOG_ACTIVE_CATEGORY===c.id?'btn-primary':''}" onclick="toggleLogCategory('${c.id}')">${escapeHtml(c.label)}</button>`).join('')}
+    </div>
+    ${DIET_LOG_ACTIVE_CATEGORY ? renderCategoryFoodList(DIET_LOG_ACTIVE_CATEGORY, 'addFoodToLog') : ''}`;
+}
+function renderLogItemRow(item) {
+  const food = foodById(item.foodId);
+  if (!food) return '';
+  const macro = computeItemMacro(item);
+  const isCount = food.unit === 'count';
+  const unitOpts = mealUnitOptions(food);
+  return `<div class="panel">
+    <div class="field-row">
+      <label class="field" style="flex:2;"><span class="lbl">${escapeHtml(food.name)}</span>
+        <div style="display:flex; gap:6px;">
+          <input type="number" min="0" step="any" value="${item.qty}" style="flex:1;" onchange="updateLogItemQty('${item.id}',this.value)">
+          ${isCount
+            ? `<span style="font-size:12px; color:var(--text-dim); flex:1; display:flex; align-items:center;">${escapeHtml(food.itemLabel)}${(Number(item.qty)||0)===1?'':'s'}</span>`
+            : `<select onchange="updateLogItemUnit('${item.id}',this.value)" style="flex:1;">${unitOpts.map(o => `<option value="${o.value}" ${item.unit===o.value?'selected':''}>${o.label}</option>`).join('')}</select>`}
+        </div>
+      </label>
+      <button class="icon-btn" style="align-self:flex-end; margin-bottom:10px; color:var(--bad);" onclick="removeLogItem('${item.id}')" title="Remove">${icon('close')}</button>
+    </div>
+    <div style="font-size:11px; color:var(--text-dim);">${Math.round(macro.cal)} cal &middot; P ${roundMacro(macro.protein)}g &middot; C ${roundMacro(macro.carb)}g &middot; F ${roundMacro(macro.fat)}g &middot; Fiber ${roundMacro(macro.fiber)}g</div>
+  </div>`;
+}
+function renderDietLog() {
+  ensureDietLogState();
+  const entries = dietLogEntriesFor(DIET_LOG_DATE);
+  const totals = computeMealTotals(entries);
+  const d = new Date(DIET_LOG_DATE + 'T00:00:00');
+  const label = d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+  const isToday = DIET_LOG_DATE === todayStr();
+  return `
+    <div class="subtle-label" style="margin:22px 0 10px;">DIET LOG</div>
+    <div class="week-selector" style="margin-bottom:12px;">
+      <div class="cycle-label" style="font-size:16px;">${label}${isToday ? ' (Today)' : ''}</div>
+      <div class="cycle-btns">
+        <button onclick="goToLogDate(-1)">&#8249;</button>
+        <button onclick="goToLogDate(1)">&#8250;</button>
+      </div>
+    </div>
+    ${STATE.diet.meals.length ? `
+      <label class="field" style="margin-bottom:12px;"><span class="lbl">Log a saved meal at once</span>
+        <select onchange="if(this.value){logSavedMeal(this.value); this.value='';}">
+          <option value="">Choose a saved meal…</option>
+          ${STATE.diet.meals.map(m => `<option value="${m.id}">${escapeHtml(m.name)}</option>`).join('')}
+        </select>
+      </label>` : ''}
+    <label class="field" style="margin-bottom:8px;"><span class="lbl">Or log one food</span>
+      <input type="text" placeholder="Search foods…" value="${escapeHtml(DIET_LOG_SEARCH_QUERY)}" oninput="onLogSearchInput(this.value)">
+    </label>
+    <div id="dietLogFoodPicker">
+      ${DIET_LOG_SEARCH_QUERY.trim() ? renderFoodSearchResults(DIET_LOG_SEARCH_QUERY, 'addFoodToLog') : renderLogCategoryPicker()}
+    </div>
+    <div class="stack" style="margin-bottom:16px;">
+      ${entries.length ? entries.map(renderLogItemRow).join('') : emptyState('Nothing logged for this day yet.')}
+    </div>
+    ${entries.length ? `
+      <div class="panel">
+        <div class="subtle-label" style="margin-bottom:8px;">TOTALS FOR THIS DAY</div>
+        <div class="row"><span style="font-size:13px;color:var(--text-dim)">Calories</span><span class="mono" style="font-weight:700">${Math.round(totals.cal)}${STATE.diet.tdee ? ` / ${STATE.diet.tdee}` : ''}</span></div>
+        <div class="row"><span style="font-size:13px;color:var(--text-dim)">Protein (g)</span><span class="mono" style="font-weight:700">${roundMacro(totals.protein)}${STATE.diet.proteinG ? ` / ${STATE.diet.proteinG}` : ''}</span></div>
+        <div class="row"><span style="font-size:13px;color:var(--text-dim)">Carbs (g)</span><span class="mono" style="font-weight:700">${roundMacro(totals.carb)}${STATE.diet.carbG ? ` / ${STATE.diet.carbG}` : ''}</span></div>
+        <div class="row"><span style="font-size:13px;color:var(--text-dim)">Fat (g)</span><span class="mono" style="font-weight:700">${roundMacro(totals.fat)}${STATE.diet.fatG ? ` / ${STATE.diet.fatG}` : ''}</span></div>
+        <div class="row"><span style="font-size:13px;color:var(--text-dim)">Fiber (g)</span><span class="mono" style="font-weight:700">${roundMacro(totals.fiber)}</span></div>
+        <div class="subtle-label" style="margin:14px 0 8px;">MICRONUTRIENTS</div>
+        ${renderMicronutrientRows(totals)}
+      </div>` : ''}
+  `;
 }
 
 function renderAllMeals() {
@@ -4906,7 +5070,8 @@ function renderDietSetup() {
       <button class="btn btn-ghost btn-sm" style="margin-top:10px;" onclick="toggleTDEECalc()">${TDEE_CALC_OPEN ? 'HIDE' : 'OPEN'} CALCULATOR</button>
     </div>
     ${calcPanel}
-    ${renderMacroCalc()}`;
+    ${renderMacroCalc()}
+    ${renderDietLog()}`;
 }
 function updateTDEE(val) {
   STATE.diet.tdee = val === '' ? null : Number(val);
