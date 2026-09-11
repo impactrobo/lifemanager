@@ -790,6 +790,7 @@ const MEAL_CATEGORIES = [
   { id: 'beans',       label: 'Beans & Plant Protein' },
   { id: 'grains',      label: 'Grains & Carbs' },
   { id: 'fats',        label: 'Fats & Oils' },
+  { id: 'sauces',      label: 'Sauces & Condiments' },
   { id: 'supplements', label: 'Powders & Supplements' },
   { id: 'junk',        label: 'Junk' },
 ];
@@ -813,101 +814,156 @@ const VOLUME_TO_ML = { mL: 1, cup: 236.588, tbsp: 14.7868, tsp: 4.92892, floz: 2
 // workbook didn't include that food at all — Junk and most of Powders & Supplements — or because
 // it only gave partial data for it, e.g. chia seeds' protein/carbs). The workbook's own sheets
 // carry the same disclaimer: "standard reference approximations... not lab-grade."
+// Micronutrient fields (sodium/potassium/calcium/iron/magnesium/vitaminC/vitaminD/vitaminB12 —
+// mg except vitaminD/vitaminB12 which are mcg) were added 2026-09-11 across every food below,
+// existing and new. They're typical/reference values from general nutrition knowledge, the same
+// way the macro figures already were — NOT pulled from whatever original source (the comment
+// below calls it "the source workbook") the original 79 foods' macros came from, and not lab
+// data for any specific brand or cut. Treat every per100 micronutrient value here as approximate,
+// independent of whether that food's own top-level `approx` flag (which is about the macros
+// specifically) is set. See docs/ROADMAP.md "Diet: expanded food database + micronutrients".
 const FOOD_DB = [
   // ---- Meat/Fish/Poultry ----
-  { id: 'chicken_breast', name: 'Chicken breast, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 165, protein: 31, carb: 0, fat: 3.6, fiber: 0 } },
-  { id: 'beef_sirloin', name: 'Beef, lean (sirloin), cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 250, protein: 27, carb: 0, fat: 15, fiber: 0 } },
-  { id: 'pork_loin', name: 'Pork, lean loin, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 242, protein: 27, carb: 0, fat: 14, fiber: 0 } },
-  { id: 'salmon', name: 'Salmon, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 208, protein: 22, carb: 0, fat: 13, fiber: 0 } },
-  { id: 'sardines_oil', name: 'Sardines, canned in oil', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 208, protein: 25, carb: 0, fat: 11, fiber: 0 } },
-  { id: 'sardines_water', name: 'Sardines, canned in water, drained', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 150, protein: 24, carb: 0.5, fat: 5, fiber: 0 } },
-  { id: 'mackerel', name: 'Mackerel, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 262, protein: 24, carb: 0, fat: 18, fiber: 0 } },
-  { id: 'herring', name: 'Herring, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 217, protein: 25, carb: 0, fat: 13, fiber: 0 } },
-  { id: 'anchovies', name: 'Anchovies, canned in oil', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 210, protein: 29, carb: 0, fat: 10, fiber: 0 } },
-  { id: 'trout', name: 'Trout, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 190, protein: 27, carb: 0, fat: 8.5, fiber: 0 } },
-  { id: 'tuna_water', name: 'Tuna, canned in water', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 116, protein: 26, carb: 0, fat: 0.8, fiber: 0 } },
-  { id: 'cod', name: 'Cod, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 105, protein: 23, carb: 0, fat: 0.9, fiber: 0 } },
-  { id: 'oysters', name: 'Oysters, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 81, protein: 9, carb: 5, fat: 2.9, fiber: 0 } },
-  { id: 'crab', name: 'Crab, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 97, protein: 19, carb: 0, fat: 1.5, fiber: 0 } },
-  { id: 'beef_liver', name: 'Beef liver, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 191, protein: 29, carb: 3.9, fat: 4.9, fiber: 0 } },
-  { id: 'beef_heart', name: 'Beef heart, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 175, protein: 28, carb: 0.1, fat: 5.6, fiber: 0 } },
-  { id: 'chicken_liver', name: 'Chicken liver, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 167, protein: 25, carb: 0.9, fat: 6.5, fiber: 0 } },
-  { id: 'oxtail', name: 'Oxtail, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 240, protein: 27, carb: 0, fat: 14, fiber: 0 } },
-  { id: 'chicken_skin', name: 'Chicken skin, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 449, protein: 18, carb: 0, fat: 43, fiber: 0 } },
-  { id: 'bone_broth', name: 'Bone broth (beef/chicken)', category: 'meat', unit: 'volume', base: 'mL', per100: { cal: 30, protein: 5, carb: 1, fat: 1, fiber: 0 }, approx: true },
+  { id: 'chicken_breast', name: 'Chicken breast, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 165, protein: 31, carb: 0, fat: 3.6, fiber: 0, sodium: 74, potassium: 256, calcium: 15, iron: 1, magnesium: 29, vitaminC: 0, vitaminD: 0.1, vitaminB12: 0.3 } },
+  { id: 'beef_sirloin', name: 'Beef, lean (sirloin), cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 250, protein: 27, carb: 0, fat: 15, fiber: 0, sodium: 56, potassium: 315, calcium: 11, iron: 2.6, magnesium: 22, vitaminC: 0, vitaminD: 0.1, vitaminB12: 2 } },
+  { id: 'pork_loin', name: 'Pork, lean loin, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 242, protein: 27, carb: 0, fat: 14, fiber: 0, sodium: 55, potassium: 350, calcium: 5, iron: 0.9, magnesium: 25, vitaminC: 0.3, vitaminD: 0.5, vitaminB12: 0.7 } },
+  { id: 'salmon', name: 'Salmon, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 208, protein: 22, carb: 0, fat: 13, fiber: 0, sodium: 59, potassium: 384, calcium: 12, iron: 0.5, magnesium: 29, vitaminC: 0, vitaminD: 11, vitaminB12: 3.2 } },
+  { id: 'sardines_oil', name: 'Sardines, canned in oil', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 208, protein: 25, carb: 0, fat: 11, fiber: 0, sodium: 307, potassium: 397, calcium: 382, iron: 2.9, magnesium: 39, vitaminC: 0, vitaminD: 4.8, vitaminB12: 8.9 } },
+  { id: 'sardines_water', name: 'Sardines, canned in water, drained', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 150, protein: 24, carb: 0.5, fat: 5, fiber: 0, sodium: 250, potassium: 350, calcium: 350, iron: 2.7, magnesium: 35, vitaminC: 0, vitaminD: 4.5, vitaminB12: 8.5 } },
+  { id: 'mackerel', name: 'Mackerel, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 262, protein: 24, carb: 0, fat: 18, fiber: 0, sodium: 90, potassium: 314, calcium: 12, iron: 1.6, magnesium: 76, vitaminC: 0.9, vitaminD: 16, vitaminB12: 8.7 } },
+  { id: 'herring', name: 'Herring, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 217, protein: 25, carb: 0, fat: 13, fiber: 0, sodium: 90, potassium: 361, calcium: 74, iron: 1.1, magnesium: 32, vitaminC: 0.8, vitaminD: 21, vitaminB12: 10 } },
+  { id: 'anchovies', name: 'Anchovies, canned in oil', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 210, protein: 29, carb: 0, fat: 10, fiber: 0, sodium: 1104, potassium: 383, calcium: 147, iron: 3.3, magnesium: 41, vitaminC: 0, vitaminD: 1.2, vitaminB12: 0.9 } },
+  { id: 'trout', name: 'Trout, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 190, protein: 27, carb: 0, fat: 8.5, fiber: 0, sodium: 52, potassium: 463, calcium: 71, iron: 2.1, magnesium: 30, vitaminC: 0, vitaminD: 15, vitaminB12: 5.4 } },
+  { id: 'tuna_water', name: 'Tuna, canned in water', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 116, protein: 26, carb: 0, fat: 0.8, fiber: 0, sodium: 247, potassium: 237, calcium: 10, iron: 1.3, magnesium: 27, vitaminC: 0, vitaminD: 1, vitaminB12: 2.5 } },
+  { id: 'cod', name: 'Cod, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 105, protein: 23, carb: 0, fat: 0.9, fiber: 0, sodium: 78, potassium: 413, calcium: 16, iron: 0.4, magnesium: 32, vitaminC: 1, vitaminD: 1.4, vitaminB12: 1 } },
+  { id: 'oysters', name: 'Oysters, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 81, protein: 9, carb: 5, fat: 2.9, fiber: 0, sodium: 211, potassium: 156, calcium: 45, iron: 5.1, magnesium: 47, vitaminC: 4, vitaminD: 8, vitaminB12: 16 } },
+  { id: 'crab', name: 'Crab, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 97, protein: 19, carb: 0, fat: 1.5, fiber: 0, sodium: 395, potassium: 262, calcium: 89, iron: 0.7, magnesium: 44, vitaminC: 3.5, vitaminD: 0.2, vitaminB12: 9.8 } },
+  { id: 'beef_liver', name: 'Beef liver, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 191, protein: 29, carb: 3.9, fat: 4.9, fiber: 0, sodium: 69, potassium: 299, calcium: 5, iron: 5, magnesium: 18, vitaminC: 0.7, vitaminD: 1.2, vitaminB12: 70 } },
+  { id: 'beef_heart', name: 'Beef heart, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 175, protein: 28, carb: 0.1, fat: 5.6, fiber: 0, sodium: 61, potassium: 232, calcium: 6, iron: 4.6, magnesium: 20, vitaminC: 2, vitaminD: 0, vitaminB12: 7.8 } },
+  { id: 'chicken_liver', name: 'Chicken liver, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 167, protein: 25, carb: 0.9, fat: 6.5, fiber: 0, sodium: 71, potassium: 230, calcium: 8, iron: 8.5, magnesium: 18, vitaminC: 12, vitaminD: 0.7, vitaminB12: 16.6 } },
+  { id: 'oxtail', name: 'Oxtail, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 240, protein: 27, carb: 0, fat: 14, fiber: 0, sodium: 65, potassium: 280, calcium: 15, iron: 3.5, magnesium: 20, vitaminC: 0, vitaminD: 0, vitaminB12: 2.2 } },
+  { id: 'chicken_skin', name: 'Chicken skin, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 449, protein: 18, carb: 0, fat: 43, fiber: 0, sodium: 60, potassium: 150, calcium: 10, iron: 0.7, magnesium: 12, vitaminC: 0, vitaminD: 0.2, vitaminB12: 0.3 } },
+  { id: 'bone_broth', name: 'Bone broth (beef/chicken)', category: 'meat', unit: 'volume', base: 'mL', per100: { cal: 30, protein: 5, carb: 1, fat: 1, fiber: 0, sodium: 250, potassium: 130, calcium: 8, iron: 0.2, magnesium: 3, vitaminC: 0, vitaminD: 0, vitaminB12: 0.1 }, approx: true },
+  { id: 'chicken_thigh', name: 'Chicken thigh, skinless, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 209, protein: 26, carb: 0, fat: 11, fiber: 0, sodium: 90, potassium: 240, calcium: 12, iron: 1.3, magnesium: 23, vitaminC: 0, vitaminD: 0.1, vitaminB12: 0.4 } },
+  { id: 'ground_chicken', name: 'Ground chicken, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 189, protein: 24, carb: 0, fat: 10, fiber: 0, sodium: 75, potassium: 250, calcium: 13, iron: 1.2, magnesium: 22, vitaminC: 0, vitaminD: 0.1, vitaminB12: 0.4 } },
+  { id: 'turkey_breast', name: 'Turkey breast, skinless, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 135, protein: 30, carb: 0, fat: 1, fiber: 0, sodium: 63, potassium: 260, calcium: 15, iron: 0.6, magnesium: 28, vitaminC: 0, vitaminD: 0.1, vitaminB12: 0.4 } },
+  { id: 'ground_turkey', name: 'Ground turkey, 93% lean, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 176, protein: 23, carb: 0, fat: 9, fiber: 0, sodium: 90, potassium: 280, calcium: 20, iron: 1.6, magnesium: 24, vitaminC: 0, vitaminD: 0.1, vitaminB12: 1.6 } },
+  { id: 'chicken_drumstick', name: 'Chicken drumstick, skinless, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 172, protein: 28, carb: 0, fat: 6, fiber: 0, sodium: 90, potassium: 240, calcium: 13, iron: 1.1, magnesium: 21, vitaminC: 0, vitaminD: 0.1, vitaminB12: 0.5 } },
+  { id: 'ground_beef_85', name: 'Ground beef, 85/15, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 250, protein: 26, carb: 0, fat: 17, fiber: 0, sodium: 72, potassium: 270, calcium: 18, iron: 2.3, magnesium: 19, vitaminC: 0, vitaminD: 0.1, vitaminB12: 2.4 } },
+  { id: 'lamb', name: 'Lamb, leg, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 258, protein: 26, carb: 0, fat: 17, fiber: 0, sodium: 65, potassium: 310, calcium: 15, iron: 1.9, magnesium: 21, vitaminC: 0, vitaminD: 0.1, vitaminB12: 2.6 } },
+  { id: 'bacon', name: 'Bacon, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 541, protein: 37, carb: 1.4, fat: 42, fiber: 0, sodium: 1717, potassium: 289, calcium: 8, iron: 1, magnesium: 20, vitaminC: 0, vitaminD: 0.5, vitaminB12: 0.6 }, approx: true },
+  { id: 'ham', name: 'Ham, deli-sliced', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 145, protein: 21, carb: 1.5, fat: 5.5, fiber: 0, sodium: 1200, potassium: 260, calcium: 6, iron: 0.7, magnesium: 15, vitaminC: 0, vitaminD: 0.4, vitaminB12: 0.5 }, approx: true },
+  { id: 'shrimp', name: 'Shrimp, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 99, protein: 24, carb: 0.2, fat: 0.3, fiber: 0, sodium: 190, potassium: 220, calcium: 70, iron: 0.5, magnesium: 39, vitaminC: 0, vitaminD: 0, vitaminB12: 1.2 } },
+  { id: 'tilapia', name: 'Tilapia, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 128, protein: 26, carb: 0, fat: 2.7, fiber: 0, sodium: 56, potassium: 380, calcium: 14, iron: 0.7, magnesium: 34, vitaminC: 0, vitaminD: 0, vitaminB12: 1.9 } },
+  { id: 'halibut', name: 'Halibut, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 111, protein: 22, carb: 0, fat: 2.3, fiber: 0, sodium: 66, potassium: 490, calcium: 13, iron: 0.9, magnesium: 33, vitaminC: 0, vitaminD: 0.5, vitaminB12: 1 } },
+  { id: 'scallops', name: 'Scallops, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 111, protein: 21, carb: 5, fat: 0.8, fiber: 0, sodium: 667, potassium: 314, calcium: 24, iron: 0.6, magnesium: 45, vitaminC: 0, vitaminD: 0, vitaminB12: 1.4 } },
   // ---- Eggs & Dairy ----
-  { id: 'eggs_whole', name: 'Eggs, whole, cooked', category: 'dairy', unit: 'count', base: 'g', itemAmount: 50, itemLabel: 'egg', per100: { cal: 155, protein: 13, carb: 1.1, fat: 11, fiber: 0 } },
-  { id: 'egg_yolk', name: 'Egg yolk only', category: 'dairy', unit: 'count', base: 'g', itemAmount: 17, itemLabel: 'yolk', per100: { cal: 322, protein: 16, carb: 3.6, fat: 27, fiber: 0 } },
-  { id: 'greek_yogurt', name: 'Greek yogurt, plain, nonfat', category: 'dairy', unit: 'weight', base: 'g', per100: { cal: 59, protein: 10, carb: 3.6, fat: 0.4, fiber: 0 } },
-  { id: 'cottage_cheese', name: 'Cottage cheese, low-fat', category: 'dairy', unit: 'weight', base: 'g', per100: { cal: 81, protein: 11, carb: 3.4, fat: 2.3, fiber: 0 } },
-  { id: 'fortified_milk', name: 'Fortified milk, whole', category: 'dairy', unit: 'volume', base: 'mL', per100: { cal: 61, protein: 3.2, carb: 4.8, fat: 3.3, fiber: 0 }, approx: true },
-  { id: 'lactose_free_milk', name: 'Lactose-free whole milk', category: 'dairy', unit: 'volume', base: 'mL', per100: { cal: 61, protein: 3.2, carb: 4.8, fat: 3.3, fiber: 0 }, approx: true },
-  { id: 'hard_cheese', name: 'Hard cheese (Parmesan-type)', category: 'dairy', unit: 'weight', base: 'g', per100: { cal: 431, protein: 38, carb: 4, fat: 29, fiber: 0 } },
+  { id: 'eggs_whole', name: 'Eggs, whole, cooked', category: 'dairy', unit: 'count', base: 'g', itemAmount: 50, itemLabel: 'egg', per100: { cal: 155, protein: 13, carb: 1.1, fat: 11, fiber: 0, sodium: 124, potassium: 126, calcium: 50, iron: 1.2, magnesium: 10, vitaminC: 0, vitaminD: 2, vitaminB12: 0.9 } },
+  { id: 'egg_yolk', name: 'Egg yolk only', category: 'dairy', unit: 'count', base: 'g', itemAmount: 17, itemLabel: 'yolk', per100: { cal: 322, protein: 16, carb: 3.6, fat: 27, fiber: 0, sodium: 48, potassium: 109, calcium: 129, iron: 2.7, magnesium: 5, vitaminC: 0, vitaminD: 5.4, vitaminB12: 1.9 } },
+  { id: 'greek_yogurt', name: 'Greek yogurt, plain, nonfat', category: 'dairy', unit: 'weight', base: 'g', per100: { cal: 59, protein: 10, carb: 3.6, fat: 0.4, fiber: 0, sodium: 36, potassium: 141, calcium: 110, iron: 0.1, magnesium: 11, vitaminC: 0, vitaminD: 0, vitaminB12: 0.5 } },
+  { id: 'cottage_cheese', name: 'Cottage cheese, low-fat', category: 'dairy', unit: 'weight', base: 'g', per100: { cal: 81, protein: 11, carb: 3.4, fat: 2.3, fiber: 0, sodium: 364, potassium: 104, calcium: 83, iron: 0.1, magnesium: 5, vitaminC: 0, vitaminD: 0, vitaminB12: 0.4 } },
+  { id: 'fortified_milk', name: 'Fortified milk, whole', category: 'dairy', unit: 'volume', base: 'mL', per100: { cal: 61, protein: 3.2, carb: 4.8, fat: 3.3, fiber: 0, sodium: 43, potassium: 132, calcium: 113, iron: 0.03, magnesium: 10, vitaminC: 0, vitaminD: 1.3, vitaminB12: 0.5 }, approx: true },
+  { id: 'lactose_free_milk', name: 'Lactose-free whole milk', category: 'dairy', unit: 'volume', base: 'mL', per100: { cal: 61, protein: 3.2, carb: 4.8, fat: 3.3, fiber: 0, sodium: 43, potassium: 150, calcium: 125, iron: 0.03, magnesium: 10, vitaminC: 0, vitaminD: 1.3, vitaminB12: 0.5 }, approx: true },
+  { id: 'hard_cheese', name: 'Hard cheese (Parmesan-type)', category: 'dairy', unit: 'weight', base: 'g', per100: { cal: 431, protein: 38, carb: 4, fat: 29, fiber: 0, sodium: 1529, potassium: 92, calcium: 1184, iron: 0.8, magnesium: 44, vitaminC: 0, vitaminD: 0.5, vitaminB12: 1.2 } },
+  { id: 'cheddar_cheese', name: 'Cheddar cheese', category: 'dairy', unit: 'weight', base: 'g', per100: { cal: 403, protein: 25, carb: 1.3, fat: 33, fiber: 0, sodium: 621, potassium: 76, calcium: 721, iron: 0.7, magnesium: 28, vitaminC: 0, vitaminD: 0.6, vitaminB12: 0.8 } },
+  { id: 'mozzarella_cheese', name: 'Mozzarella, part-skim', category: 'dairy', unit: 'weight', base: 'g', per100: { cal: 254, protein: 24, carb: 2.8, fat: 16, fiber: 0, sodium: 484, potassium: 76, calcium: 505, iron: 0.4, magnesium: 20, vitaminC: 0, vitaminD: 0.2, vitaminB12: 1 } },
+  { id: 'swiss_cheese', name: 'Swiss cheese', category: 'dairy', unit: 'weight', base: 'g', per100: { cal: 380, protein: 27, carb: 5.4, fat: 28, fiber: 0, sodium: 192, potassium: 77, calcium: 791, iron: 0.2, magnesium: 32, vitaminC: 0, vitaminD: 0.6, vitaminB12: 3.3 } },
+  { id: 'feta_cheese', name: 'Feta cheese', category: 'dairy', unit: 'weight', base: 'g', per100: { cal: 264, protein: 14, carb: 4.1, fat: 21, fiber: 0, sodium: 917, potassium: 62, calcium: 493, iron: 0.7, magnesium: 19, vitaminC: 0, vitaminD: 0, vitaminB12: 1.7 } },
+  { id: 'cream_cheese', name: 'Cream cheese', category: 'dairy', unit: 'weight', base: 'g', per100: { cal: 342, protein: 6, carb: 4.1, fat: 34, fiber: 0, sodium: 321, potassium: 138, calcium: 98, iron: 0.4, magnesium: 6, vitaminC: 0, vitaminD: 0, vitaminB12: 0.2 } },
+  { id: 'ricotta_cheese', name: 'Ricotta, part-skim', category: 'dairy', unit: 'weight', base: 'g', per100: { cal: 138, protein: 11, carb: 5.1, fat: 8, fiber: 0, sodium: 84, potassium: 105, calcium: 207, iron: 0.4, magnesium: 11, vitaminC: 0, vitaminD: 0, vitaminB12: 0.3 } },
+  { id: 'blue_cheese', name: 'Blue cheese', category: 'dairy', unit: 'weight', base: 'g', per100: { cal: 353, protein: 21, carb: 2.3, fat: 29, fiber: 0, sodium: 1395, potassium: 256, calcium: 528, iron: 0.3, magnesium: 23, vitaminC: 0, vitaminD: 0, vitaminB12: 1.2 } },
   // ---- Beans & Plant Protein ----
-  { id: 'tofu', name: 'Tofu, firm', category: 'beans', unit: 'weight', base: 'g', per100: { cal: 76, protein: 8, carb: 1.9, fat: 4.8, fiber: 0.3 } },
-  { id: 'tempeh', name: 'Tempeh', category: 'beans', unit: 'weight', base: 'g', per100: { cal: 192, protein: 20, carb: 8, fat: 11, fiber: 9 } },
-  { id: 'lentils', name: 'Lentils, cooked', category: 'beans', unit: 'weight', base: 'g', per100: { cal: 116, protein: 9, carb: 20, fat: 0.4, fiber: 8 } },
-  { id: 'chickpeas', name: 'Chickpeas, cooked', category: 'beans', unit: 'weight', base: 'g', per100: { cal: 164, protein: 9, carb: 27, fat: 2.6, fiber: 8 } },
-  { id: 'black_beans', name: 'Black beans, cooked', category: 'beans', unit: 'weight', base: 'g', per100: { cal: 132, protein: 9, carb: 24, fat: 0.5, fiber: 8.7 } },
-  { id: 'white_beans', name: 'White beans, cooked', category: 'beans', unit: 'weight', base: 'g', per100: { cal: 139, protein: 9.7, carb: 25, fat: 0.6, fiber: 6.3 } },
-  { id: 'edamame', name: 'Soybeans (edamame), cooked', category: 'beans', unit: 'weight', base: 'g', per100: { cal: 122, protein: 11, carb: 10, fat: 5, fiber: 5 } },
-  { id: 'natto', name: 'Natto', category: 'beans', unit: 'weight', base: 'g', per100: { cal: 212, protein: 18, carb: 14, fat: 11, fiber: 5.4 } },
+  { id: 'tofu', name: 'Tofu, firm', category: 'beans', unit: 'weight', base: 'g', per100: { cal: 76, protein: 8, carb: 1.9, fat: 4.8, fiber: 0.3, sodium: 7, potassium: 121, calcium: 350, iron: 5.4, magnesium: 30, vitaminC: 0.1, vitaminD: 0, vitaminB12: 0 } },
+  { id: 'tempeh', name: 'Tempeh', category: 'beans', unit: 'weight', base: 'g', per100: { cal: 192, protein: 20, carb: 8, fat: 11, fiber: 9, sodium: 9, potassium: 412, calcium: 111, iron: 2.7, magnesium: 81, vitaminC: 0, vitaminD: 0, vitaminB12: 0.1 } },
+  { id: 'lentils', name: 'Lentils, cooked', category: 'beans', unit: 'weight', base: 'g', per100: { cal: 116, protein: 9, carb: 20, fat: 0.4, fiber: 8, sodium: 2, potassium: 369, calcium: 19, iron: 3.3, magnesium: 36, vitaminC: 1.5, vitaminD: 0, vitaminB12: 0 } },
+  { id: 'chickpeas', name: 'Chickpeas, cooked', category: 'beans', unit: 'weight', base: 'g', per100: { cal: 164, protein: 9, carb: 27, fat: 2.6, fiber: 8, sodium: 6, potassium: 291, calcium: 49, iron: 2.9, magnesium: 48, vitaminC: 1.3, vitaminD: 0, vitaminB12: 0 } },
+  { id: 'black_beans', name: 'Black beans, cooked', category: 'beans', unit: 'weight', base: 'g', per100: { cal: 132, protein: 9, carb: 24, fat: 0.5, fiber: 8.7, sodium: 1, potassium: 355, calcium: 27, iron: 2.1, magnesium: 70, vitaminC: 0, vitaminD: 0, vitaminB12: 0 } },
+  { id: 'white_beans', name: 'White beans, cooked', category: 'beans', unit: 'weight', base: 'g', per100: { cal: 139, protein: 9.7, carb: 25, fat: 0.6, fiber: 6.3, sodium: 2, potassium: 421, calcium: 90, iron: 3.7, magnesium: 63, vitaminC: 0, vitaminD: 0, vitaminB12: 0 } },
+  { id: 'edamame', name: 'Soybeans (edamame), cooked', category: 'beans', unit: 'weight', base: 'g', per100: { cal: 122, protein: 11, carb: 10, fat: 5, fiber: 5, sodium: 6, potassium: 436, calcium: 63, iron: 2.3, magnesium: 65, vitaminC: 6, vitaminD: 0, vitaminB12: 0 } },
+  { id: 'natto', name: 'Natto', category: 'beans', unit: 'weight', base: 'g', per100: { cal: 212, protein: 18, carb: 14, fat: 11, fiber: 5.4, sodium: 7, potassium: 729, calcium: 217, iron: 8.6, magnesium: 115, vitaminC: 13, vitaminD: 0, vitaminB12: 0 } },
   // ---- Grains & Carbs ----
-  { id: 'white_rice', name: 'White rice, cooked', category: 'grains', unit: 'weight', base: 'g', per100: { cal: 130, protein: 2.7, carb: 28, fat: 0.3, fiber: 0.4 }, approx: true },
-  { id: 'pasta', name: 'Pasta, cooked', category: 'grains', unit: 'weight', base: 'g', per100: { cal: 131, protein: 5, carb: 25, fat: 1.1, fiber: 1.8 }, approx: true },
-  { id: 'rolled_oats', name: 'Rolled oats, dry/uncooked', category: 'grains', unit: 'weight', base: 'g', per100: { cal: 389, protein: 16.9, carb: 66.3, fat: 6.9, fiber: 10.6 } },
-  { id: 'fortified_cereal', name: 'Fortified cereal (typical)', category: 'grains', unit: 'weight', base: 'g', per100: { cal: 379, protein: 8, carb: 84, fat: 2, fiber: 8 } },
+  { id: 'white_rice', name: 'White rice, cooked', category: 'grains', unit: 'weight', base: 'g', per100: { cal: 130, protein: 2.7, carb: 28, fat: 0.3, fiber: 0.4, sodium: 1, potassium: 35, calcium: 10, iron: 0.2, magnesium: 12, vitaminC: 0, vitaminD: 0, vitaminB12: 0 }, approx: true },
+  { id: 'pasta', name: 'Pasta, cooked', category: 'grains', unit: 'weight', base: 'g', per100: { cal: 131, protein: 5, carb: 25, fat: 1.1, fiber: 1.8, sodium: 1, potassium: 44, calcium: 7, iron: 0.9, magnesium: 18, vitaminC: 0, vitaminD: 0, vitaminB12: 0 }, approx: true },
+  { id: 'rolled_oats', name: 'Rolled oats, dry/uncooked', category: 'grains', unit: 'weight', base: 'g', per100: { cal: 389, protein: 16.9, carb: 66.3, fat: 6.9, fiber: 10.6, sodium: 2, potassium: 429, calcium: 54, iron: 4.7, magnesium: 177, vitaminC: 0, vitaminD: 0, vitaminB12: 0 } },
+  { id: 'fortified_cereal', name: 'Fortified cereal (typical)', category: 'grains', unit: 'weight', base: 'g', per100: { cal: 379, protein: 8, carb: 84, fat: 2, fiber: 8, sodium: 500, potassium: 220, calcium: 200, iron: 18, magnesium: 60, vitaminC: 15, vitaminD: 2.5, vitaminB12: 2.4 } },
   // ---- Veggies ----
-  { id: 'sweet_potato', name: 'Sweet potato, cooked', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 90, protein: 2, carb: 21, fat: 0.1, fiber: 3.3 } },
-  { id: 'carrots', name: 'Carrots, raw', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 41, protein: 0.9, carb: 10, fat: 0.2, fiber: 2.8 } },
-  { id: 'spinach', name: 'Spinach, cooked', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 23, protein: 3, carb: 3.6, fat: 0.3, fiber: 2.4 } },
-  { id: 'kale', name: 'Kale, cooked', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 28, protein: 2, carb: 6, fat: 0.4, fiber: 2 } },
-  { id: 'collard_greens', name: 'Collard greens, cooked', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 32, protein: 2.5, carb: 5.7, fat: 0.6, fiber: 4 } },
-  { id: 'broccoli', name: 'Broccoli, cooked', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 35, protein: 2.4, carb: 7, fat: 0.4, fiber: 3.3 } },
-  { id: 'brussels_sprouts', name: 'Brussels sprouts, cooked', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 36, protein: 2.6, carb: 7, fat: 0.5, fiber: 3.3 } },
-  { id: 'cabbage', name: 'Cabbage, cooked', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 23, protein: 1.3, carb: 5.5, fat: 0.1, fiber: 2.5 } },
-  { id: 'red_bell_pepper', name: 'Red bell pepper, raw', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 31, protein: 1, carb: 6, fat: 0.3, fiber: 2.1 } },
-  { id: 'asparagus', name: 'Asparagus, cooked', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 22, protein: 2.4, carb: 4, fat: 0.2, fiber: 2 } },
-  { id: 'potato', name: 'Potato, with skin, cooked', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 87, protein: 1.9, carb: 20, fat: 0.1, fiber: 1.8 } },
-  { id: 'cucumber', name: 'Cucumber, raw', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 15, protein: 0.7, carb: 3.6, fat: 0.1, fiber: 0.5 } },
-  { id: 'tomato', name: 'Tomato, raw', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 18, protein: 0.9, carb: 3.9, fat: 0.2, fiber: 1.2 } },
-  { id: 'seaweed_nori', name: 'Seaweed (nori), dried', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 35, protein: 6, carb: 5, fat: 0.3, fiber: 0.3 } },
+  { id: 'sweet_potato', name: 'Sweet potato, cooked', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 90, protein: 2, carb: 21, fat: 0.1, fiber: 3.3, sodium: 36, potassium: 337, calcium: 38, iron: 0.7, magnesium: 27, vitaminC: 19.6, vitaminD: 0, vitaminB12: 0 } },
+  { id: 'carrots', name: 'Carrots, raw', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 41, protein: 0.9, carb: 10, fat: 0.2, fiber: 2.8, sodium: 69, potassium: 320, calcium: 33, iron: 0.3, magnesium: 12, vitaminC: 5.9, vitaminD: 0, vitaminB12: 0 } },
+  { id: 'spinach', name: 'Spinach, cooked', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 23, protein: 3, carb: 3.6, fat: 0.3, fiber: 2.4, sodium: 70, potassium: 466, calcium: 136, iron: 3.6, magnesium: 87, vitaminC: 9.8, vitaminD: 0, vitaminB12: 0 } },
+  { id: 'kale', name: 'Kale, cooked', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 28, protein: 2, carb: 6, fat: 0.4, fiber: 2, sodium: 29, potassium: 348, calcium: 254, iron: 1.5, magnesium: 23, vitaminC: 41, vitaminD: 0, vitaminB12: 0 } },
+  { id: 'collard_greens', name: 'Collard greens, cooked', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 32, protein: 2.5, carb: 5.7, fat: 0.6, fiber: 4, sodium: 20, potassium: 213, calcium: 232, iron: 0.9, magnesium: 15, vitaminC: 23, vitaminD: 0, vitaminB12: 0 } },
+  { id: 'broccoli', name: 'Broccoli, cooked', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 35, protein: 2.4, carb: 7, fat: 0.4, fiber: 3.3, sodium: 33, potassium: 293, calcium: 40, iron: 0.7, magnesium: 21, vitaminC: 65, vitaminD: 0, vitaminB12: 0 } },
+  { id: 'brussels_sprouts', name: 'Brussels sprouts, cooked', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 36, protein: 2.6, carb: 7, fat: 0.5, fiber: 3.3, sodium: 21, potassium: 317, calcium: 36, iron: 1.2, magnesium: 21, vitaminC: 62, vitaminD: 0, vitaminB12: 0 } },
+  { id: 'cabbage', name: 'Cabbage, cooked', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 23, protein: 1.3, carb: 5.5, fat: 0.1, fiber: 2.5, sodium: 12, potassium: 145, calcium: 46, iron: 0.3, magnesium: 11, vitaminC: 20, vitaminD: 0, vitaminB12: 0 } },
+  { id: 'red_bell_pepper', name: 'Red bell pepper, raw', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 31, protein: 1, carb: 6, fat: 0.3, fiber: 2.1, sodium: 4, potassium: 211, calcium: 7, iron: 0.4, magnesium: 12, vitaminC: 128, vitaminD: 0, vitaminB12: 0 } },
+  { id: 'asparagus', name: 'Asparagus, cooked', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 22, protein: 2.4, carb: 4, fat: 0.2, fiber: 2, sodium: 14, potassium: 224, calcium: 24, iron: 1.1, magnesium: 16, vitaminC: 7.7, vitaminD: 0, vitaminB12: 0 } },
+  { id: 'potato', name: 'Potato, with skin, cooked', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 87, protein: 1.9, carb: 20, fat: 0.1, fiber: 1.8, sodium: 6, potassium: 379, calcium: 8, iron: 0.3, magnesium: 22, vitaminC: 8, vitaminD: 0, vitaminB12: 0 } },
+  { id: 'cucumber', name: 'Cucumber, raw', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 15, protein: 0.7, carb: 3.6, fat: 0.1, fiber: 0.5, sodium: 2, potassium: 147, calcium: 16, iron: 0.3, magnesium: 13, vitaminC: 2.8, vitaminD: 0, vitaminB12: 0 } },
+  { id: 'tomato', name: 'Tomato, raw', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 18, protein: 0.9, carb: 3.9, fat: 0.2, fiber: 1.2, sodium: 5, potassium: 237, calcium: 10, iron: 0.3, magnesium: 11, vitaminC: 14, vitaminD: 0, vitaminB12: 0 } },
+  { id: 'seaweed_nori', name: 'Seaweed (nori), dried', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 35, protein: 6, carb: 5, fat: 0.3, fiber: 0.3, sodium: 872, potassium: 2400, calcium: 325, iron: 12, magnesium: 255, vitaminC: 39, vitaminD: 0, vitaminB12: 10 }, approx: true },
+  { id: 'onion', name: 'Onion, raw', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 40, protein: 1.1, carb: 9.3, fat: 0.1, fiber: 1.7, sodium: 4, potassium: 146, calcium: 23, iron: 0.2, magnesium: 10, vitaminC: 7.4, vitaminD: 0, vitaminB12: 0 } },
+  { id: 'garlic', name: 'Garlic, raw', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 149, protein: 6.4, carb: 33, fat: 0.5, fiber: 2.1, sodium: 17, potassium: 401, calcium: 181, iron: 1.7, magnesium: 25, vitaminC: 31, vitaminD: 0, vitaminB12: 0 } },
+  { id: 'zucchini', name: 'Zucchini, cooked', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 17, protein: 1.2, carb: 3.1, fat: 0.3, fiber: 1, sodium: 3, potassium: 261, calcium: 16, iron: 0.4, magnesium: 22, vitaminC: 4, vitaminD: 0, vitaminB12: 0 } },
+  { id: 'cauliflower', name: 'Cauliflower, cooked', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 23, protein: 1.8, carb: 4.1, fat: 0.5, fiber: 2.3, sodium: 15, potassium: 142, calcium: 16, iron: 0.4, magnesium: 9, vitaminC: 44, vitaminD: 0, vitaminB12: 0 } },
+  { id: 'green_beans', name: 'Green beans, cooked', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 35, protein: 1.9, carb: 8, fat: 0.3, fiber: 3.4, sodium: 3, potassium: 151, calcium: 37, iron: 0.7, magnesium: 21, vitaminC: 9.7, vitaminD: 0, vitaminB12: 0 } },
+  { id: 'mushrooms', name: 'Mushrooms, white button, cooked', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 28, protein: 2.5, carb: 5.3, fat: 0.5, fiber: 1.7, sodium: 4, potassium: 356, calcium: 4, iron: 0.9, magnesium: 11, vitaminC: 0, vitaminD: 0.2, vitaminB12: 0 } },
+  { id: 'corn', name: 'Corn, cooked', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 96, protein: 3.4, carb: 21, fat: 1.5, fiber: 2.4, sodium: 15, potassium: 270, calcium: 3, iron: 0.5, magnesium: 26, vitaminC: 6.8, vitaminD: 0, vitaminB12: 0 } },
+  { id: 'peas', name: 'Peas, cooked', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 84, protein: 5.4, carb: 15, fat: 0.4, fiber: 5.5, sodium: 3, potassium: 201, calcium: 27, iron: 1.5, magnesium: 33, vitaminC: 14, vitaminD: 0, vitaminB12: 0 } },
+  { id: 'celery', name: 'Celery, raw', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 16, protein: 0.7, carb: 3, fat: 0.2, fiber: 1.6, sodium: 80, potassium: 260, calcium: 40, iron: 0.2, magnesium: 11, vitaminC: 3.1, vitaminD: 0, vitaminB12: 0 } },
+  { id: 'romaine_lettuce', name: 'Romaine lettuce, raw', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 17, protein: 1.2, carb: 3.3, fat: 0.3, fiber: 2.1, sodium: 8, potassium: 247, calcium: 33, iron: 1, magnesium: 14, vitaminC: 4, vitaminD: 0, vitaminB12: 0 } },
   // ---- Fruit (fruit and fruit juices) ----
-  { id: 'orange', name: 'Orange', category: 'fruit', unit: 'weight', base: 'g', per100: { cal: 47, protein: 0.9, carb: 12, fat: 0.1, fiber: 2.4 } },
-  { id: 'strawberries', name: 'Strawberries', category: 'fruit', unit: 'weight', base: 'g', per100: { cal: 32, protein: 0.7, carb: 7.7, fat: 0.3, fiber: 2 } },
-  { id: 'kiwi', name: 'Kiwi', category: 'fruit', unit: 'weight', base: 'g', per100: { cal: 61, protein: 1.1, carb: 15, fat: 0.5, fiber: 3 } },
-  { id: 'banana', name: 'Banana', category: 'fruit', unit: 'weight', base: 'g', per100: { cal: 89, protein: 1.1, carb: 23, fat: 0.3, fiber: 2.6 } },
-  { id: 'raspberries', name: 'Raspberries', category: 'fruit', unit: 'weight', base: 'g', per100: { cal: 52, protein: 1.2, carb: 12, fat: 0.65, fiber: 6.5 }, approx: true },
-  { id: 'orange_juice', name: 'Orange juice', category: 'fruit', unit: 'volume', base: 'mL', per100: { cal: 45, protein: 0.7, carb: 10.4, fat: 0.2, fiber: 0.2 }, approx: true },
-  { id: 'apple_juice', name: 'Apple juice', category: 'fruit', unit: 'volume', base: 'mL', per100: { cal: 46, protein: 0.1, carb: 11.3, fat: 0.1, fiber: 0.2 }, approx: true },
+  { id: 'orange', name: 'Orange', category: 'fruit', unit: 'weight', base: 'g', per100: { cal: 47, protein: 0.9, carb: 12, fat: 0.1, fiber: 2.4, sodium: 0, potassium: 181, calcium: 40, iron: 0.1, magnesium: 10, vitaminC: 53, vitaminD: 0, vitaminB12: 0 } },
+  { id: 'strawberries', name: 'Strawberries', category: 'fruit', unit: 'weight', base: 'g', per100: { cal: 32, protein: 0.7, carb: 7.7, fat: 0.3, fiber: 2, sodium: 1, potassium: 153, calcium: 16, iron: 0.4, magnesium: 13, vitaminC: 59, vitaminD: 0, vitaminB12: 0 } },
+  { id: 'kiwi', name: 'Kiwi', category: 'fruit', unit: 'weight', base: 'g', per100: { cal: 61, protein: 1.1, carb: 15, fat: 0.5, fiber: 3, sodium: 3, potassium: 312, calcium: 34, iron: 0.3, magnesium: 17, vitaminC: 93, vitaminD: 0, vitaminB12: 0 } },
+  { id: 'banana', name: 'Banana', category: 'fruit', unit: 'weight', base: 'g', per100: { cal: 89, protein: 1.1, carb: 23, fat: 0.3, fiber: 2.6, sodium: 1, potassium: 358, calcium: 5, iron: 0.3, magnesium: 27, vitaminC: 8.7, vitaminD: 0, vitaminB12: 0 } },
+  { id: 'raspberries', name: 'Raspberries', category: 'fruit', unit: 'weight', base: 'g', per100: { cal: 52, protein: 1.2, carb: 12, fat: 0.65, fiber: 6.5, sodium: 1, potassium: 151, calcium: 25, iron: 0.7, magnesium: 22, vitaminC: 26, vitaminD: 0, vitaminB12: 0 }, approx: true },
+  { id: 'orange_juice', name: 'Orange juice', category: 'fruit', unit: 'volume', base: 'mL', per100: { cal: 45, protein: 0.7, carb: 10.4, fat: 0.2, fiber: 0.2, sodium: 1, potassium: 200, calcium: 11, iron: 0.2, magnesium: 11, vitaminC: 50, vitaminD: 0, vitaminB12: 0 }, approx: true },
+  { id: 'apple_juice', name: 'Apple juice', category: 'fruit', unit: 'volume', base: 'mL', per100: { cal: 46, protein: 0.1, carb: 11.3, fat: 0.1, fiber: 0.2, sodium: 4, potassium: 101, calcium: 8, iron: 0.1, magnesium: 5, vitaminC: 0.9, vitaminD: 0, vitaminB12: 0 }, approx: true },
   // ---- Fats & Oils (incl. nuts, seeds, avocado) ----
-  { id: 'olive_oil', name: 'Extra virgin olive oil', category: 'fats', unit: 'volume', base: 'mL', per100: { cal: 884, protein: 0, carb: 0, fat: 100, fiber: 0 }, approx: true },
-  { id: 'avocado_oil', name: 'Avocado oil', category: 'fats', unit: 'volume', base: 'mL', per100: { cal: 884, protein: 0, carb: 0, fat: 100, fiber: 0 }, approx: true },
-  { id: 'avocado', name: 'Avocado', category: 'fats', unit: 'weight', base: 'g', per100: { cal: 160, protein: 2, carb: 8.5, fat: 15, fiber: 6.7 } },
-  { id: 'walnuts', name: 'Walnuts', category: 'fats', unit: 'weight', base: 'g', per100: { cal: 654, protein: 15, carb: 14, fat: 65, fiber: 6.7 } },
-  { id: 'almonds', name: 'Almonds', category: 'fats', unit: 'weight', base: 'g', per100: { cal: 579, protein: 21, carb: 22, fat: 50, fiber: 12.5 } },
-  { id: 'hazelnuts', name: 'Hazelnuts', category: 'fats', unit: 'weight', base: 'g', per100: { cal: 628, protein: 15, carb: 17, fat: 61, fiber: 9.7 } },
-  { id: 'sunflower_seeds', name: 'Sunflower seeds', category: 'fats', unit: 'weight', base: 'g', per100: { cal: 584, protein: 21, carb: 20, fat: 51, fiber: 8.6 } },
-  { id: 'pumpkin_seeds', name: 'Pumpkin seeds', category: 'fats', unit: 'weight', base: 'g', per100: { cal: 559, protein: 30, carb: 11, fat: 49, fiber: 6 } },
-  { id: 'brazil_nuts', name: 'Brazil nuts', category: 'fats', unit: 'weight', base: 'g', per100: { cal: 656, protein: 14, carb: 12, fat: 66, fiber: 7.5 } },
-  { id: 'peanut_butter', name: 'Peanut butter', category: 'fats', unit: 'weight', base: 'g', per100: { cal: 588, protein: 25, carb: 20, fat: 50, fiber: 6 } },
-  { id: 'flaxseed', name: 'Flaxseed, ground', category: 'fats', unit: 'weight', base: 'g', per100: { cal: 534, protein: 18, carb: 29, fat: 42, fiber: 27 } },
-  { id: 'chia_seeds', name: 'Chia seeds', category: 'fats', unit: 'weight', base: 'g', per100: { cal: 486, protein: 17, carb: 42, fat: 31, fiber: 34 }, approx: true },
-  { id: 'dark_chocolate', name: 'Dark chocolate, 70-85%', category: 'fats', unit: 'count', base: 'g', itemAmount: 10, itemLabel: 'square', per100: { cal: 598, protein: 7.8, carb: 46, fat: 43, fiber: 11 } },
+  { id: 'olive_oil', name: 'Extra virgin olive oil', category: 'fats', unit: 'volume', base: 'mL', per100: { cal: 884, protein: 0, carb: 0, fat: 100, fiber: 0, sodium: 2, potassium: 1, calcium: 1, iron: 0.6, magnesium: 0, vitaminC: 0, vitaminD: 0, vitaminB12: 0 }, approx: true },
+  { id: 'avocado_oil', name: 'Avocado oil', category: 'fats', unit: 'volume', base: 'mL', per100: { cal: 884, protein: 0, carb: 0, fat: 100, fiber: 0, sodium: 0, potassium: 0, calcium: 0, iron: 0, magnesium: 0, vitaminC: 0, vitaminD: 0, vitaminB12: 0 }, approx: true },
+  { id: 'avocado', name: 'Avocado', category: 'fats', unit: 'weight', base: 'g', per100: { cal: 160, protein: 2, carb: 8.5, fat: 15, fiber: 6.7, sodium: 7, potassium: 485, calcium: 12, iron: 0.6, magnesium: 29, vitaminC: 10, vitaminD: 0, vitaminB12: 0 } },
+  { id: 'walnuts', name: 'Walnuts', category: 'fats', unit: 'weight', base: 'g', per100: { cal: 654, protein: 15, carb: 14, fat: 65, fiber: 6.7, sodium: 2, potassium: 441, calcium: 98, iron: 2.9, magnesium: 158, vitaminC: 1.3, vitaminD: 0, vitaminB12: 0 } },
+  { id: 'almonds', name: 'Almonds', category: 'fats', unit: 'weight', base: 'g', per100: { cal: 579, protein: 21, carb: 22, fat: 50, fiber: 12.5, sodium: 1, potassium: 733, calcium: 269, iron: 3.7, magnesium: 270, vitaminC: 0, vitaminD: 0, vitaminB12: 0 } },
+  { id: 'hazelnuts', name: 'Hazelnuts', category: 'fats', unit: 'weight', base: 'g', per100: { cal: 628, protein: 15, carb: 17, fat: 61, fiber: 9.7, sodium: 0, potassium: 680, calcium: 114, iron: 4.7, magnesium: 163, vitaminC: 6.3, vitaminD: 0, vitaminB12: 0 } },
+  { id: 'sunflower_seeds', name: 'Sunflower seeds', category: 'fats', unit: 'weight', base: 'g', per100: { cal: 584, protein: 21, carb: 20, fat: 51, fiber: 8.6, sodium: 9, potassium: 645, calcium: 78, iron: 5, magnesium: 325, vitaminC: 1.4, vitaminD: 0, vitaminB12: 0 } },
+  { id: 'pumpkin_seeds', name: 'Pumpkin seeds', category: 'fats', unit: 'weight', base: 'g', per100: { cal: 559, protein: 30, carb: 11, fat: 49, fiber: 6, sodium: 7, potassium: 809, calcium: 46, iron: 8.8, magnesium: 592, vitaminC: 1.9, vitaminD: 0, vitaminB12: 0 } },
+  { id: 'brazil_nuts', name: 'Brazil nuts', category: 'fats', unit: 'weight', base: 'g', per100: { cal: 656, protein: 14, carb: 12, fat: 66, fiber: 7.5, sodium: 3, potassium: 659, calcium: 160, iron: 2.4, magnesium: 376, vitaminC: 0.7, vitaminD: 0, vitaminB12: 0 } },
+  { id: 'peanut_butter', name: 'Peanut butter', category: 'fats', unit: 'weight', base: 'g', per100: { cal: 588, protein: 25, carb: 20, fat: 50, fiber: 6, sodium: 459, potassium: 649, calcium: 43, iron: 1.9, magnesium: 168, vitaminC: 0, vitaminD: 0, vitaminB12: 0 } },
+  { id: 'flaxseed', name: 'Flaxseed, ground', category: 'fats', unit: 'weight', base: 'g', per100: { cal: 534, protein: 18, carb: 29, fat: 42, fiber: 27, sodium: 30, potassium: 813, calcium: 255, iron: 5.7, magnesium: 392, vitaminC: 0.6, vitaminD: 0, vitaminB12: 0 } },
+  { id: 'chia_seeds', name: 'Chia seeds', category: 'fats', unit: 'weight', base: 'g', per100: { cal: 486, protein: 17, carb: 42, fat: 31, fiber: 34, sodium: 16, potassium: 407, calcium: 631, iron: 7.7, magnesium: 335, vitaminC: 1.6, vitaminD: 0, vitaminB12: 0 }, approx: true },
+  { id: 'dark_chocolate', name: 'Dark chocolate, 70-85%', category: 'fats', unit: 'count', base: 'g', itemAmount: 10, itemLabel: 'square', per100: { cal: 598, protein: 7.8, carb: 46, fat: 43, fiber: 11, sodium: 20, potassium: 715, calcium: 73, iron: 11.9, magnesium: 228, vitaminC: 0, vitaminD: 0, vitaminB12: 0 } },
+  // ---- Sauces & Condiments ----
+  { id: 'ketchup', name: 'Ketchup', category: 'sauces', unit: 'weight', base: 'g', per100: { cal: 101, protein: 1.2, carb: 25.8, fat: 0.2, fiber: 0.4, sodium: 907, potassium: 380, calcium: 18, iron: 0.6, magnesium: 15, vitaminC: 6, vitaminD: 0, vitaminB12: 0 }, approx: true },
+  { id: 'yellow_mustard', name: 'Yellow mustard', category: 'sauces', unit: 'weight', base: 'g', per100: { cal: 66, protein: 4.4, carb: 5.8, fat: 3.3, fiber: 3.3, sodium: 1135, potassium: 130, calcium: 58, iron: 1.7, magnesium: 43, vitaminC: 0, vitaminD: 0, vitaminB12: 0 }, approx: true },
+  { id: 'dijon_mustard', name: 'Dijon mustard', category: 'sauces', unit: 'weight', base: 'g', per100: { cal: 66, protein: 4.4, carb: 5, fat: 4, fiber: 3, sodium: 1370, potassium: 138, calcium: 35, iron: 1.2, magnesium: 40, vitaminC: 0, vitaminD: 0, vitaminB12: 0 }, approx: true },
+  { id: 'mayonnaise', name: 'Mayonnaise', category: 'sauces', unit: 'weight', base: 'g', per100: { cal: 680, protein: 1, carb: 0.6, fat: 75, fiber: 0, sodium: 635, potassium: 20, calcium: 8, iron: 0.2, magnesium: 2, vitaminC: 0, vitaminD: 0.3, vitaminB12: 0.1 }, approx: true },
+  { id: 'mayonnaise_light', name: 'Mayonnaise, light', category: 'sauces', unit: 'weight', base: 'g', per100: { cal: 232, protein: 0.6, carb: 8, fat: 22, fiber: 0, sodium: 700, potassium: 25, calcium: 5, iron: 0.1, magnesium: 2, vitaminC: 0, vitaminD: 0, vitaminB12: 0 }, approx: true },
+  { id: 'bbq_sauce', name: 'BBQ sauce', category: 'sauces', unit: 'weight', base: 'g', per100: { cal: 172, protein: 0.9, carb: 40, fat: 0.6, fiber: 0.7, sodium: 690, potassium: 170, calcium: 18, iron: 0.6, magnesium: 12, vitaminC: 2, vitaminD: 0, vitaminB12: 0 }, approx: true },
+  { id: 'soy_sauce', name: 'Soy sauce', category: 'sauces', unit: 'volume', base: 'mL', per100: { cal: 53, protein: 8, carb: 4.9, fat: 0.1, fiber: 0.8, sodium: 5493, potassium: 362, calcium: 20, iron: 1.7, magnesium: 43, vitaminC: 0, vitaminD: 0, vitaminB12: 0 }, approx: true },
+  { id: 'hot_sauce', name: 'Hot sauce (Louisiana-style)', category: 'sauces', unit: 'volume', base: 'mL', per100: { cal: 12, protein: 0.5, carb: 1.5, fat: 0.7, fiber: 0.3, sodium: 1846, potassium: 190, calcium: 20, iron: 1.1, magnesium: 15, vitaminC: 5, vitaminD: 0, vitaminB12: 0 }, approx: true },
+  { id: 'ranch_dressing', name: 'Ranch dressing', category: 'sauces', unit: 'weight', base: 'g', per100: { cal: 430, protein: 1, carb: 6, fat: 45, fiber: 0, sodium: 700, potassium: 60, calcium: 30, iron: 0.2, magnesium: 5, vitaminC: 0, vitaminD: 0, vitaminB12: 0.1 }, approx: true },
   // ---- Powders & Supplements ----
-  { id: 'nutritional_yeast', name: 'Nutritional yeast', category: 'supplements', unit: 'weight', base: 'g', per100: { cal: 325, protein: 45, carb: 36, fat: 4, fiber: 20 } },
-  { id: 'turmeric', name: 'Turmeric, ground', category: 'supplements', unit: 'weight', base: 'g', per100: { cal: 312, protein: 9.7, carb: 67, fat: 3.3, fiber: 21 } },
-  { id: 'psyllium_husk', name: 'Psyllium husk', category: 'supplements', unit: 'weight', base: 'g', per100: { cal: 22, protein: 0, carb: 79, fat: 0, fiber: 79 }, approx: true },
-  { id: 'whey_protein', name: 'Whey protein powder', category: 'supplements', unit: 'count', base: 'g', itemAmount: 30, itemLabel: 'scoop', per100: { cal: 400, protein: 80, carb: 10, fat: 5, fiber: 0 }, approx: true },
-  { id: 'fish_oil', name: 'Fish oil capsules', category: 'supplements', unit: 'count', base: 'g', itemAmount: 1, itemLabel: 'capsule', per100: { cal: 900, protein: 0, carb: 0, fat: 100, fiber: 0 }, approx: true },
-  { id: 'creatine', name: 'Creatine monohydrate', category: 'supplements', unit: 'count', base: 'g', itemAmount: 5, itemLabel: 'scoop', per100: { cal: 0, protein: 0, carb: 0, fat: 0, fiber: 0 }, approx: true },
+  { id: 'nutritional_yeast', name: 'Nutritional yeast', category: 'supplements', unit: 'weight', base: 'g', per100: { cal: 325, protein: 45, carb: 36, fat: 4, fiber: 20, sodium: 25, potassium: 1200, calcium: 30, iron: 4, magnesium: 130, vitaminC: 0, vitaminD: 0, vitaminB12: 17 } },
+  { id: 'turmeric', name: 'Turmeric, ground', category: 'supplements', unit: 'weight', base: 'g', per100: { cal: 312, protein: 9.7, carb: 67, fat: 3.3, fiber: 21, sodium: 38, potassium: 2080, calcium: 168, iron: 41, magnesium: 208, vitaminC: 0.7, vitaminD: 0, vitaminB12: 0 } },
+  { id: 'psyllium_husk', name: 'Psyllium husk', category: 'supplements', unit: 'weight', base: 'g', per100: { cal: 22, protein: 0, carb: 79, fat: 0, fiber: 79, sodium: 8, potassium: 0, calcium: 0, iron: 0, magnesium: 0, vitaminC: 0, vitaminD: 0, vitaminB12: 0 }, approx: true },
+  { id: 'whey_protein', name: 'Whey protein powder', category: 'supplements', unit: 'count', base: 'g', itemAmount: 30, itemLabel: 'scoop', per100: { cal: 400, protein: 80, carb: 10, fat: 5, fiber: 0, sodium: 150, potassium: 200, calcium: 130, iron: 0.5, magnesium: 20, vitaminC: 0, vitaminD: 0, vitaminB12: 1 }, approx: true },
+  { id: 'fish_oil', name: 'Fish oil capsules', category: 'supplements', unit: 'count', base: 'g', itemAmount: 1, itemLabel: 'capsule', per100: { cal: 900, protein: 0, carb: 0, fat: 100, fiber: 0, sodium: 0, potassium: 0, calcium: 0, iron: 0, magnesium: 0, vitaminC: 0, vitaminD: 34, vitaminB12: 0 }, approx: true },
+  { id: 'creatine', name: 'Creatine monohydrate', category: 'supplements', unit: 'count', base: 'g', itemAmount: 5, itemLabel: 'scoop', per100: { cal: 0, protein: 0, carb: 0, fat: 0, fiber: 0, sodium: 0, potassium: 0, calcium: 0, iron: 0, magnesium: 0, vitaminC: 0, vitaminD: 0, vitaminB12: 0 }, approx: true },
   // ---- Junk (not in the source workbook — added per request, standard reference values) ----
-  { id: 'sugary_cereal', name: 'Sugary cereal', category: 'junk', unit: 'weight', base: 'g', per100: { cal: 380, protein: 5, carb: 84, fat: 3, fiber: 2 }, approx: true },
-  { id: 'soda', name: 'Soda (cola)', category: 'junk', unit: 'count', base: 'mL', itemAmount: 355, itemLabel: 'can', per100: { cal: 42, protein: 0, carb: 10.6, fat: 0, fiber: 0 }, approx: true },
-  { id: 'doritos', name: 'Doritos (Nacho Cheese)', category: 'junk', unit: 'weight', base: 'g', per100: { cal: 536, protein: 7.1, carb: 53.6, fat: 28.6, fiber: 3.6 }, approx: true },
-  { id: 'chicken_tenders', name: 'Chicken tenders (breaded, e.g. Perdue/Tyson)', category: 'junk', unit: 'count', base: 'g', itemAmount: 35, itemLabel: 'tender', per100: { cal: 250, protein: 13, carb: 17, fat: 14, fiber: 1 }, approx: true },
+  { id: 'sugary_cereal', name: 'Sugary cereal', category: 'junk', unit: 'weight', base: 'g', per100: { cal: 380, protein: 5, carb: 84, fat: 3, fiber: 2, sodium: 500, potassium: 150, calcium: 200, iron: 15, magnesium: 20, vitaminC: 15, vitaminD: 2, vitaminB12: 2 }, approx: true },
+  { id: 'soda', name: 'Soda (cola)', category: 'junk', unit: 'count', base: 'mL', itemAmount: 355, itemLabel: 'can', per100: { cal: 42, protein: 0, carb: 10.6, fat: 0, fiber: 0, sodium: 15, potassium: 2, calcium: 3, iron: 0, magnesium: 1, vitaminC: 0, vitaminD: 0, vitaminB12: 0 }, approx: true },
+  { id: 'doritos', name: 'Doritos (Nacho Cheese)', category: 'junk', unit: 'weight', base: 'g', per100: { cal: 536, protein: 7.1, carb: 53.6, fat: 28.6, fiber: 3.6, sodium: 638, potassium: 180, calcium: 130, iron: 1.1, magnesium: 55, vitaminC: 0, vitaminD: 0, vitaminB12: 0 }, approx: true },
+  { id: 'chicken_tenders', name: 'Chicken tenders (breaded, e.g. Perdue/Tyson)', category: 'junk', unit: 'count', base: 'g', itemAmount: 35, itemLabel: 'tender', per100: { cal: 250, protein: 13, carb: 17, fat: 14, fiber: 1, sodium: 550, potassium: 220, calcium: 30, iron: 1, magnesium: 20, vitaminC: 0, vitaminD: 0.1, vitaminB12: 0.3 }, approx: true },
 ];
-function foodById(id) { return FOOD_DB.find(f => f.id === id) || null; }
+// FOOD_DB plus this person's own added foods (STATE.diet.customFoods) — the single list every
+// lookup/browse/search function should use so a custom food behaves identically to a built-in
+// one everywhere (Meal Builder's category list and search, foodById()). Defensive Array.isArray
+// guard rather than relying solely on updateAllTMs()'s migration (which only runs lazily, the
+// first time Exercise Setup's MAXES tab renders) — an old save visiting Health & Diet directly
+// shouldn't be able to hit this before that guard has ever run.
+function allFoods() { return FOOD_DB.concat(Array.isArray(STATE.diet.customFoods) ? STATE.diet.customFoods : []); }
+function foodById(id) { return allFoods().find(f => f.id === id) || null; }
 // Options for the unit <select> on a meal item, filtered by the food's unit-type and (for
 // weight/volume foods only) the current Metric/Imperial toggle — count-type foods always offer
 // just their one natural item label, independent of the unit system.
@@ -925,9 +981,20 @@ function defaultMealUnitFor(food) { return mealUnitOptions(food)[0].value; }
 // Converts a meal-item's {foodId, qty, unit} into grams-or-mL-equivalent-in-the-food's-base,
 // then scales that food's per100 macro profile accordingly. Works uniformly for weight (per
 // 100g), volume (per 100mL) and count (qty * itemAmount, in whichever base that food uses).
+// The full set of per100 fields a food can carry — the 5 original macros plus the 8
+// micronutrients added 2026-09-11 (see the comment above FOOD_DB). computeItemMacro()/
+// computeMealTotals() sum generically over this list rather than naming each field twice, so a
+// future nutrient just needs adding here (and to every food's per100, and to whatever renders
+// it) — the scaling/summing math itself never needs touching again.
+const NUTRIENT_KEYS = ['cal', 'protein', 'carb', 'fat', 'fiber', 'sodium', 'potassium', 'calcium', 'iron', 'magnesium', 'vitaminC', 'vitaminD', 'vitaminB12'];
+function zeroNutrients() {
+  const z = {};
+  NUTRIENT_KEYS.forEach(k => { z[k] = 0; });
+  return z;
+}
 function computeItemMacro(item) {
   const food = foodById(item.foodId);
-  if (!food) return { cal: 0, protein: 0, carb: 0, fat: 0, fiber: 0 };
+  if (!food) return zeroNutrients();
   const qty = Number(item.qty) || 0;
   let baseAmount;
   if (food.unit === 'count') {
@@ -938,21 +1005,33 @@ function computeItemMacro(item) {
     baseAmount = qty * (VOLUME_TO_ML[item.unit] || 1);
   }
   const factor = baseAmount / 100;
-  return {
-    cal: food.per100.cal * factor,
-    protein: food.per100.protein * factor,
-    carb: food.per100.carb * factor,
-    fat: food.per100.fat * factor,
-    fiber: food.per100.fiber * factor,
-  };
+  const out = {};
+  NUTRIENT_KEYS.forEach(k => { out[k] = (food.per100[k] || 0) * factor; });
+  return out;
 }
 function computeMealTotals(items) {
-  const totals = { cal: 0, protein: 0, carb: 0, fat: 0, fiber: 0 };
+  const totals = zeroNutrients();
   (items || []).forEach(item => {
     const m = computeItemMacro(item);
-    totals.cal += m.cal; totals.protein += m.protein; totals.carb += m.carb; totals.fat += m.fat; totals.fiber += m.fiber;
+    NUTRIENT_KEYS.forEach(k => { totals[k] += m[k]; });
   });
   return totals;
+}
+// Display metadata (label + unit) for the 8 micronutrients — kept separate from NUTRIENT_KEYS
+// since the macros (cal/protein/carb/fat/fiber) already have their own hand-written rows
+// wherever totals are shown; this is just for the micronutrient block appended after them.
+const MICRONUTRIENT_META = [
+  { key: 'sodium', label: 'Sodium', unit: 'mg' },
+  { key: 'potassium', label: 'Potassium', unit: 'mg' },
+  { key: 'calcium', label: 'Calcium', unit: 'mg' },
+  { key: 'iron', label: 'Iron', unit: 'mg' },
+  { key: 'magnesium', label: 'Magnesium', unit: 'mg' },
+  { key: 'vitaminC', label: 'Vitamin C', unit: 'mg' },
+  { key: 'vitaminD', label: 'Vitamin D', unit: 'mcg' },
+  { key: 'vitaminB12', label: 'Vitamin B12', unit: 'mcg' },
+];
+function renderMicronutrientRows(totals) {
+  return MICRONUTRIENT_META.map(m => `<div class="row"><span style="font-size:13px;color:var(--text-dim)">${m.label} (${m.unit})</span><span class="mono" style="font-weight:700">${roundMacro(totals[m.key])}</span></div>`).join('');
 }
 
 const GUITAR_CHORDS = [
@@ -1324,6 +1403,9 @@ function defaultState() {
       // feature's own day convention. Each day is a list of slots: {id, mealId} — mealId is null
       // until a saved meal (STATE.diet.meals) is picked for that slot. See Health -> Setup -> Meal Plan.
       mealPlan: { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] },
+      // User-added foods (added 2026-09-11) — same shape as a FOOD_DB entry plus `custom: true`,
+      // picked from and searched alongside FOOD_DB via allFoods(). See "CUSTOM FOODS" section.
+      customFoods: [],
     },
     budget: defaultBudgetState(),
   };
@@ -1659,6 +1741,7 @@ function updateAllTMs() {
   if (!Array.isArray(STATE.diet.meals)) STATE.diet.meals = [];
   if (!STATE.diet.mealPlan || typeof STATE.diet.mealPlan !== 'object') STATE.diet.mealPlan = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
   for (let d = 0; d <= 6; d++) { if (!Array.isArray(STATE.diet.mealPlan[d])) STATE.diet.mealPlan[d] = []; }
+  if (!Array.isArray(STATE.diet.customFoods)) STATE.diet.customFoods = [];
   if (!STATE.settings.mealUnitSystem) STATE.settings.mealUnitSystem = 'metric';
   MEAL_UNIT_SYSTEM = STATE.settings.mealUnitSystem;
   if (!STATE.settings.defaultPage) STATE.settings.defaultPage = 'home';
@@ -4184,10 +4267,15 @@ function renderScheduleActivityRow(schedId, act) {
 }
 
 // ---------------- HEALTH SETUP: Meal Builder / All Meals ----------------
-function setHealthSetupSubtab(t) { HEALTH_SETUP_SUBTAB = t; render(); }
+function setHealthSetupSubtab(t) {
+  HEALTH_SETUP_SUBTAB = t;
+  CUSTOM_FOOD_FORM_OPEN = false; CUSTOM_FOOD_EDIT_ID = null; // don't resume a stale add/edit form across subtab switches
+  render();
+}
 // Health's own Setup: MEAL BUILDER (build/edit one meal from the FOOD_DB categories, with a
-// running Metric/Imperial-aware macro total), ALL MEALS (saved meals, editable), and MEAL PLAN
-// (assign saved meals to days of the week). Nothing here applies outside Health & Diet.
+// running Metric/Imperial-aware macro total), ALL MEALS (saved meals, editable), MEAL PLAN
+// (assign saved meals to days of the week), and MY FOODS (this person's own added foods).
+// Nothing here applies outside Health & Diet.
 function renderHealthSetup() {
   return `<div class="screen">
     <div class="section-title">Setup</div>
@@ -4195,8 +4283,9 @@ function renderHealthSetup() {
       <button class="${HEALTH_SETUP_SUBTAB==='builder'?'active':''}" onclick="setHealthSetupSubtab('builder')">MEAL BUILDER</button>
       <button class="${HEALTH_SETUP_SUBTAB==='meals'?'active':''}" onclick="setHealthSetupSubtab('meals')">ALL MEALS</button>
       <button class="${HEALTH_SETUP_SUBTAB==='plan'?'active':''}" onclick="setHealthSetupSubtab('plan')">MEAL PLAN</button>
+      <button class="${HEALTH_SETUP_SUBTAB==='myfoods'?'active':''}" onclick="setHealthSetupSubtab('myfoods')">MY FOODS</button>
     `)}
-    ${HEALTH_SETUP_SUBTAB === 'meals' ? renderAllMeals() : HEALTH_SETUP_SUBTAB === 'plan' ? renderMealPlanTab() : renderMealBuilderTab()}
+    ${HEALTH_SETUP_SUBTAB === 'meals' ? renderAllMeals() : HEALTH_SETUP_SUBTAB === 'plan' ? renderMealPlanTab() : HEALTH_SETUP_SUBTAB === 'myfoods' ? renderMyFoodsTab() : renderMealBuilderTab()}
   </div>`;
 }
 function roundMacro(n) { return Math.round((n || 0) * 10) / 10; }
@@ -4343,6 +4432,8 @@ function renderMealBuilderForm() {
 
     <div class="subtle-label" style="margin-bottom:8px;">ADD A FOOD</div>
     <input type="text" placeholder="Search foods…" value="${escapeHtml(draft.searchQuery || '')}" style="margin-bottom:12px;" oninput="onMealSearchInput(this.value)">
+    <button type="button" class="btn btn-ghost btn-sm" style="margin-bottom:12px;" onclick="toggleCustomFoodForm()">${CUSTOM_FOOD_FORM_OPEN ? 'CANCEL' : '+ ADD CUSTOM FOOD'}</button>
+    ${CUSTOM_FOOD_FORM_OPEN ? renderCustomFoodForm() : ''}
     <div id="mealFoodPicker">
       ${draft.searchQuery && draft.searchQuery.trim() ? renderFoodSearchResults(draft.searchQuery) : renderMealCategoryPicker(draft)}
     </div>
@@ -4359,6 +4450,8 @@ function renderMealBuilderForm() {
       <div class="row"><span style="font-size:13px;color:var(--text-dim)">Carbs (g)</span><span class="mono" style="font-weight:700">${roundMacro(totals.carb)}</span></div>
       <div class="row"><span style="font-size:13px;color:var(--text-dim)">Fat (g)</span><span class="mono" style="font-weight:700">${roundMacro(totals.fat)}</span></div>
       <div class="row"><span style="font-size:13px;color:var(--text-dim)">Fiber (g)</span><span class="mono" style="font-weight:700">${roundMacro(totals.fiber)}</span></div>
+      <div class="subtle-label" style="margin:14px 0 8px;">MICRONUTRIENTS</div>
+      ${renderMicronutrientRows(totals)}
     </div>
 
     <button class="btn btn-good" style="width:100%; margin-top:16px;" ${draft.items.length ? '' : 'disabled'} onclick="saveMealDraft()">SAVE MEAL</button>
@@ -4373,11 +4466,18 @@ function renderMealCategoryPicker(draft) {
     </div>
     ${draft.activeCategory ? renderCategoryFoodList(draft.activeCategory) : ''}`;
 }
+// A food row's little parenthetical tag — "(yours)" for a custom food takes priority over
+// "(approx.)" since knowing you typed it yourself matters more than a precision caveat.
+function foodTagHtml(f) {
+  if (f.custom) return ' <span style="color:var(--accent); font-size:10px;">(yours)</span>';
+  if (f.approx) return ' <span style="color:var(--text-faint); font-size:10px;">(approx.)</span>';
+  return '';
+}
 function renderCategoryFoodList(catId) {
-  const foods = FOOD_DB.filter(f => f.category === catId).slice().sort((a, b) => a.name.localeCompare(b.name));
+  const foods = allFoods().filter(f => f.category === catId).slice().sort((a, b) => a.name.localeCompare(b.name));
   return `<div class="panel scroll-box" style="margin-bottom:18px; max-height:280px; overflow-y:auto; padding:6px;">
     ${foods.map((f, i) => `<div class="row" style="padding:8px 6px; cursor:pointer; ${i < foods.length - 1 ? 'border-bottom:1px solid var(--border-soft);' : ''}" onclick="addFoodToMeal('${f.id}')">
-      <span style="font-size:13px;">${escapeHtml(f.name)}${f.approx ? ' <span style="color:var(--text-faint); font-size:10px;">(approx.)</span>' : ''}</span>
+      <span style="font-size:13px;">${escapeHtml(f.name)}${foodTagHtml(f)}</span>
       <span style="font-size:11px; color:var(--text-dim); flex-shrink:0;">${Math.round(f.per100.cal)} cal/100${f.base}</span>
     </div>`).join('')}
   </div>`;
@@ -4386,13 +4486,13 @@ function renderCategoryFoodList(catId) {
 // its category so a match is still identifiable once it's out of its usual category grouping.
 function renderFoodSearchResults(query) {
   const q = query.trim().toLowerCase();
-  const matches = FOOD_DB.filter(f => f.name.toLowerCase().includes(q)).slice().sort((a, b) => a.name.localeCompare(b.name));
+  const matches = allFoods().filter(f => f.name.toLowerCase().includes(q)).slice().sort((a, b) => a.name.localeCompare(b.name));
   if (!matches.length) {
     return `<div class="panel" style="margin-bottom:18px;"><div style="font-size:12px; color:var(--text-faint); text-align:center; padding:6px 0;">No foods match &quot;${escapeHtml(query.trim())}&quot;.</div></div>`;
   }
   return `<div class="panel scroll-box" style="margin-bottom:18px; max-height:280px; overflow-y:auto; padding:6px;">
     ${matches.map((f, i) => `<div class="row" style="padding:8px 6px; cursor:pointer; ${i < matches.length - 1 ? 'border-bottom:1px solid var(--border-soft);' : ''}" onclick="addFoodToMeal('${f.id}')">
-      <span style="font-size:13px;">${escapeHtml(f.name)}${f.approx ? ' <span style="color:var(--text-faint); font-size:10px;">(approx.)</span>' : ''} <span style="font-size:10px; color:var(--text-faint);">— ${escapeHtml((MEAL_CATEGORIES.find(c => c.id === f.category) || {}).label || '')}</span></span>
+      <span style="font-size:13px;">${escapeHtml(f.name)}${foodTagHtml(f)} <span style="font-size:10px; color:var(--text-faint);">— ${escapeHtml((MEAL_CATEGORIES.find(c => c.id === f.category) || {}).label || '')}</span></span>
       <span style="font-size:11px; color:var(--text-dim); flex-shrink:0;">${Math.round(f.per100.cal)} cal/100${f.base}</span>
     </div>`).join('')}
   </div>`;
@@ -4418,6 +4518,160 @@ function renderMealItemRow(item) {
     <div style="font-size:11px; color:var(--text-dim);">${Math.round(macro.cal)} cal &middot; P ${roundMacro(macro.protein)}g &middot; C ${roundMacro(macro.carb)}g &middot; F ${roundMacro(macro.fat)}g &middot; Fiber ${roundMacro(macro.fiber)}g</div>
   </div>`;
 }
+
+// ================= CUSTOM FOODS (opt-in, added 2026-09-11) =================
+// A person's own added foods (STATE.diet.customFoods) — same one form whether opened inline from
+// Meal Builder's "+ ADD CUSTOM FOOD" or from Health Setup's MY FOODS tab (see renderMyFoodsTab()).
+// The form asks for nutrition PER SERVING (whatever size the person actually measured/read off a
+// label), not per-100g/mL like FOOD_DB's own entries — saveCustomFood() does that conversion so
+// nobody has to do the math by hand. For a "count" food (e.g. "1 slice"), itemAmount is fixed at
+// 100 and the entered per-serving values ARE per100 directly (baseAmount = qty*100, factor =
+// baseAmount/100 = qty) — the simplest way to make "per item" and "per100" the same number.
+let CUSTOM_FOOD_FORM_OPEN = false;
+let CUSTOM_FOOD_EDIT_ID = null; // id being edited, or null when the form is composing a new food
+function nutrientInputId(key) { return 'cf' + key.charAt(0).toUpperCase() + key.slice(1); }
+function toggleCustomFoodForm() {
+  CUSTOM_FOOD_FORM_OPEN = !CUSTOM_FOOD_FORM_OPEN;
+  CUSTOM_FOOD_EDIT_ID = null; // always resets to "new food" mode — editCustomFood() sets it explicitly afterward
+  render();
+}
+function editCustomFood(id) {
+  CUSTOM_FOOD_EDIT_ID = id;
+  CUSTOM_FOOD_FORM_OPEN = true;
+  render();
+}
+function cancelCustomFoodForm() {
+  CUSTOM_FOOD_FORM_OPEN = false;
+  CUSTOM_FOOD_EDIT_ID = null;
+  render();
+}
+// Pure DOM show/hide, no render() — toggling this must NOT wipe whatever's already been typed
+// into the other fields (name, macros), which a full render() would do since drafts here live
+// only in the DOM, not in STATE, until Save is clicked. Same reasoning as every other
+// "targeted update instead of render()" spot in this app (onMealSearchInput, selectNoteTag, ...).
+function toggleCustomFoodMicroVisibility() {
+  const wrap = document.getElementById('cfMicroWrap');
+  const btn = document.getElementById('cfMicroToggleBtn');
+  if (!wrap || !btn) return;
+  wrap.hidden = !wrap.hidden;
+  btn.textContent = wrap.hidden ? '+ ADD MICRONUTRIENTS (OPTIONAL)' : 'HIDE MICRONUTRIENTS';
+}
+function renderCustomFoodForm() {
+  const editing = CUSTOM_FOOD_EDIT_ID ? STATE.diet.customFoods.find(f => f.id === CUSTOM_FOOD_EDIT_ID) : null;
+  const servingType = editing ? editing.unit : 'weight';
+  const servingAmount = editing && editing.servingAmount ? editing.servingAmount : 100;
+  const multiplier = editing ? (servingType === 'count' ? 1 : servingAmount / 100) : 0;
+  const perServing = {};
+  NUTRIENT_KEYS.forEach(k => { perServing[k] = editing ? (editing.per100[k] || 0) * multiplier : ''; });
+  const fieldVal = (k) => perServing[k] === '' ? '' : roundMacro(perServing[k]);
+  const hasMicroData = MICRONUTRIENT_META.some(m => perServing[m.key]);
+  return `<div class="panel" style="margin-bottom:14px;">
+    <div class="row" style="margin-bottom:10px;">
+      <div class="subtle-label" style="margin-bottom:0;">${editing ? 'EDIT CUSTOM FOOD' : 'ADD CUSTOM FOOD'}</div>
+      <button type="button" class="btn btn-ghost btn-sm" onclick="cancelCustomFoodForm()">CANCEL</button>
+    </div>
+    <label class="field"><span class="lbl">Name</span><input type="text" id="cfName" value="${editing ? escapeHtml(editing.name) : ''}" placeholder="e.g. Mom's lasagna"></label>
+    <label class="field"><span class="lbl">Category</span><select id="cfCategory">${MEAL_CATEGORIES.map(c => `<option value="${c.id}" ${editing && editing.category===c.id ? 'selected' : ''}>${escapeHtml(c.label)}</option>`).join('')}</select></label>
+    <label class="field"><span class="lbl">Serving type</span>
+      <select id="cfServingType">
+        <option value="weight" ${servingType==='weight'?'selected':''}>Weight (g)</option>
+        <option value="volume" ${servingType==='volume'?'selected':''}>Volume (mL)</option>
+        <option value="count" ${servingType==='count'?'selected':''}>Item (e.g. 1 egg, 1 slice)</option>
+      </select>
+    </label>
+    <div class="field-row">
+      <label class="field"><span class="lbl">Serving size in g/mL (ignored for "Item")</span><input type="number" id="cfServingAmount" value="${servingType!=='count' ? servingAmount : ''}" placeholder="e.g. 40"></label>
+      <label class="field"><span class="lbl">Item label (only for "Item", e.g. "slice")</span><input type="text" id="cfItemLabel" value="${editing && editing.itemLabel ? escapeHtml(editing.itemLabel) : ''}" placeholder="e.g. slice"></label>
+    </div>
+    <div class="subtle-label" style="margin:14px 0 8px;">NUTRITION PER SERVING</div>
+    <div class="field-row">
+      <label class="field"><span class="lbl">Calories</span><input type="number" id="${nutrientInputId('cal')}" value="${fieldVal('cal')}"></label>
+      <label class="field"><span class="lbl">Protein (g)</span><input type="number" id="${nutrientInputId('protein')}" value="${fieldVal('protein')}"></label>
+    </div>
+    <div class="field-row">
+      <label class="field"><span class="lbl">Carbs (g)</span><input type="number" id="${nutrientInputId('carb')}" value="${fieldVal('carb')}"></label>
+      <label class="field"><span class="lbl">Fat (g)</span><input type="number" id="${nutrientInputId('fat')}" value="${fieldVal('fat')}"></label>
+    </div>
+    <label class="field"><span class="lbl">Fiber (g)</span><input type="number" id="${nutrientInputId('fiber')}" value="${fieldVal('fiber')}"></label>
+    <button type="button" id="cfMicroToggleBtn" class="btn btn-ghost btn-sm" style="margin:8px 0;" onclick="toggleCustomFoodMicroVisibility()">${hasMicroData ? 'HIDE' : '+ ADD'} MICRONUTRIENTS (OPTIONAL)</button>
+    <div id="cfMicroWrap" ${hasMicroData ? '' : 'hidden'}>
+      ${MICRONUTRIENT_META.map(m => `<label class="field"><span class="lbl">${m.label} (${m.unit})</span><input type="number" id="${nutrientInputId(m.key)}" value="${fieldVal(m.key)}"></label>`).join('')}
+    </div>
+    <button class="btn btn-primary btn-block" style="margin-top:12px;" onclick="saveCustomFood()">${editing ? 'UPDATE' : 'SAVE'} CUSTOM FOOD</button>
+  </div>`;
+}
+function saveCustomFood() {
+  const name = (document.getElementById('cfName').value || '').trim();
+  if (!name) { showToast('Give it a name'); return; }
+  const category = document.getElementById('cfCategory').value;
+  const servingType = document.getElementById('cfServingType').value; // 'weight' | 'volume' | 'count'
+  const itemLabelRaw = (document.getElementById('cfItemLabel').value || '').trim();
+  if (servingType === 'count' && !itemLabelRaw) { showToast('Give the item a label, e.g. "egg"'); return; }
+  const cal = Number(document.getElementById(nutrientInputId('cal')).value) || 0;
+  if (!cal) { showToast('Enter at least the calories for one serving'); return; }
+  const servingAmount = Math.max(1, Number(document.getElementById('cfServingAmount').value) || 100);
+  // count-type: itemAmount fixed at 100, so per-serving values entered ARE per100 already (no
+  // conversion needed) — see the block comment above this section for why.
+  const divisor = servingType === 'count' ? 1 : (servingAmount / 100);
+  const per100 = {};
+  NUTRIENT_KEYS.forEach(k => { per100[k] = (Number(document.getElementById(nutrientInputId(k)).value) || 0) / divisor; });
+
+  const wasEditing = !!CUSTOM_FOOD_EDIT_ID;
+  const food = {
+    id: CUSTOM_FOOD_EDIT_ID || uid(), name, category,
+    unit: servingType, base: servingType === 'weight' ? 'g' : servingType === 'volume' ? 'mL' : 'g',
+    per100, custom: true,
+  };
+  if (servingType === 'count') { food.itemAmount = 100; food.itemLabel = itemLabelRaw; }
+  else { food.servingAmount = servingAmount; } // metadata only, for re-showing "per serving" when editing — never read by the macro math
+
+  if (wasEditing) {
+    const idx = STATE.diet.customFoods.findIndex(f => f.id === CUSTOM_FOOD_EDIT_ID);
+    if (idx >= 0) STATE.diet.customFoods[idx] = food;
+  } else {
+    STATE.diet.customFoods.push(food);
+  }
+  saveState();
+  CUSTOM_FOOD_FORM_OPEN = false;
+  CUSTOM_FOOD_EDIT_ID = null;
+  showToast(wasEditing ? 'Custom food updated' : 'Custom food saved');
+  render();
+}
+function deleteCustomFood(id) {
+  showConfirm('Delete this custom food? Any saved meals using it will show 0 for its macros afterward, instead of erroring.', () => {
+    STATE.diet.customFoods = STATE.diet.customFoods.filter(f => f.id !== id);
+    if (CUSTOM_FOOD_EDIT_ID === id) { CUSTOM_FOOD_EDIT_ID = null; CUSTOM_FOOD_FORM_OPEN = false; }
+    saveState();
+    render();
+  });
+}
+// Health Setup's MY FOODS tab — browse/edit/delete every custom food in one place, complementing
+// the inline "+ ADD CUSTOM FOOD" entry point in Meal Builder (same form, same functions).
+function renderMyFoodsTab() {
+  const foods = STATE.diet.customFoods;
+  return `
+    <div class="row" style="margin:18px 0 8px;">
+      <div class="subtle-label" style="margin-bottom:0;">MY FOODS</div>
+      <button class="btn btn-sm btn-primary" onclick="toggleCustomFoodForm()">${CUSTOM_FOOD_FORM_OPEN ? 'CANCEL' : '+ ADD CUSTOM FOOD'}</button>
+    </div>
+    ${CUSTOM_FOOD_FORM_OPEN ? renderCustomFoodForm() : ''}
+    <div class="stack">
+      ${foods.length ? foods.map(renderCustomFoodCard).join('') : emptyState('No custom foods yet — add one above, or from Meal Builder while building a meal.')}
+    </div>
+  `;
+}
+function renderCustomFoodCard(f) {
+  return `<div class="panel" onclick="editCustomFood('${f.id}')" style="cursor:pointer;">
+    <div class="row" style="align-items:flex-start;">
+      <div>
+        <div style="font-size:14px; font-weight:700;">${escapeHtml(f.name)}</div>
+        <div style="font-size:11px; color:var(--text-dim); margin-top:4px;">${escapeHtml((MEAL_CATEGORIES.find(c => c.id === f.category) || {}).label || '')} &middot; ${Math.round(f.per100.cal)} cal/100${f.base}</div>
+      </div>
+      <button class="icon-btn" style="color:var(--bad); flex-shrink:0;" onclick="event.stopPropagation(); deleteCustomFood('${f.id}')" title="Delete">${icon('close')}</button>
+    </div>
+  </div>`;
+}
+
 function renderAllMeals() {
   const meals = STATE.diet.meals;
   return `

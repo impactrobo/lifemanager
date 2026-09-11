@@ -128,6 +128,25 @@ interface Meal {
   createdAt: number;
   updatedAt: number;
 }
+// Per100 covers the 5 macros plus the 8 micronutrients added 2026-09-11 (see NUTRIENT_KEYS in
+// app.js) — all optional here since older/looser call sites build partial objects; the real
+// enforcement is computeItemMacro()'s `food.per100[k] || 0` fallback, not this type.
+interface FoodPer100 {
+  cal?: number; protein?: number; carb?: number; fat?: number; fiber?: number;
+  sodium?: number; potassium?: number; calcium?: number; iron?: number; magnesium?: number;
+  vitaminC?: number; vitaminD?: number; vitaminB12?: number;
+}
+interface CustomFood {
+  id: string;
+  name: string;
+  category: string;
+  unit: 'weight' | 'volume' | 'count';
+  base: string;
+  itemAmount?: number;
+  itemLabel?: string;
+  per100: FoodPer100;
+  custom: true;
+}
 interface DietState {
   tdee: number | null;
   proteinG: number | null;
@@ -137,6 +156,7 @@ interface DietState {
   macro: DietMacroInputs;
   meals: Meal[];
   mealPlan: DayOfWeekMap<{ id: string; mealId: string | null }>;
+  customFoods: CustomFood[];
 }
 
 interface RecurringIncome {

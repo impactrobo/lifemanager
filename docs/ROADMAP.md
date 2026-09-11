@@ -255,6 +255,26 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Diet: expanded food database + micronutrients + custom foods (2026-09-11)** — `FOOD_DB`
+  grew from 83 to 122 foods (steered by the person: more meat/chicken/poultry/fish varieties,
+  more veggies, several cheeses, and a new "Sauces & Condiments" `MEAL_CATEGORIES` entry —
+  ketchup, mustards, mayo, BBQ/soy/hot sauce, ranch). Every food, existing and new, gained 8
+  micronutrient fields on `per100` (sodium/potassium/calcium/iron/magnesium/vitaminC/vitaminD/
+  vitaminB12) — typical/reference values from general nutrition knowledge, same footing as the
+  macros already were, not lab data for any specific brand (see the block comment above
+  `FOOD_DB`). `computeItemMacro()`/`computeMealTotals()` were generalized to sum over a shared
+  `NUTRIENT_KEYS` list instead of naming each field twice, and Meal Builder's TOTALS panel grew a
+  MICRONUTRIENTS section under the existing macro rows.
+  - **Custom foods**: `STATE.diet.customFoods` — add your own via "+ ADD CUSTOM FOOD" inline in
+    Meal Builder or from Health Setup's new MY FOODS tab (same form either way). The form asks
+    for nutrition **per serving** (whatever size you actually measured or read off a label), not
+    per-100g — `saveCustomFood()` does that conversion so nobody does the math by hand; for a
+    "count" food (e.g. "1 slice") `itemAmount` is fixed at 100 so the entered per-item value
+    becomes `per100` directly, no scaling needed. Micronutrients are optional and collapsed
+    behind a toggle. `allFoods()` (`FOOD_DB` + `customFoods`) is now the one list every
+    lookup/browse/search function uses, so a custom food behaves identically to a built-in one
+    everywhere, tagged "(yours)" in pickers. Deleting one degrades a meal item referencing it to
+    zero macros rather than erroring.
 - **Settings: aesthetic groups collapse by default; accent picker moved inline** — every visit to
   Settings now opens with all four groups (Maximalist/Vibrant/Contrast/Light) collapsed
   (`AESTHETIC_GROUPS_OPEN.clear()` in `openSetup()`), instead of everything open — with 22
