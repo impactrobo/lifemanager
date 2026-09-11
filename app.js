@@ -8168,10 +8168,22 @@ function setScheduleSubtab(t) { SCHEDULE_SUBTAB = t; render(); }
 const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 let CAL_MONTH = null;         // {year, month} — 0-indexed month, lazily set to the current month
 let CAL_SELECTED_DATE = null; // 'YYYY-MM-DD', lazily set to today
+// Zoom level for the Calendar subtab — 'year' | 'month' | 'week' | 'day'. Month is the original
+// (and default) granularity; Year and Week were added later as explicit zoom-out/zoom-in levels
+// around it, Day being what was already the reminders panel under the month grid. Not reset on
+// tab switches, same treatment as CAL_MONTH/CAL_SELECTED_DATE — it's a "where you left the
+// calendar" convenience, not part of the tab/subtab nav history.
+let CAL_ZOOM = 'month';
 let REMINDER_FORM_OPEN = false;
 function ensureCalState() {
   if (!CAL_MONTH) { const d = new Date(); CAL_MONTH = { year: d.getFullYear(), month: d.getMonth() }; }
   if (!CAL_SELECTED_DATE) CAL_SELECTED_DATE = todayStr();
+}
+function calSetZoom(z) { CAL_ZOOM = z; render(); }
+function calGoToYear(delta) {
+  ensureCalState();
+  CAL_MONTH = { year: CAL_MONTH.year + delta, month: CAL_MONTH.month };
+  render();
 }
 function calGoToMonth(delta) {
   ensureCalState();
@@ -8180,9 +8192,37 @@ function calGoToMonth(delta) {
   CAL_MONTH = { year: y, month: m };
   render();
 }
+// Week/Day navigation shift CAL_SELECTED_DATE itself (not just CAL_MONTH) since the selected day
+// is what a week/day view is actually centered on; CAL_MONTH is kept in sync so switching back to
+// Month/Year lands on the month the selected day is actually in, even across a month/year boundary.
+function calGoToWeek(delta) { calShiftSelectedDate(delta * 7); }
+function calGoToDay(delta) { calShiftSelectedDate(delta); }
+function calShiftSelectedDate(deltaDays) {
+  ensureCalState();
+  const d = new Date(CAL_SELECTED_DATE + 'T00:00:00');
+  d.setDate(d.getDate() + deltaDays);
+  CAL_SELECTED_DATE = dateKey(d.getFullYear(), d.getMonth(), d.getDate());
+  CAL_MONTH = { year: d.getFullYear(), month: d.getMonth() };
+  render();
+}
 function calSelectDay(dateStr) {
   CAL_SELECTED_DATE = dateStr;
   REMINDER_FORM_OPEN = false;
+  render();
+}
+// Used from Year view, where a day cell has no reminders panel of its own to drop down into —
+// tapping a day there jumps straight into Day zoom for it, rather than just selecting silently.
+function calSelectDayAndZoom(dateStr, zoom) {
+  CAL_SELECTED_DATE = dateStr;
+  const d = new Date(dateStr + 'T00:00:00');
+  CAL_MONTH = { year: d.getFullYear(), month: d.getMonth() };
+  CAL_ZOOM = zoom;
+  REMINDER_FORM_OPEN = false;
+  render();
+}
+function calZoomToMonth(year, month) {
+  CAL_MONTH = { year, month };
+  CAL_ZOOM = 'month';
   render();
 }
 function dateKey(y, m, d) { return `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`; }
@@ -8196,8 +8236,42 @@ function fmtReminderTime(hhmm) {
   let h12 = h % 12; if (h12 === 0) h12 = 12;
   return `${h12}:${String(m).padStart(2,'0')}${period}`;
 }
+// The 7 Sun-Sat Date objects for the week containing dateStr.
+function calWeekBounds(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  const start = new Date(d);
+  start.setDate(d.getDate() - d.getDay());
+  const days = [];
+  for (let i = 0; i < 7; i++) { const dd = new Date(start); dd.setDate(start.getDate() + i); days.push(dd); }
+  return days;
+}
+// ---- Zoom dispatcher + the shared weekday-labeled cell grid (Month/Week share this shape;
+// Year uses its own smaller cal-mini-* grid, Day has no grid at all) ----
 function renderScheduleCalendar() {
   ensureCalState();
+  return `
+    <div class="unit-toggle cal-zoom-toggle">
+      <button class="${CAL_ZOOM==='year'?'active':''}" onclick="calSetZoom('year')">YEAR</button>
+      <button class="${CAL_ZOOM==='month'?'active':''}" onclick="calSetZoom('month')">MONTH</button>
+      <button class="${CAL_ZOOM==='week'?'active':''}" onclick="calSetZoom('week')">WEEK</button>
+      <button class="${CAL_ZOOM==='day'?'active':''}" onclick="calSetZoom('day')">DAY</button>
+    </div>
+    ${CAL_ZOOM === 'year' ? renderCalYear()
+      : CAL_ZOOM === 'week' ? renderCalWeek()
+      : CAL_ZOOM === 'day' ? renderCalDay()
+      : renderCalMonth()}`;
+}
+function renderCalCell(d /* Date */, today) {
+  const dStr = dateKey(d.getFullYear(), d.getMonth(), d.getDate());
+  const has = remindersOn(dStr).length > 0;
+  const isToday = dStr === today;
+  const isSelected = dStr === CAL_SELECTED_DATE;
+  return `<button class="cal-cell ${isToday?'cal-cell-today':''} ${isSelected?'cal-cell-selected':''}" onclick="calSelectDay('${dStr}')">
+    <span class="cal-daynum">${d.getDate()}</span>
+    ${has ? '<span class="cal-dot"></span>' : ''}
+  </button>`;
+}
+function renderCalMonth() {
   const { year, month } = CAL_MONTH;
   const first = new Date(year, month, 1);
   const startWeekday = first.getDay(); // 0 = Sun
@@ -8206,19 +8280,10 @@ function renderScheduleCalendar() {
   const weekdayHeaders = ['S','M','T','W','T','F','S'].map(w => `<div class="cal-weekday">${w}</div>`).join('');
   let cells = '';
   for (let i = 0; i < startWeekday; i++) cells += `<div class="cal-cell cal-cell-blank"></div>`;
-  for (let d = 1; d <= daysInMonth; d++) {
-    const dStr = dateKey(year, month, d);
-    const has = remindersOn(dStr).length > 0;
-    const isToday = dStr === today;
-    const isSelected = dStr === CAL_SELECTED_DATE;
-    cells += `<button class="cal-cell ${isToday?'cal-cell-today':''} ${isSelected?'cal-cell-selected':''}" onclick="calSelectDay('${dStr}')">
-      <span class="cal-daynum">${d}</span>
-      ${has ? '<span class="cal-dot"></span>' : ''}
-    </button>`;
-  }
+  for (let d = 1; d <= daysInMonth; d++) cells += renderCalCell(new Date(year, month, d), today);
   return `
     <div class="week-selector" style="margin-bottom:10px;">
-      <div class="cycle-label" style="font-size:20px;">${MONTH_NAMES[month]} ${year}</div>
+      <div class="cycle-label" style="font-size:20px; cursor:pointer;" onclick="calSetZoom('year')" title="Zoom out to year">${MONTH_NAMES[month]} ${year}</div>
       <div class="cycle-btns">
         <button onclick="calGoToMonth(-1)">&#8249;</button>
         <button onclick="calGoToMonth(1)">&#8250;</button>
@@ -8227,6 +8292,78 @@ function renderScheduleCalendar() {
     <div class="cal-grid">${weekdayHeaders}${cells}</div>
     <div class="divider"></div>
     ${renderSelectedDayReminders()}`;
+}
+function renderCalWeek() {
+  ensureCalState();
+  const days = calWeekBounds(CAL_SELECTED_DATE);
+  const today = todayStr();
+  const weekdayHeaders = ['S','M','T','W','T','F','S'].map(w => `<div class="cal-weekday">${w}</div>`).join('');
+  const cells = days.map(d => renderCalCell(d, today)).join('');
+  const start = days[0], end = days[6];
+  const label = start.getMonth() === end.getMonth()
+    ? `${MONTH_NAMES[start.getMonth()]} ${start.getDate()}–${end.getDate()}, ${start.getFullYear()}`
+    : `${MONTH_NAMES[start.getMonth()].slice(0,3)} ${start.getDate()} – ${MONTH_NAMES[end.getMonth()].slice(0,3)} ${end.getDate()}, ${end.getFullYear()}`;
+  return `
+    <div class="week-selector" style="margin-bottom:10px;">
+      <div class="cycle-label" style="font-size:17px; cursor:pointer;" onclick="calSetZoom('month')" title="Zoom out to month">${label}</div>
+      <div class="cycle-btns">
+        <button onclick="calGoToWeek(-1)">&#8249;</button>
+        <button onclick="calGoToWeek(1)">&#8250;</button>
+      </div>
+    </div>
+    <div class="cal-grid">${weekdayHeaders}${cells}</div>
+    <div class="divider"></div>
+    ${renderSelectedDayReminders()}`;
+}
+function renderCalDay() {
+  ensureCalState();
+  const d = new Date(CAL_SELECTED_DATE + 'T00:00:00');
+  const label = d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+  return `
+    <div class="week-selector" style="margin-bottom:10px;">
+      <div class="cycle-label" style="font-size:18px; cursor:pointer;" onclick="calSetZoom('week')" title="Zoom out to week">${label}</div>
+      <div class="cycle-btns">
+        <button onclick="calGoToDay(-1)">&#8249;</button>
+        <button onclick="calGoToDay(1)">&#8250;</button>
+      </div>
+    </div>
+    ${renderSelectedDayReminders()}`;
+}
+function renderCalYear() {
+  ensureCalState();
+  const { year } = CAL_MONTH;
+  const today = todayStr();
+  let months = '';
+  for (let m = 0; m < 12; m++) months += renderCalMiniMonth(year, m, today);
+  return `
+    <div class="week-selector" style="margin-bottom:10px;">
+      <div class="cycle-label" style="font-size:20px;">${year}</div>
+      <div class="cycle-btns">
+        <button onclick="calGoToYear(-1)">&#8249;</button>
+        <button onclick="calGoToYear(1)">&#8250;</button>
+      </div>
+    </div>
+    <div class="cal-year-grid">${months}</div>`;
+}
+// Compact 12-up month grid for Year zoom — no weekday header row (no room at this size); tapping
+// a day jumps straight to Day zoom (calSelectDayAndZoom), tapping the month label zooms to Month.
+function renderCalMiniMonth(year, month, today) {
+  const first = new Date(year, month, 1);
+  const startWeekday = first.getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  let cells = '';
+  for (let i = 0; i < startWeekday; i++) cells += `<div class="cal-mini-cell cal-mini-blank"></div>`;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dStr = dateKey(year, month, d);
+    const has = remindersOn(dStr).length > 0;
+    const isToday = dStr === today;
+    const isSelected = dStr === CAL_SELECTED_DATE;
+    cells += `<button class="cal-mini-cell ${isToday?'cal-mini-today':''} ${isSelected?'cal-mini-selected':''} ${has?'cal-mini-has':''}" onclick="calSelectDayAndZoom('${dStr}','day')">${d}</button>`;
+  }
+  return `<div class="cal-mini-month">
+    <div class="cal-mini-month-label" onclick="calZoomToMonth(${year},${month})">${MONTH_NAMES[month].slice(0,3).toUpperCase()}</div>
+    <div class="cal-mini-grid">${cells}</div>
+  </div>`;
 }
 function renderSelectedDayReminders() {
   ensureCalState();
@@ -8305,6 +8442,7 @@ function jumpToReminderDay(dateStr) {
   CAL_SELECTED_DATE = dateStr;
   const d = new Date(dateStr + 'T00:00:00');
   CAL_MONTH = { year: d.getFullYear(), month: d.getMonth() };
+  CAL_ZOOM = 'month'; // land on the familiar month+day-panel view regardless of whatever zoom was last left on
   goHomeSection('schedule'); // switchTab() resets SCHEDULE_SUBTAB to 'today', so set 'calendar' after
   SCHEDULE_SUBTAB = 'calendar';
   render();

@@ -66,8 +66,10 @@ before starting any of these.
   charge (e.g. "Roth IRA — $250/mo toward a $7,000/yr cap") to show progress against a multi-month
   target, distinct from the monthly contributed/planned fill the budget bar already shows (see
   "Budget: savings/investment goal-progress fill" in Recently Shipped).
-- **Schedule:** a way to see the week at a glance across multiple named schedules, not just one
-  active schedule's daily anchors + a plain calendar.
+- **Schedule:** a way to see the week at a glance across multiple named *schedules* (which preset
+  — e.g. "Weekday" vs "Weekend" — is active which day), not just one active schedule's daily
+  anchors. Distinct from the Calendar's own Week zoom (see Recently Shipped), which is about
+  reminders per day, not which named schedule governs it.
 - **Web Push reminders — client side shipped 2026-09-10, backend still to deploy.** Settings has
   "ENABLE REMINDER NOTIFICATIONS" (`renderReminderPushPanel()`), gated on browser support and,
   on iOS, on being launched from a Home Screen install (`isInstalledStandalone()`). Enabling it
@@ -270,6 +272,32 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Calendar: zoom levels (Year / Month / Week / Day).** The Schedule -> Calendar subtab used to
+  be month-only, with the reminders-for-the-selected-day panel underneath acting as a de facto
+  "day view." Added an explicit `CAL_ZOOM` state (`'year'|'month'|'week'|'day'`, default `'month'`
+  so all existing month-view behavior and tests are untouched) with a `.unit-toggle`-styled
+  YEAR/MONTH/WEEK/DAY segmented control at the top of the Calendar screen.
+  - **Year** is a 3x4 grid of compact mini-months (`.cal-mini-month`/`.cal-mini-grid`, own smaller
+    CSS — no weekday header row, no room at that size) — a day with a reminder is marked by
+    coloring its number `--accent` rather than a dot (a 5px dot doesn't read at ~14px cell size).
+    Tapping a day jumps straight into Day zoom for it (`calSelectDayAndZoom()` — Year has no
+    reminders panel of its own to drop into); tapping a month's label zooms into Month
+    (`calZoomToMonth()`).
+  - **Week** reuses the exact same `.cal-grid`/`.cal-cell` markup as Month (refactored into a
+    shared `renderCalCell()`), just fed the 7 Sun–Sat days around `CAL_SELECTED_DATE`
+    (`calWeekBounds()`) instead of a full month.
+  - **Day** is just the header + the existing reminders-for-this-day panel, no grid.
+  - **Navigation**: `calGoToYear()`/`calGoToMonth()` (existing) shift `CAL_MONTH`;
+    `calGoToWeek()`/`calGoToDay()` shift `CAL_SELECTED_DATE` itself (what a week/day view is
+    actually centered on) via a shared `calShiftSelectedDate()`, keeping `CAL_MONTH` in sync so
+    switching back to Month/Year lands on the right month even after crossing a month boundary.
+  - **Zoom-out breadcrumb**: Month/Week/Day's own header label is tappable to zoom out one level
+    (Day -> Week -> Month -> Year), on top of the explicit toggle — cheap to add since the header
+    was already sitting there unused for interaction.
+  - `jumpToReminderDay()` (tapping a reminder from Home) explicitly resets `CAL_ZOOM` to `'month'`
+    so it always lands on the familiar view regardless of whatever zoom was last left active.
+  - `tests/test_calendar_zoom.js` covers all of the above; `test_calendar.js` (month-only,
+    predates this) needed no changes since Month stayed the default zoom.
 - **Budget: savings/investment goal-progress fill.** The isSavings recurring-charge flag already
   reserved a slice of the budget bar (`.budget-bar-savings`); it now reads as an actual goal
   rather than a flat "this counts as spent" block. That slice renders as a light diagonal-hatch
