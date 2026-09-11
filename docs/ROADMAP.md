@@ -58,7 +58,8 @@ before starting any of these.
 
 - **Exercise:** a personal-record (PR) log/timeline distinct from the per-workout history — the
   app tracks training maxes (`tmLb`) but there's no dedicated "here's every time you hit a new
-  best" view.
+  best" view. Distinct from Progress -> COMPARE's lift-history charts (see Recently Shipped),
+  which trend the actual top-set weight over time but don't call out a new-PR moment specifically.
 - **Health & Diet:** a weight-trend trailing average (the current chart is raw logged points),
   and a way to log incidental cardio calories from a wearable import rather than typing them in.
 - **Budget:** multi-month or year-over-year trend view (currently one month at a time via the
@@ -272,6 +273,27 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Exercise Progress: COMPARE — multi-plot body weight + lift history.** A new 4th Progress
+  subtab alongside Body Weight/Body Measurement/Set Volume. Scoped via a few rounds of questions:
+  charts real logged top-set weight (heaviest completed set per session — weight *and* reps both
+  filled in, not just a placeholder row), not the programmed Training Max; renders as small
+  multiples (one small chart per selected metric, stacked) rather than one overlaid chart, since a
+  225lb squat and a 180lb bodyweight on the same axis crushes whichever line is smaller; scoped to
+  T1/T2 tiers only (T3 accessories have no Training Max concept to anchor a "lift" against).
+  - `trackedLiftSlots()` finds every (categoryId, tierKey) actually assigned to an enabled T1/T2
+    slot on some "weights" workout, deduped — the picker list (`.tag-pill` chips, up to
+    `COMPARE_MAX_METRICS` = 4 at once).
+  - `liftHistorySeries(categoryId, tierKey)` is the real aggregation work: cycle numbers only ever
+    increase (see `logKey()`), so `STATE.logs` is a person's *entire* training history, not just
+    the current mesocycle — this scans every log whose workout ever used that category+tier slot,
+    across every cycle, pulls each session's top completed set, and returns it dated and sorted.
+  - Small multiples share consistent date-label *formatting*, not a synced axis/crosshair — no
+    time-scale chart plugin is loaded (see the CDN allowlist in CLAUDE.md), so this stays
+    consistent with the existing Body Weight/Body Measurement charts' simpler categorical-label
+    approach rather than introducing a new charting mechanism for one view.
+  - `tests/test_progress_compare.js` covers the aggregation (including an incomplete trailing set
+    correctly excluded from a session's top-set pick), the picker toggling, the selection cap, and
+    a chart canvas actually rendering for a selected metric with enough data.
 - **Calendar absorbs the old TODAY subtab; per-schedule color-coded anchor icon.** The dedicated
   Schedule -> TODAY subtab (`renderLifeDaily()`, hardcoded to `new Date()`) is gone — its content
   moved into Calendar's Day zoom via a new generalized `renderDailySchedule(dateStr)`, so browsing

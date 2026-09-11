@@ -6863,10 +6863,12 @@ function renderExerciseProgress() {
     <button class="${PROGRESS_SUBTAB==='bodyweight'?'active':''}" onclick="setProgressSubtab('bodyweight')">BODY WEIGHT</button>
     <button class="${PROGRESS_SUBTAB==='bodymeasurement'?'active':''}" onclick="setProgressSubtab('bodymeasurement')">BODY MEASUREMENT</button>
     <button class="${PROGRESS_SUBTAB==='volume'?'active':''}" onclick="setProgressSubtab('volume')">SET VOLUME</button>
+    <button class="${PROGRESS_SUBTAB==='compare'?'active':''}" onclick="setProgressSubtab('compare')">COMPARE</button>
   `, { marginTop: false });
   let body;
   if (PROGRESS_SUBTAB === 'bodyweight') body = renderBodyWeightChart();
   else if (PROGRESS_SUBTAB === 'bodymeasurement') body = renderBodyMeasurementChart();
+  else if (PROGRESS_SUBTAB === 'compare') body = renderCompareView();
   else body = renderVolume();
   return `<div class="screen">
     <div class="section-title">Exercise</div>
@@ -7181,6 +7183,154 @@ function emptyState(msg) {
   return `<div class="empty-state"><div class="big">${icon('clipboard')}</div>${msg}</div>`;
 }
 
+// ---------------- PROGRESS: COMPARE (small-multiples: body weight + lift history) ----------------
+// Every (categoryId, tierKey) combo actually assigned to an enabled T1/T2 slot on some "weights"
+// workout, deduped — the picker list for the COMPARE view below. T3 accessories are deliberately
+// excluded: they have no Training Max concept to anchor a "lift" against, unlike T1/T2.
+function trackedLiftSlots() {
+  const seen = new Map();
+  workoutsByType('weights').forEach(w => {
+    ['t1', 't2a', 't2b', 't2c'].forEach(tierKey => {
+      const slot = w[tierKey];
+      if (!slot || !slot.enabled || !slot.categoryId) return;
+      const cat = getCategory(slot.categoryId);
+      if (!cat) return;
+      const key = slot.categoryId + ':' + tierKey;
+      if (seen.has(key)) return; // same category+tier reused across workouts — history merges across all of them below anyway
+      seen.set(key, { categoryId: slot.categoryId, tierKey, label: `${cat.name} (${tierKeyToField(tierKey)})` });
+    });
+  });
+  return [...seen.values()];
+}
+// The actual weight put on the bar for (categoryId, tierKey), one point per logged session,
+// across every cycle and every workout that has ever used that category+tier slot (cycle numbers
+// only ever increase — see logKey() — so STATE.logs is a person's whole training history, not
+// just the current mesocycle). "Top set" = the heaviest set that day with both weight and reps
+// actually filled in, i.e. a completed set, not just a placeholder row.
+function liftHistorySeries(categoryId, tierKey) {
+  const workoutIds = workoutsByType('weights')
+    .filter(w => w[tierKey] && w[tierKey].enabled && w[tierKey].categoryId === categoryId)
+    .map(w => w.id);
+  if (!workoutIds.length) return [];
+  const points = [];
+  Object.keys(STATE.logs).forEach(k => {
+    const workoutId = k.slice(k.indexOf('_') + 1);
+    if (!workoutIds.includes(workoutId)) return;
+    const log = STATE.logs[k];
+    if (!log.date) return;
+    const workout = getWorkout(workoutId);
+    if (!workout) return;
+    const entryKey = (tierKey === 't1' && workout.t1.variant === 'ultra') ? 'ultra' : tierKey;
+    const entry = log.entries[entryKey];
+    if (!entry || !entry.sets || !entry.sets.length) return;
+    const topSetLb = entry.sets.reduce((max, s) => {
+      const w = Number(s.weight), r = Number(s.reps);
+      return (w && r) ? Math.max(max, w) : max;
+    }, 0);
+    if (topSetLb > 0) points.push({ date: log.date, weightLb: topSetLb });
+  });
+  points.sort((a, b) => a.date.localeCompare(b.date));
+  return points;
+}
+function compareMetricId(categoryId, tierKey) { return `lift:${categoryId}:${tierKey}`; }
+function compareMetricLabel(id) {
+  if (id === 'bodyweight') return 'Body Weight';
+  const [, categoryId, tierKey] = id.split(':');
+  const cat = getCategory(categoryId);
+  return cat ? `${cat.name} (${tierKeyToField(tierKey)})` : 'Removed lift';
+}
+function compareMetricSeries(id) {
+  if (id === 'bodyweight') {
+    return [...STATE.weightLog].sort((a, b) => a.date.localeCompare(b.date)).map(e => ({ date: e.date, weightLb: e.weightLb }));
+  }
+  const [, categoryId, tierKey] = id.split(':');
+  return liftHistorySeries(categoryId, tierKey);
+}
+let COMPARE_SELECTED = ['bodyweight']; // session-only, same lifetime as SELECTED_MEASUREMENT_FIELD
+const COMPARE_MAX_METRICS = 4; // small multiples stacked on a phone screen — more than this stops being scannable
+function toggleCompareMetric(id) {
+  const idx = COMPARE_SELECTED.indexOf(id);
+  if (idx !== -1) { COMPARE_SELECTED.splice(idx, 1); }
+  else {
+    if (COMPARE_SELECTED.length >= COMPARE_MAX_METRICS) { showToast(`Up to ${COMPARE_MAX_METRICS} at once`); return; }
+    COMPARE_SELECTED.push(id);
+  }
+  render();
+}
+// Small multiples, not one overlaid chart — a working weight (e.g. 225lb Squat) and a bodyweight
+// (e.g. 180lb) on the same axis crushes whichever line is smaller. Each metric gets its own small
+// chart instead, stacked with a shared date-label format so they still read as one comparison.
+// Charts share the same *formatting*, not a synced axis/crosshair — each one's own logged dates,
+// same as the existing single-metric charts above (no time-scale plugin loaded, see CLAUDE.md's
+// CDN allowlist).
+function renderCompareView() {
+  const liftSlots = trackedLiftSlots();
+  const chips = [
+    `<button class="tag-pill ${COMPARE_SELECTED.includes('bodyweight')?'active':''}" onclick="toggleCompareMetric('bodyweight')">Body Weight</button>`,
+    ...liftSlots.map(s => {
+      const id = compareMetricId(s.categoryId, s.tierKey);
+      return `<button class="tag-pill ${COMPARE_SELECTED.includes(id)?'active':''}" onclick="toggleCompareMetric('${id}')">${escapeHtml(s.label)}</button>`;
+    }),
+  ].join('');
+  const charts = COMPARE_SELECTED.map(renderCompareMiniChart).join('');
+  return `
+    <div style="font-size:11px; color:var(--text-dim); margin-bottom:8px;">Pick up to ${COMPARE_MAX_METRICS} to compare side by side — body weight and any lift with a Training Max tier (T1/T2) assigned in Setup &rarr; Workout Builder. Each point is the heaviest completed set logged that session, not just the programmed target.</div>
+    <div class="tag-pill-row">${chips}</div>
+    ${liftSlots.length === 0 ? `<div style="font-size:11px; color:var(--text-faint); margin:8px 0 0;">No lifts tracked yet — assign a category to a T1/T2 slot under Setup &rarr; Workout Builder to see it here.</div>` : ''}
+    <div style="margin-top:14px;">${charts || emptyState('Pick at least one metric above to see its chart.')}</div>`;
+}
+function renderCompareMiniChart(id) {
+  const series = compareMetricSeries(id);
+  const label = compareMetricLabel(id);
+  const canvasId = compareCanvasId(id);
+  if (series.length < 2) {
+    return `<div style="margin-bottom:18px;"><div class="subtle-label" style="margin-bottom:6px;">${escapeHtml(label)}</div>${emptyState('Not enough data yet — needs at least 2 logged sessions.')}</div>`;
+  }
+  return `<div style="margin-bottom:22px;"><div class="subtle-label" style="margin-bottom:6px;">${escapeHtml(label)}</div><div class="chart-wrap"><canvas id="${canvasId}" height="120"></canvas></div></div>`;
+}
+function compareCanvasId(id) { return 'cmp_' + id.replace(/[^a-zA-Z0-9]/g, '_'); }
+let compareChartInstances = {};
+function drawCompareCharts() {
+  // Drop any instance for a metric that's no longer selected (or lost its canvas some other way)
+  Object.keys(compareChartInstances).forEach(id => {
+    if (!COMPARE_SELECTED.includes(id) || !document.getElementById(compareCanvasId(id))) {
+      compareChartInstances[id].destroy();
+      delete compareChartInstances[id];
+    }
+  });
+  if (typeof Chart === 'undefined') return;
+  const styles = getComputedStyle(document.documentElement);
+  COMPARE_SELECTED.forEach(id => {
+    const series = compareMetricSeries(id);
+    if (series.length < 2) return;
+    const canvas = document.getElementById(compareCanvasId(id));
+    if (!canvas) return;
+    if (compareChartInstances[id]) compareChartInstances[id].destroy();
+    compareChartInstances[id] = new Chart(canvas.getContext('2d'), {
+      type: 'line',
+      data: {
+        labels: series.map(p => p.date.slice(5)),
+        datasets: [{
+          label: compareMetricLabel(id),
+          data: series.map(p => Number(fmt(lbToDisplay(p.weightLb), 1))),
+          borderColor: styles.getPropertyValue('--accent').trim(),
+          backgroundColor: 'transparent',
+          tension: 0.25,
+          pointRadius: 3,
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color: styles.getPropertyValue('--text-faint').trim(), font: {size: 10} }, grid: { color: styles.getPropertyValue('--border-soft').trim() } },
+          y: { ticks: { color: styles.getPropertyValue('--text-faint').trim(), font: {size: 10}, callback: v => v + ' ' + weightUnitLabel() }, grid: { color: styles.getPropertyValue('--border-soft').trim() } },
+        }
+      }
+    });
+  });
+}
+
 // ---------------- SET VOLUME ----------------
 function renderVolume() {
   if (VOLUME_CYCLE === null) VOLUME_CYCLE = STATE.currentCycle;
@@ -7252,6 +7402,7 @@ function changeVolumeCycle(delta) {
 function attachProgressHandlers() {
   if (PROGRESS_SUBTAB === 'bodyweight') setTimeout(drawWeightChart, 0);
   else if (PROGRESS_SUBTAB === 'bodymeasurement') setTimeout(drawMeasurementChart, 0);
+  else if (PROGRESS_SUBTAB === 'compare') setTimeout(drawCompareCharts, 0);
 }
 function setUnits(u) {
   STATE.units = u;
