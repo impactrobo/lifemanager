@@ -207,6 +207,35 @@ not a requirement.
   requires upgrading off the free Spark plan) and a separate email-sending service; revisit only
   if the paste flow proves to be a real problem in practice.
 
+## Reminder push notifications (opt-in, added 2026-09-10)
+Client side only so far — see `docs/ROADMAP.md` "Web Push reminders" for the full design and
+what's still missing (the backend). Inert until "ENABLE REMINDER NOTIFICATIONS" is tapped in
+Settings, same discipline as Cloud Sync above.
+
+- **Why a server is required at all:** the web has no working API for scheduling a local
+  notification on iOS (the Notification Triggers API never shipped in Safari). Delivery is Web
+  Push — a server sends the notification at the right time — which only works while the phone
+  has connectivity near that moment. A native wrapper (Capacitor + `@capacitor/local-notifications`)
+  is the eventual path to offline/exact-timing delivery; this is the interim, ship-able version.
+- **iOS gate:** Push only works for a Home Screen install, never a Safari tab.
+  `isInstalledStandalone()` checks `navigator.standalone` (Safari) / the `display-mode: standalone`
+  media query and blocks enabling with a toast on iOS until the app is actually installed.
+- **VAPID:** `VAPID_PUBLIC_KEY` in app.js is the public half of a keypair; the matching private
+  key is a secret and lives only on the backend (a Cloudflare Worker secret, once deployed) —
+  never commit it.
+- **Data sent to the backend is deliberately minimal:** only reminder *definitions*
+  (`{id, date, time, title}`), not full `STATE`, keyed by push subscription — enabling reminders
+  doesn't require Cloud Sync to be on. `queueReminderPushSync()` pushes this on every
+  `saveReminder()`/`deleteReminder()`, debounced like `queueCloudPush()`.
+- **`REMINDER_BACKEND_URL` points at the deployed Worker** (`reminder-worker/`,
+  `https://lifeman-reminders.impactrobo.workers.dev`, live since 2026-09-11).
+  `postToReminderBackend()` still guards on `backendConfigured()` so the feature degrades cleanly
+  if that URL is ever cleared (e.g. redeploying to a new account). See `reminder-worker/README.md`
+  for the Worker's own setup, and `docs/ROADMAP.md` for what's verified vs. still needs a real
+  device (the RFC 8291/8292 encryption in `sendWebPush()` was smoke-tested at the HTTP layer only).
+- `sw.js` has the delivery half: a `push` listener (`showNotification()`) and a
+  `notificationclick` listener (focuses an existing tab or opens one).
+
 ## Testing
 Canonical test files live in `tests/` as individual `test_*.js` Node scripts using Playwright
 directly (no test runner) — run each with `node tests/test_whatever.js`; nonzero exit = failure.
@@ -218,17 +247,13 @@ Added alongside the app.js split: `test_smoke.js` (boots clean + every section r
 narrow-viewport tabbar guard) and `test_state_persistence.js` (the `loadState()` migration
 contract — old saves gain new defaults, keep their data).
 
-**All 16 of 16 original canonical tests are written and passing**, plus one new one added
-alongside the Cloud Sync feature (`test_cloud_sync.js`) — 17 total, all passing together in one
-pass: `test_home.js`, `test_aesthetics.js`, `test_full_flow.js`, `test_resttimer.js`,
-`test_notes.js`, `test_budget.js`, `test_calendar.js`, `test_export.js`,
-`test_meal_builder.js`, `test_meal_plan.js`, `test_reps_validation.js`, `test_photos.js`,
-`test_quickadd_superset.js`, `test_schedule_setup.js`, `test_today_schedule_layout.js`,
-`test_ui_polish.js`, `test_cloud_sync.js`. These never existed as committed files before this
-repo — they only ever lived inside temporary chat sandboxes and were lost between sessions, so
-this was genuinely new work, not a restore. Going forward, run the full suite before any
-publish and add a new test_*.js whenever a new feature area is added, so this stays complete
-rather than drifting back toward the gap it started in.
+Canonical tests didn't exist as committed files before this repo — they only ever lived inside
+temporary chat sandboxes and were lost between sessions, so building this suite out was genuinely
+new work, not a restore. `npm test` is currently **23/23 test files passing** (`run_all.js`
+auto-discovers every `test_*.js` in `tests/`, so this number moves — trust its own summary line
+over any count written here). Run the full suite before any publish, and add a new `test_*.js`
+whenever a new feature area is added, so this stays complete rather than drifting back toward the
+gap it started in.
 
 Run the full canonical suite before every publish, screenshot-verify anything visual, and
 do a freshness check against whatever's currently live before overwriting a hosted version.

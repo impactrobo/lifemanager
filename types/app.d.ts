@@ -24,6 +24,12 @@ interface Window {
   _lmCheckForUpdate?: () => Promise<void>;
 }
 
+interface Navigator {
+  /** Safari-only: true when launched from a Home Screen icon. See isInstalledStandalone() in
+   *  the REMINDER PUSH section — iOS only exposes Push to a Home Screen install, never a tab. */
+  standalone?: boolean;
+}
+
 // The app reads `.value` / `.checked` / `.getContext` straight off `getElementById(...)` in
 // dozens of places — always on an element it knows the type of. Rather than cast at every
 // call site, widen the lookups' return here. This trades a little precision (a genuinely
@@ -67,6 +73,7 @@ interface AppSettings {
   defaultPage: string;
   homeLayout: unknown;
   cloudSync: { enabled: boolean };
+  reminderPush: { enabled: boolean };
   [k: string]: unknown;
 }
 

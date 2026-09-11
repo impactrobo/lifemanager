@@ -1260,6 +1260,11 @@ function defaultState() {
       // comes from Firebase Auth itself at runtime (see CLOUD SYNC section) — this just decides
       // whether the Settings screen shows "Enable Cloud Sync" or the signed-in sync controls.
       cloudSync: { enabled: false },
+      // Same pattern as cloudSync above: a preference flag, not the source of truth. The real
+      // subscription lives in the browser's PushManager (see REMINDER PUSH section) — this just
+      // decides whether Settings shows "Enable" or "Disable" and whether reminder edits get
+      // pushed to the backend.
+      reminderPush: { enabled: false },
     },
     meso: { cycles: 8 },
     categories: defaultCategories(),
@@ -3854,6 +3859,8 @@ function renderHomeSetup() {
     <div class="subtle-label" style="margin:22px 0 10px;">CLOUD SYNC</div>
     <div class="panel">${renderCloudSyncPanel()}</div>
     ${renderCloudSyncModal()}
+    <div class="subtle-label" style="margin:22px 0 10px;">REMINDER NOTIFICATIONS</div>
+    <div class="panel">${renderReminderPushPanel()}</div>
   </div>`;
 }
 function updateDefaultPage(val) {
@@ -5057,6 +5064,133 @@ function renderCloudSyncModal() {
     </div>`;
 }
 initCloudSync();
+
+// ================= REMINDER PUSH (opt-in) =================
+// Nothing here ever runs unless the person taps "ENABLE REMINDER NOTIFICATIONS" in Settings —
+// same opt-in discipline as Cloud Sync above. Delivers STATE.reminders as real system
+// notifications via Web Push, so they fire even when the app isn't open. See docs/ROADMAP.md
+// "Web Push reminders" for the full design writeup and its known limitation: this only works
+// while the phone has connectivity near the reminder's time (it's a server round-trip, not
+// on-device scheduling — iOS has no working API for the latter). A native wrapper is the
+// eventual fix for offline/exact-timing reliability; this is the interim, ship-able version.
+//
+// Backend: a small always-on service (not part of this app.js bundle) that (a) stores each
+// subscription's reminder list and (b) on a ~1-minute tick, sends a Web Push to any subscription
+// with a reminder due right now. See reminder-worker/ once it exists. REMINDER_BACKEND_URL is a
+// placeholder until that's deployed — every call below no-ops with a clear toast until it's set.
+const REMINDER_BACKEND_URL = 'https://lifeman-reminders.impactrobo.workers.dev'; // deployed 2026-09-11 — see reminder-worker/
+// Public half of the VAPID keypair (see reminder-worker/README.md for how it was generated and
+// where the private half lives). Public keys are not secret — safe to ship in app.js.
+const VAPID_PUBLIC_KEY = 'BLLrzqIbNsw-lmf5hDGsBAnx0ryQ4CwDsmrXrCAj0asLODcdI1CmoWA80ZIq2HkYDKJXr7-Zp-58f1rjomX0i4E';
+
+let REMINDER_PUSH_SUPPORTED = ('serviceWorker' in navigator) && ('PushManager' in window) && ('Notification' in window);
+let REMINDER_PUSH_STATUS = 'idle'; // 'idle' | 'working' | 'error'
+let REMINDER_PUSH_ERROR = null;
+
+// PushManager wants the VAPID public key as a raw Uint8Array, not the base64url string used
+// everywhere else it's handled — this is the standard conversion (MDN's own recipe).
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = window.atob(base64);
+  const arr = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+  return arr;
+}
+// iOS only exposes Push to a Home-Screen install, never a Safari tab (see docs/ROADMAP.md).
+// `navigator.standalone` is Safari-only truth for "launched from the home screen icon"; other
+// browsers/platforms use the display-mode media query instead.
+function isInstalledStandalone() {
+  return window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
+}
+function backendConfigured() { return !!REMINDER_BACKEND_URL; }
+async function postToReminderBackend(path, body) {
+  const res = await fetch(REMINDER_BACKEND_URL + path, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error('Backend responded ' + res.status);
+}
+async function enableReminderPush() {
+  if (!REMINDER_PUSH_SUPPORTED) { showToast('This browser doesn\'t support notifications'); return; }
+  if (!backendConfigured()) { showToast('Reminder notifications aren\'t set up yet — the backend hasn\'t been deployed'); return; }
+  const isIos = /iP(hone|ad|od)/.test(navigator.userAgent);
+  if (isIos && !isInstalledStandalone()) {
+    showToast('Add this app to your Home Screen first (Share → Add to Home Screen), then try again from there');
+    return;
+  }
+  REMINDER_PUSH_STATUS = 'working'; render();
+  try {
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') {
+      REMINDER_PUSH_STATUS = 'idle';
+      showToast(permission === 'denied' ? 'Notifications blocked — enable them for this app in system settings to turn this on' : 'Notification permission dismissed');
+      render();
+      return;
+    }
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY) });
+    // Timezone travels with the reminders because the backend runs in UTC and reminders are
+    // stored as plain local date/time strings with no zone of their own — the Worker needs this
+    // to know what "now" means for a Sept 9 09:00 reminder. See reminder-worker/src/index.js.
+    await postToReminderBackend('/subscribe', { subscription: sub.toJSON(), reminders: STATE.reminders, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone });
+    STATE.settings.reminderPush.enabled = true;
+    saveState();
+    REMINDER_PUSH_STATUS = 'idle';
+    showToast('Reminder notifications enabled');
+  } catch (e) {
+    REMINDER_PUSH_STATUS = 'error'; REMINDER_PUSH_ERROR = e.message;
+    showToast('Could not enable reminder notifications: ' + e.message);
+  }
+  render();
+}
+async function disableReminderPush() {
+  REMINDER_PUSH_STATUS = 'working'; render();
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) {
+      if (backendConfigured()) { try { await postToReminderBackend('/unsubscribe', { endpoint: sub.endpoint }); } catch (e) { /* best-effort — still unsubscribe locally */ } }
+      await sub.unsubscribe();
+    }
+  } catch (e) { /* fall through — still clear the local flag so Settings doesn't get stuck */ }
+  STATE.settings.reminderPush.enabled = false;
+  saveState();
+  REMINDER_PUSH_STATUS = 'idle';
+  showToast('Reminder notifications turned off');
+  render();
+}
+let _reminderPushSyncDebounceTimer = null;
+// Called whenever STATE.reminders changes (see saveReminder()/deleteReminder()). No-op unless
+// the feature is actually on — mirrors queueCloudPush()'s debounce so rapid edits (e.g. deleting
+// several reminders in a row) don't fire a network call per edit.
+function queueReminderPushSync() {
+  if (!STATE.settings.reminderPush.enabled || !backendConfigured()) return;
+  clearTimeout(_reminderPushSyncDebounceTimer);
+  _reminderPushSyncDebounceTimer = setTimeout(async () => {
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (!sub) return; // subscription got lost somehow — ENABLE will re-create it next time it's pressed
+      await postToReminderBackend('/reminders', { endpoint: sub.endpoint, reminders: STATE.reminders, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone });
+    } catch (e) { console.warn('Reminder sync to backend failed (will retry on next edit):', e.message); }
+  }, 1500);
+}
+function renderReminderPushPanel() {
+  if (!REMINDER_PUSH_SUPPORTED) {
+    return `<div style="font-size:11px; color:var(--text-faint);">Not supported in this browser.</div>`;
+  }
+  if (!STATE.settings.reminderPush.enabled) {
+    return `<button class="btn btn-block" onclick="enableReminderPush()" ${REMINDER_PUSH_STATUS==='working'?'disabled':''}>${REMINDER_PUSH_STATUS==='working'?'ENABLING…':'ENABLE REMINDER NOTIFICATIONS'}</button>
+      <div style="font-size:11px; color:var(--text-faint); margin-top:8px;">Optional — get a system notification when a reminder is due, even with the app closed. On iPhone, add this app to your Home Screen first, and it only works while your phone has a connection around the reminder's time.</div>`;
+  }
+  return `
+    <div style="font-size:12px; color:var(--text-dim); margin-bottom:10px;">Enabled &middot; <span style="color:${REMINDER_PUSH_STATUS==='error'?'var(--bad)':'var(--good)'};">${REMINDER_PUSH_STATUS==='error'?'Error':'On'}</span></div>
+    ${REMINDER_PUSH_STATUS === 'error' ? `<div style="font-size:11px; color:var(--bad); margin-bottom:8px;">${escapeHtml(REMINDER_PUSH_ERROR || '')}</div>` : ''}
+    <button class="btn btn-block" onclick="disableReminderPush()" ${REMINDER_PUSH_STATUS==='working'?'disabled':''}>${REMINDER_PUSH_STATUS==='working'?'WORKING…':'DISABLE REMINDER NOTIFICATIONS'}</button>
+  `;
+}
+
 function resetAllData() {
   showConfirm('This erases everything stored on this device — training maxes, workout logs, measurements, weight log. This cannot be undone. Continue?', () => {
     STATE = defaultState(); // reset in-memory first — never skipped even if storage access below fails
@@ -7511,6 +7645,7 @@ function saveReminder() {
   STATE.reminders.push({ id: uid(), date: CAL_SELECTED_DATE, time, title, notes, createdAt: Date.now() });
   REMINDER_FORM_OPEN = false;
   saveState();
+  queueReminderPushSync(); // no-op unless reminder notifications are enabled — see REMINDER PUSH section
   showToast('Reminder saved');
   render();
 }
@@ -7527,7 +7662,9 @@ function renderReminderCard(r) {
 function deleteReminder(id) {
   showConfirm('Delete this reminder?', () => {
     STATE.reminders = STATE.reminders.filter(r => r.id !== id);
-    saveState(); render();
+    saveState();
+    queueReminderPushSync(); // no-op unless reminder notifications are enabled — see REMINDER PUSH section
+    render();
   });
 }
 // ---- Home page: today's reminders, shown above the RIGHT NOW card ----

@@ -1,0 +1,22 @@
+name = "lifeman-reminders"
+main = "src/index.js"
+compatibility_date = "2026-09-10"
+workers_dev = true
+preview_urls = false
+
+# Runs once a minute, looking for any subscriber with a reminder due right now (within
+# GRACE_MINUTES) — see checkDueReminders() in src/index.js.
+[triggers]
+crons = ["* * * * *"]
+
+# Created by `npx wrangler kv namespace create REMINDERS_KV` — paste the id it prints below.
+# See README.md for the full one-time setup.
+[[kv_namespaces]]
+binding = "REMINDERS_KV"
+id = "9124bc36b3fc492192e6d3ea0dd7577e"
+
+# Not secret — the same value hardcoded as VAPID_PUBLIC_KEY in app.js. Public keys are safe to
+# commit; this file is version-controlled. VAPID_PRIVATE_KEY and VAPID_SUBJECT_EMAIL are secrets
+# instead (`wrangler secret put ...`, see README.md) — never put those here.
+[vars]
+VAPID_PUBLIC_KEY = "BLLrzqIbNsw-lmf5hDGsBAnx0ryQ4CwDsmrXrCAj0asLODcdI1CmoWA80ZIq2HkYDKJXr7-Zp-58f1rjomX0i4E"

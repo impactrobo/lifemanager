@@ -35,4 +35,22 @@ see `tests/README.md` for that.
       that once cached the tab switch to C.R.E.A.M shows them immediately. Glow halo should follow
       the stone's outline, not a square; icon + label readable over the crown in daylight.
 
+## Reminder push notifications
+- [x] Backend deployed 2026-09-11 (`https://lifeman-reminders.impactrobo.workers.dev`) and
+      smoke-tested via curl — subscribe/reminders/unsubscribe round-trip, 400/404 cases all
+      correct. Everything below still needs a real device — the encryption in `sendWebPush()`
+      has never been exercised against a real push service. See `docs/ROADMAP.md` "Web Push
+      reminders".
+- [ ] On a real installed iOS Home Screen PWA: ENABLE REMINDER NOTIFICATIONS → grant permission →
+      confirm the subscribe call succeeds (no error toast)
+- [ ] Add a reminder a couple minutes out, background the app (or lock the phone), confirm the
+      system notification actually arrives around the scheduled time
+- [ ] Tap the notification — confirm it opens/focuses the app rather than doing nothing
+- [ ] Edit/delete a reminder while enabled — confirm the backend's copy updates (no stale
+      notification for a deleted reminder)
+- [ ] Put the phone in airplane mode across a reminder's scheduled time, then reconnect — this is
+      the known degradation case (see ROADMAP): confirm it arrives late rather than crashing
+      anything, and note whether it arrives at all
+- [ ] DISABLE REMINDER NOTIFICATIONS — confirm no more notifications arrive after
+
 ## Add future items below as new features ship
