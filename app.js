@@ -356,13 +356,16 @@ const AESTHETIC_ACCENTS = {
       resetBorder: '#fbeefb', resetBg: '#381c5b', resetText: '#fbeefb',
     },
     rosie: {
-      label: 'Rosie', accent: '#ff5c8a',
-      swatch: 'linear-gradient(135deg, #ff5c8a 0 38%, #e0342a 38% 62%, #ffffff 62% 100%)',
-      bg: '#1a0510', surface: '#3a0d23', surface2: '#4d1330',
-      border: '#8a2a4d', borderSoft: '#571a30',
-      text: '#ffeef4', textDim: '#e0adc0', textFaint: '#a17183',
+      // Softened toward a true pastel pink (like a Sonic love-interest's hair/fur) rather than
+      // hot magenta — accent lightened/desaturated, and bg/surface hue nudged warmer (less blue)
+      // so the dark backdrop reads as deep rose rather than wine/magenta.
+      label: 'Rosie', accent: '#f78fb3',
+      swatch: 'linear-gradient(135deg, #f78fb3 0 38%, #e0303a 38% 62%, #ffffff 62% 100%)',
+      bg: '#1f0912', surface: '#3d1522', surface2: '#4f1c2c',
+      border: '#8a3550', borderSoft: '#5a2436',
+      text: '#fff0f5', textDim: '#e3b5c6', textFaint: '#a67c8c',
       good: '#4fd07d', goodSoft: '#0c2c1a',
-      resetBorder: '#ffeef4', resetBg: '#4d1330', resetText: '#ffeef4',
+      resetBorder: '#fff0f5', resetBg: '#4f1c2c', resetText: '#fff0f5',
     },
     kos: {
       label: 'K-Os', accent: '#55d4ff',
