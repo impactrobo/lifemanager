@@ -7652,15 +7652,30 @@ function saveReminder() {
   showToast('Reminder saved');
   render();
 }
+// Reminders edit inline (title/time/notes are live inputs, onchange saves) rather than through a
+// separate edit form — same convention as renderRecurringRow()/updateRecurringField() elsewhere
+// in Budget, so there's no edit-mode toggle state to track.
 function renderReminderCard(r) {
   return `<div class="entry-card">
     <div class="ehead">
-      <div style="font-size:14px; font-weight:700; font-family:var(--font-body);">${escapeHtml(r.title)}</div>
+      <input type="text" value="${escapeHtml(r.title)}" placeholder="Title" style="font-weight:700; font-size:14px; border:none; background:transparent; padding:0; color:var(--text); font-family:var(--font-body); flex:1; min-width:0;" onchange="updateReminderField('${r.id}','title',this.value)">
       <button class="icon-btn" onclick="deleteReminder('${r.id}')">${icon('close')}</button>
     </div>
-    ${r.time ? `<div class="estats"><span>Time <b>${fmtReminderTime(r.time)}</b></span></div>` : ''}
-    ${r.notes ? `<div style="font-size:12px; color:var(--text-dim); margin-top:6px;">${escapeHtml(r.notes)}</div>` : ''}
+    <div class="field-row" style="margin-top:8px;">
+      <label class="field" style="margin-bottom:0;"><span class="lbl">Time</span><input type="time" value="${r.time || ''}" onchange="updateReminderField('${r.id}','time',this.value)"></label>
+    </div>
+    <label class="field" style="margin-top:8px; margin-bottom:0;"><span class="lbl">Notes</span><textarea placeholder="Any details..." onchange="updateReminderField('${r.id}','notes',this.value)">${escapeHtml(r.notes || '')}</textarea></label>
   </div>`;
+}
+function updateReminderField(id, field, value) {
+  const r = STATE.reminders.find(x => x.id === id);
+  if (!r) return;
+  if (field === 'title') { const trimmed = (value || '').trim(); if (trimmed) r.title = trimmed; } // empty title silently reverts on re-render
+  else if (field === 'time') r.time = value || null;
+  else if (field === 'notes') r.notes = (value || '').trim();
+  saveState();
+  queueReminderPushSync(); // no-op unless reminder notifications are enabled — see REMINDER PUSH section
+  render();
 }
 function deleteReminder(id) {
   showConfirm('Delete this reminder?', () => {

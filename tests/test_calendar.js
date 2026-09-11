@@ -1,5 +1,6 @@
-// test_calendar.js — Schedule -> Calendar subtab: month navigation, selecting a day, adding
-// and deleting a reminder on that day, the "has reminder" dot indicator, and persistence.
+// test_calendar.js — Schedule -> Calendar subtab: month navigation, selecting a day, adding,
+// editing and deleting a reminder on that day, the "has reminder" dot indicator, today's own
+// highlight, and persistence.
 const { chromium } = require('playwright');
 const path = require('path');
 
@@ -25,6 +26,28 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   await page.waitForTimeout(150);
   const startMonth = await page.evaluate(() => ({ ...CAL_MONTH }));
   console.log('starting CAL_MONTH:', startMonth);
+
+  // 1b. Today's cell carries its own highlight class, distinct from selection — on first visit
+  // CAL_SELECTED_DATE defaults to today, so both classes land on the same cell at once, which is
+  // exactly the case that used to swallow today's marker (see the box-shadow comment in
+  // styles.css). Confirm the class is present and its color actually differs from --accent (the
+  // .cal-cell-selected color) so it reads as its own signal, not a dimmer selection.
+  const todayCellInfo = await page.evaluate(() => {
+    const el = document.querySelector('.cal-cell-today');
+    if (!el) return null;
+    const cs = getComputedStyle(el);
+    return {
+      alsoSelected: el.classList.contains('cal-cell-selected'),
+      boxShadow: cs.boxShadow,
+      accent: getComputedStyle(document.documentElement).getPropertyValue('--accent').trim(),
+      good: getComputedStyle(document.documentElement).getPropertyValue('--good').trim(),
+    };
+  });
+  console.log('today cell:', todayCellInfo);
+  if (!todayCellInfo) throw new Error('Expected a .cal-cell-today element to exist on the current month\'s grid');
+  if (!todayCellInfo.alsoSelected) throw new Error('Expected today to also be the default selected day on first visit');
+  if (!todayCellInfo.boxShadow || todayCellInfo.boxShadow === 'none') throw new Error('Expected .cal-cell-today to render its own box-shadow ring even while also selected');
+  if (todayCellInfo.good === todayCellInfo.accent) console.log('NOTE: --good equals --accent in this aesthetic — the highlight still renders but reads as the same hue as selection here');
 
   // 2. Month navigation forward and back returns to the same month
   await page.evaluate(() => calGoToMonth(1));
@@ -73,6 +96,23 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   await page.evaluate(() => saveReminder());
   const remindersAfterEmpty = await page.evaluate(() => STATE.reminders.length);
   if (remindersAfterEmpty !== remindersAfter) throw new Error('Expected saveReminder() to reject an empty title');
+
+  // 5b. Reminders edit inline (title/time/notes are live card inputs, not a separate edit form)
+  // — updateReminderField() mutates in place, keeps the same id, and rejects an empty title.
+  const editId = await page.evaluate(() => STATE.reminders[STATE.reminders.length - 1].id);
+  await page.evaluate((id) => updateReminderField(id, 'title', 'Renamed via inline edit'), editId);
+  await page.evaluate((id) => updateReminderField(id, 'time', '14:30'), editId);
+  await page.evaluate((id) => updateReminderField(id, 'notes', 'edited notes'), editId);
+  const edited = await page.evaluate((id) => STATE.reminders.find(r => r.id === id), editId);
+  console.log('reminder after inline edit:', edited);
+  if (edited.title !== 'Renamed via inline edit' || edited.time !== '14:30' || edited.notes !== 'edited notes') {
+    throw new Error(`Expected the edited fields to stick, got ${JSON.stringify(edited)}`);
+  }
+  const countAfterEdit = await page.evaluate(() => STATE.reminders.length);
+  if (countAfterEdit !== remindersAfterEmpty) throw new Error('Expected editing to change the existing reminder in place, not add a new one');
+  await page.evaluate((id) => updateReminderField(id, 'title', '   '), editId); // whitespace-only
+  const afterEmptyEdit = await page.evaluate((id) => STATE.reminders.find(r => r.id === id).title, editId);
+  if (afterEmptyEdit !== 'Renamed via inline edit') throw new Error('Expected an empty/whitespace title edit to be silently rejected, kept the old title');
 
   // 6. The month grid should now show a "has reminder" dot for that day
   await page.waitForTimeout(150);

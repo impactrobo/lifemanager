@@ -255,6 +255,15 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Reminders edit inline** — title/time/notes on a Schedule → Calendar reminder card are now
+  live inputs (`updateReminderField()`), same convention as Budget's recurring rows, instead of
+  add/delete only.
+- **Calendar: today gets its own highlight, distinct from selection** — `.cal-cell-today` used to
+  set `border-color`, which `.cal-cell-selected` (same specificity, defined after it) always won
+  on the very common case of today also being the default-selected day, so the marker was
+  invisible on first visit. Now an inset box-shadow ring in `--good` (a distinct hue per
+  aesthetic, not a dimmer `--accent`) plus a bolded day-number — a property `.cal-cell-selected`
+  doesn't touch, so both coexist.
 - **Budget savings/investment flag** — recurring charges can be flagged as savings/investment
   (vs. plain spending), shown with a distinct `--savings` colour badge and their own segment on
   the budget bar, separate from regular reserved expenses.
