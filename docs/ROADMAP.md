@@ -91,12 +91,13 @@ before starting any of these.
     route is also just the normal way to authenticate `wrangler` non-interactively.
   - The push-send step (`sendWebPush()`) implements RFC 8291 (aes128gcm encryption) + RFC 8292
     (VAPID JWT) by hand with WebCrypto, since the plain `web-push` npm package can't run on
-    Workers (it shells out to Node's `https` module). All the HTTP-layer behavior was smoke-tested
+    Workers (it shells out to Node's `https` module). HTTP-layer behavior was smoke-tested
     with `curl` post-deploy (subscribe/reminders/unsubscribe round-trip, 400 on malformed input,
-    404 on unknown routes — all correct), but **the encryption itself has never been exercised
-    against a real push service** — there's no way to create a real `PushSubscription` without an
-    actual browser + device. The first real test is enabling notifications on a real installed
-    iOS PWA; see `TESTING_CHECKLIST.md`.
+    404 on unknown routes — all correct), and **the encryption itself was verified live
+    2026-09-11**: a real reminder arrived as a system notification on an installed iOS PWA,
+    roughly a minute after its scheduled time (expected — the cron checks once a minute, not a
+    bug). See `TESTING_CHECKLIST.md` for what's still unconfirmed (tap-to-open, edit/delete
+    syncing to the backend, the airplane-mode degradation case, disabling).
   - `test_reminder_push.js` covers everything client-side up to the backend guard (default state,
     feature detection, both panel states, the no-op-when-unconfigured guard, `sw.js` shipping
     both handlers, real SW registration over a test HTTP server). See its own header comment for

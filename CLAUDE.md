@@ -231,8 +231,10 @@ Settings, same discipline as Cloud Sync above.
   `https://lifeman-reminders.impactrobo.workers.dev`, live since 2026-09-11).
   `postToReminderBackend()` still guards on `backendConfigured()` so the feature degrades cleanly
   if that URL is ever cleared (e.g. redeploying to a new account). See `reminder-worker/README.md`
-  for the Worker's own setup, and `docs/ROADMAP.md` for what's verified vs. still needs a real
-  device (the RFC 8291/8292 encryption in `sendWebPush()` was smoke-tested at the HTTP layer only).
+  for the Worker's own setup. The RFC 8291/8292 encryption in `sendWebPush()` — the one piece a
+  dev sandbox couldn't exercise — is now **verified live** (2026-09-11): a real reminder arrived
+  as a system notification on an installed iOS PWA. See `docs/ROADMAP.md` / `TESTING_CHECKLIST.md`
+  for what's still unconfirmed (tap-to-open, edit/delete syncing, airplane mode, disabling).
 - `sw.js` has the delivery half: a `push` listener (`showNotification()`) and a
   `notificationclick` listener (focuses an existing tab or opens one).
 

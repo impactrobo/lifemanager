@@ -38,13 +38,14 @@ see `tests/README.md` for that.
 ## Reminder push notifications
 - [x] Backend deployed 2026-09-11 (`https://lifeman-reminders.impactrobo.workers.dev`) and
       smoke-tested via curl — subscribe/reminders/unsubscribe round-trip, 400/404 cases all
-      correct. Everything below still needs a real device — the encryption in `sendWebPush()`
-      has never been exercised against a real push service. See `docs/ROADMAP.md` "Web Push
-      reminders".
-- [ ] On a real installed iOS Home Screen PWA: ENABLE REMINDER NOTIFICATIONS → grant permission →
-      confirm the subscribe call succeeds (no error toast)
-- [ ] Add a reminder a couple minutes out, background the app (or lock the phone), confirm the
-      system notification actually arrives around the scheduled time
+      correct. See `docs/ROADMAP.md` "Web Push reminders".
+- [x] On a real installed iOS Home Screen PWA: ENABLE REMINDER NOTIFICATIONS → grant permission →
+      subscribe succeeded (no error toast)
+- [x] **Verified live 2026-09-11**: a real reminder arrived as a system notification on an
+      installed iOS PWA — confirms `sendWebPush()`'s hand-rolled RFC 8291/8292 encryption is
+      correct end to end, the one piece that couldn't be tested from the dev sandbox. Arrived
+      roughly a minute after the scheduled time, which is expected (the Worker's cron checks
+      once a minute) — not a bug, nothing to fix.
 - [ ] Tap the notification — confirm it opens/focuses the app rather than doing nothing
 - [ ] Edit/delete a reminder while enabled — confirm the backend's copy updates (no stale
       notification for a deleted reminder)
