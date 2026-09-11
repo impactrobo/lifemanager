@@ -377,6 +377,54 @@ const AESTHETIC_ACCENTS = {
       resetBorder: '#e8fbff', resetBg: '#0d4655', resetText: '#e8fbff',
     },
   },
+  // Cartomancer is a MAIN COLOR aesthetic (see FULL_PALETTE_AESTHETICS): each entry is one of
+  // the five mana colors, renamed after its philosophy rather than the literal color name
+  // (Protection/Control/Death/Rapidity/Growth) — same reason Hedge never says "Sonic": stylistic
+  // inspiration, not the trademarked names. All five keep a dark backdrop (no light-theme token
+  // flip, matching every MAIN COLOR aesthetic except Liminal) — the color identity comes through
+  // accent/--good/panel tint, not a literal bright background.
+  cartomancer: {
+    protection: { // White — Plains, order, angels
+      label: 'Protection', accent: '#f0dfa0',
+      bg: '#120f08', surface: '#241d10', surface2: '#332816',
+      border: '#5c4a28', borderSoft: '#3a2f18',
+      text: '#f7efd8', textDim: '#c9bb92', textFaint: '#8a7c58',
+      good: '#8fc97a', goodSoft: '#1c2c16',
+      resetBorder: '#f7efd8', resetBg: '#332816', resetText: '#f7efd8',
+    },
+    control: { // Blue — Islands, knowledge, illusion
+      label: 'Control', accent: '#4aa8e8',
+      bg: '#050e16', surface: '#0d1f2c', surface2: '#12303f',
+      border: '#255472', borderSoft: '#173a4e',
+      text: '#d9f0fb', textDim: '#8fb8cc', textFaint: '#547d8f',
+      good: '#5adbc4', goodSoft: '#0d2e28',
+      resetBorder: '#d9f0fb', resetBg: '#12303f', resetText: '#d9f0fb',
+    },
+    death: { // Black — Swamp, decay, power
+      label: 'Death', accent: '#8452b8',
+      bg: '#0a0610', surface: '#160d24', surface2: '#201433',
+      border: '#4a2e66', borderSoft: '#2e1d40',
+      text: '#ece3f5', textDim: '#b19bc9', textFaint: '#71618a',
+      good: '#7dd490', goodSoft: '#16281c',
+      resetBorder: '#ece3f5', resetBg: '#201433', resetText: '#ece3f5',
+    },
+    rapidity: { // Red — Mountain, chaos, speed
+      label: 'Rapidity', accent: '#e8562a',
+      bg: '#140704', surface: '#2a120a', surface2: '#3a190d',
+      border: '#7a3318', borderSoft: '#4a2010',
+      text: '#fce8dd', textDim: '#d9a68f', textFaint: '#94614a',
+      good: '#f5c542', goodSoft: '#33280a',
+      resetBorder: '#fce8dd', resetBg: '#3a190d', resetText: '#fce8dd',
+    },
+    growth: { // Green — Forest, nature, growth
+      label: 'Growth', accent: '#4a9450',
+      bg: '#070f08', surface: '#101f12', surface2: '#172e1a',
+      border: '#2e5a34', borderSoft: '#1c3a20',
+      text: '#e2f2e0', textDim: '#a8c9a6', textFaint: '#6b8f68',
+      good: '#d9b24a', goodSoft: '#332908',
+      resetBorder: '#e2f2e0', resetBg: '#172e1a', resetText: '#e2f2e0',
+    },
+  },
 };
 function prefersDarkTheme() {
   const explicit = document.documentElement.dataset.theme;
@@ -439,6 +487,11 @@ const AESTHETICS = {
   // animation on `rotate`, so the ring still hangs and still turns with the module absent —
   // see aesthetics/hedge/fx.ts.
   hedge:        { label: 'Hedge',         desc: 'Gotta go fast — a gold ring turning over a drift of out-of-focus lights, menu bars scanned with stripes inside a bright inner border, and hard italic headers. Pick your character below and the whole scene changes colour.', group: 'Maximalist', external: true, fx: true },
+  // MAIN COLOR aesthetic (see FULL_PALETTE_AESTHETICS) — the MANA COLOR picker swaps the whole
+  // card-frame palette. Its fx module is a PARTICLE module (drifting mana motes) but continuous
+  // rather than tap-triggered like Draconic's — see aesthetics/cartomancer/fx.ts and
+  // checkContinuousParticleModule() in test_aesthetic_fx.js, which needed a third FX shape for it.
+  cartomancer:  { label: 'Cartomancer',   desc: 'Every panel a card in its own frame — thick colored border, a rules-text box, drifting mana motes, and the occasional panel catching a foil shimmer like you just pulled a rare. Pick your color below.', group: 'Maximalist', external: true, fx: true },
 };
 const AESTHETIC_GROUP_ORDER = ['Maximalist', 'Vibrant', 'Contrast', 'Light'];
 // Which groups are expanded in the settings panel right now — session-only (not persisted).
@@ -586,7 +639,7 @@ function currentAccentKey() {
 const TERMINAL_PALETTE_VARS = ['--bg', '--surface', '--surface2', '--border', '--border-soft', '--text', '--text-dim', '--text-faint', '--good', '--good-soft', '--reset-border', '--reset-bg', '--reset-text'];
 // Aesthetics whose accent-palette entries are full mini-palettes (see TERMINAL_PALETTE_VARS above)
 // rather than a single `value` color — Retro Terminal's phosphor colors and Four Symbols' guardians.
-const FULL_PALETTE_AESTHETICS = new Set(['terminal', 'sixiang', 'cream', 'millennium', 'spacehighway', 'hedge']);
+const FULL_PALETTE_AESTHETICS = new Set(['terminal', 'sixiang', 'cream', 'millennium', 'spacehighway', 'hedge', 'cartomancer']);
 // What the picker calls itself for each full-palette aesthetic. Everything else gets the
 // default "ACCENT COLOR" heading — this map is only for aesthetics where the choice repaints
 // the whole app rather than tinting one colour.
@@ -597,6 +650,7 @@ const PALETTE_PICKER_COPY = {
   millennium: { label: 'VIBE', note: 'Relights the whole room — floor, frames, bulbs and every shade of text. Each vibe is a pair of hues, and the stepped frames run between them.' },
   hedge: { label: 'CHARACTER', note: "Pick who you're playing as — each one repaints the whole app in the three colours they're drawn in, from the backdrop and borders to every shade of text." },
   spacehighway: { label: 'SECTOR', note: "Pick the sector of space the highway runs through — it recolours everything from the deep-space backdrop and the star field to every shade of text. The road, Saturn and the cars stay as they are." },
+  cartomancer: { label: 'MANA COLOR', note: "Pick a color's philosophy — each recolors the whole card frame, background, borders and every shade of text." },
 };
 function applyAccentColor() {
   const aesthetic = currentAesthetic();

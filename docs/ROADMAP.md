@@ -269,6 +269,36 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Cartomancer aesthetic — 23 aesthetics.** Trading-card-frame styling: thick colored card
+  border + rounded corners + a "rules text box" surface tint on every panel, section titles as a
+  filled "typeline bar", a generic masked mana-pip glyph (`mana-pip.svg`, own art — not any
+  specific card game's actual iconography) as a corner decoration and bullet. MAIN COLOR picker
+  ("MANA COLOR") is 5 palettes named after philosophy rather than the literal color
+  (Protection/Control/Death/Rapidity/Growth for White/Blue/Black/Red/Green) — same reason Hedge
+  never says "Sonic": stylistic inspiration, original names/palettes/art, nothing trademarked
+  reproduced anywhere in code or copy. All five keep a dark backdrop like every MAIN COLOR
+  aesthetic except Liminal.
+  - **Foil shimmer, the person's own idea**: rather than tagging specific data as "foil" (which
+    would mean editing dozens of render functions app-wide), every 5th `.panel`/`.entry-card` on
+    a screen (`:nth-of-type(5n+2)`) gets an animated rainbow-sweep `::after` overlay blended with
+    `mix-blend-mode: overlay`. "Random" by position, not re-rolled per render — reads as "a
+    couple of these are foil" the way opening a pack does, never flickers.
+  - **Tap rotation**: trading-card-game 90°-tap convention, applied to the checkmark icon inside
+    the two most common "done" indicators (`.hit-mark.hit`, `.workout-cell.done`) — never to a
+    whole panel, which would just make its text unreadable.
+  - **A new, third FX-module shape**: "Particle FX" was chosen for this theme, but continuous
+    (drifting mana motes, always on) rather than tap-triggered like Draconic's embers — the
+    lesson from C.R.E.A.M.'s removed tap-glitter is that motion tied to taps gets old fast on a
+    data-entry app. The existing `checkParticleModule()` in `test_aesthetic_fx.js` assumed a
+    canvas starts empty and returns to empty (Draconic's contract), which is the opposite of a
+    continuous module — added `checkContinuousParticleModule()`, detected generically (canvas
+    already has lit pixels before any interaction) rather than by aesthetic name, same "detect
+    the shape, don't name it" spirit as the existing particle/ambient split. It also verifies
+    `prefers-reduced-motion` draws nothing at all (via `page.emulateMedia()`), a check the other
+    two shapes' tests don't have — more important here since this one has no interaction gate at
+    all for a reduced-motion user to just not trigger.
+  - Fonts: Fraunces (header/typeline) + Spectral (body/rules-text) — both unclaimed by any other
+    theme (Cinzel, the other "fantasy serif" option, is already Draconic's and Runic's).
 - **Home edit mode: boxes no longer act on a plain tap** — `renderHomeSectionsGrid()` already
   stripped the navigation `onclick` out of a section tile's edit-mode markup, but a box (RIGHT
   NOW/WORKOUTS/Reminders/...) kept its full normal markup — including onclick — underneath the

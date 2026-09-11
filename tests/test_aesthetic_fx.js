@@ -17,14 +17,20 @@ const ROOT = path.resolve(__dirname, '..');
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css',
   '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml' };
 
-// FX modules come in two shapes and the test detects which, rather than naming modules here,
+// FX modules come in three shapes and the test detects which, rather than naming modules here,
 // so a new fx aesthetic still needs no edits to this file:
-//   particle — mounts an aria-hidden canvas on <body> and draws on it (Draconic's embers)
-//   ambient  — draws nothing and writes CSS custom properties on <html> instead, which theme.css
-//              consumes (Metalheart's cable-field parallax)
-// Both owe the same five things: install on select, respond to input, stop when idle, tear down
+//   particle            — mounts an aria-hidden canvas on <body>, starts EMPTY, and only draws
+//                          in response to a tap, expiring on its own (Draconic's embers)
+//   continuous particle — same canvas, but already drawing before any interaction and never
+//                          fully empties — ambient atmosphere, not a tap reward (Cartomancer's
+//                          mana motes). Told apart from the shape above purely by whether the
+//                          canvas already has lit pixels the moment it's detected installed.
+//   ambient              — draws nothing and writes CSS custom properties on <html> instead,
+//                          which theme.css consumes (Metalheart's cable-field parallax)
+// All three owe the same core obligations: install on select, stop being wasteful when idle
+// (tap-particle: expire; continuous-particle: honour reduced-motion; ambient: settle), tear down
 // completely on switch-away, and survive being re-selected. See checkParticleModule /
-// checkAmbientModule below.
+// checkContinuousParticleModule / checkAmbientModule below.
 //
 // A control that should throw particles, and one that shouldn't (see TRIGGER_SELECTOR in each
 // particle module's fx.ts). Both are common to every aesthetic.
@@ -181,6 +187,52 @@ async function checkParticleModule(page, key) {
   console.log('destroy(): canvas removed and listener released');
 }
 
+/** The CONTINUOUS canvas-drawing shape (Cartomancer's mana motes): already lit before any
+ *  interaction and stays lit indefinitely — the opposite of Draconic's tap-then-expire embers.
+ *  Detected generically by the caller (litPixels() > 0 right after fxInstalled(), before any
+ *  tap) rather than by aesthetic name, same "detect the shape, don't name it" spirit as
+ *  particle-vs-ambient. Verifies: draws immediately, keeps actually animating (not one static
+ *  frame that happens to have pixels), honours prefers-reduced-motion (drawing nothing at all
+ *  once it's set — checked via page.emulateMedia() on the same page, cheaper than a whole new
+ *  browser context), and destroy() removes the canvas completely. There's no tap-based
+ *  re-creation check like checkParticleModule()'s — this module never listens for pointerdown at
+ *  all, so there's nothing for a stray tap after destroy() to accidentally revive.
+ *  Assumes the aesthetic is already selected; leaves the app on 'cyberpunk'. */
+async function checkContinuousParticleModule(page, key) {
+  const canvasId = await page.evaluate(sel => document.querySelector(sel).id, FX_CANVAS);
+  console.log(`continuous particle module loaded, canvas #${canvasId}`);
+
+  // --- 3. It's already drawing before any interaction (the caller sampled this to route here). ---
+  const initialLit = await litPixels(page);
+  console.log('lit pixels immediately after load (no interaction yet):', initialLit);
+  if (initialLit <= 0) throw new Error(`${key}: expected the canvas to already be drawing on load`);
+
+  // --- 4. It's genuinely animating, not a single static frame that happens to have pixels. ---
+  const frameA = await page.evaluate(sel => document.querySelector(sel).toDataURL(), FX_CANVAS);
+  await page.waitForTimeout(1200);
+  const frameB = await page.evaluate(sel => document.querySelector(sel).toDataURL(), FX_CANVAS);
+  if (frameA === frameB) throw new Error(`${key}: canvas pixels never changed — the rAF loop may not be running`);
+  console.log('canvas content changed between samples (actively animating)');
+
+  // --- 5. Honours prefers-reduced-motion: re-selecting under it draws nothing at all. ---
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.evaluate(() => setAesthetic('cyberpunk'));
+  await page.waitForTimeout(150);
+  await page.evaluate(k => setAesthetic(k), key);
+  await page.waitForFunction(sel => !!document.querySelector(sel), FX_CANVAS, { timeout: 5000 });
+  await page.waitForTimeout(500);
+  const reducedLit = await litPixels(page);
+  console.log('lit pixels under prefers-reduced-motion:', reducedLit);
+  if (reducedLit > 0) throw new Error(`${key}: drew particles even with prefers-reduced-motion set`);
+  await page.emulateMedia({ reducedMotion: 'no-preference' }); // restore for the rest of the suite
+
+  // --- 6. Switching away destroys it completely. ---
+  await page.evaluate(() => setAesthetic('cyberpunk'));
+  await page.waitForTimeout(300);
+  if (await page.$(FX_CANVAS)) throw new Error(`${key}: destroy() left the canvas behind`);
+  console.log('destroy(): canvas removed');
+}
+
 /** The CSS-driving shape (Metalheart's cable parallax): init() writes custom properties on
  *  <html> instead of drawing, input moves them, the easing settles instead of drifting forever,
  *  and destroy() clears them and releases its listeners. Same five obligations as the particle
@@ -293,8 +345,18 @@ async function checkAmbientModule(page, key, baseProps) {
     await page.evaluate(k => setAesthetic(k), key);
     await page.waitForFunction(fxInstalled, [FX_CANVAS, baseProps], { timeout: 5000 });
 
-    if (await page.$(FX_CANVAS)) await checkParticleModule(page, key);
-    else await checkAmbientModule(page, key, baseProps);
+    if (await page.$(FX_CANVAS)) {
+      // A settle wait: the canvas element can exist a frame or two before its first paint lands,
+      // and which particle shape this is (tap-triggered vs. continuous, see
+      // checkContinuousParticleModule() below) is told apart by whether it's ALREADY drawing —
+      // sampling too early would misread a continuous module as the tap-triggered shape.
+      await page.waitForTimeout(200);
+      const startsLit = (await litPixels(page)) > 0;
+      if (startsLit) await checkContinuousParticleModule(page, key);
+      else await checkParticleModule(page, key);
+    } else {
+      await checkAmbientModule(page, key, baseProps);
+    }
 
     // --- 6. Re-selecting it works again (init/destroy are repeatable). ---
     await page.evaluate(k => setAesthetic(k), key);

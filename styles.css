@@ -584,6 +584,7 @@ select { -webkit-appearance: none; appearance: none; background-image: linear-gr
 /* The Sanic default, read as a run left to right: night sky, the blue itself, his white
    glove, a ring, then the red of the shoes. Retinted per CHARACTER at runtime; this is the default. */
 .aesthetic-preview-hedge { background: linear-gradient(150deg, #050d22 6%, #3d82ff 32%, #eef4ff 50%, #ffce3a 68%, #ef4b23 88%, #150404 100%); }
+.aesthetic-preview-cartomancer { background: linear-gradient(135deg, #f0dfa0 0 20%, #4aa8e8 20% 40%, #8452b8 40% 60%, #e8562a 60% 80%, #4a9450 80% 100%); }
 .aesthetic-card-name { font-weight: 700; font-size: 13px; }
 .aesthetic-card-desc { font-size: 11px; color: var(--text-faint); margin-top: 2px; line-height: 1.4; }
 .aesthetic-card-check { position: absolute; right: 10px; top: 10px; }

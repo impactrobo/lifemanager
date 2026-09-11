@@ -1,0 +1,397 @@
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700;9..144,900&family=Spectral:wght@400;500;600;700&display=swap');
+
+/* ============================================================================
+   Aesthetic: Cartomancer — every panel reads as a card in its own frame: a
+   thick colored border, rounded corners, a "rules text box" surface tint, and
+   a small mana pip in the corner. Style inspired by trading-card-game frames
+   in general (five color philosophies, foil-card shimmer, a card "tapping"
+   convention) — original palette/art/copy throughout, no trademarked names,
+   logos, or card art reproduced anywhere in this file or in app.js.
+
+   ---- MAIN COLOR: the MANA COLOR picker ----
+   FULL_PALETTE aesthetic (see app.js > FULL_PALETTE_AESTHETICS): --bg /
+   --surface / --surface2 / --border / --border-soft / --text* / --good /
+   --good-soft / --reset-* / --accent all arrive INLINE on <html> from
+   applyAccentColor(), one set per color philosophy (Protection/Control/Death/
+   Rapidity/Growth). Only hue-independent/derived tokens live in the block
+   below — anything hardcoded here would survive the color swap and stick out
+   under the other four. All five keep a DARK backdrop (no light-theme token
+   flip — that machinery is only for light-surfaces-on-dark-backdrop themes
+   like Liminal); the color identity comes through accent/--good/panel tint.
+
+   ---- Foil shimmer: some panels catch the light, most don't ----
+   Rather than tagging specific data items as "foil" (which would mean editing
+   dozens of render functions across the whole app), this is done with a pure
+   CSS `:nth-of-type` selector on `.panel` — every panel landing on that
+   position in its own parent gets an animated holo-sweep `::after` overlay.
+   It's "random" in the sense that *which* panel lands there shifts as content
+   changes, but it's deterministic by position, not re-rolled every render —
+   it never flickers, it just quietly reads as "a couple of these are foil"
+   on any given screen, the way opening a pack does. Border-radius on the
+   overlay clips its own gradient to the rounded card shape automatically —
+   no `overflow: hidden` needed (and it isn't set, so it can't accidentally
+   clip anything else added to a panel elsewhere).
+
+   ---- Tap rotation ----
+   Trading-card-game convention: a used card rotates 90° to show it's tapped.
+   Applied here to the small checkmark icon *inside* a "done" indicator, not
+   to a whole panel (rotating body copy 90° would just make it unreadable) —
+   see the TAP ROTATION section near the bottom.
+
+   ---- Particle FX: drifting mana motes ----
+   Continuous ambient drift (aesthetics/cartomancer/fx.ts), not tap-triggered
+   like Draconic's embers — the lesson from C.R.E.A.M.'s removed tap-glitter
+   and Millennium's trimmed marquee is that motion next to constantly-tapped
+   controls gets old fast on a data-entry app. This is a NEW fx shape (a
+   canvas that's already lit before any interaction, and never fully empties)
+   — see checkContinuousParticleModule() in tests/test_aesthetic_fx.js.
+
+   External aesthetic — lazily loaded, everything scoped under
+   [data-aesthetic="cartomancer"]. Fonts @imported here rather than added to
+   the shared <link>: Fraunces (a display serif with real character, used
+   nowhere else — Cinzel is already Draconic's and Runic's fantasy-serif) for
+   headers, Spectral (plain, readable) for body/rules-text panels.
+
+   Picker swatch `.aesthetic-preview-cartomancer` lives in styles.css, not
+   here — the picker renders while a different aesthetic is still active.
+   Positioning of .topbar/.tabbar is never touched; they need their
+   sticky/fixed from styles.css.
+   ============================================================================ */
+
+:root[data-aesthetic="cartomancer"] {
+  /* Palette-supplied tokens arrive inline — see the header. Derived only here. */
+  --accent-dim: color-mix(in srgb, var(--accent) 55%, var(--border));
+  --accent-soft: color-mix(in srgb, var(--accent) 18%, var(--surface));
+  --bad: #e8395a;
+  --bad-soft: color-mix(in srgb, #e8395a 20%, var(--surface));
+  --warn: #f2c94c;
+  --myo: #b98cff;
+  --savings: #5adbc4;
+  --savings-soft: color-mix(in srgb, var(--savings) 20%, var(--surface));
+  --font-head: 'Fraunces', 'Georgia', serif;
+  --font-body: 'Spectral', 'Georgia', serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --radius: 10px; /* a card's corner, not a phone-app corner — noticeably squarer than most themes */
+
+  /* ---- The frame ----
+     A real card frame is a colored border, a thin dark separator line, THEN
+     the rules-text surface. Three inset shadows give exactly that: 0-3 the
+     accent border, 3-4 a dark hairline, 4-5 a faint highlight lifting the
+     text box off the border (first-listed paints on top, so order matters). */
+  --cm-frame:
+      inset 0 0 0 3px var(--accent),
+      inset 0 0 0 4px color-mix(in srgb, var(--bg) 70%, #000000),
+      inset 0 0 0 5px color-mix(in srgb, var(--accent) 30%, transparent),
+      0 6px 16px rgba(0, 0, 0, 0.5);
+  --cm-frame-tight: /* same construction, one step thinner, for grid tiles */
+      inset 0 0 0 2px var(--accent),
+      inset 0 0 0 3px color-mix(in srgb, var(--bg) 70%, #000000),
+      0 4px 12px rgba(0, 0, 0, 0.45);
+  /* The "rules text box" — a faint vellum tint lifted off the surface, never
+     flat surface color, so a card panel is legible as parchment, not a plain box. */
+  --cm-textbox: linear-gradient(180deg,
+      color-mix(in srgb, var(--surface2) 92%, var(--accent)) 0%,
+      var(--surface) 100%);
+  --cm-glow: 0 0 16px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+/* ---------- The table ---------- */
+[data-aesthetic="cartomancer"] body {
+  background-color: var(--bg);
+  background-image: radial-gradient(140% 90% at 50% -10%,
+      color-mix(in srgb, var(--accent) 10%, transparent) 0%,
+      transparent 60%);
+  background-attachment: scroll; /* fixed is broken on iOS Safari */
+}
+[data-aesthetic="cartomancer"] #app { position: relative; z-index: 1; }
+
+/* ---------- Card-frame panels ---------- */
+[data-aesthetic="cartomancer"] .panel,
+[data-aesthetic="cartomancer"] .entry-card,
+[data-aesthetic="cartomancer"] .note-card,
+[data-aesthetic="cartomancer"] .chart-wrap,
+[data-aesthetic="cartomancer"] .modal-box,
+[data-aesthetic="cartomancer"] .superset-group,
+[data-aesthetic="cartomancer"] .aesthetic-card,
+[data-aesthetic="cartomancer"] .home-popup,
+[data-aesthetic="cartomancer"] .rest-timer-widget {
+  position: relative;
+  background: var(--cm-textbox);
+  border: none; /* the frame is drawn as inset shadows, not a real border */
+  border-radius: var(--radius);
+  box-shadow: var(--cm-frame);
+}
+/* Corner mana pip — a masked glyph (see mana-pip.svg), recolored per palette. */
+[data-aesthetic="cartomancer"] .panel::before,
+[data-aesthetic="cartomancer"] .entry-card::before,
+[data-aesthetic="cartomancer"] .note-card::before,
+[data-aesthetic="cartomancer"] .modal-box::before {
+  content: '';
+  position: absolute; top: 8px; right: 8px; width: 14px; height: 14px;
+  pointer-events: none;
+  background-color: color-mix(in srgb, var(--accent) 80%, transparent);
+  -webkit-mask: url('mana-pip.svg') center / contain no-repeat;
+  mask: url('mana-pip.svg') center / contain no-repeat;
+}
+[data-aesthetic="cartomancer"] .panel-done,
+[data-aesthetic="cartomancer"] .workout-cell.done {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--good) 24%, var(--surface2)) 0%,
+    color-mix(in srgb, var(--good) 10%, var(--surface)) 100%);
+  box-shadow:
+    inset 0 0 0 3px var(--good),
+    inset 0 0 0 4px color-mix(in srgb, var(--bg) 70%, #000000),
+    0 6px 16px rgba(0, 0, 0, 0.5);
+}
+[data-aesthetic="cartomancer"] .modal-overlay {
+  background: color-mix(in srgb, var(--bg) 78%, transparent);
+}
+/* Grid tiles: .workout-cell is aspect-ratio:1 inside repeat(3, 1fr). No extra
+   padding here — the square breaks and the third column runs off screen. */
+[data-aesthetic="cartomancer"] .workout-cell,
+[data-aesthetic="cartomancer"] .cal-cell {
+  background: var(--cm-textbox);
+  border: none;
+  border-radius: var(--radius);
+  box-shadow: var(--cm-frame-tight);
+}
+
+/* ---------- Foil shimmer ----------
+   Every 5th panel-shaped thing on a screen (see the header comment for why
+   nth-of-type rather than tagging data). The sweep itself: a diagonal
+   repeating rainbow band, blended with `overlay` so it tints the existing
+   frame/text instead of washing it out flat, animated by sliding its own
+   background-position — compositor-friendly, no repaint of the gradient. */
+[data-aesthetic="cartomancer"] .panel:nth-of-type(5n+2)::after,
+[data-aesthetic="cartomancer"] .entry-card:nth-of-type(5n+2)::after {
+  content: '';
+  position: absolute; inset: 0; z-index: 1;
+  pointer-events: none;
+  border-radius: inherit;
+  mix-blend-mode: overlay;
+  opacity: 0.65;
+  background: repeating-linear-gradient(115deg,
+      transparent 0 8%,
+      rgba(255, 90, 90, 0.5) 8% 10%,
+      rgba(255, 200, 70, 0.5) 10% 12%,
+      rgba(130, 255, 130, 0.5) 12% 14%,
+      rgba(90, 190, 255, 0.5) 14% 16%,
+      rgba(210, 110, 255, 0.5) 16% 18%,
+      transparent 18% 30%);
+  background-size: 220% 220%;
+  animation: cm-foil-sweep 7s linear infinite;
+}
+@keyframes cm-foil-sweep {
+  0%   { background-position: 0% 0%; }
+  100% { background-position: 100% 100%; }
+}
+
+/* ---------- Bars ----------
+   `position` is never touched on these two — they carry sticky/fixed from
+   styles.css and lose their pinning if it is. z-index only. */
+[data-aesthetic="cartomancer"] .topbar {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--surface2) 80%, var(--accent)) 0%,
+    var(--surface) 70%,
+    color-mix(in srgb, var(--bg) 60%, #000000) 100%);
+  border-bottom: none;
+  box-shadow: inset 0 -3px 0 var(--accent), 0 3px 14px rgba(0, 0, 0, 0.6);
+  z-index: 20;
+}
+[data-aesthetic="cartomancer"] .tabbar {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--surface) 88%, var(--accent)) 0%,
+    color-mix(in srgb, var(--bg) 70%, #000000) 100%);
+  border-top: none;
+  box-shadow: 0 -3px 20px rgba(0, 0, 0, 0.7);
+  z-index: 30;
+}
+[data-aesthetic="cartomancer"] .tabbar::before {
+  content: '';
+  position: absolute; left: 0; right: 0; top: 0; height: 3px;
+  pointer-events: none;
+  background: var(--accent);
+}
+[data-aesthetic="cartomancer"] .tabbar button { background: none; border-radius: 8px; color: var(--text-faint); }
+[data-aesthetic="cartomancer"] .tabbar button.active {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+[data-aesthetic="cartomancer"] .toast { z-index: 60; }
+
+/* ---------- Lettering ----------
+   .section-title doubles as the "typeline bar" every card frame has below its
+   art — a filled band, small-caps-ish tracking, a mana pip leading it. */
+[data-aesthetic="cartomancer"] .topbar .brand {
+  font-family: var(--font-head);
+  font-weight: 900;
+  letter-spacing: 0.01em;
+  color: var(--text);
+}
+[data-aesthetic="cartomancer"] .topbar .brand span { color: var(--accent); }
+[data-aesthetic="cartomancer"] .section-title {
+  display: flex; align-items: center; gap: 8px;
+  font-family: var(--font-head);
+  font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.06em; font-size: 15px;
+  color: var(--text);
+  background: linear-gradient(90deg,
+      color-mix(in srgb, var(--accent) 22%, var(--surface)) 0%,
+      color-mix(in srgb, var(--accent) 6%, var(--surface)) 100%);
+  padding: 8px 12px;
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+[data-aesthetic="cartomancer"] .section-title::before {
+  content: '';
+  width: 12px; height: 12px; flex-shrink: 0;
+  background-color: var(--accent);
+  -webkit-mask: url('mana-pip.svg') center / contain no-repeat;
+  mask: url('mana-pip.svg') center / contain no-repeat;
+}
+[data-aesthetic="cartomancer"] .subtle-label {
+  font-family: var(--font-head);
+  color: color-mix(in srgb, var(--accent) 40%, var(--text-dim));
+  text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700;
+}
+[data-aesthetic="cartomancer"] body, [data-aesthetic="cartomancer"] input, [data-aesthetic="cartomancer"] textarea, [data-aesthetic="cartomancer"] select {
+  font-family: var(--font-body);
+}
+[data-aesthetic="cartomancer"] .empty-state { color: var(--text-dim); font-style: italic; }
+
+/* ---------- Controls ----------
+   ORDER MATTERS: [data-aesthetic] .btn and [data-aesthetic] .btn-primary are
+   equal specificity (0,2,0) and every .btn-primary also carries .btn, so the
+   neutral plate must come FIRST. .btn-danger / .btn-good are restated below
+   because this theme's .btn outranks styles.css's rules for them.
+   NO padding on the shared rule — .icon-btn is a fixed 30x30 box, .rest-timer-fab
+   52x52, .rt-btn has its own padding; a blanket value collapses their SVGs. */
+[data-aesthetic="cartomancer"] .btn,
+[data-aesthetic="cartomancer"] .icon-btn,
+[data-aesthetic="cartomancer"] .subnav button,
+[data-aesthetic="cartomancer"] .rt-btn,
+[data-aesthetic="cartomancer"] .rest-timer-fab,
+[data-aesthetic="cartomancer"] .week-selector .cycle-btns button {
+  background: var(--cm-textbox);
+  border: 2px solid var(--accent);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: var(--font-head);
+  font-weight: 700;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  transition: transform 0.06s, box-shadow 0.06s;
+}
+[data-aesthetic="cartomancer"] .btn:active,
+[data-aesthetic="cartomancer"] .icon-btn:active,
+[data-aesthetic="cartomancer"] .subnav button:active,
+[data-aesthetic="cartomancer"] .rt-btn:active,
+[data-aesthetic="cartomancer"] .rest-timer-fab:active,
+[data-aesthetic="cartomancer"] .week-selector .cycle-btns button:active {
+  transform: translateY(2px);
+  box-shadow: 0 0 0 rgba(0, 0, 0, 0.4);
+}
+[data-aesthetic="cartomancer"] .btn-primary {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--accent) 55%, #ffffff) 0%,
+    var(--accent) 60%,
+    color-mix(in srgb, var(--accent) 78%, #000000) 100%);
+  border-color: color-mix(in srgb, var(--accent) 60%, #000000);
+  color: var(--bg);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4), var(--cm-glow);
+}
+[data-aesthetic="cartomancer"] .btn-good {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--good) 55%, #ffffff) 0%,
+    var(--good) 60%,
+    color-mix(in srgb, var(--good) 78%, #000000) 100%);
+  border-color: color-mix(in srgb, var(--good) 60%, #000000);
+  color: var(--bg);
+}
+[data-aesthetic="cartomancer"] .btn-danger {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--bad) 55%, #ffffff) 0%,
+    var(--bad) 60%,
+    color-mix(in srgb, var(--bad) 78%, #000000) 100%);
+  border-color: color-mix(in srgb, var(--bad) 60%, #000000);
+  color: #2a0410;
+}
+[data-aesthetic="cartomancer"] .btn-ghost {
+  background: none; border-color: transparent; box-shadow: none; color: var(--text-dim);
+}
+[data-aesthetic="cartomancer"] .subnav button.active,
+[data-aesthetic="cartomancer"] .unit-toggle button.active {
+  background: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 60%, #000000);
+  color: var(--bg); font-weight: 800;
+}
+[data-aesthetic="cartomancer"] .unit-toggle {
+  border: 2px solid var(--accent);
+  border-radius: 8px; overflow: hidden;
+}
+[data-aesthetic="cartomancer"] .unit-toggle button {
+  background: var(--surface2); color: var(--text-dim);
+  border: none; box-shadow: none; transform: none;
+}
+[data-aesthetic="cartomancer"] .plate,
+[data-aesthetic="cartomancer"] .pill,
+[data-aesthetic="cartomancer"] .tag-pill,
+[data-aesthetic="cartomancer"] .exercise-chip {
+  background: var(--surface2);
+  border: 1px solid color-mix(in srgb, var(--accent) 50%, var(--border));
+  border-radius: 999px;
+}
+
+/* ---------- Inputs: a well cut into the card stock ---------- */
+[data-aesthetic="cartomancer"] input[type="text"],
+[data-aesthetic="cartomancer"] input[type="number"],
+[data-aesthetic="cartomancer"] input[type="date"],
+[data-aesthetic="cartomancer"] input[type="time"],
+[data-aesthetic="cartomancer"] select,
+[data-aesthetic="cartomancer"] textarea,
+[data-aesthetic="cartomancer"] .note-editor {
+  background: color-mix(in srgb, var(--bg) 78%, #000000);
+  border: 2px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+  border-radius: 6px;
+  color: var(--text);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+[data-aesthetic="cartomancer"] input::placeholder,
+[data-aesthetic="cartomancer"] textarea::placeholder { color: var(--text-faint); }
+[data-aesthetic="cartomancer"] input:focus,
+[data-aesthetic="cartomancer"] select:focus,
+[data-aesthetic="cartomancer"] textarea:focus {
+  outline-color: var(--accent);
+  border-color: var(--accent);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.5), var(--cm-glow);
+}
+
+/* ---------- MANA COLOR swatches ---------- */
+[data-aesthetic="cartomancer"] .accent-swatch {
+  border: 2px solid var(--border);
+}
+[data-aesthetic="cartomancer"] .accent-swatch.active {
+  border-color: var(--text);
+  box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px var(--accent);
+}
+
+/* ---------- Tap rotation ----------
+   A used card rotates 90° in trading-card-game convention. Applied to the
+   checkmark icon inside the two most common per-item "done" indicators —
+   never to a whole panel/card, which would just make its text unreadable. */
+[data-aesthetic="cartomancer"] .hit-mark.hit svg,
+[data-aesthetic="cartomancer"] .workout-cell.done .cell-icon svg {
+  transform: rotate(90deg);
+  transition: transform 0.2s ease;
+}
+
+/* ---------- Reduced motion: the sweep stops, nothing is left mid-frame ----------
+   The foil keyframes start and end at the same visual band position modulo the
+   gradient's own repeat, so freezing costs only the motion. The particle
+   module also checks this itself and never starts. */
+@media (prefers-reduced-motion: reduce) {
+  [data-aesthetic="cartomancer"] .panel:nth-of-type(5n+2)::after,
+  [data-aesthetic="cartomancer"] .entry-card:nth-of-type(5n+2)::after {
+    animation: none;
+  }
+}
