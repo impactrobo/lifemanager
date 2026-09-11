@@ -135,6 +135,33 @@ async function keyFor(endpoint) {
   return [...new Uint8Array(hash)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+// A single KV entry holding every subscriber's key, so the once-a-minute cron never has to call
+// list() to discover them (see checkDueReminders()). This exists because of a real production
+// incident (2026-09-12): KV's free tier caps *list* operations at 1,000/day, separately from the
+// 100,000/day read cap — a per-minute list() is 1,440 calls/day on its own, blowing the list
+// budget by 44% before a single subscriber ever gets checked, and once that budget's exhausted
+// for the day list() starts erroring, silently breaking reminder delivery until the UTC-midnight
+// reset. The index below is read with a plain get() (100k/day budget) instead, and only written
+// on subscribe/unsubscribe — for a personal app that's rare enough that even the read-modify-write
+// race between two near-simultaneous subscribes (KV has no atomic list-append) is an acceptable,
+// unlikely-to-matter risk, not worth a more complex scheme.
+const INDEX_KEY = '__subscriber_index__';
+async function getIndex(env) {
+  const raw = await env.REMINDERS_KV.get(INDEX_KEY);
+  return raw ? JSON.parse(raw) : [];
+}
+async function addToIndex(env, key) {
+  const index = await getIndex(env);
+  if (index.includes(key)) return;
+  index.push(key);
+  await env.REMINDERS_KV.put(INDEX_KEY, JSON.stringify(index));
+}
+async function removeFromIndex(env, key) {
+  const index = await getIndex(env);
+  if (!index.includes(key)) return;
+  await env.REMINDERS_KV.put(INDEX_KEY, JSON.stringify(index.filter((k) => k !== key)));
+}
+
 /* ============================ HTTP endpoints ============================ */
 async function handleSubscribe(request, env) {
   const { subscription, reminders, timezone } = await request.json();
@@ -143,6 +170,7 @@ async function handleSubscribe(request, env) {
   await env.REMINDERS_KV.put(key, JSON.stringify({
     subscription, reminders: reminders || [], timezone: timezone || 'UTC', sentIds: [],
   }));
+  await addToIndex(env, key);
   return json({ ok: true });
 }
 async function handleReminders(request, env) {
@@ -159,12 +187,15 @@ async function handleReminders(request, env) {
     timezone: timezone || existing.timezone,
     sentIds: (existing.sentIds || []).filter((id) => newIds.has(id)), // drop sent-state for reminders that no longer exist
   }));
+  await addToIndex(env, key); // defensive no-op for any subscriber written before the index existed
   return json({ ok: true });
 }
 async function handleUnsubscribe(request, env) {
   const { endpoint } = await request.json();
   if (!endpoint) return json({ error: 'Missing endpoint' }, 400);
-  await env.REMINDERS_KV.delete(await keyFor(endpoint));
+  const key = await keyFor(endpoint);
+  await env.REMINDERS_KV.delete(key);
+  await removeFromIndex(env, key);
   return json({ ok: true });
 }
 
@@ -184,14 +215,10 @@ function minutesSinceMidnight(hhmm) {
   return h * 60 + m;
 }
 async function checkDueReminders(env) {
-  let cursor;
-  do {
-    const page = await env.REMINDERS_KV.list({ cursor });
-    for (const { name: key } of page.keys) {
-      await processSubscriber(key, env);
-    }
-    cursor = page.cursor;
-  } while (cursor);
+  const index = await getIndex(env); // one cheap get() — see the INDEX_KEY comment for why this isn't list()
+  for (const key of index) {
+    await processSubscriber(key, env);
+  }
 }
 async function processSubscriber(key, env) {
   const raw = await env.REMINDERS_KV.get(key);
@@ -223,7 +250,7 @@ async function processSubscriber(key, env) {
       console.error(`Push send threw for ${reminder.id}:`, e.message);
     }
   }
-  if (subscriptionGone) { await env.REMINDERS_KV.delete(key); return; }
+  if (subscriptionGone) { await env.REMINDERS_KV.delete(key); await removeFromIndex(env, key); return; }
   await env.REMINDERS_KV.put(key, JSON.stringify({ ...record, sentIds: [...sentIds] }));
 }
 

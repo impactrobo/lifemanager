@@ -88,6 +88,20 @@ before starting any of these.
     **API token** (`Edit Cloudflare Workers` template) rather than `wrangler login`'s OAuth flow —
     the browser-redirect callback didn't reach the CLI process in this dev environment; the token
     route is also just the normal way to authenticate `wrangler` non-interactively.
+  - **Incident, 2026-09-12: `list()` was blowing KV's daily quota, fixed same day.**
+    `checkDueReminders()` originally called `env.REMINDERS_KV.list()` on every cron tick to
+    discover subscriber keys — 1,440 calls/day on a 1-minute cron, against KV's free-tier cap of
+    just **1,000 *list* operations/day** (a separate, much stingier budget than the 100,000/day
+    read cap). That's a 44% overshoot from polling alone, regardless of how many people were
+    actually using reminders — Cloudflare's usage-alert email is what surfaced it. Once the daily
+    list budget was exhausted (~16–17h into the UTC day at that rate), `list()` started erroring
+    with no try/catch around it, so **reminders scheduled later in the day would silently stop
+    firing** until the UTC-midnight reset — a real reliability bug, not just a quota nag. Fixed by
+    adding `INDEX_KEY` (`__subscriber_index__`), a single KV entry listing every subscriber's key,
+    maintained on subscribe/unsubscribe (rare, cheap writes) and read with a plain `get()` (100k/
+    day budget) instead of `list()` in the cron path — `list()` is no longer called anywhere in
+    the Worker. Verified live: subscribe/reminders/unsubscribe via curl all correctly
+    add/no-op/remove the index entry, checked directly with `wrangler kv key get`.
   - The push-send step (`sendWebPush()`) implements RFC 8291 (aes128gcm encryption) + RFC 8292
     (VAPID JWT) by hand with WebCrypto, since the plain `web-push` npm package can't run on
     Workers (it shells out to Node's `https` module). HTTP-layer behavior was smoke-tested
