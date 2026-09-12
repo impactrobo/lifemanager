@@ -1406,13 +1406,19 @@ function defaultHomeLayout() {
     boxHidden: [],
   };
 }
+// `color` is a fixed per-section identity, not an index-based rotation — these are 6 known,
+// permanent sections (unlike a user's own dynamic schedules/budget categories elsewhere), so each
+// one just gets its own color outright, and that color follows the section id wherever it's
+// dragged to. That's the actual point of asking for this: reordering in edit mode reads as "the
+// blue one moved up," not just a shuffled list of same-colored squares. Reuses hues already in
+// use elsewhere (Notes tags / muscle groups) for a consistent palette rather than a new one.
 const HOME_SECTION_META = {
-  schedule: { label: 'SCHEDULE', icon: 'schedule' },
-  train: { label: 'EXERCISE', icon: 'exercise' },
-  hobbies: { label: 'HOBBIES', icon: 'hobbies' },
-  health: { label: 'HEALTH & DIET', icon: 'health' },
-  notes: { label: 'NOTES', icon: 'notes' },
-  budget: { label: 'FINANCIAL', icon: 'budget' },
+  schedule: { label: 'SCHEDULE', icon: 'schedule', color: '#819FFF' },
+  train: { label: 'EXERCISE', icon: 'exercise', color: '#FF9191' },
+  hobbies: { label: 'HOBBIES', icon: 'hobbies', color: '#CAAFFF' },
+  health: { label: 'HEALTH & DIET', icon: 'health', color: '#92FECD' },
+  notes: { label: 'NOTES', icon: 'notes', color: '#FFD961' },
+  budget: { label: 'FINANCIAL', icon: 'budget', color: '#B2FF5D' },
 };
 const HOME_BOX_META = {
   reminders: { label: "TODAY'S REMINDERS" },
@@ -8477,6 +8483,7 @@ function renderHomeAddPopup() {
   const rows = hiddenIds.length ? hiddenIds.map(id => `
     <label class="home-popup-row">
       <input type="checkbox" onchange="${isSections ? 'showHomeSection' : 'showHomeBox'}('${id}')">
+      ${isSections && meta[id] ? `<i style="display:inline-block; width:9px; height:9px; border-radius:50%; background:${meta[id].color}; margin-right:6px; vertical-align:middle;"></i>` : ''}
       <span>${escapeHtml(meta[id] ? meta[id].label : id)}</span>
     </label>`).join('') : `<div style="font-size:12px; color:var(--text-faint); padding:10px 0;">Nothing hidden — everything's already showing.</div>`;
   return `
@@ -8495,13 +8502,14 @@ function renderHomeSectionsGrid() {
   const tiles = L.sectionOrder.map(id => {
     const meta = HOME_SECTION_META[id];
     if (!meta) return '';
+    const colorStyle = `border-color:${meta.color}; background:color-mix(in srgb, ${meta.color} 12%, var(--surface));`;
     if (!HOME_EDIT_MODE) {
-      return `<div class="workout-cell home-tile" onclick="goHomeSection('${id}')">
+      return `<div class="workout-cell home-tile" style="${colorStyle}" onclick="goHomeSection('${id}')">
         <div style="font-size:36px;">${icon(meta.icon)}</div>
         <div class="wname">${meta.label}</div>
       </div>`;
     }
-    return `<div class="workout-cell home-tile home-edit-item" data-home-drag-list="sections" data-home-drag-id="${id}" onpointerdown="startHomeDrag('sections','${id}',event,this)">
+    return `<div class="workout-cell home-tile home-edit-item" style="${colorStyle}" data-home-drag-list="sections" data-home-drag-id="${id}" onpointerdown="startHomeDrag('sections','${id}',event,this)">
       <button class="home-edit-x" onclick="event.stopPropagation(); hideHomeSection('${id}')" title="Hide">${icon('close')}</button>
       <div style="font-size:36px;">${icon(meta.icon)}</div>
       <div class="wname">${meta.label}</div>

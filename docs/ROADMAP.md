@@ -275,6 +275,23 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Home's 6 section tiles get individual coloration (2026-09-12).** Asked for specifically to
+  make drag-reordering in edit mode legible — before this, all 6 tiles (SCHEDULE/EXERCISE/
+  HOBBIES/HEALTH & DIET/NOTES/FINANCIAL) looked identical except for icon shape and label, so
+  tracking "which one moved where" while dragging meant reading text mid-drag. `HOME_SECTION_META`
+  gained a `color` per entry — a fixed identity tied to the section id, not an index-based
+  rotation (unlike `SCHEDULE_COLOR_PALETTE`/`BUDGET_CATEGORIES` elsewhere, which are for
+  user-created, growable lists) — since these 6 are permanent and known, each just gets its own
+  color outright, and that color follows the tile wherever it's dragged to. Colors reuse hues
+  already established elsewhere (Notes tags / muscle groups) rather than inventing a new palette:
+  Schedule blue, Exercise red, Hobbies purple, Health & Diet teal, Notes yellow, Financial green.
+  Applied as a border + subtle background tint on the tile itself (`renderHomeSectionsGrid()`) —
+  the icon stays accent-colored, unchanged everywhere else it appears (Schedule's own topbar,
+  etc.). The "ADD BACK SECTIONS" popup for re-showing a hidden section also gets a matching
+  color-dot next to each hidden section's name, for the same at-a-glance recognition.
+  - **Found in passing while testing, not fixed:** the Home-tile-order bug flagged the same day
+    (`showHomeBox()` appending a restored tile to the end of the order) — the person confirmed
+    it's not worth fixing right now. Left as-is, documented above for reference.
 - **Cardio-adjusted TDEE: a decomposition, not a new target (2026-09-12).** Discussed at length
   before building — the rolling TDEE is a pure black-box estimate (real weight change vs. real
   calories eaten), which means it *already* has whatever cardio actually happened baked in for its

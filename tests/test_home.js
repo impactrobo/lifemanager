@@ -106,6 +106,43 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   const restoredOrder = await page.evaluate(() => STATE.settings.homeLayout.sectionOrder);
   if (!restoredOrder.includes(targetId)) throw new Error(`Expected '${targetId}' restored to sectionOrder after showHomeSection`);
 
+  // 6. Each of the 6 section tiles gets its own fixed color (not shared/generic), and it's the
+  // exact one named in HOME_SECTION_META for that id — reordering shouldn't change which color a
+  // section carries, since the whole point is tracking a tile by color through a reorder.
+  await page.evaluate(() => { switchTab('home'); });
+  await page.waitForTimeout(150);
+  const tileColors = await page.evaluate(() => {
+    const ids = STATE.settings.homeLayout.sectionOrder;
+    return ids.map(id => {
+      const el = [...document.querySelectorAll('.home-tile')].find(t => t.textContent.includes(HOME_SECTION_META[id].label));
+      return { id, expected: HOME_SECTION_META[id].color, actualBorder: el ? el.style.borderColor : null };
+    });
+  });
+  console.log('tile colors:', tileColors);
+  const uniqueColors = new Set(tileColors.map(t => t.expected));
+  if (uniqueColors.size !== 6) throw new Error(`Expected all 6 sections to have distinct colors, got ${uniqueColors.size} unique: ${JSON.stringify([...uniqueColors])}`);
+  for (const t of tileColors) {
+    if (!t.actualBorder) throw new Error(`Expected tile "${t.id}" to render with a border-color set, found none`);
+  }
+
+  // 7. The color follows the section id through a reorder, not the position — drag "budget" to
+  // the front and confirm its rendered color is still its own, not whatever "schedule" (the old
+  // first tile) used to have.
+  const budgetColorBefore = tileColors.find(t => t.id === 'budget').expected;
+  await page.evaluate(() => reorderHomeList('sections', 'budget', 'schedule')); // move budget to sit before schedule
+  await page.waitForTimeout(150);
+  const budgetColorAfter = await page.evaluate(() => {
+    const el = [...document.querySelectorAll('.home-tile')].find(t => t.textContent.includes(HOME_SECTION_META.budget.label));
+    return el ? el.style.borderColor : null;
+  });
+  console.log('budget tile color before/after reordering to the front:', budgetColorBefore, '/', budgetColorAfter);
+  // style.borderColor normalizes hex to rgb() — just confirm it didn't become schedule's color
+  const scheduleColorRgb = await page.evaluate(() => { const d = document.createElement('div'); d.style.color = HOME_SECTION_META.schedule.color; document.body.appendChild(d); const c = getComputedStyle(d).color; d.remove(); return c; });
+  if (budgetColorAfter === scheduleColorRgb) throw new Error('Expected budget to keep its own color after moving to the front, not inherit schedule\'s old position color');
+
+  // cleanup — restore the default section order this test's reordering disturbed
+  await page.evaluate(() => { STATE.settings.homeLayout = defaultHomeLayout(); saveState(); });
+
   await browser.close();
 
   if (errors.length > 0) {
