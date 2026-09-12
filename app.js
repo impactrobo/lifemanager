@@ -41,6 +41,7 @@ const ICONS = {
   recurDollar: `<svg class="icon-svg" viewBox="0 0 24 24" width="1em" height="1em" aria-hidden="true"><path d="M4 11a8 8 0 0 1 13.9-5.4M20 13a8 8 0 0 1-13.9 5.4" fill="none" stroke="var(--accent)" stroke-width="1.7" stroke-linecap="round"/><path d="M17.5 3v3.2h-3.2M6.5 21v-3.2h3.2" fill="none" stroke="var(--accent)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><text x="12" y="14.6" text-anchor="middle" font-size="8.5" font-weight="700" fill="var(--accent)">$</text></svg>`,
   mountain: `<svg class="icon-svg" viewBox="0 0 24 24" width="1em" height="1em" aria-hidden="true"><path d="M2.5 19 9 7l3.4 5.8L15 9.5 21.5 19z" fill="var(--accent)" fill-opacity=".18" stroke="var(--accent)" stroke-width="1.5" stroke-linejoin="round"/><path d="M9 7l1.7 2.9-1.7 1-1.9-1.1z" fill="var(--accent)"/></svg>`,
   flag: `<svg class="icon-svg" viewBox="0 0 24 24" width="1em" height="1em" aria-hidden="true"><path d="M6 21V4" stroke="var(--accent)" stroke-width="1.7" stroke-linecap="round"/><path d="M6 4.5c2-1.6 4-1.6 6 0s4 1.6 6 0v8c-2 1.6-4 1.6-6 0s-4-1.6-6 0z" fill="var(--accent)" fill-opacity=".2" stroke="var(--accent)" stroke-width="1.4" stroke-linejoin="round"/></svg>`,
+  bell: `<svg class="icon-svg" viewBox="0 0 24 24" width="1em" height="1em" aria-hidden="true"><path d="M12 3.5c-2.2 0-4 1.8-4 4v3.2c0 .8-.3 1.6-.9 2.2L5.8 14.3c-.6.6-.2 1.7.7 1.7h11c.9 0 1.3-1.1.7-1.7l-1.3-1.4c-.6-.6-.9-1.4-.9-2.2V7.5c0-2.2-1.8-4-4-4z" fill="var(--accent)" fill-opacity=".18" stroke="var(--accent)" stroke-width="1.5" stroke-linejoin="round"/><path d="M9.5 18.5a2.5 2.5 0 0 0 5 0" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"/></svg>`,
   wallet: `<svg class="icon-svg" viewBox="0 0 24 24" width="1em" height="1em" aria-hidden="true"><rect x="3" y="5.5" width="18" height="13.5" rx="2" fill="var(--accent)" fill-opacity=".16" stroke="var(--accent)" stroke-width="1.6" stroke-linejoin="round"/><path d="M13 9.5h5.5a1.5 1.5 0 0 1 1.5 1.5v3a1.5 1.5 0 0 1-1.5 1.5H13z" fill="var(--accent)" fill-opacity=".26" stroke="var(--accent)" stroke-width="1.3" stroke-linejoin="round"/><circle cx="17.3" cy="13" r="1.1" fill="var(--accent)"/></svg>`,
   mobility: `<svg class="icon-svg" viewBox="0 0 24 24" width="1em" height="1em" aria-hidden="true"><circle cx="12" cy="4.2" r="2" fill="var(--accent)"/><path d="M12 6.5v6M12 8.5 6 6M12 8.5l6.5-1.5M12 12.5 7 19M12 12.5l4.5 4" fill="none" stroke="var(--accent)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
   warmup: `<svg class="icon-svg" viewBox="0 0 24 24" width="1em" height="1em" aria-hidden="true"><path d="M12 2.5c1 3-2.5 4-2.5 7a2.5 2.5 0 0 0 5 0c0-1-.5-1.7-1-2.3 1.8.6 3.5 2.7 3.5 5.3a5 5 0 0 1-10 0c0-4 3-5.5 3-8 0-.7 1-1.5 2-2z" fill="var(--accent)" fill-opacity=".22" stroke="var(--accent)" stroke-width="1.4" stroke-linejoin="round"/></svg>`,
@@ -8064,6 +8065,30 @@ function noteSearchText(n) {
   scratch.innerHTML = getNoteBodyHtml(n);
   return `${n.title || ''} ${scratch.textContent || ''}`.toLowerCase();
 }
+// Plain-text extraction of a note's rich body, case preserved — same scratch-div technique as
+// noteSearchText() above, just not lowercased (that one's for matching, this one's for reuse
+// elsewhere, e.g. convertNoteToReminder()).
+function notePlainTextBody(n) {
+  const scratch = document.createElement('div');
+  scratch.innerHTML = getNoteBodyHtml(n);
+  return (scratch.textContent || '').trim();
+}
+// A copy, not a move — the note stays exactly as it was; this just also sends a plain reminder to
+// the Calendar. Reminder title falls back to a snippet of the body when the note has none, and to
+// "Note" if even the body is empty; dated to the note's own date, not today's, since that's
+// presumably still the relevant date. Lands on that day's Calendar view afterward, same
+// "go see what you just made" convenience as the shopping-list generator and a Home reminder tap.
+function convertNoteToReminder(id) {
+  const n = STATE.notes.find(x => x.id === id);
+  if (!n) return;
+  const body = notePlainTextBody(n);
+  const title = (n.title && n.title.trim()) || body.slice(0, 60) || 'Note';
+  STATE.reminders.push({ id: uid(), date: n.date, time: null, title, notes: body, createdAt: Date.now(), type: 'reminder' });
+  saveState();
+  queueReminderPushSync(); // no-op unless reminder notifications are enabled — see REMINDER PUSH section
+  showToast('Reminder created from this note');
+  jumpToReminderDay(n.date);
+}
 function notesMatchingQuery(notes, query) {
   const q = (query || '').trim().toLowerCase();
   if (!q) return notes;
@@ -8114,6 +8139,7 @@ function renderNoteCard(n) {
       </div>
       <div style="display:flex; gap:4px;">
         <button class="icon-btn" onclick="editNote('${n.id}')">${icon('pencil')}</button>
+        <button class="icon-btn" onclick="convertNoteToReminder('${n.id}')" title="Create a reminder from this note">${icon('bell')}</button>
         <button class="icon-btn" onclick="deleteNote('${n.id}')">${icon('close')}</button>
       </div>
     </div>

@@ -56,12 +56,13 @@ These are **not** requested features — they're natural extensions given the cu
 app, logged here so they're not lost, not so they get built unprompted. Confirm with the person
 before starting any of these.
 
-- **Cross-feature linking, other candidates surfaced 2026-09-12** (three of the batch already
-  shipped — see Recently Shipped): converting a Note into a Reminder; a Calendar marker on a
-  recurring budget charge's due date (same spirit as the schedule anchor icon); something
-  noticeable (a toast, a reminder) the moment a Savings Goal actually completes, not just a quiet
-  badge you'd only see by opening Budget; tagging a Note to the specific workout/exercise day it's
-  about, rather than just a freeform date.
+- **Cross-feature linking, other candidates surfaced 2026-09-12** (four of the batch already
+  shipped, most recently Note -> Reminder — see Recently Shipped): a Calendar marker on a
+  recurring budget charge's due date (same spirit as the schedule anchor icon); tagging a Note to
+  the specific workout/exercise day it's about, rather than just a freeform date. (A noticeable
+  moment when a Savings Goal completes was floated too, but explicitly deferred — the person wants
+  it to feel custom per aesthetic rather than one generic animation, which is real design work of
+  its own.)
 - **Exercise:** a personal-record (PR) log/timeline distinct from the per-workout history — the
   app tracks training maxes (`tmLb`) but there's no dedicated "here's every time you hit a new
   best" view. Distinct from Progress -> COMPARE's lift-history charts (see Recently Shipped),
@@ -274,6 +275,21 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Note -> Reminder conversion (4th cross-feature link, 2026-09-12).** A bell icon on every note
+  card (`convertNoteToReminder()`) copies — never moves, the note stays exactly as it was — the
+  note into a plain Reminder dated to the note's own date, title falling back note-title ->
+  a body-text snippet -> `"Note"` if even the body is empty. Body HTML is flattened to plain text
+  (`notePlainTextBody()`, the same scratch-`<div>`-and-read-`.textContent` trick `noteSearchText()`
+  already used for search, just case-preserved) into the reminder's `notes` field. Lands on that
+  date's Calendar Day view afterward, same convenience as the shopping-list generator and a Home
+  reminder tap. `tests/test_note_to_reminder.js` covers the title fallback chain, the note
+  surviving the "conversion," and persistence.
+  - **Found in passing, not caused by this or any change today:** `tests/test_home.js` fails
+    deterministically even on a clean save, confirmed by checking out the prior commit — root
+    cause is `showHomeBox()` re-adding a restored Home tile to the *end* of `boxOrder` instead of
+    its original index, so hiding then un-hiding a tile silently reorders navigation (a later tap
+    on "the same spot" can land on a different box's handler). Reported, not fixed — waiting on
+    the person before touching unrelated Home-layout code.
 - **Cross-feature linking round: To-Do reminders, a Meal Plan shopping list, goal→budget hookup.**
   The person asked to step back and look at linking existing features together rather than adding
   standalone ones — landed on three (2026-09-12), each addressing a real gap:
