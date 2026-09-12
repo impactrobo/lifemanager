@@ -275,10 +275,13 @@ on an architecture split + a large wave of Maximalist aesthetics.
   Setup -> Schedule Builder (`renderWeekOverviewStrip()`), above the existing schedule list.
   - Color-coded via `scheduleColorFor()` — the *exact same* categorical palette the Calendar's
     per-schedule anchor icon already uses, so the two views read as one consistent system rather
-    than a second color language. Each badge abbreviates the schedule's name to 5 letters
-    (uppercased) — specifically 5, not 3, because "Weekday"/"Weekend" (about as common a
-    real-world pairing as this feature will ever see) are identical for their first 4 letters and
-    only actually diverge at the 5th.
+    than a second color language. Each badge shows `scheduleAbbrev()`: a schedule's own editable
+    `shortLabel` (a new field, up to 5 characters, set right under Schedule Name in the builder
+    form) if one's been typed, else an auto-truncated 5-letter fallback of the schedule's name.
+    5 letters, not 3 — "Weekday"/"Weekend" (about as common a real-world pairing as this feature
+    will ever see) are identical for their first 4 letters, diverging only at the 5th — but a
+    person would more naturally write "WEEK"/"WKND", which the auto-truncation alone can't produce
+    since it isn't derivable from any fixed-length slice; hence the editable override.
   - **Surfaces gaps and conflicts that `scheduleForDate()` already silently handled** — a day no
     schedule covers shows a dashed "—" placeholder (with a note that only daily anchors apply that
     day); a day two or more schedules both claim (`scheduleForDate()` resolves that by "first

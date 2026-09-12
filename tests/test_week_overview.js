@@ -1,7 +1,8 @@
 // test_week_overview.js — the "WEEK AT A GLANCE" strip at the top of Schedule -> Setup ->
 // Schedule Builder: which named schedule covers each weekday (color-coded via the same
 // scheduleColorFor() the Calendar's anchor icon uses), a day with no schedule assigned showing as
-// a gap, and two schedules covering the same day flagged as a conflict.
+// a gap, two schedules covering the same day flagged as a conflict, and a schedule's own editable
+// shortLabel overriding the default 5-letter auto-truncated abbreviation (scheduleAbbrev()).
 const { chromium } = require('playwright');
 const path = require('path');
 
@@ -61,6 +62,27 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // 3. The legend lists both schedule names
   const legendText = await page.evaluate(() => (document.querySelector('.cal-schedule-legend') || {}).textContent || '');
   if (!legendText.includes('Weekday') || !legendText.includes('Weekend')) throw new Error(`Expected the legend to list both schedule names, got "${legendText}"`);
+
+  // 3b. A schedule's own editable shortLabel overrides the auto-truncated abbreviation — set via
+  // the real Schedule Builder form field, same convention as everything else there.
+  await page.evaluate((id) => { openScheduleEdit(id); }, ids.weekday);
+  await page.waitForTimeout(100);
+  const abbrevInput = await page.evaluateHandle(() => [...document.querySelectorAll('input')].find(i => i.getAttribute('onchange') && i.getAttribute('onchange').includes('shortLabel')));
+  await abbrevInput.asElement().fill('WEEK');
+  await page.evaluate(el => el.dispatchEvent(new Event('change')), abbrevInput);
+  await page.waitForTimeout(100);
+  await page.evaluate((id) => { closeScheduleEdit(); openScheduleEdit(id); }, ids.weekend);
+  await page.waitForTimeout(100);
+  const abbrevInput2 = await page.evaluateHandle(() => [...document.querySelectorAll('input')].find(i => i.getAttribute('onchange') && i.getAttribute('onchange').includes('shortLabel')));
+  await abbrevInput2.asElement().fill('WKND');
+  await page.evaluate(el => el.dispatchEvent(new Event('change')), abbrevInput2);
+  await page.waitForTimeout(100);
+  await page.evaluate(() => closeScheduleEdit());
+  await page.waitForTimeout(150);
+  const customBadges = await page.evaluate(() => [...document.querySelectorAll('.week-overview-day .week-overview-badge')].map(b => b.textContent));
+  console.log('badges after setting shortLabel WEEK/WKND:', customBadges);
+  if (customBadges[0] !== 'WKND') throw new Error(`Expected Sunday's badge to show the custom shortLabel "WKND", got "${customBadges[0]}"`);
+  if (customBadges[1] !== 'WEEK') throw new Error(`Expected Monday's badge to show the custom shortLabel "WEEK", got "${customBadges[1]}"`);
 
   // 4. Remove Friday from Weekday -> a real gap appears, with a note about it
   await page.evaluate((id) => { toggleScheduleDay(id, 5); }, ids.weekday); // day 5 = Friday

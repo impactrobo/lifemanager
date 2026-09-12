@@ -199,6 +199,9 @@ interface ScheduleBlock {
   days: number[];
   wakeStart: string; wakeEnd: string; bedStart: string; bedEnd: string;
   activities: Array<{ id: string; start: string; end: string; title: string; description: string }>;
+  /** Up to 5 uppercase letters shown on the Week At A Glance strip (scheduleAbbrev()) — falls
+   *  back to an auto-truncated name when unset. */
+  shortLabel?: string;
 }
 interface GuitarState {
   chordStatus: Record<string, number>;

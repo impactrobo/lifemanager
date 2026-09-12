@@ -4241,12 +4241,21 @@ function renderScheduleBuilderList() {
 // inventing a second color language. Also the one place a gap (no schedule assigned that day) or
 // a conflict (more than one schedule claiming the same day — scheduleForDate() silently resolves
 // that by "first match wins") actually gets surfaced, right where it'd get fixed.
+//
+// Badge text prefers a schedule's own shortLabel (editable in the Schedule Builder form) since a
+// blind character-count truncation can't reliably produce a good abbreviation on its own —
+// "Weekday"/"Weekend" only diverge at their 5th letter either way ("WEEKD"/"WEEKE"), where a
+// person would more naturally write "WEEK"/"WKND". Falls back to that 5-letter auto-truncation
+// only when shortLabel is unset, so this never needs the person to fill in anything for it to work.
+function scheduleAbbrev(sched) {
+  return (sched.shortLabel || (sched.name || '?').slice(0, 5).toUpperCase());
+}
 function renderWeekOverviewStrip() {
   const cells = WEEKDAY_LABELS.map((lbl, day) => {
     const covering = STATE.life.schedules.filter(s => Array.isArray(s.days) && s.days.includes(day));
     const primary = covering[0];
     const badge = primary
-      ? `<div class="week-overview-badge" style="border-color:${scheduleColorFor(primary.id)}; color:${scheduleColorFor(primary.id)};" title="${escapeHtml(primary.name || 'Untitled schedule')}">${escapeHtml((primary.name || '?').slice(0, 5).toUpperCase())}</div>`
+      ? `<div class="week-overview-badge" style="border-color:${scheduleColorFor(primary.id)}; color:${scheduleColorFor(primary.id)};" title="${escapeHtml(primary.name || 'Untitled schedule')}">${escapeHtml(scheduleAbbrev(primary))}</div>`
       : `<div class="week-overview-empty" title="No schedule assigned — only your daily anchors apply">&mdash;</div>`;
     const conflict = covering.length > 1
       ? `<div class="week-overview-conflict" title="${covering.map(s => escapeHtml(s.name || 'Untitled schedule')).join(' and ')} both cover this day — ${escapeHtml(primary.name || 'the first one')} wins">!</div>`
@@ -4336,6 +4345,7 @@ function renderScheduleBuilderForm(sched) {
       <button class="btn btn-ghost btn-sm" onclick="closeScheduleEdit()">&#8249; ALL SCHEDULES</button>
     </div>
     <label class="field" style="margin-top:10px;"><span class="lbl">Schedule Name</span><input type="text" value="${escapeHtml(sched.name || '')}" onchange="updateScheduleField('${sched.id}','name',this.value)"></label>
+    <label class="field"><span class="lbl">Abbreviation (for the week-at-a-glance strip)</span><input type="text" maxlength="5" placeholder="${escapeHtml((sched.name || '?').slice(0, 5).toUpperCase())}" value="${escapeHtml(sched.shortLabel || '')}" onchange="updateScheduleField('${sched.id}','shortLabel',this.value.toUpperCase())"></label>
 
     <div class="subtle-label" style="margin:16px 0 6px;">DAYS OF WEEK</div>
     <div class="day-toggle-row" style="display:flex; gap:6px; margin-bottom:16px;">
