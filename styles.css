@@ -633,6 +633,22 @@ select { -webkit-appearance: none; appearance: none; background-image: linear-gr
 .habit-cal-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 11px; color: var(--text-dim); margin-bottom: 10px; }
 .habit-legend-swatch { width: 8px; height: 8px; margin-right: 4px; background: var(--text-dim); vertical-align: middle; }
 
+/* ---------- Calendar Day zoom: the day timeline (renderDailySchedule) ----------
+   A list rather than a to-scale hour grid, chosen deliberately: the whole day fits one phone
+   screen, and anchor check-off keeps a full-size tap target that a 22px-tall 30-minute block in
+   a time grid couldn't offer. Duration is carried by the bar height plus explicit text, and
+   unscheduled stretches get named outright (.day-gap) instead of being empty space. */
+.day-row { display: flex; gap: 10px; align-items: stretch; }
+.day-row + .day-row, .day-gap + .day-row { border-top: 1px solid var(--border-soft); }
+.day-row-now { background: var(--accent-soft); border-radius: var(--radius); }
+.day-bar-col { width: 4px; flex-shrink: 0; display: flex; align-items: center; }
+.day-bar { width: 4px; border-radius: 2px; }
+.day-body { flex: 1; padding: 10px 0; min-width: 0; }
+.day-gap { display: flex; gap: 8px; align-items: center; padding: 4px 0 4px 14px; font-size: 10px; color: var(--text-faint); font-style: italic; }
+.day-gap-line { flex: 1; border-top: 1px dashed var(--border-soft); }
+.day-chip { display: inline-block; font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 3px; margin-left: 5px; vertical-align: middle; letter-spacing: 0.04em; }
+.day-chip-now { background: var(--bad); color: #fff; }
+
 /* ---------- Settings: aesthetic picker ---------- */
 .aesthetic-card { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px; position: relative; color: var(--text); }
 .aesthetic-card.active { border-color: var(--accent); }

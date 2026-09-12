@@ -56,6 +56,31 @@ These are **not** requested features — they're natural extensions given the cu
 app, logged here so they're not lost, not so they get built unprompted. Confirm with the person
 before starting any of these.
 
+- **Scheduling build-out — agreed 2026-09-12, step 1 of 4 shipped.** Came from a review of what
+  this app's scheduling lacked next to general calendar apps. The person picked four areas and
+  approved this dependency order; steps 2-4 are **agreed work, not speculative ideas**, but still
+  confirm before starting each:
+  1. ~~Dated one-off events (Reminders gain an optional end time) + a Day timeline showing
+     duration~~ — **shipped 2026-09-12**, see Recently Shipped.
+  2. **Calendar as the true union of the app.** The Day view currently knows about anchors,
+     schedule activities and reminders only — `exercisePlan` (planned workouts) renders on Home
+     but never on the Calendar, and the same goes for the meal plan, habit marks (they have their
+     own separate calendar under Schedule → Setup), and budget charge due dates. Reuse the
+     `BLOCK_KIND_META` + badge system step 1 established; `renderHomeWorkoutsBox()` already has
+     the weekday → planned-workouts lookup this needs.
+  3. **Recurrence + single-day exceptions.** No recurrence exists beyond day-of-week, so monthly,
+     annual (birthdays/anniversaries have no home at all), every-other-week and every-N-days are
+     all unrepresentable; `periodic` anchors do cadence-days but are a due-list that never lands
+     on a date. Separately, a schedule is a weekday template with no way to say "this Tuesday is
+     different" — a holiday, a vacation week, a sick day — nor to skip one occurrence.
+  4. Smaller items surfaced by the same review, not yet scheduled: overlap detection *between
+     activities in a day* (the Week At A Glance strip only catches two schedules claiming the same
+     weekday); a forward-looking agenda ("next 7 days across everything" — there is no such view,
+     you navigate day by day); repeating reminders (every reminder is a single date, so a weekly
+     bin-day nudge must be hand-recreated); and a time-budget rollup ("hobbies got 4h this week"),
+     which would fit this app's existing habit of rolling things up (TDEE, budget bars, streaks).
+  Explicitly ruled out as groupware that doesn't apply to a single-user local-first app: invites,
+  attendees, free/busy sharing, calendar subscriptions.
 - **Cross-feature linking, other candidates surfaced 2026-09-12** (four of the batch already
   shipped, most recently Note -> Reminder — see Recently Shipped): a Calendar marker on a
   recurring budget charge's due date (same spirit as the schedule anchor icon); tagging a Note to
@@ -275,6 +300,51 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Dated one-off events, and a Day timeline that shows duration (2026-09-12).** Came out of a
+  review of what this app's scheduling was missing next to general calendar apps. The structural
+  finding: everything in Schedule was a *weekday template* (anchors, schedules, `exercisePlan`),
+  so a specific appointment — "dentist, Oct 3, 2–3pm" — had nowhere to live that actually occupied
+  time. Reminders were the only dated thing, and a reminder is a point, not a block.
+  - **A Reminder with both `time` and a new optional `endTime` is now a dated event.**
+    `scheduleBlocksForDate()` merges it into the day's blocks as `kind: 'event'`, which means it
+    lands in Calendar → Day *and* in `currentScheduleBlock()` — Home's RIGHT NOW card can say
+    "Dentist" with no wiring of its own. A reminder with no `endTime` behaves exactly as it always
+    did (list + push only, never a block), so **no migration is needed** for existing saves.
+    Deliberately grew Reminders rather than adding a separate Events type: no new concept to learn,
+    push already works on it, and the inline-editable reminder card is already a good editing
+    surface. Clearing a reminder's start time clears its end with it (an end alone has nothing to
+    measure from, and is dropped at save time too).
+  - Events stay listed in the day's reminder list as well as appearing in the timeline — the
+    established convention already (anchors show in the timeline but are edited under Setup;
+    schedule activities show but are edited in Schedule Builder). The card gains a small "on your
+    day's schedule" line so the relationship is legible.
+  - **The Day timeline (`renderDailySchedule()`) was rebuilt to make duration legible.** Chosen
+    over a to-scale hour grid after building both and comparing screenshots: the list fits a whole
+    day on one 390px screen (~680px vs. ~970px), and anchor check-off keeps a full-size tap target
+    that a 22px-tall 30-minute block in a time grid can't offer. A time grid's real advantage —
+    showing that one block sits *inside* another — matters most for dense overlapping meetings,
+    which isn't the shape of this app's day. Revisit as an optional zoom if that changes.
+    - Per-block duration bar, square-root-scaled (`14 + sqrt(d/max) * 28` px) so an 8-hour block
+      reads as clearly longer than a 30-minute one without dragging a near-empty row 100px tall.
+    - Colored by `BLOCK_KIND_META` — fixed per kind (a known, closed set), same
+      fixed-identity-vs-rotating-palette distinction as `HOME_SECTION_META` vs. `scheduleColorFor()`,
+      drawn from the same palette family as the calendar's schedule colors.
+    - Unscheduled stretches of 30+ minutes are named outright ("2h 30m free") instead of being
+      absent. Computed against a running coverage watermark, so a block nested inside a longer one
+      never opens a phantom gap.
+    - A booked/unscheduled total per day, via `dayBookedMinutes()` — an interval **union**, not a
+      sum, since blocks overlap constantly and summing would report more than 24 hours.
+    - The current block gets a `NOW · 40m LEFT` chip. It's identified by calling
+      `currentScheduleBlock()` and comparing ids rather than re-deriving "what's on now", so the
+      Day view and Home's RIGHT NOW card can never disagree. A list can't draw a now-*line* inside
+      a block honestly — above the current block would read as "now is before this" — so the badge
+      carries the remaining time instead, which a line couldn't tell you anyway.
+  - `tests/test_dated_events.js` covers the block-merge rules (both times required, other dates
+    excluded, legacy reminders untouched), `blockDurationMinutes()` across midnight,
+    `dayBookedMinutes()`'s union against hand-computed overlap/nesting/disjoint/clipped cases, the
+    real save form, inline editing, start-clears-end, RIGHT NOW picking up a live event (bracketing
+    the real clock rather than mocking it), the NOW chip and EVENT badge rendering, gap math around
+    a nested block, and persistence across a real reload.
 - **Cardio Calories auto-fills into each log from the workout itself (2026-09-12).** A cardio
   workout's own "Calories" target (in Setup → Workout Builder, the same field already shown in
   the log screen's TARGET panel) now seeds a brand-new log's Calories field automatically —
