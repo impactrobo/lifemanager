@@ -9097,6 +9097,33 @@ function fmtReminderTime(hhmm) {
   let h12 = h % 12; if (h12 === 0) h12 = 12;
   return `${h12}:${String(m).padStart(2,'0')}${period}`;
 }
+// Has this reminder's moment already gone by? Drives the past-due mark on the reminder card and
+// on Home's TODAY'S REMINDERS list.
+//
+// Measured against `endTime` when there is one, not the start: a 2-3pm dated event is *happening*
+// at 2:30, not overdue, and marking it past due then would directly contradict the Day timeline's
+// own "NOW - 30m LEFT" chip on the very same block.
+//
+// A reminder with no time at all is an all-day thing — it isn't late until the day itself is over,
+// rather than the instant the day begins.
+function reminderIsPastDue(r) {
+  // A to-do list with every box ticked is finished, whatever the clock says — nagging about a
+  // completed checklist is just noise. An empty checklist still counts as outstanding.
+  if (r.type === 'todo' && Array.isArray(r.items) && r.items.length && r.items.every(i => i.done)) return false;
+  const today = todayStr();
+  if (r.date < today) return true;
+  if (r.date > today) return false;
+  const dueAt = r.endTime || r.time;
+  if (!dueAt) return false;
+  const now = new Date();
+  return anchorMinutes(dueAt) < now.getHours() * 60 + now.getMinutes();
+}
+// Fixed yellow-orange rather than var(--warn): that token swings from lime (#e8ff5b) to muted
+// brown (#b8863a) across the 23 aesthetics, and "you're late" needs to read the same everywhere.
+// Same reasoning as BLOCK_KIND_META's fixed per-kind colors.
+function pastDueMark(r) {
+  return reminderIsPastDue(r) ? `<span class="past-due-mark" title="Past due">!</span>` : '';
+}
 // The 7 Sun-Sat Date objects for the week containing dateStr.
 function calWeekBounds(dateStr) {
   const d = new Date(dateStr + 'T00:00:00');
@@ -9324,6 +9351,7 @@ function renderReminderCard(r) {
   const isTodo = r.type === 'todo';
   return `<div class="entry-card">
     <div class="ehead">
+      ${pastDueMark(r)}
       <input type="text" value="${escapeHtml(r.title)}" placeholder="Title" style="font-weight:700; font-size:14px; border:none; background:transparent; padding:0; color:var(--text); font-family:var(--font-body); flex:1; min-width:0;" onchange="updateReminderField('${r.id}','title',this.value)">
       <button class="icon-btn" onclick="deleteReminder('${r.id}')">${icon('close')}</button>
     </div>
@@ -9436,7 +9464,7 @@ function renderTodaysReminders() {
       ${list.map((r, i) => `
       <div onclick="jumpToReminderDay('${r.date}')" style="display:flex; gap:10px; align-items:flex-start; padding:10px 0; ${i < list.length-1 ? 'border-bottom:1px solid var(--border-soft);' : ''} cursor:pointer;">
         <div style="flex:1;">
-          <div style="font-size:13px; font-weight:600;">${escapeHtml(r.title)}${r.time ? ` <span style="color:var(--text-faint); font-weight:500; font-size:11px;">${fmtReminderTime(r.time)}</span>` : ''}</div>
+          <div style="font-size:13px; font-weight:600;">${pastDueMark(r)}${escapeHtml(r.title)}${r.time ? ` <span style="color:var(--text-faint); font-weight:500; font-size:11px;">${fmtReminderTime(r.time)}</span>` : ''}</div>
           ${r.notes ? `<div style="font-size:11px; color:var(--text-dim); margin-top:2px;">${escapeHtml(r.notes)}</div>` : ''}
         </div>
         <button class="icon-btn" onclick="event.stopPropagation(); deleteReminder('${r.id}')">${icon('close')}</button>

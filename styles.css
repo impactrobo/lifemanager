@@ -649,6 +649,16 @@ select { -webkit-appearance: none; appearance: none; background-image: linear-gr
 .day-chip { display: inline-block; font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 3px; margin-left: 5px; vertical-align: middle; letter-spacing: 0.04em; }
 .day-chip-now { background: var(--bad); color: #fff; }
 
+/* Past-due reminder mark (pastDueMark()). Fixed yellow-orange, not var(--warn) — that token runs
+   from lime to muted brown across the aesthetics and "you're late" has to read identically in all
+   of them. The glow is static on purpose: several overdue reminders all pulsing at once would be
+   noise rather than a signal. */
+.past-due-mark {
+  color: #FF9F1A; font-weight: 900; font-size: 15px; line-height: 1;
+  flex-shrink: 0; margin-right: 6px;
+  text-shadow: 0 0 4px #FF9F1A, 0 0 10px rgba(255, 159, 26, 0.6);
+}
+
 /* ---------- Settings: aesthetic picker ---------- */
 .aesthetic-card { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px; position: relative; color: var(--text); }
 .aesthetic-card.active { border-color: var(--accent); }
