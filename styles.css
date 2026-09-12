@@ -649,14 +649,22 @@ select { -webkit-appearance: none; appearance: none; background-image: linear-gr
 .day-chip { display: inline-block; font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 3px; margin-left: 5px; vertical-align: middle; letter-spacing: 0.04em; }
 .day-chip-now { background: var(--bad); color: #fff; }
 
-/* Past-due reminder mark (pastDueMark()). Fixed yellow-orange, not var(--warn) — that token runs
-   from lime to muted brown across the aesthetics and "you're late" has to read identically in all
-   of them. The glow is static on purpose: several overdue reminders all pulsing at once would be
-   noise rather than a signal. */
+/* Past-due reminder mark (pastDueMark()). Takes the active aesthetic's own --warn so it belongs to
+   whatever theme is on, rather than one fixed hue sitting outside the palette. The glow is built
+   from currentColor for the same reason — it tracks --warn automatically with no per-theme rule. */
 .past-due-mark {
-  color: #FF9F1A; font-weight: 900; font-size: 15px; line-height: 1;
+  color: var(--warn); font-weight: 900; font-size: 15px; line-height: 1;
   flex-shrink: 0; margin-right: 6px;
-  text-shadow: 0 0 4px #FF9F1A, 0 0 10px rgba(255, 159, 26, 0.6);
+  text-shadow: 0 0 4px currentColor, 0 0 10px currentColor;
+  animation: past-due-pulse 1.6s ease-in-out infinite;
+}
+@keyframes past-due-pulse {
+  0%, 100% { text-shadow: 0 0 3px currentColor, 0 0 6px currentColor; opacity: 0.8; }
+  50%      { text-shadow: 0 0 6px currentColor, 0 0 15px currentColor; opacity: 1; }
+}
+/* Someone who's asked their OS for less motion still gets the mark, just held at a steady glow. */
+@media (prefers-reduced-motion: reduce) {
+  .past-due-mark { animation: none; text-shadow: 0 0 4px currentColor, 0 0 10px currentColor; }
 }
 
 /* ---------- Settings: aesthetic picker ---------- */

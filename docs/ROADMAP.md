@@ -310,14 +310,19 @@ on an architecture split + a large wave of Maximalist aesthetics.
     than from the moment the day starts.
   - A to-do whose every item is ticked is finished whatever the clock says (an *empty* checklist
     still counts as outstanding). Nagging about a completed list would just be noise.
-  - Fixed `#FF9F1A` rather than `var(--warn)`: that token runs from lime (`#e8ff5b`) to muted brown
-    (`#b8863a`) across the 23 aesthetics, and "you're late" has to read identically in all of them
-    — same reasoning as `BLOCK_KIND_META`'s fixed per-kind colors. The glow is a static
-    `text-shadow`, deliberately not a pulse: several overdue reminders animating at once would be
-    noise rather than a signal.
+  - Takes the active aesthetic's own `var(--warn)` and **pulses** (a 1.6s `text-shadow`/opacity
+    breath). Both were a deliberate call by the person, overriding a first pass that used a fixed
+    yellow-orange and a static glow on the reasoning that `--warn` swings from lime (`#e8ff5b`) to
+    muted brown (`#b8863a`) across the aesthetics. Belonging to the theme won over reading
+    identically everywhere — worth remembering as this project's general preference when the two
+    conflict. Checked at both extremes: it glows clearly on Terminal's near-black and stays legible
+    as ochre on Editorial's cream. The glow is built from `currentColor`, so it follows `--warn`
+    with no per-aesthetic rule to maintain, and `prefers-reduced-motion` holds it at a steady glow.
   - `tests/test_reminder_past_due.js` covers 13 date/time/type combinations (built by offsetting
-    the real clock rather than mocking it), both render surfaces, and the computed color/glow — so
-    a dropped stylesheet rule fails rather than silently shipping an unstyled character.
+    the real clock rather than mocking it), both render surfaces, and the computed colour, glow and
+    animation — asserted against the *resolved* `--warn` rather than a hardcoded value, and
+    re-checked after switching aesthetic, so it's the linkage being tested rather than a magic
+    number. A dropped stylesheet rule fails rather than silently shipping an unstyled character.
 - **Dated one-off events, and a Day timeline that shows duration (2026-09-12).** Came out of a
   review of what this app's scheduling was missing next to general calendar apps. The structural
   finding: everything in Schedule was a *weekday template* (anchors, schedules, `exercisePlan`),

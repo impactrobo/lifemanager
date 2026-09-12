@@ -96,17 +96,53 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (!overdueCard || !overdueCard.marked) throw new Error('Expected the past-due reminder card to carry the mark');
   if (!upcomingCard || upcomingCard.marked) throw new Error('An upcoming reminder must NOT carry the past-due mark');
 
-  // The mark has to actually be the glowing yellow-orange, not an unstyled character — a missing
-  // stylesheet rule would otherwise sail through as a passing test.
-  const markStyle = await page.evaluate(() => {
+  // The mark has to actually be styled and animated, not an unstyled character — a missing
+  // stylesheet rule would otherwise sail through as a passing test. Colour is asserted against the
+  // *resolved* --warn rather than a hardcoded value, so this checks the linkage itself.
+  const readMark = () => page.evaluate(() => {
     const el = document.querySelector('.past-due-mark');
+    const probe = document.createElement('span');
+    probe.style.color = 'var(--warn)';
+    document.body.appendChild(probe);
+    const warn = getComputedStyle(probe).color;
+    probe.remove();
     const cs = getComputedStyle(el);
-    return { text: el.textContent.trim(), color: cs.color, shadow: cs.textShadow, weight: cs.fontWeight };
+    return { text: el.textContent.trim(), color: cs.color, warn, shadow: cs.textShadow, weight: cs.fontWeight, animation: cs.animationName };
   });
+  const markStyle = await readMark();
   console.log('mark style:', markStyle);
   if (markStyle.text !== '!') throw new Error(`Expected an exclamation point, got ${markStyle.text}`);
-  if (markStyle.color !== 'rgb(255, 159, 26)') throw new Error(`Expected the fixed yellow-orange, got ${markStyle.color}`);
+  if (markStyle.color !== markStyle.warn) throw new Error(`Expected the mark to take the aesthetic's --warn (${markStyle.warn}), got ${markStyle.color}`);
   if (!markStyle.shadow || markStyle.shadow === 'none') throw new Error('Expected a glow (text-shadow) on the past-due mark');
+  if (markStyle.animation !== 'past-due-pulse') throw new Error(`Expected the pulse animation, got ${markStyle.animation}`);
+
+  // ...and it tracks --warn when the aesthetic changes, rather than only happening to match the
+  // default theme. Picks whichever built-in aesthetic has a different --warn from the current one.
+  const swapped = await page.evaluate(() => {
+    const probe = document.createElement('span');
+    probe.style.color = 'var(--warn)';
+    document.body.appendChild(probe);
+    const before = getComputedStyle(probe).color;
+    const keys = Object.keys(AESTHETICS).filter(k => !AESTHETICS[k].external);
+    let found = null;
+    for (const k of keys) {
+      document.documentElement.setAttribute('data-aesthetic', k);
+      if (getComputedStyle(probe).color !== before) { found = k; break; }
+    }
+    probe.remove();
+    return found;
+  });
+  if (swapped) {
+    await page.evaluate(() => render());
+    await page.waitForTimeout(100);
+    const after = await readMark();
+    console.log(`after switching to aesthetic "${swapped}":`, { color: after.color, warn: after.warn });
+    if (after.color !== after.warn) throw new Error(`The mark must follow --warn across aesthetics; on "${swapped}" got ${after.color} vs --warn ${after.warn}`);
+    if (after.color === markStyle.color) throw new Error(`Expected "${swapped}" to actually change the mark's colour`);
+  } else {
+    throw new Error('Expected at least one built-in aesthetic with a different --warn to test against');
+  }
+  await page.evaluate(() => applyAesthetic());
 
   // ---- Home's TODAY'S REMINDERS list gets the same treatment ----
   await page.evaluate(() => switchTab('home'));

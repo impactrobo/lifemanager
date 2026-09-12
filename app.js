@@ -9118,9 +9118,9 @@ function reminderIsPastDue(r) {
   const now = new Date();
   return anchorMinutes(dueAt) < now.getHours() * 60 + now.getMinutes();
 }
-// Fixed yellow-orange rather than var(--warn): that token swings from lime (#e8ff5b) to muted
-// brown (#b8863a) across the 23 aesthetics, and "you're late" needs to read the same everywhere.
-// Same reasoning as BLOCK_KIND_META's fixed per-kind colors.
+// Styled off the active aesthetic's own --warn (see .past-due-mark in styles.css) rather than one
+// fixed hue, so an overdue mark belongs to whatever theme is on — the glow derives from
+// currentColor, so it follows --warn with no per-aesthetic rule to maintain.
 function pastDueMark(r) {
   return reminderIsPastDue(r) ? `<span class="past-due-mark" title="Past due">!</span>` : '';
 }
