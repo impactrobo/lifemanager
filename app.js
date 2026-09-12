@@ -1218,6 +1218,7 @@ function incomeFrequencyOptions(selected) {
   return Object.keys(INCOME_FREQUENCIES).map(k => `<option value="${k}" ${k === selected ? 'selected' : ''}>${INCOME_FREQUENCIES[k].label}</option>`).join('');
 }
 const BUDGET_CATEGORIES = {
+  Savings:       '#5FE0A8',
   Housing:       '#8FD3FF',
   Utilities:     '#FFD966',
   Insurance:     '#B8B8FF',
@@ -5051,11 +5052,77 @@ function renderMealPlanTab() {
     : null;
   return `
     <div style="font-size:11px; color:var(--text-dim); margin:18px 0 14px;">Assign saved meals to each day of the week. Copy a day's plan to reuse it elsewhere.</div>
+    ${renderShoppingListGenerator()}
     ${clipboardLabel ? `<div class="panel" style="margin-bottom:14px; font-size:11px; color:var(--text-dim);">Clipboard: ${escapeHtml(clipboardLabel)}</div>` : ''}
     <div class="stack" style="margin-bottom:20px;">
       ${MEAL_PLAN_DAY_ORDER.map(renderMealPlanDay).join('')}
     </div>
   `;
+}
+// ---- Shopping list: aggregates every food + quantity across the whole week's assigned meals
+// into one "what to buy" list, then saves it as a to-do-type Reminder (checklist items, one per
+// ingredient) on whichever date the person picks — from there it's just a normal to-do reminder,
+// editable/checkable on the Calendar like any other. ----
+let SHOPPING_LIST_FORM_OPEN = false;
+function toggleShoppingListForm() { SHOPPING_LIST_FORM_OPEN = !SHOPPING_LIST_FORM_OPEN; render(); }
+// Grouped by (foodId, unit) rather than foodId alone — two meals measuring the same food in
+// different units (e.g. one in g, another in oz) stay as separate lines rather than risking a
+// wrong unit conversion just to merge them into one.
+function generateShoppingListItems() {
+  const totals = new Map();
+  for (let day = 0; day <= 6; day++) {
+    (STATE.diet.mealPlan[day] || []).forEach(entry => {
+      if (!entry.mealId) return;
+      const meal = STATE.diet.meals.find(m => m.id === entry.mealId);
+      if (!meal) return;
+      meal.items.forEach(it => {
+        const food = foodById(it.foodId);
+        if (!food) return;
+        const key = it.foodId + ':' + it.unit;
+        if (!totals.has(key)) totals.set(key, { food, unit: it.unit, qty: 0 });
+        totals.get(key).qty += Number(it.qty) || 0;
+      });
+    });
+  }
+  return [...totals.values()]
+    .sort((a, b) => a.food.name.localeCompare(b.food.name))
+    .map(t => {
+      const qty = Math.round(t.qty * 100) / 100;
+      const unitLabel = t.food.unit === 'count' ? (t.food.itemLabel + (qty === 1 ? '' : 's')) : t.unit;
+      return `${t.food.name} — ${qty} ${unitLabel}`;
+    });
+}
+function renderShoppingListGenerator() {
+  const items = generateShoppingListItems();
+  return `
+    <div class="panel" style="margin-bottom:14px;">
+      <div class="row" style="margin-bottom:${SHOPPING_LIST_FORM_OPEN ? '10px' : '0'};">
+        <div>
+          <div class="subtle-label" style="margin-bottom:2px;">SHOPPING LIST</div>
+          <div style="font-size:11px; color:var(--text-dim);">${items.length ? `${items.length} ingredient${items.length===1?'':'s'} across this week's Meal Plan` : 'Assign some meals below to generate one'}</div>
+        </div>
+        <button class="btn btn-sm btn-primary" ${items.length ? '' : 'disabled'} onclick="toggleShoppingListForm()">${SHOPPING_LIST_FORM_OPEN ? 'CANCEL' : 'GENERATE'}</button>
+      </div>
+      ${SHOPPING_LIST_FORM_OPEN ? `
+        <label class="field"><span class="lbl">Save as a to-do list on this date</span><input type="date" id="shoppingListDate" value="${todayStr()}"></label>
+        <button class="btn btn-primary btn-block" onclick="generateShoppingListReminder()">+ CREATE TO-DO LIST</button>
+      ` : ''}
+    </div>`;
+}
+function generateShoppingListReminder() {
+  const items = generateShoppingListItems();
+  if (!items.length) { showToast('No meals assigned yet'); return; }
+  const dateEl = document.getElementById('shoppingListDate');
+  const date = (dateEl && dateEl.value) || todayStr();
+  STATE.reminders.push({
+    id: uid(), date, time: null, title: 'Shopping List', notes: '', createdAt: Date.now(),
+    type: 'todo', items: items.map(text => ({ id: uid(), text, done: false })),
+  });
+  saveState();
+  queueReminderPushSync(); // no-op unless reminder notifications are enabled — see REMINDER PUSH section
+  SHOPPING_LIST_FORM_OPEN = false;
+  showToast('Shopping list saved — opening it now');
+  jumpToReminderDay(date); // same "land on Calendar's Day view for it" convenience as tapping a Home reminder
 }
 function renderMealPlanDay(day) {
   const entries = STATE.diet.mealPlan[day] || [];
@@ -8561,6 +8628,7 @@ let CAL_SELECTED_DATE = null; // 'YYYY-MM-DD', lazily set to today
 // calendar" convenience, not part of the tab/subtab nav history.
 let CAL_ZOOM = 'month';
 let REMINDER_FORM_OPEN = false;
+let REMINDER_FORM_TYPE = 'reminder'; // 'reminder' | 'todo' — which shape toggleReminderForm()'s open form saves as
 function ensureCalState() {
   if (!CAL_MONTH) { const d = new Date(); CAL_MONTH = { year: d.getFullYear(), month: d.getMonth() }; }
   if (!CAL_SELECTED_DATE) CAL_SELECTED_DATE = todayStr();
@@ -8797,33 +8865,48 @@ function renderSelectedDayReminders() {
     ${REMINDER_FORM_OPEN ? renderReminderForm() : ''}
     <div class="entry-list">${list.length ? list.map(renderReminderCard).join('') : emptyState('No reminders for this day.')}</div>`;
 }
-function toggleReminderForm() { REMINDER_FORM_OPEN = !REMINDER_FORM_OPEN; render(); }
+function toggleReminderForm() { REMINDER_FORM_OPEN = !REMINDER_FORM_OPEN; REMINDER_FORM_TYPE = 'reminder'; render(); }
+function setReminderFormType(t) { REMINDER_FORM_TYPE = t; render(); }
 function renderReminderForm() {
+  const isTodo = REMINDER_FORM_TYPE === 'todo';
   return `
     <div class="panel">
-      <label class="field"><span class="lbl">Title</span><input type="text" id="remTitle" placeholder="e.g. Call the doctor"></label>
+      <div class="unit-toggle" style="margin-bottom:12px;">
+        <button class="${!isTodo?'active':''}" onclick="setReminderFormType('reminder')">REMINDER</button>
+        <button class="${isTodo?'active':''}" onclick="setReminderFormType('todo')">TO-DO LIST</button>
+      </div>
+      <label class="field"><span class="lbl">Title</span><input type="text" id="remTitle" placeholder="${isTodo ? 'e.g. Grocery Shopping' : 'e.g. Call the doctor'}"></label>
       <label class="field"><span class="lbl">Time (optional)</span><input type="time" id="remTime"></label>
-      <label class="field"><span class="lbl">Notes (optional)</span><textarea id="remNotes" placeholder="Any details..."></textarea></label>
-      <button class="btn btn-primary btn-block" onclick="saveReminder()">SAVE REMINDER</button>
+      ${isTodo
+        ? `<div style="font-size:11px; color:var(--text-faint); margin-bottom:10px;">Add checklist items after saving.</div>`
+        : `<label class="field"><span class="lbl">Notes (optional)</span><textarea id="remNotes" placeholder="Any details..."></textarea></label>`}
+      <button class="btn btn-primary btn-block" onclick="saveReminder()">${isTodo ? 'SAVE TO-DO LIST' : 'SAVE REMINDER'}</button>
     </div>`;
 }
 function saveReminder() {
   const titleEl = document.getElementById('remTitle');
   const title = titleEl ? titleEl.value.trim() : '';
-  if (!title) { showToast('Give the reminder a title'); return; }
+  if (!title) { showToast(REMINDER_FORM_TYPE === 'todo' ? 'Give the to-do list a title' : 'Give the reminder a title'); return; }
   const time = document.getElementById('remTime').value || null;
-  const notes = document.getElementById('remNotes').value.trim();
-  STATE.reminders.push({ id: uid(), date: CAL_SELECTED_DATE, time, title, notes, createdAt: Date.now() });
+  const isTodo = REMINDER_FORM_TYPE === 'todo';
+  const notesEl = document.getElementById('remNotes');
+  const notes = notesEl ? notesEl.value.trim() : '';
+  const reminder = { id: uid(), date: CAL_SELECTED_DATE, time, title, notes, createdAt: Date.now(), type: isTodo ? 'todo' : 'reminder' };
+  if (isTodo) reminder.items = [];
+  STATE.reminders.push(reminder);
   REMINDER_FORM_OPEN = false;
   saveState();
   queueReminderPushSync(); // no-op unless reminder notifications are enabled — see REMINDER PUSH section
-  showToast('Reminder saved');
+  showToast(isTodo ? 'To-do list saved' : 'Reminder saved');
   render();
 }
 // Reminders edit inline (title/time/notes are live inputs, onchange saves) rather than through a
 // separate edit form — same convention as renderRecurringRow()/updateRecurringField() elsewhere
-// in Budget, so there's no edit-mode toggle state to track.
+// in Budget, so there's no edit-mode toggle state to track. A 'todo' reminder swaps the plain
+// notes textarea for a checklist (renderReminderTodoItems()) — everything else about it (title,
+// time, delete) works exactly like a normal reminder.
 function renderReminderCard(r) {
+  const isTodo = r.type === 'todo';
   return `<div class="entry-card">
     <div class="ehead">
       <input type="text" value="${escapeHtml(r.title)}" placeholder="Title" style="font-weight:700; font-size:14px; border:none; background:transparent; padding:0; color:var(--text); font-family:var(--font-body); flex:1; min-width:0;" onchange="updateReminderField('${r.id}','title',this.value)">
@@ -8832,7 +8915,7 @@ function renderReminderCard(r) {
     <div class="field-row" style="margin-top:8px;">
       <label class="field" style="margin-bottom:0;"><span class="lbl">Time</span><input type="time" value="${r.time || ''}" onchange="updateReminderField('${r.id}','time',this.value)"></label>
     </div>
-    <label class="field" style="margin-top:8px; margin-bottom:0;"><span class="lbl">Notes</span><textarea placeholder="Any details..." onchange="updateReminderField('${r.id}','notes',this.value)">${escapeHtml(r.notes || '')}</textarea></label>
+    ${isTodo ? renderReminderTodoItems(r) : `<label class="field" style="margin-top:8px; margin-bottom:0;"><span class="lbl">Notes</span><textarea placeholder="Any details..." onchange="updateReminderField('${r.id}','notes',this.value)">${escapeHtml(r.notes || '')}</textarea></label>`}
   </div>`;
 }
 function updateReminderField(id, field, value) {
@@ -8844,6 +8927,61 @@ function updateReminderField(id, field, value) {
   saveState();
   queueReminderPushSync(); // no-op unless reminder notifications are enabled — see REMINDER PUSH section
   render();
+}
+// ---- To-do reminders: a checklist instead of freeform notes ----
+function renderReminderTodoItems(r) {
+  const items = r.items || [];
+  const doneCount = items.filter(i => i.done).length;
+  return `
+    <div style="margin-top:10px;">
+      <div class="row" style="margin-bottom:6px;">
+        <span class="lbl" style="margin-bottom:0;">Checklist</span>
+        ${items.length ? `<span class="mono" style="font-size:11px; color:var(--text-faint);">${doneCount}/${items.length}</span>` : ''}
+      </div>
+      ${items.map(i => `
+        <label style="display:flex; align-items:center; gap:8px; padding:4px 0;">
+          <input type="checkbox" ${i.done?'checked':''} onchange="toggleReminderTodoItem('${r.id}','${i.id}')">
+          <input type="text" value="${escapeHtml(i.text)}" style="flex:1; min-width:0; border:none; background:transparent; padding:0; font-size:13px; color:var(--text); font-family:var(--font-body); ${i.done?'text-decoration:line-through; color:var(--text-faint);':''}" onchange="updateReminderTodoItemText('${r.id}','${i.id}',this.value)">
+          <button class="icon-btn" style="flex-shrink:0;" onclick="deleteReminderTodoItem('${r.id}','${i.id}')">${icon('close')}</button>
+        </label>`).join('')}
+      <div class="field-row" style="margin-top:8px; align-items:flex-end;">
+        <label class="field" style="margin-bottom:0;"><input type="text" id="todoNewItem_${r.id}" placeholder="Add an item..." onkeydown="if(event.key==='Enter'){event.preventDefault(); addReminderTodoItem('${r.id}');}"></label>
+        <button class="btn btn-sm" onclick="addReminderTodoItem('${r.id}')">+ ADD</button>
+      </div>
+    </div>`;
+}
+function addReminderTodoItem(reminderId) {
+  const input = document.getElementById('todoNewItem_' + reminderId);
+  const text = input ? input.value.trim() : '';
+  if (!text) return;
+  const r = STATE.reminders.find(x => x.id === reminderId);
+  if (!r) return;
+  if (!Array.isArray(r.items)) r.items = [];
+  r.items.push({ id: uid(), text, done: false });
+  saveState();
+  input.value = '';
+  render();
+}
+function toggleReminderTodoItem(reminderId, itemId) {
+  const r = STATE.reminders.find(x => x.id === reminderId);
+  const item = r && (r.items || []).find(i => i.id === itemId);
+  if (!item) return;
+  item.done = !item.done;
+  saveState(); render();
+}
+function updateReminderTodoItemText(reminderId, itemId, value) {
+  const r = STATE.reminders.find(x => x.id === reminderId);
+  const item = r && (r.items || []).find(i => i.id === itemId);
+  if (!item) return;
+  const trimmed = (value || '').trim();
+  if (trimmed) item.text = trimmed; // empty text silently reverts, same convention as an empty title
+  saveState(); render();
+}
+function deleteReminderTodoItem(reminderId, itemId) {
+  const r = STATE.reminders.find(x => x.id === reminderId);
+  if (!r) return;
+  r.items = (r.items || []).filter(i => i.id !== itemId);
+  saveState(); render();
 }
 function deleteReminder(id) {
   showConfirm('Delete this reminder?', () => {
@@ -9024,18 +9162,31 @@ function deleteSavingsGoal(id) {
     saveState(); render();
   });
 }
+// countAgainstBudget is opt-in per contribution (not automatic) — a manual goal contribution
+// otherwise has zero effect on the monthly budget bar's Remaining figure, which can quietly
+// overstate what's actually left to spend. Checking the box also logs it as an Incidental
+// (category "Savings") for the current budget month, same $ amount, same date — a linked
+// recurring charge's own monthly completion already flows through the reserved-slice math, so
+// this only ever applies to the ad-hoc/manual side.
 function addGoalContribution(id) {
   const amtEl = document.getElementById('goalContribAmount_' + id);
   const amt = Number(amtEl.value);
   if (!amt || amt <= 0) { showToast('Enter an amount first'); return; }
   const noteEl = document.getElementById('goalContribNote_' + id);
   const note = noteEl ? noteEl.value.trim() : '';
+  const countEl = document.getElementById('goalContribCountBudget_' + id);
+  const countAgainstBudget = countEl ? countEl.checked : false;
   const g = STATE.budget.goals.find(x => x.id === id);
   if (!g) return;
   g.contributions.push({ id: uid(), date: todayStr(), amount: amt, note, source: 'manual' });
+  if (countAgainstBudget) {
+    const key = budgetMonthKey();
+    if (!STATE.budget.incidentals[key]) STATE.budget.incidentals[key] = [];
+    STATE.budget.incidentals[key].push({ id: uid(), date: todayStr(), amount: amt, category: 'Savings', note: `${g.name} contribution` });
+  }
   saveState();
-  amtEl.value = ''; if (noteEl) noteEl.value = '';
-  showToast('Contribution logged');
+  amtEl.value = ''; if (noteEl) noteEl.value = ''; if (countEl) countEl.checked = false;
+  showToast(countAgainstBudget ? "Contribution logged — counted against this month's budget" : 'Contribution logged');
   render();
 }
 function deleteGoalContribution(goalId, contribId) {
@@ -9117,6 +9268,10 @@ function renderGoalCard(g) {
         <label class="field"><span class="lbl">Amount ($)</span><input type="number" step="0.01" inputmode="decimal" id="goalContribAmount_${g.id}" placeholder="0.00"></label>
         <label class="field"><span class="lbl">Note (optional)</span><input type="text" id="goalContribNote_${g.id}" placeholder="Birthday money, sold old one..."></label>
       </div>
+      <label style="display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text-dim); cursor:pointer; margin-bottom:10px;">
+        <input type="checkbox" id="goalContribCountBudget_${g.id}">
+        Also count against this month's budget (logs as an Incidental too)
+      </label>
       <button class="btn btn-primary btn-sm btn-block" style="margin-bottom:14px;" onclick="addGoalContribution('${g.id}')">+ ADD CONTRIBUTION</button>
       <div class="subtle-label" style="margin-bottom:8px;">${g.resetsAnnually ? `${new Date().getFullYear()} ` : ''}CONTRIBUTIONS</div>
       <div class="entry-list">${contribs.length ? contribs.map(c => renderGoalContributionCard(g.id, c)).join('') : emptyState('Nothing logged yet.')}</div>

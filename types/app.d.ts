@@ -279,6 +279,11 @@ interface Reminder {
   title: string;
   notes: string;
   createdAt: number;
+  /** 'reminder' (default, absent on any pre-existing entry) | 'todo' — a to-do reminder shows
+   *  a checklist (items) instead of the plain notes textarea. See renderReminderCard(). */
+  type?: 'reminder' | 'todo';
+  /** Only meaningful when type === 'todo'. */
+  items?: Array<{ id: string; text: string; done: boolean }>;
 }
 
 /** The single global object holding all app data. Built by `defaultState()`, persisted verbatim

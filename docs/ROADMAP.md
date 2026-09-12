@@ -56,6 +56,12 @@ These are **not** requested features — they're natural extensions given the cu
 app, logged here so they're not lost, not so they get built unprompted. Confirm with the person
 before starting any of these.
 
+- **Cross-feature linking, other candidates surfaced 2026-09-12** (three of the batch already
+  shipped — see Recently Shipped): converting a Note into a Reminder; a Calendar marker on a
+  recurring budget charge's due date (same spirit as the schedule anchor icon); something
+  noticeable (a toast, a reminder) the moment a Savings Goal actually completes, not just a quiet
+  badge you'd only see by opening Budget; tagging a Note to the specific workout/exercise day it's
+  about, rather than just a freeform date.
 - **Exercise:** a personal-record (PR) log/timeline distinct from the per-workout history — the
   app tracks training maxes (`tmLb`) but there's no dedicated "here's every time you hit a new
   best" view. Distinct from Progress -> COMPARE's lift-history charts (see Recently Shipped),
@@ -268,6 +274,36 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Cross-feature linking round: To-Do reminders, a Meal Plan shopping list, goal→budget hookup.**
+  The person asked to step back and look at linking existing features together rather than adding
+  standalone ones — landed on three (2026-09-12), each addressing a real gap:
+  - **Reminders gain a 'todo' type.** `Reminder.type` ('reminder' default | 'todo') + `items:
+    [{id, text, done}]`. The add form gets a REMINDER/TO-DO LIST toggle (`REMINDER_FORM_TYPE`);
+    a todo reminder's card swaps the plain notes textarea for a real checklist
+    (`renderReminderTodoItems()` — add/check/edit/delete items) instead of a wall of text you'd
+    have to re-read to know what's left. A reminder with no `type` field at all (every reminder
+    ever created before this) renders exactly as it always did — the type check is `r.type ===
+    'todo'`, so undefined just falls through to the original branch, no migration needed.
+  - **Diet -> Setup -> Meal Plan gets a SHOPPING LIST generator.** `generateShoppingListItems()`
+    aggregates every food + quantity across whichever meals are assigned Sun-Sat, grouped by
+    (foodId, unit) so the same food measured differently in two meals stays as separate lines
+    rather than risking a wrong unit conversion just to merge them. One click
+    (`generateShoppingListReminder()`) turns that into a real to-do-type Reminder — one checklist
+    item per ingredient — on whichever date is picked, then jumps straight to that date's Calendar
+    Day view (reusing `jumpToReminderDay()`, the same "land on it" convenience a Home reminder tap
+    already had). From there it's just a normal to-do reminder — check things off in the store,
+    add more items by hand, whatever.
+  - **A goal contribution can opt in to counting against the monthly budget.** Before this, an
+    ad-hoc Goal contribution (Recently Shipped, earlier 2026-09-12) had zero effect on the budget
+    bar's Remaining figure — the money was "saved" on paper but the budget still looked like it
+    was available to spend. `addGoalContribution()` gained an opt-in checkbox; when checked, the
+    same $ amount/date also gets logged as an Incidental (new `Savings` `BUDGET_CATEGORIES` entry)
+    for the current budget month, so Remaining actually drops. Opt-in, not automatic — a goal
+    funded via its recurring-charge link (see the original Goals entry above) already flows
+    through the reserved-slice math and was never affected by this gap in the first place; this
+    only ever applied to the manual/ad-hoc side.
+  - `tests/test_todo_reminders.js`, `tests/test_shopping_list.js`, `tests/test_goal_budget_link.js`
+    cover all three. 35/35 test files passing, typecheck clean.
 - **Budget: named Savings Goals with a running balance (new GOALS subtab).** Scoped via a round of
   questions grounded in actual personal-finance patterns (2026-09-12) — the relevant concept is a
   **sinking fund** (Ramsey/YNAB): a named bucket saved toward for a specific future expense. Two
