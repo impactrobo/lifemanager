@@ -106,39 +106,42 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   const restoredOrder = await page.evaluate(() => STATE.settings.homeLayout.sectionOrder);
   if (!restoredOrder.includes(targetId)) throw new Error(`Expected '${targetId}' restored to sectionOrder after showHomeSection`);
 
-  // 6. Each of the 6 section tiles gets its own fixed color (not shared/generic), and it's the
-  // exact one named in HOME_SECTION_META for that id — reordering shouldn't change which color a
-  // section carries, since the whole point is tracking a tile by color through a reorder.
+  // 6. Each of the 6 section tiles gets its own fixed color (not shared/generic) as a glow behind
+  // its icon (.home-tile-glow) rather than tinting the whole tile — checked via the raw `style`
+  // attribute text (unnormalized), since the color is embedded inside a radial-gradient() string
+  // rather than being its own recognized CSS property browsers would normalize on read-back.
   await page.evaluate(() => { switchTab('home'); });
   await page.waitForTimeout(150);
   const tileColors = await page.evaluate(() => {
     const ids = STATE.settings.homeLayout.sectionOrder;
     return ids.map(id => {
-      const el = [...document.querySelectorAll('.home-tile')].find(t => t.textContent.includes(HOME_SECTION_META[id].label));
-      return { id, expected: HOME_SECTION_META[id].color, actualBorder: el ? el.style.borderColor : null };
+      const tile = [...document.querySelectorAll('.home-tile')].find(t => t.textContent.includes(HOME_SECTION_META[id].label));
+      const glow = tile ? tile.querySelector('.home-tile-glow') : null;
+      return { id, expected: HOME_SECTION_META[id].color, glowStyle: glow ? glow.getAttribute('style') : null };
     });
   });
-  console.log('tile colors:', tileColors);
+  console.log('tile glow colors:', tileColors);
   const uniqueColors = new Set(tileColors.map(t => t.expected));
   if (uniqueColors.size !== 6) throw new Error(`Expected all 6 sections to have distinct colors, got ${uniqueColors.size} unique: ${JSON.stringify([...uniqueColors])}`);
   for (const t of tileColors) {
-    if (!t.actualBorder) throw new Error(`Expected tile "${t.id}" to render with a border-color set, found none`);
+    if (!t.glowStyle || !t.glowStyle.includes(t.expected)) throw new Error(`Expected tile "${t.id}"'s glow to embed its color ${t.expected}, got style="${t.glowStyle}"`);
   }
 
   // 7. The color follows the section id through a reorder, not the position — drag "budget" to
-  // the front and confirm its rendered color is still its own, not whatever "schedule" (the old
-  // first tile) used to have.
-  const budgetColorBefore = tileColors.find(t => t.id === 'budget').expected;
+  // the front and confirm its glow is still its own, not whatever "schedule" (the old first tile)
+  // used to have.
   await page.evaluate(() => reorderHomeList('sections', 'budget', 'schedule')); // move budget to sit before schedule
   await page.waitForTimeout(150);
-  const budgetColorAfter = await page.evaluate(() => {
-    const el = [...document.querySelectorAll('.home-tile')].find(t => t.textContent.includes(HOME_SECTION_META.budget.label));
-    return el ? el.style.borderColor : null;
+  const budgetGlowAfter = await page.evaluate(() => {
+    const tile = [...document.querySelectorAll('.home-tile')].find(t => t.textContent.includes(HOME_SECTION_META.budget.label));
+    const glow = tile ? tile.querySelector('.home-tile-glow') : null;
+    return glow ? glow.getAttribute('style') : null;
   });
-  console.log('budget tile color before/after reordering to the front:', budgetColorBefore, '/', budgetColorAfter);
-  // style.borderColor normalizes hex to rgb() — just confirm it didn't become schedule's color
-  const scheduleColorRgb = await page.evaluate(() => { const d = document.createElement('div'); d.style.color = HOME_SECTION_META.schedule.color; document.body.appendChild(d); const c = getComputedStyle(d).color; d.remove(); return c; });
-  if (budgetColorAfter === scheduleColorRgb) throw new Error('Expected budget to keep its own color after moving to the front, not inherit schedule\'s old position color');
+  console.log('budget tile glow after reordering to the front:', budgetGlowAfter);
+  const budgetColor = tileColors.find(t => t.id === 'budget').expected;
+  const scheduleColor = tileColors.find(t => t.id === 'schedule').expected;
+  if (!budgetGlowAfter || !budgetGlowAfter.includes(budgetColor)) throw new Error(`Expected budget's glow to keep its own color ${budgetColor} after moving to the front, got "${budgetGlowAfter}"`);
+  if (budgetGlowAfter.includes(scheduleColor)) throw new Error('Expected budget\'s glow to NOT pick up schedule\'s old position color');
 
   // cleanup — restore the default section order this test's reordering disturbed
   await page.evaluate(() => { STATE.settings.homeLayout = defaultHomeLayout(); saveState(); });

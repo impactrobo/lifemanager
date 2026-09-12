@@ -8497,21 +8497,30 @@ function renderHomeAddPopup() {
       </div>
     </div>`;
 }
+// A soft radial glow sitting behind the icon, rather than tinting the whole tile (an earlier,
+// more heavy-handed pass with a colored border + background) — the tile itself stays neutral,
+// just the icon gets its section's color as an ambient aura. Still enough to track a tile by
+// color through a drag-reorder, without recoloring the tile's whole footprint.
+function renderHomeTileIcon(meta) {
+  return `<div class="home-tile-icon-wrap">
+    <div class="home-tile-glow" style="background:radial-gradient(circle, ${meta.color}66 0%, ${meta.color}00 70%);"></div>
+    <div class="home-tile-icon">${icon(meta.icon)}</div>
+  </div>`;
+}
 function renderHomeSectionsGrid() {
   const L = homeLayout();
   const tiles = L.sectionOrder.map(id => {
     const meta = HOME_SECTION_META[id];
     if (!meta) return '';
-    const colorStyle = `border-color:${meta.color}; background:color-mix(in srgb, ${meta.color} 12%, var(--surface));`;
     if (!HOME_EDIT_MODE) {
-      return `<div class="workout-cell home-tile" style="${colorStyle}" onclick="goHomeSection('${id}')">
-        <div style="font-size:36px;">${icon(meta.icon)}</div>
+      return `<div class="workout-cell home-tile" onclick="goHomeSection('${id}')">
+        ${renderHomeTileIcon(meta)}
         <div class="wname">${meta.label}</div>
       </div>`;
     }
-    return `<div class="workout-cell home-tile home-edit-item" style="${colorStyle}" data-home-drag-list="sections" data-home-drag-id="${id}" onpointerdown="startHomeDrag('sections','${id}',event,this)">
+    return `<div class="workout-cell home-tile home-edit-item" data-home-drag-list="sections" data-home-drag-id="${id}" onpointerdown="startHomeDrag('sections','${id}',event,this)">
       <button class="home-edit-x" onclick="event.stopPropagation(); hideHomeSection('${id}')" title="Hide">${icon('close')}</button>
-      <div style="font-size:36px;">${icon(meta.icon)}</div>
+      ${renderHomeTileIcon(meta)}
       <div class="wname">${meta.label}</div>
     </div>`;
   }).join('');

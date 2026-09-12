@@ -285,10 +285,12 @@ on an architecture split + a large wave of Maximalist aesthetics.
   color outright, and that color follows the tile wherever it's dragged to. Colors reuse hues
   already established elsewhere (Notes tags / muscle groups) rather than inventing a new palette:
   Schedule blue, Exercise red, Hobbies purple, Health & Diet teal, Notes yellow, Financial green.
-  Applied as a border + subtle background tint on the tile itself (`renderHomeSectionsGrid()`) —
-  the icon stays accent-colored, unchanged everywhere else it appears (Schedule's own topbar,
-  etc.). The "ADD BACK SECTIONS" popup for re-showing a hidden section also gets a matching
-  color-dot next to each hidden section's name, for the same at-a-glance recognition.
+  First pass tinted the whole tile (border + background) — revised same day to something more
+  subtle per feedback: a soft radial glow sitting behind just the icon (`.home-tile-glow`,
+  `renderHomeTileIcon()`), tile itself back to its normal neutral styling. Still enough to track a
+  tile by color through a reorder, without recoloring its whole footprint. The "ADD BACK SECTIONS"
+  popup for re-showing a hidden section keeps a small matching color-dot next to each hidden
+  section's name (unchanged by the revision — a compact list item, not a tile).
   - **Found in passing while testing, not fixed:** the Home-tile-order bug flagged the same day
     (`showHomeBox()` appending a restored tile to the end of the order) — the person confirmed
     it's not worth fixing right now. Left as-is, documented above for reference.
