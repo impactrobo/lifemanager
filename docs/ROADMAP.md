@@ -300,6 +300,30 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Home edit mode's pencil now turns `var(--warn)` while active — and this surfaced a real,
+  previously-dormant styling bug (2026-09-12).** The person asked for the pencil to change color
+  in edit mode for clarity; investigating found it technically already had an "active" rule
+  (`.home-edit-toggle-active`, tinting it `--accent`) that had **never once actually rendered**,
+  on any build, since it was written. `.home-edit-toggle-active` and `.icon-btn` carry identical
+  specificity, `.icon-btn` sits later in `styles.css` and sets its own background/border/color, so
+  it silently won the cascade every time — the exact CSS gotcha CLAUDE.md already warns about
+  elsewhere, just not yet caught here. The existing test only checked the class was *attached*,
+  never what it actually rendered as, so this shipped invisibly for as long as the feature existed.
+  - Fixed by writing the selector as `.icon-btn.home-edit-toggle-active` (specificity now wins
+    outright, independent of file order) and switching the color itself to `var(--warn)` — pink
+    accent sitting right next to the accent-colored Settings gear and accent-colored wordmark made
+    "you're in edit mode" nearly unreadable even once the rule did fire; `--warn` reads as "this
+    changes your layout" and stands apart from the rest of the chrome. Checked on Terminal (bright
+    lime glow) and Editorial (a legible ochre-brown on cream) as well as the default aesthetic.
+  - `tests/test_home.js`'s existing edit-button assertion was rewritten to check the *computed*
+    border color against a live `var(--warn)` probe rather than just `classList.contains(...)` — a
+    plain class check is exactly what let the original bug hide for this long, so it needed to
+    actually verify the rendered color to mean anything. Also fixed, incidentally: that same test
+    file's RIGHT NOW/"FREE TIME" assertions relied on no default anchor being active, which depends
+    on the wall-clock time the suite happens to run at (several default anchors span hours of the
+    morning and evening) — clearing `STATE.life.anchors` before those assertions and restoring them
+    after makes the test deterministic regardless of time of day, rather than failing for several
+    hours out of every day for reasons unrelated to whatever change is actually being tested.
 - **Past-due reminders get a glowing exclamation mark (2026-09-12).** `reminderIsPastDue()` +
   `pastDueMark()`, shown on both surfaces a reminder appears on — the Calendar reminder card and
   Home's TODAY'S REMINDERS list.
