@@ -143,6 +143,36 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (!budgetGlowAfter || !budgetGlowAfter.includes(budgetColor)) throw new Error(`Expected budget's glow to keep its own color ${budgetColor} after moving to the front, got "${budgetGlowAfter}"`);
   if (budgetGlowAfter.includes(scheduleColor)) throw new Error('Expected budget\'s glow to NOT pick up schedule\'s old position color');
 
+  // 8. reorderHomeList()'s insertAfter fix: dropping "before" a target could never actually land
+  // an item in the true last slot (nothing exists after the last item to drop "before" into) —
+  // insertAfter=true on the current last item is what onHomeDragMove() now sends when the pointer
+  // is past that item's far edge, and it must actually produce the real last position.
+  await page.evaluate(() => { STATE.settings.homeLayout = defaultHomeLayout(); saveState(); });
+  const orderBefore = await page.evaluate(() => STATE.settings.homeLayout.sectionOrder.slice());
+  const firstId = orderBefore[0], lastId = orderBefore[orderBefore.length - 1];
+  await page.evaluate((args) => reorderHomeList('sections', args.firstId, args.lastId, true), { firstId, lastId });
+  const orderAfterInsertAfter = await page.evaluate(() => STATE.settings.homeLayout.sectionOrder);
+  console.log('order before/after moving the first item onto the last with insertAfter=true:', orderBefore, '/', orderAfterInsertAfter);
+  if (orderAfterInsertAfter[orderAfterInsertAfter.length - 1] !== firstId) {
+    throw new Error(`Expected "${firstId}" to land in the true last slot, got order ${JSON.stringify(orderAfterInsertAfter)}`);
+  }
+  if (orderAfterInsertAfter[orderAfterInsertAfter.length - 2] !== lastId) {
+    throw new Error(`Expected the old last item "${lastId}" to now sit second-to-last, got order ${JSON.stringify(orderAfterInsertAfter)}`);
+  }
+
+  // insertAfter=false (or omitted) on the same drop still inserts *before* the target, unaffected
+  // — confirms the fix is additive, not a change to the existing default behavior.
+  await page.evaluate(() => { STATE.settings.homeLayout = defaultHomeLayout(); saveState(); });
+  await page.evaluate((args) => reorderHomeList('sections', args.firstId, args.lastId), { firstId, lastId });
+  const orderAfterBefore = await page.evaluate(() => STATE.settings.homeLayout.sectionOrder);
+  console.log('order after the same move without insertAfter:', orderAfterBefore);
+  if (orderAfterBefore[orderAfterBefore.length - 1] !== lastId) {
+    throw new Error(`Expected the target to remain last when insertAfter is unset, got order ${JSON.stringify(orderAfterBefore)}`);
+  }
+  if (orderAfterBefore[orderAfterBefore.length - 2] !== firstId) {
+    throw new Error(`Expected the dragged item to sit immediately before the target, got order ${JSON.stringify(orderAfterBefore)}`);
+  }
+
   // cleanup — restore the default section order this test's reordering disturbed
   await page.evaluate(() => { STATE.settings.homeLayout = defaultHomeLayout(); saveState(); });
 

@@ -8459,9 +8459,13 @@ function showHomeBox(id) {
   if (!L.boxOrder.includes(id)) L.boxOrder.push(id);
   saveState(); render();
 }
-// Plain "move dragged item to sit right before target" reorder — no merge/superset concept
-// needed here (unlike Exercise's drag, which this otherwise mirrors), just a linear order.
-function reorderHomeList(listKey, draggedId, targetId) {
+// Moves the dragged item to sit right before (or, if insertAfter, right after) the target — no
+// merge/superset concept needed here (unlike Exercise's drag, which this otherwise mirrors), just
+// a linear order. insertAfter matters specifically for the *last* item in the list: dropping
+// "before" it can never actually put anything after it, so without this, nothing could ever land
+// in the true last slot (see onHomeDragMove(), which decides insertAfter from which side of the
+// target the pointer is actually over).
+function reorderHomeList(listKey, draggedId, targetId, insertAfter) {
   const L = homeLayout();
   const arr = listKey === 'sections' ? L.sectionOrder : L.boxOrder;
   if (draggedId === targetId) return;
@@ -8469,7 +8473,9 @@ function reorderHomeList(listKey, draggedId, targetId) {
   if (from === -1) return;
   arr.splice(from, 1);
   const to = arr.indexOf(targetId);
-  arr.splice(to === -1 ? arr.length : to, 0, draggedId);
+  let insertAt = to === -1 ? arr.length : to;
+  if (insertAfter && to !== -1) insertAt += 1;
+  arr.splice(insertAt, 0, draggedId);
   saveState(); render();
 }
 function openHomeAddPopup(which) { HOME_ADD_POPUP = which; render(); }
@@ -8597,9 +8603,10 @@ function renderHomeBoxesSection() {
 }
 // ---- Custom pointer-based drag for Home's Edit mode — same ghost-clone/pointer-capture
 // mechanism as Exercise's superset drag (startChipDrag et al.), simplified to plain linear
-// reordering (drop onto another item = move before it) since there's no merge/superset concept
-// here, just two independent ordered lists (sections, boxes) that never mix with each other.
-let HOME_DRAG = null; // { listKey, id, ghostEl, sourceEl, startX, startY, offsetX, offsetY, currentTarget, moved, scrollDir }
+// reordering (drop before or after another item, whichever side the pointer is actually over —
+// see the insertAfter comment below) since there's no merge/superset concept here, just two
+// independent ordered lists (sections, boxes) that never mix with each other.
+let HOME_DRAG = null; // { listKey, id, ghostEl, sourceEl, startX, startY, offsetX, offsetY, currentTarget, moved, scrollDir, insertAfter }
 function startHomeDrag(listKey, id, evt, el) {
   if (!HOME_EDIT_MODE) return;
   if (evt.target.closest('.home-edit-x')) return; // let the X's own click through — don't capture the pointer or preventDefault over it
@@ -8639,7 +8646,16 @@ function onHomeDragMove(evt) {
   const hit = el ? el.closest('[data-home-drag-id]') : null;
   const valid = hit && hit.getAttribute('data-home-drag-list') === HOME_DRAG.listKey && hit.getAttribute('data-home-drag-id') !== HOME_DRAG.id ? hit : null;
   if (HOME_DRAG.currentTarget && HOME_DRAG.currentTarget !== valid) HOME_DRAG.currentTarget.classList.remove('drop-target-active');
-  if (valid) valid.classList.add('drop-target-active');
+  if (valid) {
+    valid.classList.add('drop-target-active');
+    // Sections lay out as a horizontal grid, boxes as a vertical stack — check whichever axis
+    // that list actually flows along, so dropping on the far side of the target can insert
+    // *after* it. Without this, nothing could ever land in the true last slot.
+    const rect = valid.getBoundingClientRect();
+    HOME_DRAG.insertAfter = HOME_DRAG.listKey === 'sections'
+      ? evt.clientX > rect.left + rect.width / 2
+      : evt.clientY > rect.top + rect.height / 2;
+  }
   HOME_DRAG.currentTarget = valid;
 }
 function homeDragScrollTick() {
@@ -8649,7 +8665,7 @@ function homeDragScrollTick() {
 }
 function onHomeDragEnd(evt) {
   if (!HOME_DRAG) return;
-  const { listKey, id, ghostEl, sourceEl, currentTarget, moved } = HOME_DRAG;
+  const { listKey, id, ghostEl, sourceEl, currentTarget, moved, insertAfter } = HOME_DRAG;
   sourceEl.removeEventListener('pointermove', onHomeDragMove);
   sourceEl.removeEventListener('pointerup', onHomeDragEnd);
   sourceEl.removeEventListener('pointercancel', onHomeDragEnd);
@@ -8658,7 +8674,7 @@ function onHomeDragEnd(evt) {
   ghostEl.remove();
   HOME_DRAG = null;
   if (!moved || !currentTarget) return;
-  reorderHomeList(listKey, id, currentTarget.getAttribute('data-home-drag-id'));
+  reorderHomeList(listKey, id, currentTarget.getAttribute('data-home-drag-id'), insertAfter);
 }
 // Edit mode strips the navigation onclick out of the *non-edit* section-tile markup entirely
 // (see renderHomeSectionsGrid()), but a box (RIGHT NOW / WORKOUTS / Reminders / ...) keeps its

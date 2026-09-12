@@ -275,6 +275,22 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Fixed: Home edit-mode drag couldn't move anything into the true last slot (2026-09-12).**
+  Real bug, reported directly — `reorderHomeList()` only ever inserted the dragged item *before*
+  whatever it was dropped on, and there's nothing after the last item to drop "before" into, so no
+  item could ever actually land last; a drop there always snapped to second-to-last instead.
+  `onHomeDragMove()` now also tracks which side of the hovered target the pointer is actually
+  over — the horizontal midpoint for sections (a grid), the vertical midpoint for boxes (a
+  stack) — and passes that through as `insertAfter` to `reorderHomeList()`, which inserts after
+  the target instead of before when set. Existing behavior (drop = insert before) is unchanged
+  when `insertAfter` is unset, so this is additive, not a behavior change for every other drop.
+  `tests/test_home.js` covers both: `insertAfter: true` actually produces the true last position,
+  and the original before-behavior is unaffected when it's omitted.
+- **Calendar Year zoom: 2 mini-months across instead of 3 (2026-09-12).** Reported from a real
+  phone — 3 across fit the 390px viewport this was designed/tested against, but ran off-screen on
+  actual hardware. `.cal-year-grid` now does `repeat(2, 1fr)`; day-number font size bumped
+  7px -> 9px and the month-label 10px -> 11px to use the extra width each mini-month gains, rather
+  than leaving it as excess padding.
 - **Home's 6 section tiles get individual coloration (2026-09-12).** Asked for specifically to
   make drag-reordering in edit mode legible — before this, all 6 tiles (SCHEDULE/EXERCISE/
   HOBBIES/HEALTH & DIET/NOTES/FINANCIAL) looked identical except for icon shape and label, so

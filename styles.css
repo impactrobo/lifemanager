@@ -595,16 +595,17 @@ select { -webkit-appearance: none; appearance: none; background-image: linear-gr
 .week-overview-empty { width: 100%; height: 30px; border: 1.5px dashed var(--border); border-radius: 6px; background: transparent; color: var(--text-faint); display: flex; align-items: center; justify-content: center; font-size: 12px; }
 .week-overview-conflict { position: absolute; top: -5px; right: -5px; width: 14px; height: 14px; border-radius: 50%; background: var(--warn); color: #1a1a1a; font-size: 9px; font-weight: 900; display: flex; align-items: center; justify-content: center; }
 
-/* Year zoom: a compact 12-up grid of mini-months. No weekday header row — no room for it at this
-   size — and day numbers alone (no dot) mark a day with a reminder, since a 5px dot doesn't read
-   at ~14px cell size; .cal-mini-today's ring take priority visually over .cal-mini-has's color
-   when a day is both (rare, but consistent with the full .cal-cell-today/-selected coexistence
-   rule above). */
-.cal-year-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+/* Year zoom: a compact 12-up grid of mini-months, 2 across (was 3 — that went off-screen on a
+   real phone despite fitting the 390px viewport this was designed/tested against, so 2 is the
+   safer default). No weekday header row — no room for it at this size — and day numbers alone
+   (no dot) mark a day with a reminder, since a 5px dot doesn't read at this cell size;
+   .cal-mini-today's ring takes priority visually over .cal-mini-has's color when a day is both
+   (rare, but consistent with the full .cal-cell-today/-selected coexistence rule above). */
+.cal-year-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
 .cal-mini-month { background: var(--surface); border: 1px solid var(--border-soft); border-radius: var(--radius); padding: 6px; }
-.cal-mini-month-label { font-size: 10px; font-weight: 800; letter-spacing: 0.05em; color: var(--text-dim); text-align: center; margin-bottom: 4px; cursor: pointer; }
+.cal-mini-month-label { font-size: 11px; font-weight: 800; letter-spacing: 0.05em; color: var(--text-dim); text-align: center; margin-bottom: 4px; cursor: pointer; }
 .cal-mini-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; }
-.cal-mini-cell { position: relative; aspect-ratio: 1; background: transparent; border: none; color: var(--text-faint); font-size: 7px; font-family: var(--font-mono); display: flex; align-items: center; justify-content: center; border-radius: 2px; }
+.cal-mini-cell { position: relative; aspect-ratio: 1; background: transparent; border: none; color: var(--text-faint); font-size: 9px; font-family: var(--font-mono); display: flex; align-items: center; justify-content: center; border-radius: 2px; }
 .cal-mini-blank { visibility: hidden; }
 .cal-mini-has { color: var(--accent); font-weight: 800; }
 .cal-mini-today { box-shadow: inset 0 0 0 1px var(--good); color: var(--good); font-weight: 800; }
