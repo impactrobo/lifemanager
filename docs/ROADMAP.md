@@ -275,6 +275,28 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Cardio-adjusted TDEE: a decomposition, not a new target (2026-09-12).** Discussed at length
+  before building — the rolling TDEE is a pure black-box estimate (real weight change vs. real
+  calories eaten), which means it *already* has whatever cardio actually happened baked in for its
+  measurement window. Adding cardio calories on top of it would have double-counted. Landed
+  instead on splitting the existing estimate into a non-exercise portion and an average-cardio
+  portion — "how much of my TDEE is actually cardio?", not a second number to eat against.
+  - `rollingTdeeEstimate()` now also returns `bucketRanges` (the exact date ranges of the weeks it
+    used) so the cardio math can never quietly drift out of sync with the TDEE number it's
+    decomposing.
+  - `cardioCaloriesInRanges()` sums real cardio-workout-log `actualCalories` (Time/Dist/Cal-style
+    logs only — Interval style tracks rounds, not calories) dated within those exact ranges — the
+    precise, already-logged-per-session source, not the coarser flat `cardioCalories` field on a
+    daily weight entry (which nothing reads).
+  - `cardioAdjustedTdeeBreakdown()` divides that total by the sampled days (`weeksUsed * 7`) for an
+    average cardio cal/day, then `nonExerciseTdee = tdee - avgCardioPerDay` — the two portions
+    always sum back to the original estimate by construction.
+  - Shown as one extra line under the existing ROLLING TDEE panel, only when there's actually
+    cardio logged in-window (silent otherwise) — explicitly framed as "a breakdown of the number
+    above, not a separate target."
+  - `tests/test_weight_tdee.js` extended with a hand-computed fixture (two cardio-log weeks
+    summing to an exact 30 cal/day average, a session dated outside the window correctly excluded,
+    the two portions confirmed to sum back to the total).
 - **Note -> Reminder conversion (4th cross-feature link, 2026-09-12).** A bell icon on every note
   card (`convertNoteToReminder()`) copies — never moves, the note stays exactly as it was — the
   note into a plain Reminder dated to the note's own date, title falling back note-title ->

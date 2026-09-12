@@ -5257,7 +5257,7 @@ function rollingTdeeEstimate() {
       const cal = resolvedCaloriesForDate(dateKey(dd.getFullYear(), dd.getMonth(), dd.getDate()));
       if (cal) calValues.push(cal);
     }
-    buckets.push({ avgWeightLb, avgCalories: calValues.length ? calValues.reduce((s, v) => s + v, 0) / calValues.length : null });
+    buckets.push({ avgWeightLb, avgCalories: calValues.length ? calValues.reduce((s, v) => s + v, 0) / calValues.length : null, startStr, endStr });
   }
   if (buckets.length < 2) return null; // one week alone has nothing to compare against
   const weeksUsed = buckets.length;
@@ -5267,7 +5267,46 @@ function rollingTdeeEstimate() {
   const avgCaloriesAcrossWeeks = calorieBuckets.reduce((s, b) => s + b.avgCalories, 0) / calorieBuckets.length;
   // A pound lost is ~3500 kcal; losing weight (negative change) means true TDEE ran above intake.
   const estimate = avgCaloriesAcrossWeeks - (weightChangePerWeekLb * 3500 / 7);
-  return { estimate: Math.round(estimate), weeksUsed, calorieWeeksUsed: calorieBuckets.length, windowWeeks };
+  // Exposed for cardioAdjustedTdeeBreakdown() below — the exact same weeks' date ranges, so the
+  // cardio decomposition can never quietly drift out of sync with the TDEE estimate itself.
+  const bucketRanges = buckets.map(b => ({ startStr: b.startStr, endStr: b.endStr }));
+  return { estimate: Math.round(estimate), weeksUsed, calorieWeeksUsed: calorieBuckets.length, windowWeeks, bucketRanges };
+}
+// Every logged cardio session's real calorie burn (Time/Dist/Cal-style cardio logs only —
+// Interval style tracks rounds, not calories) dated within any of the given ranges, summed. Same
+// "STATE.logs is a person's whole training history, cycle numbers only ever increase" reasoning
+// as liftHistorySeries() in the Exercise Progress section.
+function cardioCaloriesInRanges(ranges) {
+  const cardioWorkoutIds = new Set(workoutsByType('cardio').map(w => w.id));
+  let total = 0;
+  Object.keys(STATE.logs).forEach(k => {
+    const workoutId = k.slice(k.indexOf('_') + 1);
+    if (!cardioWorkoutIds.has(workoutId)) return;
+    const log = STATE.logs[k];
+    if (!log.date || !log.actualCalories) return;
+    if (ranges.some(r => log.date >= r.startStr && log.date <= r.endStr)) total += Number(log.actualCalories) || 0;
+  });
+  return total;
+}
+// Decomposes the rolling TDEE estimate into a non-exercise portion and an average-cardio portion
+// — not a new/separate calorie target to eat against, just answering "how much of my TDEE is
+// actually cardio?". Deliberately not additive (baseline + today's cardio on top): the rolling
+// estimate already reflects however much cardio actually happened during its own measurement
+// window (it's derived from real weight change, which doesn't care why the energy was spent), so
+// adding cardio again on top of it would double-count. This only ever re-explains a slice of the
+// same number, using the exact weeks rollingTdeeEstimate() already used.
+function cardioAdjustedTdeeBreakdown() {
+  const rolling = rollingTdeeEstimate();
+  if (!rolling) return null;
+  const totalCardioCal = cardioCaloriesInRanges(rolling.bucketRanges);
+  const sampledDays = rolling.weeksUsed * 7;
+  const avgCardioPerDay = totalCardioCal / sampledDays;
+  return {
+    tdee: rolling.estimate,
+    avgCardioPerDay: Math.round(avgCardioPerDay),
+    nonExerciseTdee: Math.round(rolling.estimate - avgCardioPerDay),
+    weeksUsed: rolling.weeksUsed,
+  };
 }
 function updateTdeeWindowWeeks(val) {
   const n = Math.round(Number(val));
@@ -5350,6 +5389,7 @@ function renderDietSetup() {
 // applied deliberately, same pattern as the calculator's own result.
 function renderRollingTdeePanel() {
   const rolling = rollingTdeeEstimate();
+  const cardio = rolling ? cardioAdjustedTdeeBreakdown() : null;
   return `
     <div class="panel">
       <div class="subtle-label" style="margin-bottom:8px;">ROLLING TDEE (ADAPTIVE)</div>
@@ -5361,7 +5401,8 @@ function renderRollingTdeePanel() {
             <div class="sugval">${rolling.estimate} cal</div>
           </div>
           <button class="btn btn-good btn-sm" onclick="applyTDEEResult(${rolling.estimate})">USE THIS</button>
-        </div>` : `<div style="font-size:11px; color:var(--text-faint);">Not enough data yet — keep logging daily weight (Health & Diet → Weight & Calories) and calories (there or via the Diet log) to see this.</div>`}
+        </div>
+        ${cardio && cardio.avgCardioPerDay > 0 ? `<div style="font-size:11px; color:var(--text-faint); margin-top:8px;">Of that, ~<b style="color:var(--text)">${cardio.avgCardioPerDay} cal/day</b> came from logged cardio sessions over those same weeks — <b style="color:var(--text)">${cardio.nonExerciseTdee} cal/day</b> non-exercise. A breakdown of the number above, not a separate target — logging more cardio here already moves the estimate itself, no extra math needed on top.</div>` : ''}` : `<div style="font-size:11px; color:var(--text-faint);">Not enough data yet — keep logging daily weight (Health & Diet → Weight & Calories) and calories (there or via the Diet log) to see this.</div>`}
       <label class="field" style="margin-top:12px; margin-bottom:0;">
         <span class="lbl">Averaging window (weeks)</span>
         <input type="number" step="1" min="1" value="${STATE.diet.tdeeWindowWeeks}" onchange="updateTdeeWindowWeeks(this.value)">

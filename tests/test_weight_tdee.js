@@ -1,9 +1,10 @@
 // test_weight_tdee.js — daily weight-log entries gaining optional Body Fat %/Body Water % fields,
 // the Body Weight chart's per-metric selector + 7-day trailing-average trend line
-// (trailingAverage()), and the rolling/adaptive TDEE estimate (rollingTdeeEstimate()) built from
+// (trailingAverage()), the rolling/adaptive TDEE estimate (rollingTdeeEstimate()) built from
 // actual weight trend + calories in (resolvedCaloriesForDate(), preferring the real Diet log over
 // the weight-log's own manual Calories field) rather than the static Harris-Benedict/Mifflin-St
-// Jeor calculator.
+// Jeor calculator, and cardioAdjustedTdeeBreakdown()'s decomposition of that same estimate into a
+// non-exercise portion and an average-cardio portion using real cardio workout logs.
 const { chromium } = require('playwright');
 const path = require('path');
 
@@ -140,6 +141,42 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (windowed.estimate !== 3200) throw new Error(`Expected estimate 3200 with a 2-week window, got ${windowed.estimate}`);
   const persistedWindow = await page.evaluate(() => STATE.diet.tdeeWindowWeeks);
   if (persistedWindow !== 2) throw new Error(`Expected updateTdeeWindowWeeks(2) to set STATE.diet.tdeeWindowWeeks, got ${persistedWindow}`);
+
+  // 5b. cardioAdjustedTdeeBreakdown() decomposes that same 3200 estimate using real cardio
+  // workout logs dated within the exact weeks the estimate itself used (still the 2-week window:
+  // '2026-06-09'..'2026-06-15' most recent, '2026-06-02'..'2026-06-08' older, per `windowed` above).
+  const cardioSetup = await page.evaluate(() => {
+    const workoutId = uid();
+    STATE.workouts.push({ id: workoutId, name: 'Cardio Test Day', type: 'cardio', style: 'Time/Dist/Cal' });
+    // Most recent week: two sessions, 150 + 90 = 240 cal. Older week: one session, 180 cal.
+    // Total 420 cal / 14 sampled days = 30 cal/day exactly.
+    STATE.logs[logKey(301, workoutId)] = { date: '2026-06-10', entries: {}, notes: '', complete: true, actualCalories: 150 };
+    STATE.logs[logKey(302, workoutId)] = { date: '2026-06-12', entries: {}, notes: '', complete: true, actualCalories: 90 };
+    STATE.logs[logKey(303, workoutId)] = { date: '2026-06-05', entries: {}, notes: '', complete: true, actualCalories: 180 };
+    // Outside the window entirely — must not be counted.
+    STATE.logs[logKey(304, workoutId)] = { date: '2026-01-01', entries: {}, notes: '', complete: true, actualCalories: 9999 };
+    saveState();
+    return { workoutId };
+  });
+  const breakdown = await page.evaluate(() => cardioAdjustedTdeeBreakdown());
+  console.log('cardioAdjustedTdeeBreakdown():', breakdown);
+  if (breakdown.tdee !== 3200) throw new Error(`Expected the breakdown's tdee to match rollingTdeeEstimate() (3200), got ${breakdown.tdee}`);
+  if (breakdown.avgCardioPerDay !== 30) throw new Error(`Expected avgCardioPerDay 420/14=30, got ${breakdown.avgCardioPerDay}`);
+  if (breakdown.nonExerciseTdee !== 3170) throw new Error(`Expected nonExerciseTdee 3200-30=3170, got ${breakdown.nonExerciseTdee}`);
+  if (breakdown.avgCardioPerDay + breakdown.nonExerciseTdee !== breakdown.tdee) throw new Error('Expected the two portions to sum back to the same tdee — this is a decomposition, not a new total');
+
+  // The panel actually renders the breakdown line
+  await page.evaluate(() => { switchTab('health'); setHealthSubtab('diet'); });
+  await page.waitForTimeout(150);
+  const breakdownShown = await page.evaluate(() => document.body.textContent.includes('non-exercise'));
+  if (!breakdownShown) throw new Error('Expected the ROLLING TDEE panel to render the cardio breakdown line');
+
+  // cleanup (this sub-test's own fixtures)
+  await page.evaluate((id) => {
+    STATE.workouts = STATE.workouts.filter(w => w.id !== id);
+    Object.keys(STATE.logs).forEach(k => { if (k.endsWith('_' + id)) delete STATE.logs[k]; });
+    saveState();
+  }, cardioSetup.workoutId);
 
   // 6. Only 1 week of data -> null (nothing to compare against yet)
   await page.evaluate(() => { STATE.diet.tdeeWindowWeeks = 12; STATE.weightLog = STATE.weightLog.filter(e => e.date >= '2026-06-09'); saveState(); }); // keep just the most recent week
