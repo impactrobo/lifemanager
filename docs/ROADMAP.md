@@ -275,6 +275,25 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Cardio Calories auto-fills into each log from the workout itself (2026-09-12).** A cardio
+  workout's own "Calories" target (in Setup → Workout Builder, the same field already shown in
+  the log screen's TARGET panel) now seeds a brand-new log's Calories field automatically —
+  someone doing the same recurring cardio session (e.g. a 45-minute Zone 2 ride) no longer has to
+  retype roughly the same number every week just to keep it feeding
+  `cardioAdjustedTdeeBreakdown()`.
+  - `getCardioLog()` seeds `actualCalories` from the workout's `targetCalories` **only the first
+    time a given week's log is created** (`undefined`, never touched) — an explicitly blanked
+    field (`null`, via `updateCardioLogField()`'s existing "blank clears to null" convention)
+    is left alone rather than getting re-seeded on the next read. The value is still a normal,
+    fully editable field per session (e.g. a wearable read something different that day).
+  - No new field: reuses the existing `targetCalories` the workout editor already had, rather
+    than adding a second, confusingly-similar number. Editor and log screen both gained a small
+    hint clarifying it also auto-fills, not just displays a target.
+  - A workout with no Calories target set behaves exactly as before — a brand-new log's Calories
+    field stays blank.
+  - `tests/test_cardio_calorie_autofill.js` covers the seed-on-first-open, the input reflecting
+    it, an override sticking, persistence across a real reload, a separate week seeding
+    independently, an explicit blank surviving reopen, and the no-target case staying unseeded.
 - **Habits: a new tracking concept distinct from anchors, with streaks and a multi-habit success
   calendar (2026-09-12).** Scoped via a discussion before building — the person's own worry going
   in was "is this just anchors again," resolved by nature-of-the-thing rather than where it's
