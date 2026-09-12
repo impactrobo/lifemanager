@@ -2109,7 +2109,24 @@ function getCardioWorkout(id) { return getWorkout(id); }
 function mesoLogKey(cycle, workoutId) { return logKey(cycle, workoutId); }
 function cardioLogKey(cycle, cardioId) { return logKey(cycle, cardioId); }
 function getMesoLog(cycle, workoutId) { return getLog(cycle, workoutId); }
-function getCardioLog(cycle, cardioId) { return getLog(cycle, cardioId); }
+// Cardio logs get one extra behavior generic getLog() doesn't have: a brand-new log seeds
+// actualCalories from the workout's own targetCalories, so the calorie figure that feeds
+// cardio-adjusted TDEE (see cardioCaloriesInRanges()) doesn't require retyping the same number
+// every single session. `undefined` (never touched) triggers the seed; `null` (the user
+// explicitly blanked the field via updateCardioLogField()) is left alone, same "blank means
+// intentionally cleared" convention used elsewhere in this file.
+function getCardioLog(cycle, cardioId) {
+  const isNew = !STATE.logs[logKey(cycle, cardioId)];
+  const clog = getLog(cycle, cardioId);
+  if (isNew) {
+    const c = getCardioWorkout(cardioId);
+    if (c && c.targetCalories != null && clog.actualCalories === undefined) {
+      clog.actualCalories = c.targetCalories;
+      saveState();
+    }
+  }
+  return clog;
+}
 function getMesoExercise(workout, exId) { return workout.exercises.find(e => e.id === exId); }
 
 // ---- Cardio workout slots — same pattern as weights, intentionally minimal for now ----
@@ -3071,7 +3088,7 @@ function renderCardioLog(cardioId) {
         <label class="field"><span class="lbl">Minutes</span><input type="number" min="0" step="1" value="${clog.actualMinutes ?? ''}" onchange="updateCardioLogField('${cardioId}','actualMinutes',this.value)"></label>
         <label class="field"><span class="lbl">Distance (${cardio.targetDistanceUnit || 'mi'})</span><input type="number" min="0" step="0.1" value="${clog.actualDistance ?? ''}" onchange="updateCardioLogField('${cardioId}','actualDistance',this.value)"></label>
         <label class="field"><span class="lbl">Calories</span><input type="number" min="0" step="1" value="${clog.actualCalories ?? ''}" onchange="updateCardioLogField('${cardioId}','actualCalories',this.value)"></label>
-      </div>`;
+      </div>${cardio.targetCalories != null ? `<div style="font-size:11px; color:var(--text-faint); margin-top:4px;">Auto-filled from this workout's Calories target — edit it if this session actually burned something different.</div>` : ''}`;
 
   return `
     <div class="screen">
@@ -6539,7 +6556,7 @@ function renderCardioWorkoutEditor(c) {
           </label>
         </div>
         <label class="field"><span class="lbl">Calories</span><input type="number" min="0" step="1" value="${c.targetCalories ?? ''}" onchange="updateCardioField('${c.id}','targetCalories',this.value)"></label>`}
-      <div style="font-size:11px; color:var(--text-faint); margin-top:4px;">Leave any field blank to skip it — the log screen only shows targets you've set here.</div>
+      <div style="font-size:11px; color:var(--text-faint); margin-top:4px;">Leave any field blank to skip it — the log screen only shows targets you've set here.${isInterval ? '' : ' Calories also auto-fills into each new log below, so it doesn\'t need retyping every session — edit that session\'s value anytime it differs.'}</div>
     </div>`;
 }
 function updateCardioField(id, field, val) {
