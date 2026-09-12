@@ -40,6 +40,7 @@ const ICONS = {
   magnify: `<svg class="icon-svg" viewBox="0 0 24 24" width="1em" height="1em" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6" fill="var(--accent)" fill-opacity=".14" stroke="var(--accent)" stroke-width="1.7"/><path d="M15 15l5.5 5.5" stroke="var(--accent)" stroke-width="1.9" stroke-linecap="round"/></svg>`,
   recurDollar: `<svg class="icon-svg" viewBox="0 0 24 24" width="1em" height="1em" aria-hidden="true"><path d="M4 11a8 8 0 0 1 13.9-5.4M20 13a8 8 0 0 1-13.9 5.4" fill="none" stroke="var(--accent)" stroke-width="1.7" stroke-linecap="round"/><path d="M17.5 3v3.2h-3.2M6.5 21v-3.2h3.2" fill="none" stroke="var(--accent)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><text x="12" y="14.6" text-anchor="middle" font-size="8.5" font-weight="700" fill="var(--accent)">$</text></svg>`,
   mountain: `<svg class="icon-svg" viewBox="0 0 24 24" width="1em" height="1em" aria-hidden="true"><path d="M2.5 19 9 7l3.4 5.8L15 9.5 21.5 19z" fill="var(--accent)" fill-opacity=".18" stroke="var(--accent)" stroke-width="1.5" stroke-linejoin="round"/><path d="M9 7l1.7 2.9-1.7 1-1.9-1.1z" fill="var(--accent)"/></svg>`,
+  flag: `<svg class="icon-svg" viewBox="0 0 24 24" width="1em" height="1em" aria-hidden="true"><path d="M6 21V4" stroke="var(--accent)" stroke-width="1.7" stroke-linecap="round"/><path d="M6 4.5c2-1.6 4-1.6 6 0s4 1.6 6 0v8c-2 1.6-4 1.6-6 0s-4-1.6-6 0z" fill="var(--accent)" fill-opacity=".2" stroke="var(--accent)" stroke-width="1.4" stroke-linejoin="round"/></svg>`,
   wallet: `<svg class="icon-svg" viewBox="0 0 24 24" width="1em" height="1em" aria-hidden="true"><rect x="3" y="5.5" width="18" height="13.5" rx="2" fill="var(--accent)" fill-opacity=".16" stroke="var(--accent)" stroke-width="1.6" stroke-linejoin="round"/><path d="M13 9.5h5.5a1.5 1.5 0 0 1 1.5 1.5v3a1.5 1.5 0 0 1-1.5 1.5H13z" fill="var(--accent)" fill-opacity=".26" stroke="var(--accent)" stroke-width="1.3" stroke-linejoin="round"/><circle cx="17.3" cy="13" r="1.1" fill="var(--accent)"/></svg>`,
   mobility: `<svg class="icon-svg" viewBox="0 0 24 24" width="1em" height="1em" aria-hidden="true"><circle cx="12" cy="4.2" r="2" fill="var(--accent)"/><path d="M12 6.5v6M12 8.5 6 6M12 8.5l6.5-1.5M12 12.5 7 19M12 12.5l4.5 4" fill="none" stroke="var(--accent)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
   warmup: `<svg class="icon-svg" viewBox="0 0 24 24" width="1em" height="1em" aria-hidden="true"><path d="M12 2.5c1 3-2.5 4-2.5 7a2.5 2.5 0 0 0 5 0c0-1-.5-1.7-1-2.3 1.8.6 3.5 2.7 3.5 5.3a5 5 0 0 1-10 0c0-4 3-5.5 3-8 0-.7 1-1.5 2-2z" fill="var(--accent)" fill-opacity=".22" stroke="var(--accent)" stroke-width="1.4" stroke-linejoin="round"/></svg>`,
@@ -1183,6 +1184,17 @@ function defaultLifeState() {
 // charge ids the user has actually confirmed contributing that month — this is what lets the
 // savings slice of the budget bar fill in progressively (see renderBudgetBar()) instead of just
 // showing as a flat reserved block the moment a charge is flagged isSavings.
+// goals (added 2026-09-12) are named savings/investment targets distinct from all of the above —
+// isSavings/savingsCompletions track whether THIS MONTH's reserved slice got contributed; a goal
+// tracks cumulative progress toward an actual target amount (a Roth IRA's annual cap, a PS5's
+// price tag, a house down payment), funded either by logging ad-hoc contributions directly
+// (goalContributions-style, see addGoalContribution()) or by linking a goal to an isSavings
+// recurring charge (recurringChargeId) so checking that month's box also feeds the goal — see
+// syncGoalContributionForRecurringCharge(). resetsAnnually distinguishes the two goal shapes the
+// person actually asked for: false = one-time, save-until-you-hit-it (down payment, PS5); true =
+// the target re-applies every calendar year and progress only counts this year's contributions
+// (IRA/Roth-style caps) — see goalProgress(). No IRS dollar limits are hardcoded anywhere; the
+// person types whatever target they want.
 function defaultBudgetState() {
   return {
     recurringIncome: [], // [{id, name, amount, frequency: 'weekly'|'biweekly'|'monthly', active}]
@@ -1191,6 +1203,7 @@ function defaultBudgetState() {
     incidentals: {},
     savingsPlan: { mode: 'percent', value: null },
     savingsCompletions: {},
+    goals: [], // [{id, name, targetAmount, resetsAnnually, recurringChargeId, contributions:[{id,date,amount,note,source}], archived, createdAt}]
   };
 }
 // Weekly/bi-weekly amounts convert to a monthly-equivalent for budgeting math (52 weeks or 26
@@ -1516,6 +1529,7 @@ function loadState() {
         incomeLog: parsed.budget.incomeLog || {},
         incidentals: parsed.budget.incidentals || {},
         savingsCompletions: parsed.budget.savingsCompletions || {},
+        goals: parsed.budget.goals || [],
       }) : base.budget,
     });
   } catch (e) {
@@ -1984,6 +1998,7 @@ function updateAllTMs() {
   }
   if (!STATE.budget.savingsPlan || typeof STATE.budget.savingsPlan !== 'object') STATE.budget.savingsPlan = { mode: 'percent', value: null };
   if (!STATE.budget.savingsCompletions || typeof STATE.budget.savingsCompletions !== 'object') STATE.budget.savingsCompletions = {};
+  if (!Array.isArray(STATE.budget.goals)) STATE.budget.goals = [];
 
   // ---- Notes tag migration (one-time) ----
   // Folds the five former built-in tags (idea/todo/win/issue/reflect) into customNoteTags so
@@ -2739,7 +2754,8 @@ function renderTabbar() {
   } else if (CURRENT_TAB === 'budget') {
     sectionBtns = `
       <button class="${BUDGET_SUBTAB==='overview'?'active':''}" onclick="setBudgetSubtab('overview')"><span class="ic">${icon('mountain')}</span>OVERVIEW</button>
-      <button class="${BUDGET_SUBTAB==='recurring'?'active':''}" onclick="setBudgetSubtab('recurring')"><span class="ic">${icon('recurDollar')}</span>RECURRING</button>`;
+      <button class="${BUDGET_SUBTAB==='recurring'?'active':''}" onclick="setBudgetSubtab('recurring')"><span class="ic">${icon('recurDollar')}</span>RECURRING</button>
+      <button class="${BUDGET_SUBTAB==='goals'?'active':''}" onclick="setBudgetSubtab('goals')"><span class="ic">${icon('flag')}</span>GOALS</button>`;
   }
   return homeBtn + sectionBtns;
 }
@@ -2775,6 +2791,7 @@ function _doRender() {
     if (NOTES_SUBTAB === 'write') { renderNoteTagSwatches(); renderNotePhotoRow(); }
   } else if (CURRENT_TAB === 'budget') {
     if (BUDGET_SUBTAB === 'recurring') app.innerHTML = renderBudgetRecurring();
+    else if (BUDGET_SUBTAB === 'goals') app.innerHTML = renderBudgetGoals();
     else app.innerHTML = renderBudgetHome();
   }
   const tabbarEl = document.getElementById('tabbar');
@@ -8931,9 +8948,191 @@ function toggleSavingsCompletion(key, id, checked) {
   const idx = arr.indexOf(id);
   if (checked && idx === -1) arr.push(id);
   else if (!checked && idx !== -1) arr.splice(idx, 1);
+  syncGoalContributionForRecurringCharge(key, id, checked);
   saveState();
   render();
 }
+// A recurring isSavings charge linked to a goal (goal.recurringChargeId) auto-adds/removes a
+// contribution to that goal every time this exact checkbox is toggled, so the goal's running
+// balance stays in sync with the existing monthly-completion mechanic instead of needing the
+// same $ logged twice in two places. The entry's id is deterministic (month + charge), so
+// unchecking finds and removes exactly the one entry it added — never a manual entry that just
+// happens to share an amount.
+function syncGoalContributionForRecurringCharge(monthKey, chargeId, checked) {
+  const goal = STATE.budget.goals.find(g => g.recurringChargeId === chargeId);
+  if (!goal) return;
+  const autoId = 'auto_' + monthKey + '_' + chargeId;
+  if (checked) {
+    if (goal.contributions.some(c => c.id === autoId)) return; // already synced
+    const charge = STATE.budget.recurring.find(r => r.id === chargeId);
+    const amount = charge ? Number(charge.amount) || 0 : 0;
+    if (amount <= 0) return;
+    // Dated to the last day of the month the checkbox is actually for, not "today" — the two
+    // can differ (e.g. catching up on last month's box after the month has turned over).
+    const [y, m] = monthKey.split('-').map(Number);
+    const lastDay = new Date(y, m, 0).getDate();
+    const date = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    goal.contributions.push({ id: autoId, date, amount, note: charge ? charge.name : '', source: 'recurring' });
+  } else {
+    goal.contributions = goal.contributions.filter(c => c.id !== autoId);
+  }
+}
+
+// ---- Savings Goals: named targets with a running balance, distinct from the monthly savings
+// slice above — see the comment above defaultBudgetState()'s `goals` field for the full picture. ----
+function goalContributionsInScope(goal) {
+  if (!goal.resetsAnnually) return goal.contributions;
+  const year = String(new Date().getFullYear());
+  return goal.contributions.filter(c => c.date.slice(0, 4) === year);
+}
+function goalProgress(goal) {
+  return goalContributionsInScope(goal).reduce((s, c) => s + (Number(c.amount) || 0), 0);
+}
+function goalPct(goal) {
+  if (!goal.targetAmount) return 0;
+  return Math.max(0, Math.min(100, goalProgress(goal) / goal.targetAmount * 100));
+}
+function goalIsComplete(goal) {
+  return goal.targetAmount > 0 && goalProgress(goal) >= goal.targetAmount;
+}
+function addSavingsGoal() {
+  const nameEl = document.getElementById('goalName');
+  const name = nameEl.value.trim();
+  const amountEl = document.getElementById('goalTarget');
+  const amount = Number(amountEl.value);
+  if (!name) { showToast('Give it a name'); return; }
+  if (!amount || amount <= 0) { showToast('Enter a target amount'); return; }
+  const resetsAnnually = document.getElementById('goalResetsAnnually').checked;
+  STATE.budget.goals.push({ id: uid(), name, targetAmount: amount, resetsAnnually, recurringChargeId: null, contributions: [], archived: false, createdAt: Date.now() });
+  saveState();
+  nameEl.value = ''; amountEl.value = ''; document.getElementById('goalResetsAnnually').checked = false;
+  showToast('Goal added');
+  render();
+}
+function updateGoalField(id, field, value) {
+  const g = STATE.budget.goals.find(x => x.id === id);
+  if (!g) return;
+  if (field === 'targetAmount') g.targetAmount = Number(value) || 0;
+  else if (field === 'name') { const trimmed = value.trim(); if (trimmed) g.name = trimmed; }
+  else if (field === 'resetsAnnually') g.resetsAnnually = value;
+  else if (field === 'recurringChargeId') g.recurringChargeId = value || null;
+  saveState(); render();
+}
+function deleteSavingsGoal(id) {
+  showConfirm('Delete this goal? Its contribution history goes with it.', () => {
+    STATE.budget.goals = STATE.budget.goals.filter(g => g.id !== id);
+    saveState(); render();
+  });
+}
+function addGoalContribution(id) {
+  const amtEl = document.getElementById('goalContribAmount_' + id);
+  const amt = Number(amtEl.value);
+  if (!amt || amt <= 0) { showToast('Enter an amount first'); return; }
+  const noteEl = document.getElementById('goalContribNote_' + id);
+  const note = noteEl ? noteEl.value.trim() : '';
+  const g = STATE.budget.goals.find(x => x.id === id);
+  if (!g) return;
+  g.contributions.push({ id: uid(), date: todayStr(), amount: amt, note, source: 'manual' });
+  saveState();
+  amtEl.value = ''; if (noteEl) noteEl.value = '';
+  showToast('Contribution logged');
+  render();
+}
+function deleteGoalContribution(goalId, contribId) {
+  showConfirm('Delete this contribution?', () => {
+    const g = STATE.budget.goals.find(x => x.id === goalId);
+    if (g) g.contributions = g.contributions.filter(c => c.id !== contribId);
+    saveState(); render();
+  });
+}
+// Recurring charges available to link — active, flagged isSavings, and not already claimed by a
+// different goal (a charge funds at most one goal, so its monthly contribution never double-counts).
+function availableRecurringChargesForGoal(currentGoalId) {
+  const claimedByOther = new Set(STATE.budget.goals.filter(g => g.id !== currentGoalId && g.recurringChargeId).map(g => g.recurringChargeId));
+  return STATE.budget.recurring.filter(r => r.isSavings && r.active && !claimedByOther.has(r.id));
+}
+let GOAL_EXPANDED = null; // which goal's contribution ledger + add-contribution form is open, one at a time
+function toggleGoalExpanded(id) { GOAL_EXPANDED = GOAL_EXPANDED === id ? null : id; render(); }
+function renderBudgetGoals() {
+  const goals = STATE.budget.goals;
+  return `<div class="screen">
+    <div class="section-title">Goals</div>
+    <div style="font-size:12px; color:var(--text-dim); margin:6px 0 14px;">Named savings/investment targets with a running balance — a Roth IRA's annual cap, a down payment, a game console. Fund one by logging contributions here directly, or linking it to an isSavings recurring charge so checking off that month's box on the Recurring tab feeds it automatically.</div>
+
+    <div class="subtle-label" style="margin-bottom:8px;">NEW GOAL</div>
+    <div class="panel">
+      <div class="field-row">
+        <label class="field"><span class="lbl">Name</span><input type="text" id="goalName" placeholder="e.g. Roth IRA, PS5, Down Payment"></label>
+        <label class="field"><span class="lbl">Target ($)</span><input type="number" step="0.01" inputmode="decimal" id="goalTarget" placeholder="0.00"></label>
+      </div>
+      <label style="display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text-dim); cursor:pointer; margin-bottom:10px;">
+        <input type="checkbox" id="goalResetsAnnually">
+        Resets every calendar year — for an annual cap (IRA/Roth-style) rather than a one-time target
+      </label>
+      <button class="btn btn-primary btn-sm btn-block" onclick="addSavingsGoal()">+ ADD GOAL</button>
+    </div>
+
+    <div class="subtle-label" style="margin:18px 0 8px;">YOUR GOALS</div>
+    <div class="stack">
+      ${goals.length ? goals.map(renderGoalCard).join('') : emptyState('No goals yet — add one above.')}
+    </div>
+  </div>`;
+}
+function renderGoalCard(g) {
+  const progress = goalProgress(g);
+  const pct = goalPct(g);
+  const complete = goalIsComplete(g);
+  const expanded = GOAL_EXPANDED === g.id;
+  const linkedCharge = g.recurringChargeId ? STATE.budget.recurring.find(r => r.id === g.recurringChargeId) : null;
+  const contribs = goalContributionsInScope(g).slice().sort((a, b) => b.date.localeCompare(a.date));
+  return `<div class="panel" style="${complete ? 'border-color:var(--good);' : ''}">
+    <div class="row" style="align-items:flex-start; cursor:pointer;" onclick="toggleGoalExpanded('${g.id}')">
+      <div style="flex:1; min-width:0;">
+        <div style="font-size:14px; font-weight:700;">${escapeHtml(g.name)}${g.resetsAnnually ? ` <span style="font-size:10px; font-weight:700; color:var(--text-faint);">&middot; ${new Date().getFullYear()}</span>` : ''}${complete ? ` <span style="color:var(--good); font-size:11px; font-weight:700;">&#10003; COMPLETE</span>` : ''}</div>
+        <div style="font-size:12px; color:var(--text-dim); margin-top:2px;">${fmtMoney(progress)} / ${fmtMoney(g.targetAmount)}${linkedCharge ? ` &middot; linked to "${escapeHtml(linkedCharge.name)}"` : ''}</div>
+      </div>
+      <button class="icon-btn" style="color:var(--bad); flex-shrink:0;" onclick="event.stopPropagation(); deleteSavingsGoal('${g.id}')" title="Delete goal">${icon('close')}</button>
+    </div>
+    <div class="goal-bar" style="margin-top:10px;">
+      <div class="goal-bar-fill ${complete ? 'goal-bar-fill-complete' : ''}" style="width:${pct}%;"></div>
+    </div>
+    ${expanded ? `
+      <div class="divider" style="margin:14px 0;"></div>
+      <label class="field"><span class="lbl">Name</span><input type="text" value="${escapeHtml(g.name)}" onchange="updateGoalField('${g.id}','name',this.value)"></label>
+      <div class="field-row">
+        <label class="field"><span class="lbl">Target ($)</span><input type="number" step="0.01" inputmode="decimal" value="${g.targetAmount || ''}" onchange="updateGoalField('${g.id}','targetAmount',this.value)"></label>
+        <label class="field"><span class="lbl">Link to recurring charge</span>
+          <select onchange="updateGoalField('${g.id}','recurringChargeId',this.value)">
+            <option value="">None (manual only)</option>
+            ${availableRecurringChargesForGoal(g.id).map(r => `<option value="${r.id}" ${g.recurringChargeId===r.id?'selected':''}>${escapeHtml(r.name)} (${fmtMoney(r.amount)}/mo)</option>`).join('')}
+          </select>
+        </label>
+      </div>
+      <label style="display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text-dim); cursor:pointer; margin-bottom:12px;">
+        <input type="checkbox" ${g.resetsAnnually?'checked':''} onchange="updateGoalField('${g.id}','resetsAnnually',this.checked)">
+        Resets every calendar year
+      </label>
+      <div class="subtle-label" style="margin-bottom:8px;">LOG A CONTRIBUTION</div>
+      <div class="field-row">
+        <label class="field"><span class="lbl">Amount ($)</span><input type="number" step="0.01" inputmode="decimal" id="goalContribAmount_${g.id}" placeholder="0.00"></label>
+        <label class="field"><span class="lbl">Note (optional)</span><input type="text" id="goalContribNote_${g.id}" placeholder="Birthday money, sold old one..."></label>
+      </div>
+      <button class="btn btn-primary btn-sm btn-block" style="margin-bottom:14px;" onclick="addGoalContribution('${g.id}')">+ ADD CONTRIBUTION</button>
+      <div class="subtle-label" style="margin-bottom:8px;">${g.resetsAnnually ? `${new Date().getFullYear()} ` : ''}CONTRIBUTIONS</div>
+      <div class="entry-list">${contribs.length ? contribs.map(c => renderGoalContributionCard(g.id, c)).join('') : emptyState('Nothing logged yet.')}</div>
+    ` : ''}
+  </div>`;
+}
+function renderGoalContributionCard(goalId, c) {
+  return `<div class="entry-card">
+    <div class="ehead">
+      <div><span class="edate">${fmtMoney(c.amount)}</span> <span style="font-size:12px; color:var(--text-dim);">${escapeHtml(c.note || '')}</span>${c.source==='recurring' ? ` <span class="savings-badge">${icon('recurDollar')} AUTO</span>` : ''}</div>
+      <button class="icon-btn" onclick="deleteGoalContribution('${goalId}','${c.id}')">${icon('close')}</button>
+    </div>
+    <div class="estats"><span>${c.date}</span></div>
+  </div>`;
+}
+
 // Every active recurring income source converted to its monthly-equivalent and summed — the
 // steady figure the budget bar starts from each month, replacing the old flat monthlyIncome.
 function recurringIncomeMonthlyTotal() {
@@ -9151,6 +9350,10 @@ function toggleRecurringSavings(id, checked) {
 function deleteRecurringCharge(id) {
   showConfirm('Delete this recurring charge?', () => {
     STATE.budget.recurring = STATE.budget.recurring.filter(x => x.id !== id);
+    // A goal linked to this charge keeps its already-logged contribution history — only the
+    // now-dangling link itself is cleared, same as any other delete-the-thing-it-points-to case.
+    const linkedGoal = STATE.budget.goals.find(g => g.recurringChargeId === id);
+    if (linkedGoal) linkedGoal.recurringChargeId = null;
     saveState(); render();
   });
 }

@@ -189,6 +189,28 @@ interface BudgetState {
   savingsPlan: { mode: string; value: number | null };
   /** 'YYYY-MM' -> ids of isSavings recurring charges marked contributed for that month */
   savingsCompletions: Record<string, string[]>;
+  goals: SavingsGoal[];
+}
+interface SavingsGoalContribution {
+  id: string;
+  date: string;
+  amount: number;
+  note: string;
+  /** 'manual' = logged by hand; 'recurring' = auto-added by syncGoalContributionForRecurringCharge() */
+  source: 'manual' | 'recurring';
+}
+interface SavingsGoal {
+  id: string;
+  name: string;
+  targetAmount: number;
+  /** true = the target re-applies every calendar year and progress only counts this year's
+   *  contributions (IRA/Roth-style caps); false = one-time, save-until-you-hit-it. */
+  resetsAnnually: boolean;
+  /** An isSavings RecurringCharge id whose monthly "contributed" checkbox auto-feeds this goal. */
+  recurringChargeId: string | null;
+  contributions: SavingsGoalContribution[];
+  archived: boolean;
+  createdAt: number;
 }
 
 interface ScheduleAnchor { id: string; start: string; end: string; label: string; detail?: string }

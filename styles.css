@@ -376,6 +376,11 @@ select { -webkit-appearance: none; appearance: none; background-image: linear-gr
   margin-right: 6px; white-space: nowrap;
 }
 
+/* ---------- Budget: Savings Goals (Budget -> Goals) ---------- */
+.goal-bar { position: relative; height: 10px; border-radius: 20px; background: var(--surface2); border: 1px solid var(--border-soft); overflow: hidden; }
+.goal-bar-fill { height: 100%; background: var(--savings); border-radius: 20px; transition: width 0.3s ease; }
+.goal-bar-fill-complete { background: var(--good); }
+
 /* ---------- Notes (tag-colored, styled after the exercise-order drag chips) ---------- */
 .note-card { background: var(--surface); border: 1px solid var(--border-soft); border-radius: var(--radius); padding: 12px; }
 .note-tag-label { font-family: var(--font-mono); font-size: 9px; font-weight: 800; letter-spacing: 0.04em; border: 1px solid; border-radius: 20px; padding: 2px 8px; flex-shrink: 0; }

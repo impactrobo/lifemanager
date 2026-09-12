@@ -64,10 +64,8 @@ before starting any of these.
   typing them in. (The weight-trend trailing average idea shipped 2026-09-12 — see Recently
   Shipped.)
 - **Budget:** multi-month or year-over-year trend view (currently one month at a time via the
-  cycle arrows, with no rollup); a longer-horizon "cap" amount per savings-flagged recurring
-  charge (e.g. "Roth IRA — $250/mo toward a $7,000/yr cap") to show progress against a multi-month
-  target, distinct from the monthly contributed/planned fill the budget bar already shows (see
-  "Budget: savings/investment goal-progress fill" in Recently Shipped).
+  cycle arrows, with no rollup across time). (The per-goal cumulative/annual-cap tracking idea
+  shipped 2026-09-12 as the new Goals subtab — see Recently Shipped.)
 - **Web Push reminders — client side shipped 2026-09-10, backend still to deploy.** Settings has
   "ENABLE REMINDER NOTIFICATIONS" (`renderReminderPushPanel()`), gated on browser support and,
   on iOS, on being launched from a Home Screen install (`isInstalledStandalone()`). Enabling it
@@ -270,6 +268,35 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Budget: named Savings Goals with a running balance (new GOALS subtab).** Scoped via a round of
+  questions grounded in actual personal-finance patterns (2026-09-12) — the relevant concept is a
+  **sinking fund** (Ramsey/YNAB): a named bucket saved toward for a specific future expense. Two
+  goal shapes, both requested: one-time cumulative (a down payment, a game console — save until
+  you hit the target, done) and annual-resetting (a Roth IRA/IRA-style cap — the target re-applies
+  every calendar year, progress only counts that year's contributions). No IRS dollar limits are
+  hardcoded anywhere — those change yearly; the person types whatever target they want.
+  - New `STATE.budget.goals` (`SavingsGoal[]`) — distinct from the existing `isSavings`/
+    `savingsCompletions` mechanism (Recently Shipped, 2026-09-11), which only ever tracked *this
+    month's* reserved slice getting contributed, with no concept of a cumulative target.
+  - **Two ways to fund a goal**, both available per goal: log an ad-hoc contribution directly
+    (`addGoalContribution()`, same pattern as logging an Incidental), or link the goal to an
+    existing `isSavings` recurring charge (`recurringChargeId`) so checking off that month's
+    "contributed" box (the existing fill mechanic) *also* adds a contribution automatically
+    (`syncGoalContributionForRecurringCharge()`) — no need to log the same money twice. A charge
+    can fund at most one goal at a time (`availableRecurringChargesForGoal()` excludes ones already
+    claimed elsewhere); deleting a linked charge clears the goal's now-dangling reference but keeps
+    its already-logged contribution history.
+  - `goalProgress()`/`goalPct()`/`goalIsComplete()` read from `goalContributionsInScope()`, which
+    is where `resetsAnnually` actually does its filtering (this calendar year's contributions only).
+  - UI: `renderBudgetGoals()`, a new panel-per-goal list with a progress bar (green + a "COMPLETE"
+    badge once it hits target), tap-to-expand for editing/linking/logging, under a new GOALS
+    button in Budget's subnav (new `flag` icon, replacing nothing — the third tab alongside
+    OVERVIEW/RECURRING).
+  - `tests/test_budget_goals.js` covers manual contributions and progress math, one-time vs.
+    resets-annually scoping (a stale prior-year contribution correctly excluded), the recurring-
+    charge auto-link both directions (checking adds exactly one entry, re-checking doesn't double-
+    add, unchecking removes exactly that entry and nothing else), the one-goal-per-charge
+    exclusivity, cleanup on linked-charge deletion, and persistence.
 - **Schedule Builder: "WEEK AT A GLANCE" strip — which named schedule covers each weekday.**
   Scoped via a couple of questions (2026-09-12): a compact 7-cell strip at the top of Schedule ->
   Setup -> Schedule Builder (`renderWeekOverviewStrip()`), above the existing schedule list.
