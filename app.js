@@ -8507,11 +8507,13 @@ function renderHomeAddPopup() {
 // more heavy-handed pass with a colored border + background) — the tile itself stays neutral,
 // just the icon gets its section's color as an ambient aura. Still enough to track a tile by
 // color through a drag-reorder, without recoloring the tile's whole footprint.
-function renderHomeTileIcon(meta) {
-  return `<div class="home-tile-icon-wrap">
-    <div class="home-tile-glow" style="background:radial-gradient(circle, ${meta.color}66 0%, ${meta.color}00 70%);"></div>
-    <div class="home-tile-icon">${icon(meta.icon)}</div>
-  </div>`;
+// Second revision, same day — first pass tinted the whole tile flat, second put a glow behind
+// just the icon; this one puts the color at the tile's own edges, fading inward toward a neutral
+// center (a vignette, not a spotlight). `circle at center` with the default farthest-corner sizing
+// naturally reaches every corner of a square tile, so the color genuinely traces the tile's own
+// border rather than just glowing around the icon in the middle.
+function homeTileGlowStyle(color) {
+  return `background: radial-gradient(circle at center, transparent 0%, transparent 40%, ${color}80 100%), var(--surface);`;
 }
 function renderHomeSectionsGrid() {
   const L = homeLayout();
@@ -8519,14 +8521,14 @@ function renderHomeSectionsGrid() {
     const meta = HOME_SECTION_META[id];
     if (!meta) return '';
     if (!HOME_EDIT_MODE) {
-      return `<div class="workout-cell home-tile" onclick="goHomeSection('${id}')">
-        ${renderHomeTileIcon(meta)}
+      return `<div class="workout-cell home-tile" style="${homeTileGlowStyle(meta.color)}" onclick="goHomeSection('${id}')">
+        <div style="font-size:36px;">${icon(meta.icon)}</div>
         <div class="wname">${meta.label}</div>
       </div>`;
     }
-    return `<div class="workout-cell home-tile home-edit-item" data-home-drag-list="sections" data-home-drag-id="${id}" onpointerdown="startHomeDrag('sections','${id}',event,this)">
+    return `<div class="workout-cell home-tile home-edit-item" style="${homeTileGlowStyle(meta.color)}" data-home-drag-list="sections" data-home-drag-id="${id}" onpointerdown="startHomeDrag('sections','${id}',event,this)">
       <button class="home-edit-x" onclick="event.stopPropagation(); hideHomeSection('${id}')" title="Hide">${icon('close')}</button>
-      ${renderHomeTileIcon(meta)}
+      <div style="font-size:36px;">${icon(meta.icon)}</div>
       <div class="wname">${meta.label}</div>
     </div>`;
   }).join('');

@@ -106,42 +106,40 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   const restoredOrder = await page.evaluate(() => STATE.settings.homeLayout.sectionOrder);
   if (!restoredOrder.includes(targetId)) throw new Error(`Expected '${targetId}' restored to sectionOrder after showHomeSection`);
 
-  // 6. Each of the 6 section tiles gets its own fixed color (not shared/generic) as a glow behind
-  // its icon (.home-tile-glow) rather than tinting the whole tile — checked via the raw `style`
-  // attribute text (unnormalized), since the color is embedded inside a radial-gradient() string
-  // rather than being its own recognized CSS property browsers would normalize on read-back.
+  // 6. Each of the 6 section tiles gets its own fixed color (not shared/generic) as a vignette on
+  // the tile's own background (homeTileGlowStyle()) — checked via the raw `style` attribute text
+  // (unnormalized), since the color is embedded inside a radial-gradient() string rather than
+  // being its own recognized CSS property browsers would normalize on read-back.
   await page.evaluate(() => { switchTab('home'); });
   await page.waitForTimeout(150);
   const tileColors = await page.evaluate(() => {
     const ids = STATE.settings.homeLayout.sectionOrder;
     return ids.map(id => {
       const tile = [...document.querySelectorAll('.home-tile')].find(t => t.textContent.includes(HOME_SECTION_META[id].label));
-      const glow = tile ? tile.querySelector('.home-tile-glow') : null;
-      return { id, expected: HOME_SECTION_META[id].color, glowStyle: glow ? glow.getAttribute('style') : null };
+      return { id, expected: HOME_SECTION_META[id].color, tileStyle: tile ? tile.getAttribute('style') : null };
     });
   });
-  console.log('tile glow colors:', tileColors);
+  console.log('tile vignette colors:', tileColors);
   const uniqueColors = new Set(tileColors.map(t => t.expected));
   if (uniqueColors.size !== 6) throw new Error(`Expected all 6 sections to have distinct colors, got ${uniqueColors.size} unique: ${JSON.stringify([...uniqueColors])}`);
   for (const t of tileColors) {
-    if (!t.glowStyle || !t.glowStyle.includes(t.expected)) throw new Error(`Expected tile "${t.id}"'s glow to embed its color ${t.expected}, got style="${t.glowStyle}"`);
+    if (!t.tileStyle || !t.tileStyle.includes(t.expected)) throw new Error(`Expected tile "${t.id}" to embed its color ${t.expected}, got style="${t.tileStyle}"`);
   }
 
   // 7. The color follows the section id through a reorder, not the position — drag "budget" to
-  // the front and confirm its glow is still its own, not whatever "schedule" (the old first tile)
-  // used to have.
+  // the front and confirm its vignette is still its own, not whatever "schedule" (the old first
+  // tile) used to have.
   await page.evaluate(() => reorderHomeList('sections', 'budget', 'schedule')); // move budget to sit before schedule
   await page.waitForTimeout(150);
-  const budgetGlowAfter = await page.evaluate(() => {
+  const budgetStyleAfter = await page.evaluate(() => {
     const tile = [...document.querySelectorAll('.home-tile')].find(t => t.textContent.includes(HOME_SECTION_META.budget.label));
-    const glow = tile ? tile.querySelector('.home-tile-glow') : null;
-    return glow ? glow.getAttribute('style') : null;
+    return tile ? tile.getAttribute('style') : null;
   });
-  console.log('budget tile glow after reordering to the front:', budgetGlowAfter);
+  console.log('budget tile style after reordering to the front:', budgetStyleAfter);
   const budgetColor = tileColors.find(t => t.id === 'budget').expected;
   const scheduleColor = tileColors.find(t => t.id === 'schedule').expected;
-  if (!budgetGlowAfter || !budgetGlowAfter.includes(budgetColor)) throw new Error(`Expected budget's glow to keep its own color ${budgetColor} after moving to the front, got "${budgetGlowAfter}"`);
-  if (budgetGlowAfter.includes(scheduleColor)) throw new Error('Expected budget\'s glow to NOT pick up schedule\'s old position color');
+  if (!budgetStyleAfter || !budgetStyleAfter.includes(budgetColor)) throw new Error(`Expected budget's tile to keep its own color ${budgetColor} after moving to the front, got "${budgetStyleAfter}"`);
+  if (budgetStyleAfter.includes(scheduleColor)) throw new Error('Expected budget\'s tile to NOT pick up schedule\'s old position color');
 
   // 8. reorderHomeList()'s insertAfter fix: dropping "before" a target could never actually land
   // an item in the true last slot (nothing exists after the last item to drop "before" into) —

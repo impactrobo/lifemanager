@@ -301,12 +301,15 @@ on an architecture split + a large wave of Maximalist aesthetics.
   color outright, and that color follows the tile wherever it's dragged to. Colors reuse hues
   already established elsewhere (Notes tags / muscle groups) rather than inventing a new palette:
   Schedule blue, Exercise red, Hobbies purple, Health & Diet teal, Notes yellow, Financial green.
-  First pass tinted the whole tile (border + background) — revised same day to something more
-  subtle per feedback: a soft radial glow sitting behind just the icon (`.home-tile-glow`,
-  `renderHomeTileIcon()`), tile itself back to its normal neutral styling. Still enough to track a
-  tile by color through a reorder, without recoloring its whole footprint. The "ADD BACK SECTIONS"
-  popup for re-showing a hidden section keeps a small matching color-dot next to each hidden
-  section's name (unchanged by the revision — a compact list item, not a tile).
+  Iterated twice more the same day per feedback: first pass tinted the whole tile (border +
+  background); second put a soft glow behind just the icon; landed on a vignette tracing the
+  tile's own edges instead, fading to a neutral center (`homeTileGlowStyle()` —
+  `radial-gradient(circle at center, transparent 0%, transparent 40%, color 100%)`, layered over
+  `var(--surface)`; the default farthest-corner sizing naturally reaches every corner of a square
+  tile, so the color genuinely traces the border rather than concentrating mid-tile). Still enough
+  to track a tile by color through a reorder, without a flat recolor or an icon-centered glow. The
+  "ADD BACK SECTIONS" popup for re-showing a hidden section keeps its small matching color-dot per
+  hidden section's name, unchanged through all three revisions — a compact list item, not a tile.
   - **Found in passing while testing, not fixed:** the Home-tile-order bug flagged the same day
     (`showHomeBox()` appending a restored tile to the end of the order) — the person confirmed
     it's not worth fixing right now. Left as-is, documented above for reference.
