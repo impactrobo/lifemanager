@@ -571,6 +571,18 @@ select { -webkit-appearance: none; appearance: none; background-image: linear-gr
 .cal-schedule-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 11px; color: var(--text-dim); margin-bottom: 10px; }
 .cal-legend-swatch { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
 
+/* ---------- Schedule Builder: week-at-a-glance strip (renderWeekOverviewStrip()) ---------- */
+.week-overview-strip { display: flex; gap: 5px; }
+.week-overview-day { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 5px; min-width: 0; }
+.week-overview-label { font-size: 10px; font-weight: 700; color: var(--text-faint); }
+/* No aspect-ratio here (unlike .cal-cell) — these badges only ever share a row with 6 others, so
+   the extra horizontal-only room goes toward fitting more of a schedule's name (5 chars, not 3 —
+   "Weekday"/"Weekend" only actually diverge at their 5th letter, the single most likely real
+   collision this abbreviation has to survive). */
+.week-overview-badge { width: 100%; height: 30px; border: 1.5px solid; border-radius: 6px; background: var(--surface2); display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 800; letter-spacing: 0.01em; overflow: hidden; padding: 0 2px; }
+.week-overview-empty { width: 100%; height: 30px; border: 1.5px dashed var(--border); border-radius: 6px; background: transparent; color: var(--text-faint); display: flex; align-items: center; justify-content: center; font-size: 12px; }
+.week-overview-conflict { position: absolute; top: -5px; right: -5px; width: 14px; height: 14px; border-radius: 50%; background: var(--warn); color: #1a1a1a; font-size: 9px; font-weight: 900; display: flex; align-items: center; justify-content: center; }
+
 /* Year zoom: a compact 12-up grid of mini-months. No weekday header row — no room for it at this
    size — and day numbers alone (no dot) mark a day with a reminder, since a 5px dot doesn't read
    at ~14px cell size; .cal-mini-today's ring take priority visually over .cal-mini-has's color

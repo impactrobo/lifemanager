@@ -68,10 +68,6 @@ before starting any of these.
   charge (e.g. "Roth IRA — $250/mo toward a $7,000/yr cap") to show progress against a multi-month
   target, distinct from the monthly contributed/planned fill the budget bar already shows (see
   "Budget: savings/investment goal-progress fill" in Recently Shipped).
-- **Schedule:** a way to see the week at a glance across multiple named *schedules* (which preset
-  — e.g. "Weekday" vs "Weekend" — is active which day), not just one active schedule's daily
-  anchors. Distinct from the Calendar's own Week zoom (see Recently Shipped), which is about
-  reminders per day, not which named schedule governs it.
 - **Web Push reminders — client side shipped 2026-09-10, backend still to deploy.** Settings has
   "ENABLE REMINDER NOTIFICATIONS" (`renderReminderPushPanel()`), gated on browser support and,
   on iOS, on being launched from a Home Screen install (`isInstalledStandalone()`). Enabling it
@@ -274,6 +270,29 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Schedule Builder: "WEEK AT A GLANCE" strip — which named schedule covers each weekday.**
+  Scoped via a couple of questions (2026-09-12): a compact 7-cell strip at the top of Schedule ->
+  Setup -> Schedule Builder (`renderWeekOverviewStrip()`), above the existing schedule list.
+  - Color-coded via `scheduleColorFor()` — the *exact same* categorical palette the Calendar's
+    per-schedule anchor icon already uses, so the two views read as one consistent system rather
+    than a second color language. Each badge abbreviates the schedule's name to 5 letters
+    (uppercased) — specifically 5, not 3, because "Weekday"/"Weekend" (about as common a
+    real-world pairing as this feature will ever see) are identical for their first 4 letters and
+    only actually diverge at the 5th.
+  - **Surfaces gaps and conflicts that `scheduleForDate()` already silently handled** — a day no
+    schedule covers shows a dashed "—" placeholder (with a note that only daily anchors apply that
+    day); a day two or more schedules both claim (`scheduleForDate()` resolves that by "first
+    match wins", with no prior indication it was even happening) now shows a small warning badge.
+    This is the one place either of those would actually get *noticed*, right where they'd get
+    fixed (the schedule cards immediately below, same screen).
+  - Reuses `renderScheduleColorLegend()` as-is (originally built for the Calendar) as the
+    name-to-color key underneath the strip — zero duplication, guaranteed to never drift out of
+    sync with the Calendar's own legend.
+  - `tests/test_week_overview.js` covers: no strip at all with zero schedules, a clean
+    Weekday/Weekend split rendering correctly (including the 5-letter abbreviation actually
+    distinguishing the two), a real gap appearing when a day loses its only schedule, a real
+    conflict appearing when two schedules are made to cover the same day, and that
+    `scheduleForDate()`'s own resolution behavior is unaffected by any of this.
 - **Daily body-fat %/body-water %, a weight-trend average line, and a rolling adaptive TDEE.**
   Scoped via a few rounds of questions (2026-09-12):
   - **New optional fields on the daily weight-log entry** (`bodyFatPct`, `bodyWaterPct` on

@@ -4224,6 +4224,7 @@ function renderScheduleBuilder() {
 function renderScheduleBuilderList() {
   const list = STATE.life.schedules;
   return `
+    ${list.length ? renderWeekOverviewStrip() : ''}
     <div class="row" style="margin:18px 0 8px;">
       <div class="subtle-label" style="margin-bottom:0;">YOUR SCHEDULES</div>
       <button class="btn btn-sm btn-primary" onclick="createSchedule()">+ NEW SCHEDULE</button>
@@ -4233,6 +4234,36 @@ function renderScheduleBuilderList() {
       ${list.length ? list.map(renderScheduleListCard).join('') : emptyState('No schedules yet — build one above.')}
     </div>
   `;
+}
+// Which named schedule covers each weekday, at a glance — color-coded via scheduleColorFor(),
+// the exact same categorical palette the Calendar's per-schedule anchor icon already uses (see
+// the CALENDAR & REMINDERS section), so the two views read as one consistent system rather than
+// inventing a second color language. Also the one place a gap (no schedule assigned that day) or
+// a conflict (more than one schedule claiming the same day — scheduleForDate() silently resolves
+// that by "first match wins") actually gets surfaced, right where it'd get fixed.
+function renderWeekOverviewStrip() {
+  const cells = WEEKDAY_LABELS.map((lbl, day) => {
+    const covering = STATE.life.schedules.filter(s => Array.isArray(s.days) && s.days.includes(day));
+    const primary = covering[0];
+    const badge = primary
+      ? `<div class="week-overview-badge" style="border-color:${scheduleColorFor(primary.id)}; color:${scheduleColorFor(primary.id)};" title="${escapeHtml(primary.name || 'Untitled schedule')}">${escapeHtml((primary.name || '?').slice(0, 5).toUpperCase())}</div>`
+      : `<div class="week-overview-empty" title="No schedule assigned — only your daily anchors apply">&mdash;</div>`;
+    const conflict = covering.length > 1
+      ? `<div class="week-overview-conflict" title="${covering.map(s => escapeHtml(s.name || 'Untitled schedule')).join(' and ')} both cover this day — ${escapeHtml(primary.name || 'the first one')} wins">!</div>`
+      : '';
+    return `<div class="week-overview-day">
+      <div class="week-overview-label">${lbl}</div>
+      <div style="position:relative;">${badge}${conflict}</div>
+    </div>`;
+  }).join('');
+  const anyGap = STATE.life.schedules.length && WEEKDAY_LABELS.some((_, d) => !STATE.life.schedules.some(s => Array.isArray(s.days) && s.days.includes(d)));
+  return `
+    <div class="subtle-label" style="margin-bottom:8px;">WEEK AT A GLANCE</div>
+    <div class="panel" style="margin-bottom:4px;">
+      <div class="week-overview-strip">${cells}</div>
+      ${renderScheduleColorLegend()}
+      ${anyGap ? `<div style="font-size:11px; color:var(--text-faint); margin-top:8px;">Days marked "&mdash;" have no schedule assigned yet — just your daily anchors apply.</div>` : ''}
+    </div>`;
 }
 function renderScheduleListCard(s) {
   const dayStr = s.days && s.days.length ? s.days.slice().sort().map(d => WEEKDAY_LABELS[d]).join(' ') : 'No days selected';
