@@ -21,6 +21,19 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   await page.goto(APP_PATH);
   await page.waitForTimeout(300);
 
+  // RIGHT NOW's fallback "FREE TIME" card (see 2c/2e below) only shows when currentScheduleBlock()
+  // finds nothing active — with the real default anchors in place, that depends on the wall-clock
+  // time the test happens to run at (several anchors span hours of the morning and evening), so
+  // this test's use of RIGHT NOW as a stand-in for "some clickable, non-edit box" would pass or
+  // fail depending on nothing this test is actually about. Clearing anchors up front makes it
+  // deterministic regardless of when it runs.
+  const anchorSnapshot = await page.evaluate(() => {
+    const snap = JSON.parse(JSON.stringify(STATE.life.anchors));
+    STATE.life.anchors = [];
+    saveState();
+    return snap;
+  });
+
   // 1. Home tiles render on load
   const tileCount = await page.$$eval('.home-tile', els => els.length);
   console.log('home tiles on load:', tileCount);
@@ -37,10 +50,26 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   console.log('hide (x) buttons visible in edit mode:', hideButtons);
   if (hideButtons === 0) throw new Error('Expected .home-edit-x buttons while HOME_EDIT_MODE is true');
 
-  // 2b. The edit button itself is highlighted while edit mode is active
-  const btnHighlighted = await page.evaluate(() => document.getElementById('homeEditBtn').classList.contains('home-edit-toggle-active'));
-  console.log('#homeEditBtn carries .home-edit-toggle-active while active:', btnHighlighted);
-  if (!btnHighlighted) throw new Error('Expected #homeEditBtn to be highlighted (.home-edit-toggle-active) while HOME_EDIT_MODE is true');
+  // 2b. The edit button itself is highlighted while edit mode is active. Checks the *computed*
+  // border color against a live-rendered var(--warn) probe, not just class presence — a class can
+  // be attached while a same-specificity, later-in-file rule (.icon-btn) silently overrides its
+  // styling, which is exactly the bug this once shipped as (see styles.css's
+  // .icon-btn.home-edit-toggle-active comment). A plain classList check would never have caught it.
+  const editBtnStyle = await page.evaluate(() => {
+    const el = document.getElementById('homeEditBtn');
+    const probe = document.createElement('span');
+    probe.style.color = 'var(--warn)';
+    document.body.appendChild(probe);
+    const warn = getComputedStyle(probe).color;
+    probe.remove();
+    const cs = getComputedStyle(el);
+    return { hasClass: el.classList.contains('home-edit-toggle-active'), borderColor: cs.borderColor, warn };
+  });
+  console.log('#homeEditBtn while active:', editBtnStyle);
+  if (!editBtnStyle.hasClass) throw new Error('Expected #homeEditBtn to carry .home-edit-toggle-active while HOME_EDIT_MODE is true');
+  if (editBtnStyle.borderColor !== editBtnStyle.warn) {
+    throw new Error(`Expected #homeEditBtn's border to actually resolve to --warn (${editBtnStyle.warn}) while active, got ${editBtnStyle.borderColor}`);
+  }
 
   // 2c. Tapping into a box's own content (e.g. RIGHT NOW's "FREE TIME, tap to view" panel, which
   // normally calls goHomeSection('schedule')) must NOT navigate away while in edit mode — it's
@@ -171,8 +200,13 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     throw new Error(`Expected the dragged item to sit immediately before the target, got order ${JSON.stringify(orderAfterBefore)}`);
   }
 
-  // cleanup — restore the default section order this test's reordering disturbed
-  await page.evaluate(() => { STATE.settings.homeLayout = defaultHomeLayout(); saveState(); });
+  // cleanup — restore the default section order this test's reordering disturbed, and the real
+  // anchors cleared at the top
+  await page.evaluate((anchors) => {
+    STATE.settings.homeLayout = defaultHomeLayout();
+    STATE.life.anchors = anchors;
+    saveState();
+  }, anchorSnapshot);
 
   await browser.close();
 

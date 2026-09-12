@@ -293,7 +293,16 @@ select { -webkit-appearance: none; appearance: none; background-image: linear-gr
 .exercise-chip-ghost { position: fixed; pointer-events: none; z-index: 999; box-shadow: 0 6px 18px rgba(0,0,0,0.35); opacity: 0.96; }
 
 /* ---------- Home Edit mode: reorder/hide sections & boxes ---------- */
-.home-edit-toggle-active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+/* var(--warn), not --accent: the pencil sat in the topbar right next to the accent-colored
+   Settings gear and the accent-colored brand wordmark, so tinting it accent too made "you're in
+   edit mode" nearly invisible — same button, same color as everything around it. --warn reads as
+   "careful, this changes your layout" and stands apart from the rest of the accent-colored chrome. */
+/* .icon-btn.home-edit-toggle-active, not just .home-edit-toggle-active: .icon-btn (styles.css,
+   further down) has equal specificity and sets its own background/border/color, so on source
+   order alone it would silently win and this rule would never actually show — the CSS gotcha
+   CLAUDE.md already warns about. Compounding the class onto .icon-btn's own selector wins on
+   specificity instead, regardless of where either rule sits in the file. */
+.icon-btn.home-edit-toggle-active { background: color-mix(in srgb, var(--warn) 14%, var(--surface)); border-color: var(--warn); color: var(--warn); }
 .home-edit-item { position: relative; border: 1px dashed var(--border); touch-action: none; }
 .home-edit-box { border-radius: var(--radius); padding: 6px 6px 2px; margin-bottom: 4px; }
 .home-drag-source { opacity: 0.3; }
