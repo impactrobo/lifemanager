@@ -302,8 +302,19 @@ on an architecture split + a large wave of Maximalist aesthetics.
     funded via its recurring-charge link (see the original Goals entry above) already flows
     through the reserved-slice math and was never affected by this gap in the first place; this
     only ever applied to the manual/ad-hoc side.
+  - **Follow-up, same day: a per-contribution "in budget" indicator.** The checkbox above only
+    ever affected what happened *at the moment* of logging — nothing on the contribution record
+    itself said afterward whether that $ had counted. Added `countedAgainstBudget` to
+    `SavingsGoalContribution` (set from the checkbox for a manual entry; unconditionally `true`
+    for a `recurring`-sourced one, since that money's already the reserved slice itself).
+    `renderGoalContributionCard()` shows a savings-colored "IN BUDGET" badge or a muted "Not in
+    budget" label accordingly — a `recurring`-sourced entry keeps just its existing AUTO badge
+    instead, which already implies budget-linkage on its own. Anything logged before this field
+    existed has no `countedAgainstBudget` at all, which correctly reads as "not in budget" (there
+    was no checkbox yet, so it genuinely wasn't) — no migration needed.
   - `tests/test_todo_reminders.js`, `tests/test_shopping_list.js`, `tests/test_goal_budget_link.js`
-    cover all three. 35/35 test files passing, typecheck clean.
+    (the last one extended same-day for the indicator) cover all of this. 35/35 test files
+    passing, typecheck clean.
 - **Budget: named Savings Goals with a running balance (new GOALS subtab).** Scoped via a round of
   questions grounded in actual personal-finance patterns (2026-09-12) — the relevant concept is a
   **sinking fund** (Ramsey/YNAB): a named bucket saved toward for a specific future expense. Two

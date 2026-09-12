@@ -9110,7 +9110,10 @@ function syncGoalContributionForRecurringCharge(monthKey, chargeId, checked) {
     const [y, m] = monthKey.split('-').map(Number);
     const lastDay = new Date(y, m, 0).getDate();
     const date = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
-    goal.contributions.push({ id: autoId, date, amount, note: charge ? charge.name : '', source: 'recurring' });
+    // A recurring-charge-linked contribution is always effectively counted against the budget —
+    // it's the reserved slice itself, not a separate Incidental — so this is unconditionally true
+    // here, unlike the opt-in checkbox on a manual contribution below.
+    goal.contributions.push({ id: autoId, date, amount, note: charge ? charge.name : '', source: 'recurring', countedAgainstBudget: true });
   } else {
     goal.contributions = goal.contributions.filter(c => c.id !== autoId);
   }
@@ -9178,7 +9181,7 @@ function addGoalContribution(id) {
   const countAgainstBudget = countEl ? countEl.checked : false;
   const g = STATE.budget.goals.find(x => x.id === id);
   if (!g) return;
-  g.contributions.push({ id: uid(), date: todayStr(), amount: amt, note, source: 'manual' });
+  g.contributions.push({ id: uid(), date: todayStr(), amount: amt, note, source: 'manual', countedAgainstBudget: countAgainstBudget });
   if (countAgainstBudget) {
     const key = budgetMonthKey();
     if (!STATE.budget.incidentals[key]) STATE.budget.incidentals[key] = [];
@@ -9278,10 +9281,20 @@ function renderGoalCard(g) {
     ` : ''}
   </div>`;
 }
+// A recurring-sourced contribution already carries the AUTO badge, which implies budget-linkage
+// on its own (it *is* the reserved slice) — a second badge saying the same thing would be noise.
+// A manual contribution has no such built-in signal, so it always gets an explicit one either
+// way (countedAgainstBudget is undefined on anything logged before this indicator existed, which
+// correctly reads as "not counted" — that money genuinely wasn't, there was no checkbox yet).
 function renderGoalContributionCard(goalId, c) {
+  const budgetBadge = c.source === 'recurring'
+    ? ` <span class="savings-badge">${icon('recurDollar')} AUTO</span>`
+    : c.countedAgainstBudget
+      ? ` <span class="savings-badge">${icon('recurDollar')} IN BUDGET</span>`
+      : ` <span style="font-size:10px; color:var(--text-faint); white-space:nowrap;">Not in budget</span>`;
   return `<div class="entry-card">
     <div class="ehead">
-      <div><span class="edate">${fmtMoney(c.amount)}</span> <span style="font-size:12px; color:var(--text-dim);">${escapeHtml(c.note || '')}</span>${c.source==='recurring' ? ` <span class="savings-badge">${icon('recurDollar')} AUTO</span>` : ''}</div>
+      <div><span class="edate">${fmtMoney(c.amount)}</span> <span style="font-size:12px; color:var(--text-dim);">${escapeHtml(c.note || '')}</span>${budgetBadge}</div>
       <button class="icon-btn" onclick="deleteGoalContribution('${goalId}','${c.id}')">${icon('close')}</button>
     </div>
     <div class="estats"><span>${c.date}</span></div>

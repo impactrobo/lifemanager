@@ -1,7 +1,9 @@
 // test_goal_budget_link.js — the opt-in "also count against this month's budget" checkbox on a
 // manual goal contribution: unchecked has zero effect on the budget bar's math (as it already
 // didn't before Goals linking existed); checked also logs a Savings-category Incidental for the
-// current budget month, which reduces Remaining — same $ amount, same date.
+// current budget month, which reduces Remaining — same $ amount, same date. Also covers the
+// per-contribution "in budget / not in budget" indicator on the contribution card, which is what
+// actually lets a person confirm after the fact which of their logged $ counted.
 const { chromium } = require('playwright');
 const path = require('path');
 
@@ -43,6 +45,12 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   console.log('incidentals before/after an UNCHECKED contribution:', incidentalsBefore, '/', incidentalsAfterUnchecked);
   if (incidentalsAfterUnchecked !== incidentalsBefore) throw new Error('Expected an unchecked contribution to add zero incidentals');
 
+  // 1b. The contribution's own record remembers it wasn't counted, and the card shows "Not in budget"
+  const uncheckedContrib = await page.evaluate((id) => STATE.budget.goals.find(g => g.id === id).contributions.find(c => c.amount === 100), goal.id);
+  if (uncheckedContrib.countedAgainstBudget !== false) throw new Error(`Expected countedAgainstBudget: false on the unchecked contribution, got ${JSON.stringify(uncheckedContrib)}`);
+  const notInBudgetShown = await page.evaluate(() => document.body.textContent.includes('Not in budget'));
+  if (!notInBudgetShown) throw new Error('Expected a "Not in budget" indicator to render for the unchecked contribution');
+
   // 2. Log a second contribution WITH the checkbox checked -> a matching Savings incidental appears
   await page.fill(`#goalContribAmount_${goal.id}`, '75');
   await page.check(`#goalContribCountBudget_${goal.id}`);
@@ -53,6 +61,12 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   const newIncidental = afterChecked.find(e => e.amount === 75 && e.category === 'Savings');
   if (!newIncidental) throw new Error(`Expected a new $75 "Savings"-category incidental, got ${JSON.stringify(afterChecked)}`);
   if (!newIncidental.note.includes('Test Console')) throw new Error(`Expected the incidental's note to mention the goal name, got "${newIncidental.note}"`);
+
+  // 2b. That contribution's own record remembers it WAS counted, and shows "IN BUDGET"
+  const checkedContrib = await page.evaluate((id) => STATE.budget.goals.find(g => g.id === id).contributions.find(c => c.amount === 75), goal.id);
+  if (checkedContrib.countedAgainstBudget !== true) throw new Error(`Expected countedAgainstBudget: true on the checked contribution, got ${JSON.stringify(checkedContrib)}`);
+  const inBudgetShown = await page.evaluate(() => document.body.textContent.includes('IN BUDGET'));
+  if (!inBudgetShown) throw new Error('Expected an "IN BUDGET" indicator to render for the checked contribution');
 
   // 3. The checkbox resets after submitting (doesn't silently stay checked for the next contribution)
   const checkboxStillChecked = await page.evaluate((id) => { const el = document.getElementById('goalContribCountBudget_' + id); return el ? el.checked : null; }, goal.id);

@@ -198,6 +198,10 @@ interface SavingsGoalContribution {
   note: string;
   /** 'manual' = logged by hand; 'recurring' = auto-added by syncGoalContributionForRecurringCharge() */
   source: 'manual' | 'recurring';
+  /** Whether this $ was also logged as a Savings-category Incidental for that month (always true
+   *  for 'recurring' source; opt-in checkbox for 'manual'). Absent on anything logged before this
+   *  field existed — reads as false, which is correct: there was no checkbox yet. */
+  countedAgainstBudget?: boolean;
 }
 interface SavingsGoal {
   id: string;
