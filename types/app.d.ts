@@ -299,6 +299,12 @@ interface Reminder {
   /** 'reminder' (default, absent on any pre-existing entry) | 'todo' — a to-do reminder shows
    *  a checklist (items) instead of the plain notes textarea. See renderReminderCard(). */
   type?: 'reminder' | 'todo';
+  /** Optional end time ('HH:MM'). A reminder with both `time` and `endTime` occupies real time —
+   *  scheduleBlocksForDate() merges it into the day's timeline as a `kind: 'event'` block, so it
+   *  shows in Calendar -> Day and can become Home's RIGHT NOW card. Absent (the default, and the
+   *  case for every pre-existing reminder) means a point in time, which behaves exactly as before:
+   *  list + push notification only, never a timeline block. */
+  endTime?: string | null;
   /** Only meaningful when type === 'todo'. */
   items?: Array<{ id: string; text: string; done: boolean }>;
 }

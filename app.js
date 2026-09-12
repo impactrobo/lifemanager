@@ -8470,6 +8470,51 @@ function fmtBlockTime(block) {
   if (block.start && block.end && block.start !== block.end) return fmtReminderTime(block.start) + '-' + fmtReminderTime(block.end);
   return fmtReminderTime(block.start || block.end);
 }
+// How long a block runs, in minutes. `end < start` means it crosses midnight (a 23:00-06:00 Bed
+// Time), the same convention currentScheduleBlock() already uses.
+function blockDurationMinutes(block) {
+  if (!block.start || !block.end) return 0;
+  let d = anchorMinutes(block.end) - anchorMinutes(block.start);
+  if (d < 0) d += 1440;
+  return d;
+}
+function fmtDuration(mins) {
+  if (mins < 60) return `${mins}m`;
+  const h = Math.floor(mins / 60), m = mins % 60;
+  return m === 0 ? `${h}h` : `${h}h ${m}m`;
+}
+// Minutes of the day actually covered by at least one block. Deliberately a union of intervals
+// rather than a sum of durations — blocks overlap constantly (a 30-minute Lunch sits inside an
+// 8-hour Work block), and summing would report more than 24 hours booked. An overnight block only
+// counts the part landing on this day.
+function dayBookedMinutes(blocks) {
+  const spans = [];
+  blocks.forEach(b => {
+    const d = blockDurationMinutes(b);
+    if (d <= 0) return;
+    const s = anchorMinutes(b.start);
+    spans.push([s, Math.min(s + d, 1440)]);
+  });
+  spans.sort((a, b) => a[0] - b[0]);
+  let total = 0, coveredTo = -1;
+  spans.forEach(([s, e]) => {
+    if (s >= coveredTo) { total += e - s; coveredTo = e; }
+    else if (e > coveredTo) { total += e - coveredTo; coveredTo = e; }
+  });
+  return total;
+}
+// Per-kind identity color + the badge some kinds carry in the day timeline. Fixed-per-kind (a
+// known, closed set) rather than index-based like SCHEDULE_COLOR_PALETTE — same distinction as
+// HOME_SECTION_META's colors vs. scheduleColorFor(). Drawn from the same palette family as the
+// calendar's schedule colors so the two views read as one system.
+const BLOCK_KIND_META = {
+  wake:     { color: '#FFD966', badge: null },
+  bed:      { color: '#C9A6FF', badge: null },
+  anchor:   { color: '#8FD3FF', badge: null },
+  activity: { color: '#9BE8B0', badge: null },
+  event:    { color: '#FF9ED8', badge: 'EVENT' },
+};
+function blockKindMeta(kind) { return BLOCK_KIND_META[kind] || BLOCK_KIND_META.activity; }
 // Which built schedule (Schedule -> Setup -> Schedule Builder) is toggled on for a given date's
 // weekday, if any. If more than one somehow overlaps the same day, the first match wins.
 function scheduleForDate(dateObj) {
@@ -8492,6 +8537,17 @@ function scheduleBlocksForDate(dateObj) {
       blocks.push({ id: 'act:' + act.id, start: act.start, end: act.end || act.start, label: act.title || 'Untitled activity', detail: act.description || '', kind: 'activity' });
     });
   }
+  // Dated one-off events. Everything above this line is a weekday *template* — the same every
+  // Tuesday — which left a specific appointment ("dentist, Oct 3, 2-3pm") with nowhere to live
+  // that actually occupies time. A reminder carrying both a start and an end is that event, and
+  // merging it here means it lands in the Day timeline and in currentScheduleBlock() (so Home's
+  // RIGHT NOW can say "Dentist") without either of them needing to know reminders exist.
+  // A reminder with no endTime stays a point in time: list + push only, exactly as before.
+  const dStr = dateKey(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate());
+  STATE.reminders.forEach(r => {
+    if (r.date !== dStr || !r.time || !r.endTime) return;
+    blocks.push({ id: 'event:' + r.id, start: r.time, end: r.endTime, label: r.title || 'Untitled event', detail: r.notes || '', kind: 'event', reminderId: r.id });
+  });
   blocks.sort((x, y) => anchorMinutes(x.start) - anchorMinutes(y.start));
   return { schedule: sched, blocks };
 }
@@ -9227,7 +9283,11 @@ function renderReminderForm() {
         <button class="${isTodo?'active':''}" onclick="setReminderFormType('todo')">TO-DO LIST</button>
       </div>
       <label class="field"><span class="lbl">Title</span><input type="text" id="remTitle" placeholder="${isTodo ? 'e.g. Grocery Shopping' : 'e.g. Call the doctor'}"></label>
-      <label class="field"><span class="lbl">Time (optional)</span><input type="time" id="remTime"></label>
+      <div class="field-row">
+        <label class="field"><span class="lbl">Time (optional)</span><input type="time" id="remTime"></label>
+        <label class="field"><span class="lbl">End Time (optional)</span><input type="time" id="remEndTime"></label>
+      </div>
+      <div style="font-size:11px; color:var(--text-faint); margin:-4px 0 10px;">Add an end time and this becomes a real block on your day's schedule — an appointment, not just a nudge.</div>
       ${isTodo
         ? `<div style="font-size:11px; color:var(--text-faint); margin-bottom:10px;">Add checklist items after saving.</div>`
         : `<label class="field"><span class="lbl">Notes (optional)</span><textarea id="remNotes" placeholder="Any details..."></textarea></label>`}
@@ -9239,10 +9299,14 @@ function saveReminder() {
   const title = titleEl ? titleEl.value.trim() : '';
   if (!title) { showToast(REMINDER_FORM_TYPE === 'todo' ? 'Give the to-do list a title' : 'Give the reminder a title'); return; }
   const time = document.getElementById('remTime').value || null;
+  const endEl = document.getElementById('remEndTime');
+  // An end time only means anything alongside a start — on its own there's nothing to measure it
+  // from, so it's dropped rather than saved as a half-specified block.
+  const endTime = (time && endEl && endEl.value) ? endEl.value : null;
   const isTodo = REMINDER_FORM_TYPE === 'todo';
   const notesEl = document.getElementById('remNotes');
   const notes = notesEl ? notesEl.value.trim() : '';
-  const reminder = { id: uid(), date: CAL_SELECTED_DATE, time, title, notes, createdAt: Date.now(), type: isTodo ? 'todo' : 'reminder' };
+  const reminder = { id: uid(), date: CAL_SELECTED_DATE, time, endTime, title, notes, createdAt: Date.now(), type: isTodo ? 'todo' : 'reminder' };
   if (isTodo) reminder.items = [];
   STATE.reminders.push(reminder);
   REMINDER_FORM_OPEN = false;
@@ -9265,7 +9329,9 @@ function renderReminderCard(r) {
     </div>
     <div class="field-row" style="margin-top:8px;">
       <label class="field" style="margin-bottom:0;"><span class="lbl">Time</span><input type="time" value="${r.time || ''}" onchange="updateReminderField('${r.id}','time',this.value)"></label>
+      <label class="field" style="margin-bottom:0;"><span class="lbl">End Time</span><input type="time" value="${r.endTime || ''}" onchange="updateReminderField('${r.id}','endTime',this.value)"></label>
     </div>
+    ${r.time && r.endTime ? `<div style="font-size:10px; color:var(--text-faint); margin-top:6px;">${icon('anchorMark')} On your day's schedule &middot; ${fmtReminderTime(r.time)}&ndash;${fmtReminderTime(r.endTime)}</div>` : ''}
     ${isTodo ? renderReminderTodoItems(r) : `<label class="field" style="margin-top:8px; margin-bottom:0;"><span class="lbl">Notes</span><textarea placeholder="Any details..." onchange="updateReminderField('${r.id}','notes',this.value)">${escapeHtml(r.notes || '')}</textarea></label>`}
   </div>`;
 }
@@ -9273,7 +9339,11 @@ function updateReminderField(id, field, value) {
   const r = STATE.reminders.find(x => x.id === id);
   if (!r) return;
   if (field === 'title') { const trimmed = (value || '').trim(); if (trimmed) r.title = trimmed; } // empty title silently reverts on re-render
-  else if (field === 'time') r.time = value || null;
+  else if (field === 'time') {
+    r.time = value || null;
+    if (!r.time) r.endTime = null; // clearing the start leaves nothing for an end to anchor to
+  }
+  else if (field === 'endTime') r.endTime = (r.time && value) ? value : null;
   else if (field === 'notes') r.notes = (value || '').trim();
   saveState();
   queueReminderPushSync(); // no-op unless reminder notifications are enabled — see REMINDER PUSH section
@@ -10096,25 +10166,58 @@ function renderDailySchedule(dateStr) {
   const anchorBlocks = blocks.filter(b => b.kind === 'anchor');
   const doneCount = anchorBlocks.filter(b => log[b.anchorId]).length;
   const isToday = dateStr === todayStr();
+  // Reuses currentScheduleBlock() rather than re-deriving "what's on now", so the Day view and
+  // Home's RIGHT NOW card can never disagree about which block you're actually in.
+  const currentId = isToday ? ((currentScheduleBlock() || {}).id || null) : null;
+  const booked = dayBookedMinutes(blocks);
+  const maxDur = Math.max(...blocks.map(blockDurationMinutes), 1);
+  const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+
+  let rows = '';
+  let coveredTo = -1; // running end of everything placed so far, so an overlap never reads as a gap
+  blocks.forEach(b => {
+    const start = anchorMinutes(b.start);
+    const d = blockDurationMinutes(b);
+    const meta = blockKindMeta(b.kind);
+    // Unscheduled time worth naming. 30 minutes is the floor — smaller than that is changeover,
+    // not a gap you'd plan into.
+    if (coveredTo >= 0 && start - coveredTo >= 30) {
+      rows += `<div class="day-gap"><span>${fmtDuration(start - coveredTo)} free</span><span class="day-gap-line"></span></div>`;
+    }
+    coveredTo = Math.max(coveredTo, Math.min(start + d, 1440));
+    // Square-root rather than linear: an 8-hour block should read as clearly longer than a 30
+    // minute one without dragging a nearly empty row 100px tall. Exact length is in the text.
+    const barH = Math.round(14 + Math.sqrt(d / maxDur) * 28);
+    const badge = meta.badge
+      ? `<span class="day-chip" style="background:${meta.color}22; color:${meta.color};">${meta.badge}</span>` : '';
+    let leftMin = anchorMinutes(b.end) - nowMin; if (leftMin < 0) leftMin += 1440;
+    const nowBadge = b.id === currentId
+      ? `<span class="day-chip day-chip-now">NOW &middot; ${fmtDuration(leftMin)} LEFT</span>` : '';
+    const isAnchor = b.kind === 'anchor';
+    rows += `
+      <div class="day-row ${b.id === currentId ? 'day-row-now' : ''}" ${isAnchor ? `onclick="toggleDailyAnchor('${b.anchorId}','${dateStr}')" style="cursor:pointer;"` : ''}>
+        <div class="day-bar-col"><div class="day-bar" style="background:${meta.color}; height:${barH}px;"></div></div>
+        <div class="day-body">
+          <div style="font-size:13px; font-weight:600;">${escapeHtml(b.label)}${badge}${nowBadge}
+            <span style="color:var(--text-faint); font-weight:500; font-size:11px;">${fmtBlockTime(b)}${d ? ` &middot; ${fmtDuration(d)}` : ''}</span></div>
+          ${b.detail ? `<div style="font-size:11px; color:var(--text-dim); margin-top:2px;">${escapeHtml(b.detail)}</div>` : ''}
+        </div>
+        ${isAnchor ? `<div class="hit-mark ${log[b.anchorId] ? 'hit' : ''}" style="flex-shrink:0; align-self:center;">${log[b.anchorId] ? icon('check') : ''}</div>` : ''}
+      </div>`;
+  });
+
   return `
     <div class="panel" style="margin-bottom:14px;">
       <div class="row">
         <span style="font-size:13px;color:var(--text-dim)">${isToday ? 'Today' : 'Day'}'s Schedule${schedule && schedule.name ? ` &middot; ${escapeHtml(schedule.name)}` : ''}</span>
-        <span class="mono" style="font-weight:700">${doneCount} / ${anchorBlocks.length}</span>
+        ${anchorBlocks.length ? `<span class="mono" style="font-weight:700">${doneCount} / ${anchorBlocks.length}</span>` : ''}
+      </div>
+      <div class="row" style="margin-top:6px;">
+        <span style="font-size:11px; color:var(--text-faint);">${fmtDuration(1440 - booked)} unscheduled</span>
+        <span class="mono" style="font-size:11px; color:var(--text-faint);">${fmtDuration(booked)} booked</span>
       </div>
     </div>
-    <div class="panel" style="padding:2px 14px;">
-      ${blocks.map((b, i) => `
-      <div class="row" ${b.kind==='anchor' ? `onclick="toggleDailyAnchor('${b.anchorId}','${dateStr}')" style="cursor:pointer; padding:16px 0; ${i < blocks.length-1 ? 'border-bottom:1px solid var(--border-soft);' : ''}"` : `style="padding:16px 0; ${i < blocks.length-1 ? 'border-bottom:1px solid var(--border-soft);' : ''}"`}>
-        <div>
-          <div style="font-size:13px; font-weight:600;">${escapeHtml(b.label)} <span style="color:var(--text-faint); font-weight:500; font-size:11px;">${fmtBlockTime(b)}</span></div>
-          ${b.detail ? `<div style="font-size:11px; color:var(--text-dim); margin-top:2px;">${escapeHtml(b.detail)}</div>` : ''}
-        </div>
-        ${b.kind==='anchor'
-          ? `<div class="hit-mark ${log[b.anchorId] ? 'hit' : ''}" style="flex-shrink:0;">${log[b.anchorId] ? icon('check') : ''}</div>`
-          : ''}
-      </div>`).join('')}
-    </div>
+    <div class="panel" style="padding:2px 14px;">${rows}</div>
   `;
 }
 function renderPeriodicRow(a) {
