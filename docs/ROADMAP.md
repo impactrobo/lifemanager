@@ -300,6 +300,24 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Past-due reminders get a glowing exclamation mark (2026-09-12).** `reminderIsPastDue()` +
+  `pastDueMark()`, shown on both surfaces a reminder appears on — the Calendar reminder card and
+  Home's TODAY'S REMINDERS list.
+  - Measured against `endTime` when there is one, not the start: a 2-3pm dated event is *happening*
+    at 2:30, not overdue, and marking it late there would directly contradict the Day timeline's
+    own `NOW - 30m LEFT` chip on the very same block.
+  - A reminder with no time at all is an all-day thing — not late until the day is over, rather
+    than from the moment the day starts.
+  - A to-do whose every item is ticked is finished whatever the clock says (an *empty* checklist
+    still counts as outstanding). Nagging about a completed list would just be noise.
+  - Fixed `#FF9F1A` rather than `var(--warn)`: that token runs from lime (`#e8ff5b`) to muted brown
+    (`#b8863a`) across the 23 aesthetics, and "you're late" has to read identically in all of them
+    — same reasoning as `BLOCK_KIND_META`'s fixed per-kind colors. The glow is a static
+    `text-shadow`, deliberately not a pulse: several overdue reminders animating at once would be
+    noise rather than a signal.
+  - `tests/test_reminder_past_due.js` covers 13 date/time/type combinations (built by offsetting
+    the real clock rather than mocking it), both render surfaces, and the computed color/glow — so
+    a dropped stylesheet rule fails rather than silently shipping an unstyled character.
 - **Dated one-off events, and a Day timeline that shows duration (2026-09-12).** Came out of a
   review of what this app's scheduling was missing next to general calendar apps. The structural
   finding: everything in Schedule was a *weekday template* (anchors, schedules, `exercisePlan`),
