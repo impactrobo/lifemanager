@@ -60,8 +60,9 @@ before starting any of these.
   app tracks training maxes (`tmLb`) but there's no dedicated "here's every time you hit a new
   best" view. Distinct from Progress -> COMPARE's lift-history charts (see Recently Shipped),
   which trend the actual top-set weight over time but don't call out a new-PR moment specifically.
-- **Health & Diet:** a weight-trend trailing average (the current chart is raw logged points),
-  and a way to log incidental cardio calories from a wearable import rather than typing them in.
+- **Health & Diet:** a way to log incidental cardio calories from a wearable import rather than
+  typing them in. (The weight-trend trailing average idea shipped 2026-09-12 — see Recently
+  Shipped.)
 - **Budget:** multi-month or year-over-year trend view (currently one month at a time via the
   cycle arrows, with no rollup); a longer-horizon "cap" amount per savings-flagged recurring
   charge (e.g. "Roth IRA — $250/mo toward a $7,000/yr cap") to show progress against a multi-month
@@ -273,6 +274,34 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Daily body-fat %/body-water %, a weight-trend average line, and a rolling adaptive TDEE.**
+  Scoped via a few rounds of questions (2026-09-12):
+  - **New optional fields on the daily weight-log entry** (`bodyFatPct`, `bodyWaterPct` on
+    `WeightLogEntry`) — for a smart-scale reading, deliberately separate from the existing
+    occasional tape/caliper Body Fat % under Body Measurements (different cadence, different
+    instrument, no migration between them).
+  - **Body Weight chart gets a metric selector** (Weight / Body Fat % / Body Water %, same
+    dropdown convention as Body Measurement's own chart) **and every metric now plots a 7-day
+    trailing average line** (`trailingAverage()`, dashed, alongside the raw daily points) — smooths
+    day-to-day noise (water weight, meal timing) without hiding the real logged values.
+  - **Rolling/adaptive TDEE** (`rollingTdeeEstimate()`), informational only for now — sits as its
+    own panel right under the existing manual TDEE field on Diet -> Setup, with a "USE THIS" button
+    to copy it in (never auto-applies). Estimates from actual weight trend against calories in,
+    not a bodystat formula: buckets weight + resolved calories into rolling 7-day "weeks" counting
+    back from the most recent weight entry, then takes the overall weight change from the oldest to
+    the newest available week (spread across however many week-to-week intervals that spans)
+    against the **average of every week's own average calories** — an "average of averages," per
+    how this was scoped, rather than noisy week-to-week pairwise deltas. Needs at least ~2 weeks of
+    weight data to say anything at all. Window defaults to 12 weeks, adjustable right there
+    (`STATE.diet.tdeeWindowWeeks`).
+  - **`resolvedCaloriesForDate()`** prefers the real Diet food log's actual logged-meal total for a
+    date, falling back to the weight-log entry's own manual Calories field only for a day that has
+    nothing logged in Diet — "whichever was actually logged that day," per how this was scoped.
+  - `tests/test_weight_tdee.js` covers the new fields end-to-end (real form, persistence), the
+    trailing-average math on a hand-checked series, the metric-selector empty-state gating, the
+    calorie-source fallback logic, and `rollingTdeeEstimate()` against a fully hand-computed 3-week
+    fixture (verified exactly, including how changing the averaging window changes the result and
+    that <2 weeks of data correctly returns nothing).
 - **Exercise Progress: COMPARE — multi-plot body weight + lift history.** A new 4th Progress
   subtab alongside Body Weight/Body Measurement/Set Volume. Scoped via a few rounds of questions:
   charts real logged top-set weight (heaviest completed set per session — weight *and* reps both

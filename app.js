@@ -1471,6 +1471,9 @@ function defaultState() {
       // [{id, foodId, qty, unit}], the same item shape as a saved Meal's items. Distinct from
       // mealPlan above (a reusable weekly TEMPLATE) — this is per real date. See "DIET LOG".
       foodLog: {},
+      // How many weeks of weight-log data rollingTdeeEstimate() averages over — see the
+      // "ROLLING TDEE" section below. Adjustable under Diet -> Setup -> TDEE.
+      tdeeWindowWeeks: 12,
     },
     budget: defaultBudgetState(),
   };
@@ -1809,6 +1812,7 @@ function updateAllTMs() {
   for (let d = 0; d <= 6; d++) { if (!Array.isArray(STATE.diet.mealPlan[d])) STATE.diet.mealPlan[d] = []; }
   if (!Array.isArray(STATE.diet.customFoods)) STATE.diet.customFoods = [];
   if (!STATE.diet.foodLog || typeof STATE.diet.foodLog !== 'object') STATE.diet.foodLog = {};
+  if (!STATE.diet.tdeeWindowWeeks) STATE.diet.tdeeWindowWeeks = 12;
   if (!STATE.settings.mealUnitSystem) STATE.settings.mealUnitSystem = 'metric';
   MEAL_UNIT_SYSTEM = STATE.settings.mealUnitSystem;
   if (!STATE.settings.defaultPage) STATE.settings.defaultPage = 'home';
@@ -5078,6 +5082,73 @@ function computeTDEE(calc) {
   const modifier = TDEE_ACTIVITY_MODIFIERS[calc.activity] || 1;
   return Math.round(avgBmrCal * modifier);
 }
+
+// ---- Rolling TDEE (adaptive, from actual weight trend + calories in — separate from the
+// Harris-Benedict/Mifflin-St Jeor formula calculator above, which only ever estimates from
+// bodystats). Informational only for now: shown as a readout next to the manual TDEE field, with
+// a "USE THIS" button to copy it in — it never overwrites STATE.diet.tdee on its own.
+//
+// "Calories in" for a date prefers the real Diet log (actual logged meals — the authoritative
+// number if it's being used that day) and falls back to the weight-log entry's own manual
+// Calories field for a day only that was filled in.
+function resolvedCaloriesForDate(dateStr) {
+  const loggedItems = STATE.diet.foodLog[dateStr];
+  if (loggedItems && loggedItems.length) {
+    const totals = computeMealTotals(loggedItems);
+    if (totals && totals.cal) return totals.cal;
+  }
+  const wEntry = STATE.weightLog.find(e => e.date === dateStr);
+  return (wEntry && wEntry.calories) ? wEntry.calories : null;
+}
+// Buckets weight + resolved-calorie data into rolling 7-day "weeks" counting back from the most
+// recent weight entry (not calendar-aligned Sun-Sat — logging can start any day of the week), up
+// to STATE.diet.tdeeWindowWeeks buckets back. Rather than comparing week-to-week deltas pairwise
+// (noisy with only ~7 points per week), this takes the overall change from the oldest available
+// week's average weight to the most recent week's average weight, spread evenly across however
+// many week-to-week intervals that spans, and separately averages every week's own average
+// calorie intake into one number — an "average of averages," per how this was scoped. Needs at
+// least 2 weekly weight-buckets to have any trend to measure at all, which in practice means this
+// starts producing a real number as soon as a bit more than a week of logging exists, then keeps
+// refining as more weeks roll in, capped at the configured window.
+function rollingTdeeEstimate() {
+  const weightEntries = STATE.weightLog.filter(e => e.weightLb != null);
+  if (!weightEntries.length) return null;
+  const windowWeeks = STATE.diet.tdeeWindowWeeks || 12;
+  const mostRecentDate = weightEntries.reduce((max, e) => e.date > max ? e.date : max, weightEntries[0].date);
+  const mostRecent = new Date(mostRecentDate + 'T00:00:00');
+  const buckets = []; // index 0 = most recent week, growing older
+  for (let w = 0; w < windowWeeks; w++) {
+    const bucketEnd = new Date(mostRecent); bucketEnd.setDate(mostRecent.getDate() - w * 7);
+    const bucketStart = new Date(bucketEnd); bucketStart.setDate(bucketEnd.getDate() - 6);
+    const startStr = dateKey(bucketStart.getFullYear(), bucketStart.getMonth(), bucketStart.getDate());
+    const endStr = dateKey(bucketEnd.getFullYear(), bucketEnd.getMonth(), bucketEnd.getDate());
+    const weightsInBucket = weightEntries.filter(e => e.date >= startStr && e.date <= endStr).map(e => e.weightLb);
+    if (!weightsInBucket.length) continue; // a fully-skipped week just isn't part of the trend
+    const avgWeightLb = weightsInBucket.reduce((s, v) => s + v, 0) / weightsInBucket.length;
+    const calValues = [];
+    for (let d = 0; d < 7; d++) {
+      const dd = new Date(bucketStart); dd.setDate(bucketStart.getDate() + d);
+      const cal = resolvedCaloriesForDate(dateKey(dd.getFullYear(), dd.getMonth(), dd.getDate()));
+      if (cal) calValues.push(cal);
+    }
+    buckets.push({ avgWeightLb, avgCalories: calValues.length ? calValues.reduce((s, v) => s + v, 0) / calValues.length : null });
+  }
+  if (buckets.length < 2) return null; // one week alone has nothing to compare against
+  const weeksUsed = buckets.length;
+  const weightChangePerWeekLb = (buckets[0].avgWeightLb - buckets[buckets.length - 1].avgWeightLb) / (weeksUsed - 1);
+  const calorieBuckets = buckets.filter(b => b.avgCalories !== null);
+  if (!calorieBuckets.length) return null; // a real weight trend exists but no calorie data to anchor it to
+  const avgCaloriesAcrossWeeks = calorieBuckets.reduce((s, b) => s + b.avgCalories, 0) / calorieBuckets.length;
+  // A pound lost is ~3500 kcal; losing weight (negative change) means true TDEE ran above intake.
+  const estimate = avgCaloriesAcrossWeeks - (weightChangePerWeekLb * 3500 / 7);
+  return { estimate: Math.round(estimate), weeksUsed, calorieWeeksUsed: calorieBuckets.length, windowWeeks };
+}
+function updateTdeeWindowWeeks(val) {
+  const n = Math.round(Number(val));
+  STATE.diet.tdeeWindowWeeks = (n && n > 0) ? n : 12;
+  saveState(); render();
+}
+
 function renderDietSetup() {
   const calc = STATE.diet.calc;
   const hasAllInputs = calc.weight && calc.height && calc.age && calc.sex && calc.heightUnit && calc.weightUnit && calc.activity;
@@ -5144,8 +5215,32 @@ function renderDietSetup() {
       <button class="btn btn-ghost btn-sm" style="margin-top:10px;" onclick="toggleTDEECalc()">${TDEE_CALC_OPEN ? 'HIDE' : 'OPEN'} CALCULATOR</button>
     </div>
     ${calcPanel}
+    ${renderRollingTdeePanel()}
     ${renderMacroCalc()}
     ${renderDietLog()}`;
+}
+// Adaptive estimate from actual weight trend + calories in, alongside (not replacing) the manual
+// TDEE above — see rollingTdeeEstimate() for the math and why. A "USE THIS" button lets it be
+// applied deliberately, same pattern as the calculator's own result.
+function renderRollingTdeePanel() {
+  const rolling = rollingTdeeEstimate();
+  return `
+    <div class="panel">
+      <div class="subtle-label" style="margin-bottom:8px;">ROLLING TDEE (ADAPTIVE)</div>
+      <div style="font-size:11px; color:var(--text-dim); margin-bottom:10px;">Estimated from your actual weight trend against calories logged — not a formula, the real thing your data shows. Averages up to <b style="color:var(--text)">${STATE.diet.tdeeWindowWeeks}</b> weeks; needs at least ~2 weeks of weight entries (with some calories logged in that span) to say anything.</div>
+      ${rolling ? `
+        <div class="suggestion-box">
+          <div>
+            <div class="sugtext">Based on ${rolling.weeksUsed} week${rolling.weeksUsed===1?'':'s'} of weight data, ${rolling.calorieWeeksUsed} with calories logged</div>
+            <div class="sugval">${rolling.estimate} cal</div>
+          </div>
+          <button class="btn btn-good btn-sm" onclick="applyTDEEResult(${rolling.estimate})">USE THIS</button>
+        </div>` : `<div style="font-size:11px; color:var(--text-faint);">Not enough data yet — keep logging daily weight (Health & Diet → Weight & Calories) and calories (there or via the Diet log) to see this.</div>`}
+      <label class="field" style="margin-top:12px; margin-bottom:0;">
+        <span class="lbl">Averaging window (weeks)</span>
+        <input type="number" step="1" min="1" value="${STATE.diet.tdeeWindowWeeks}" onchange="updateTdeeWindowWeeks(this.value)">
+      </label>
+    </div>`;
 }
 function updateTDEE(val) {
   STATE.diet.tdee = val === '' ? null : Number(val);
@@ -7039,6 +7134,8 @@ function renderWeightLog() {
       </div>
       <div class="estats">
         <span>Weight <b>${fmt(lbToDisplay(e.weightLb),1)}</b> ${weightUnitLabel()}</span>
+        ${e.bodyFatPct ? `<span>Body Fat <b>${fmt(e.bodyFatPct,1)}</b>%</span>` : ''}
+        ${e.bodyWaterPct ? `<span>Body Water <b>${fmt(e.bodyWaterPct,1)}</b>%</span>` : ''}
         ${e.calories ? `<span>Calories <b>${e.calories}</b></span>` : ''}
         ${e.cardioCalories ? `<span>Cardio Cal <b>${e.cardioCalories}</b></span>` : ''}
       </div>
@@ -7057,6 +7154,11 @@ function renderWeightForm() {
         <label class="field"><span class="lbl">Weight (${weightUnitLabel()})</span><input type="number" step="0.1" id="wWeight"></label>
       </div>
       <div class="field-row">
+        <label class="field"><span class="lbl">Body Fat % (optional)</span><input type="number" step="0.1" id="wBodyFat"></label>
+        <label class="field"><span class="lbl">Body Water % (optional)</span><input type="number" step="0.1" id="wBodyWater"></label>
+      </div>
+      <div style="font-size:10px; color:var(--text-faint); margin-top:-4px; margin-bottom:10px;">From a smart scale reading, if you have one — separate from the occasional tape/caliper Body Fat % under Body Measurements.</div>
+      <div class="field-row">
         <label class="field"><span class="lbl">Calories (optional)</span><input type="number" id="wCal"></label>
         <label class="field"><span class="lbl">Cardio Calories (optional)</span><input type="number" id="wCardioCal"></label>
       </div>
@@ -7068,10 +7170,17 @@ function renderWeightForm() {
 function saveWeightEntry() {
   const date = document.getElementById('wDate').value || todayStr();
   const w = document.getElementById('wWeight').value;
+  const bodyFat = document.getElementById('wBodyFat').value;
+  const bodyWater = document.getElementById('wBodyWater').value;
   const cal = document.getElementById('wCal').value;
   const cardioCal = document.getElementById('wCardioCal').value;
   if (w === '') { showToast('Enter a weight'); return; }
-  STATE.weightLog.push({ id: uid(), date, weightLb: displayToLb(w), calories: cal ? Number(cal) : null, cardioCalories: cardioCal ? Number(cardioCal) : null });
+  STATE.weightLog.push({
+    id: uid(), date, weightLb: displayToLb(w),
+    bodyFatPct: bodyFat ? Number(bodyFat) : null,
+    bodyWaterPct: bodyWater ? Number(bodyWater) : null,
+    calories: cal ? Number(cal) : null, cardioCalories: cardioCal ? Number(cardioCal) : null,
+  });
   WEIGHTLOG_FORM_OPEN = false;
   saveState();
   showToast('Entry saved');
@@ -7085,44 +7194,97 @@ function deleteWeightEntry(id) {
     drawWeightChart();
   });
 }
+// Trailing N-day rolling average, one output value per input entry (same index/order) — averages
+// every logged value within [that entry's date - (windowDays-1), that entry's date] inclusive, so
+// a gap in logging just means fewer points feed that particular average rather than breaking the
+// line or requiring every day to have an entry. Used for both the Body Weight chart's trend line
+// (fixed 7 days) and the rolling TDEE estimate below (its own weekly buckets, not this).
+function trailingAverage(sortedEntries, windowDays) {
+  return sortedEntries.map(e => {
+    const cutoff = new Date(e.date + 'T00:00:00');
+    cutoff.setDate(cutoff.getDate() - (windowDays - 1));
+    const cutoffStr = dateKey(cutoff.getFullYear(), cutoff.getMonth(), cutoff.getDate());
+    const inWindow = sortedEntries.filter(x => x.date >= cutoffStr && x.date <= e.date);
+    return inWindow.reduce((s, x) => s + x.value, 0) / inWindow.length;
+  });
+}
+const WEIGHT_TREND_WINDOW_DAYS = 7;
 let weightChartInstance = null;
 function drawWeightChart() {
   const canvas = document.getElementById('weightChart');
   if (!canvas || typeof Chart === 'undefined') return;
-  const list = [...STATE.weightLog].sort((a,b) => a.date.localeCompare(b.date));
+  const metric = WEIGHT_METRICS.find(m => m.key === SELECTED_WEIGHT_METRIC) || WEIGHT_METRICS[0];
+  const isWeight = metric.key === 'weight';
+  const list = STATE.weightLog
+    .filter(e => isWeight ? e.weightLb != null : e[metric.key] != null)
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map(e => ({ date: e.date, value: isWeight ? lbToDisplay(e.weightLb) : e[metric.key] }));
   if (weightChartInstance) { weightChartInstance.destroy(); }
+  const trend = trailingAverage(list, WEIGHT_TREND_WINDOW_DAYS);
   const styles = getComputedStyle(document.documentElement);
+  const unitSuffix = isWeight ? ' ' + weightUnitLabel() : '%';
   weightChartInstance = new Chart(canvas.getContext('2d'), {
     type: 'line',
     data: {
       labels: list.map(e => e.date.slice(5)),
-      datasets: [{
-        label: 'Weight',
-        data: list.map(e => Number(fmt(lbToDisplay(e.weightLb), 1))),
-        borderColor: styles.getPropertyValue('--accent').trim(),
-        backgroundColor: 'transparent',
-        tension: 0.25,
-        pointRadius: 3,
-      }]
+      datasets: [
+        {
+          label: metric.label,
+          data: list.map(e => Number(fmt(e.value, 1))),
+          borderColor: styles.getPropertyValue('--accent').trim(),
+          backgroundColor: 'transparent',
+          tension: 0.25,
+          pointRadius: 3,
+        },
+        {
+          label: `${WEIGHT_TREND_WINDOW_DAYS}-day average`,
+          data: trend.map(v => Number(fmt(v, 1))),
+          borderColor: styles.getPropertyValue('--good').trim(),
+          backgroundColor: 'transparent',
+          borderDash: [5, 4],
+          tension: 0.25,
+          pointRadius: 0,
+          borderWidth: 2,
+        },
+      ]
     },
     options: {
       responsive: true,
-      plugins: { legend: { display: false } },
+      plugins: { legend: { display: true, labels: { color: styles.getPropertyValue('--text-dim').trim(), font: { size: 10 }, boxWidth: 12 } } },
       scales: {
         x: { ticks: { color: styles.getPropertyValue('--text-faint').trim(), font: {size: 10} }, grid: { color: styles.getPropertyValue('--border-soft').trim() } },
-        y: { ticks: { color: styles.getPropertyValue('--text-faint').trim(), font: {size: 10} }, grid: { color: styles.getPropertyValue('--border-soft').trim() } },
+        y: { ticks: { color: styles.getPropertyValue('--text-faint').trim(), font: {size: 10}, callback: v => v + unitSuffix }, grid: { color: styles.getPropertyValue('--border-soft').trim() } },
       }
     }
   });
 }
 
 // ---------------- PROGRESS: chart-only views (data entry lives on the Health & Diet tab) ----------------
+// Same three metrics the weight-log entry form can capture (weight required, body fat %/body
+// water % optional smart-scale readings) \u2014 one chart at a time via this selector, same UX
+// convention as SELECTED_MEASUREMENT_FIELD's dropdown below for Body Measurements.
+const WEIGHT_METRICS = [
+  { key: 'weight', label: 'Weight' },
+  { key: 'bodyFatPct', label: 'Body Fat %' },
+  { key: 'bodyWaterPct', label: 'Body Water %' },
+];
+let SELECTED_WEIGHT_METRIC = 'weight';
+function setWeightMetric(m) { SELECTED_WEIGHT_METRIC = m; render(); }
 function renderBodyWeightChart() {
-  const list = [...STATE.weightLog].sort((a,b) => a.date.localeCompare(b.date));
+  const metric = WEIGHT_METRICS.find(m => m.key === SELECTED_WEIGHT_METRIC) || WEIGHT_METRICS[0];
+  const isWeight = metric.key === 'weight';
+  const selector = `
+    <label class="field" style="margin-bottom:12px;">
+      <span class="lbl">Metric</span>
+      <select onchange="setWeightMetric(this.value)">
+        ${WEIGHT_METRICS.map(m => `<option value="${m.key}" ${m.key===SELECTED_WEIGHT_METRIC?'selected':''}>${m.label}</option>`).join('')}
+      </select>
+    </label>`;
+  const list = STATE.weightLog.filter(e => isWeight ? e.weightLb != null : e[metric.key] != null);
   if (list.length < 2) {
-    return emptyState('Log at least 2 entries on Health & Diet \u2192 Weight & Calories to see a trend here.');
+    return selector + emptyState(`Log at least 2 entries with ${metric.label} on Health & Diet \u2192 Weight & Calories to see a trend here.`);
   }
-  return `<div class="chart-wrap"><canvas id="weightChart" height="180"></canvas></div>`;
+  return selector + `<div class="chart-wrap"><canvas id="weightChart" height="180"></canvas></div>`;
 }
 let SELECTED_MEASUREMENT_FIELD = 'weight';
 function setMeasurementField(field) { SELECTED_MEASUREMENT_FIELD = field; render(); }

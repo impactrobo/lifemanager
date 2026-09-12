@@ -158,6 +158,9 @@ interface DietState {
   mealPlan: DayOfWeekMap<{ id: string; mealId: string | null }>;
   customFoods: CustomFood[];
   foodLog: Record<string, Array<{ id: string; foodId: string; qty: number | string; unit: string }>>;
+  /** How many weeks of weight-log data rollingTdeeEstimate() averages over (default 12) —
+   *  adjustable under Diet -> Setup -> TDEE. */
+  tdeeWindowWeeks: number;
 }
 
 interface RecurringIncome {
@@ -228,6 +231,10 @@ interface WeightLogEntry {
   weightLb: number;
   calories?: number | null;
   cardioCalories?: number | null;
+  /** Optional smart-scale readings — separate from the occasional tape/caliper Body Fat %
+   *  under Body Measurements (MEASURE_FIELDS' 'bf' key); these are the daily-cadence versions. */
+  bodyFatPct?: number | null;
+  bodyWaterPct?: number | null;
 }
 interface Note {
   id: string;
