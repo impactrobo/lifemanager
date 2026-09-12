@@ -275,6 +275,40 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Habits: a new tracking concept distinct from anchors, with streaks and a multi-habit success
+  calendar (2026-09-12).** Scoped via a discussion before building — the person's own worry going
+  in was "is this just anchors again," resolved by nature-of-the-thing rather than where it's
+  filed: an **anchor** is a permanent, time-of-day-scoped routine item that's always there; a
+  **habit** is a discipline push with a start (and optionally an end — a defined challenge like
+  "no drinking, 30 days" vs. just ongoing), where the streak/history is the actual point.
+  - New `STATE.life.habits` (`{id, name, startDate, endDate}[]`) and `STATE.life.habitLog`
+    (habit id -> `{'YYYY-MM-DD': true|false}`, a date absent = **unmarked**, deliberately neutral
+    — it doesn't break a streak, but doesn't grow it either, same forgiving/log-it-late convention
+    as every other log in this app).
+  - `habitCurrentStreak()`/`habitBestStreak()` walk the log skipping unmarked days (kept days
+    still count even across a gap; the first *broken* day, or the habit's own `startDate`, stops
+    the walk — confirmed a habit can never "steal" streak days from before it started).
+  - **Home**: a new conditional box (`renderHomeHabitsBox()`, only shows with active habits) for
+    today-only kept/broke toggling — tapping the already-active state again clears it back to
+    unmarked. Automatically backfilled into an existing save's `boxOrder` by the same
+    "newly-added box" migration every other Home box change already relies on — no separate
+    migration code needed for this feature specifically.
+  - **Schedule -> Setup** gains a third tab, HABITS, alongside Set Anchors/Schedule Builder — full
+    CRUD (name/start/end, inline-editable), an "END NOW" button for stopping an open-ended habit
+    early (sets `endDate` to today; today itself stays inclusively active), and current/best
+    streak shown per habit.
+  - **The "success calendar"**: one combined month grid for *every* habit at once (not a separate
+    grid per habit) — each habit gets its own shape (`habitShapeFor()`: circle/square/triangle/
+    diamond, cycling by list position) so multiple habits' marks in the same day cell stay
+    distinguishable; color is reserved for status instead (green = kept, red = broken, a plain
+    hollow dot regardless of shape = unmarked — distinguishing *which* habit hasn't been logged
+    isn't worth the visual noise). Its own independent month-navigation state, deliberately not
+    wired into the Reminders/Schedule Calendar's zoom system — a separate, focused view.
+  - `tests/test_habits.js` covers the CRUD, the Home box toggle (including untoggling and
+    overriding kept<->broken), streak math against a fully hand-computed fixture (including the
+    startDate-boundary edge case this test's own first draft actually tripped over), the
+    end-date's inclusive-today behavior, the multi-habit calendar's shapes/legend, deletion, and
+    the existing-save box-order migration (via a real reload, not calling internals directly).
 - **Fixed: Home edit-mode drag couldn't move anything into the true last slot (2026-09-12).**
   Real bug, reported directly — `reorderHomeList()` only ever inserted the dragged item *before*
   whatever it was dropped on, and there's nothing after the last item to drop "before" into, so no

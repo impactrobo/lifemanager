@@ -612,6 +612,27 @@ select { -webkit-appearance: none; appearance: none; background-image: linear-gr
    read at ~14px, a solid color square still does. */
 .cal-mini-anchor-dot { position: absolute; top: 1px; right: 1px; width: 4px; height: 4px; border-radius: 1px; pointer-events: none; }
 
+/* ---------- Habits: multi-habit "success calendar" (Schedule -> Setup -> Habits) ---------- */
+.habit-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 4px; }
+.habit-cal-cell { aspect-ratio: 1; background: var(--surface); border: 1px solid var(--border-soft); border-radius: var(--radius); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 2px; overflow: hidden; }
+.habit-cal-blank { background: transparent; border-color: transparent; }
+.habit-cal-daynum { font-family: var(--font-mono); font-weight: 700; font-size: 11px; }
+.habit-cal-marks { display: flex; flex-wrap: wrap; gap: 2px; justify-content: center; }
+/* Color = status (kept/broke), shape = which habit — see habitShapeFor()/habitStatusOn(). An
+   unmarked day always renders as a plain hollow circle regardless of the habit's real shape
+   (shapeClass forces this in renderHabitCalendar()) — distinguishing *which* habit hasn't been
+   logged yet isn't worth the visual noise; distinguishing *that* it's unmarked is what matters. */
+.habit-mark { display: inline-block; width: 6px; height: 6px; flex-shrink: 0; }
+.habit-shape-circle { border-radius: 50%; }
+.habit-shape-square { border-radius: 1px; }
+.habit-shape-triangle { clip-path: polygon(50% 0%, 0% 100%, 100% 100%); }
+.habit-shape-diamond { transform: rotate(45deg); border-radius: 1px; }
+.habit-mark-kept { background: var(--good); }
+.habit-mark-broken { background: var(--bad); }
+.habit-mark-unmarked { background: transparent; border: 1px solid var(--text-faint); box-sizing: border-box; }
+.habit-cal-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 11px; color: var(--text-dim); margin-bottom: 10px; }
+.habit-legend-swatch { width: 8px; height: 8px; margin-right: 4px; background: var(--text-dim); vertical-align: middle; }
+
 /* ---------- Settings: aesthetic picker ---------- */
 .aesthetic-card { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px; position: relative; color: var(--text); }
 .aesthetic-card.active { border-color: var(--accent); }

@@ -1169,6 +1169,12 @@ function defaultLifeState() {
     guitar: { chordStatus: {}, songStatus: {}, techStatus: {}, practiceLog: [], chordLearnedDate: {}, songLearnedDate: {} }, // status: 0 none, 1 learning, 2 learned; *LearnedDate: index -> date string, for the Hobbies Progress timeline
     skinCycleStart: null, // date string the 4-night rotation started
     supplementLog: {}, // date -> { suppName: true }
+    // Habits (added 2026-09-12) are distinct from anchors on purpose: an anchor is a permanent,
+    // time-of-day-scoped routine item that's always there; a habit is a discipline push with a
+    // start (and optionally an end — a defined challenge like "no drinking, 30 days" vs. just
+    // ongoing), where the streak/history itself is the point. See habitCurrentStreak() etc.
+    habits: [], // [{id, name, startDate, endDate, createdAt}] — Schedule -> Setup -> Habits
+    habitLog: {}, // habitId -> { 'YYYY-MM-DD': true|false } — true=kept, false=broke, absent=unmarked (neutral, doesn't break a streak)
   };
 }
 // ---- Budgeting ----
@@ -1402,7 +1408,7 @@ function defaultHomeLayout() {
   return {
     sectionOrder: ['schedule', 'train', 'hobbies', 'health', 'notes', 'budget'],
     sectionHidden: [],
-    boxOrder: ['reminders', 'rightnow', 'workouts', 'wakeup', 'calories'],
+    boxOrder: ['reminders', 'rightnow', 'workouts', 'wakeup', 'calories', 'habits'],
     boxHidden: [],
   };
 }
@@ -1426,6 +1432,7 @@ const HOME_BOX_META = {
   workouts: { label: "TODAY'S WORKOUTS" },
   wakeup: { label: 'WAKE-UP' },
   calories: { label: 'CALORIES' },
+  habits: { label: 'HABITS' },
 };
 /** @returns {AppState} */
 function defaultState() {
@@ -1964,6 +1971,8 @@ function updateAllTMs() {
   if (!STATE.life.supplementLog) STATE.life.supplementLog = {};
   if (!Array.isArray(STATE.life.anchors)) STATE.life.anchors = DEFAULT_DAILY_ANCHORS.map(a => Object.assign({}, a));
   if (!Array.isArray(STATE.life.periodic)) STATE.life.periodic = DEFAULT_PERIODIC_ANCHORS.map(a => Object.assign({}, a));
+  if (!Array.isArray(STATE.life.habits)) STATE.life.habits = [];
+  if (!STATE.life.habitLog || typeof STATE.life.habitLog !== 'object') STATE.life.habitLog = {};
   if (!Array.isArray(STATE.life.schedules)) STATE.life.schedules = [];
 
   // ---- MESO1 normalization ----
@@ -4139,8 +4148,9 @@ function renderScheduleSetup() {
     ${subNav(`
       <button class="${SCHEDULE_SETUP_SUBTAB==='anchors'?'active':''}" onclick="setScheduleSetupSubtab('anchors')">SET ANCHORS</button>
       <button class="${SCHEDULE_SETUP_SUBTAB==='builder'?'active':''}" onclick="setScheduleSetupSubtab('builder')">SCHEDULE BUILDER</button>
+      <button class="${SCHEDULE_SETUP_SUBTAB==='habits'?'active':''}" onclick="setScheduleSetupSubtab('habits')">HABITS</button>
     `)}
-    ${SCHEDULE_SETUP_SUBTAB === 'builder' ? renderScheduleBuilder() : renderSetAnchors()}
+    ${SCHEDULE_SETUP_SUBTAB === 'builder' ? renderScheduleBuilder() : SCHEDULE_SETUP_SUBTAB === 'habits' ? renderHabitsSetup() : renderSetAnchors()}
   </div>`;
 }
 
@@ -4232,6 +4242,201 @@ function deletePeriodic(id) {
     delete STATE.life.periodicLog[id];
     saveState(); render();
   });
+}
+
+// ---- Habits: distinct from anchors on purpose (see defaultLifeState()'s comment) — a discipline
+// push with a start (and optionally an end), where the streak/history is the actual point. ----
+// Identity (color + shape) is derived from a habit's position in the list, same "categorical,
+// index-based, no picker UI" convention as scheduleColorFor() — color here means STATUS (kept/
+// broke), so a habit's own identity on the multi-habit calendar is carried by shape instead.
+const HABIT_COLOR_PALETTE = ['#FF9191', '#92FECD', '#FFD961', '#CAAFFF', '#819FFF', '#B2FF5D'];
+const HABIT_SHAPES = ['circle', 'square', 'triangle', 'diamond'];
+function habitColorFor(id) {
+  const idx = STATE.life.habits.findIndex(h => h.id === id);
+  return HABIT_COLOR_PALETTE[(idx < 0 ? 0 : idx) % HABIT_COLOR_PALETTE.length];
+}
+function habitShapeFor(id) {
+  const idx = STATE.life.habits.findIndex(h => h.id === id);
+  return HABIT_SHAPES[(idx < 0 ? 0 : idx) % HABIT_SHAPES.length];
+}
+function habitIsActiveOn(habit, dateStr) {
+  if (habit.startDate && dateStr < habit.startDate) return false;
+  if (habit.endDate && dateStr > habit.endDate) return false;
+  return true;
+}
+// A date absent from habitLog is 'unmarked' — neutral, not a failure (see the comment on
+// defaultLifeState()'s habitLog field) — distinct from 'broken' (explicitly marked as missed).
+function habitStatusOn(habitId, dateStr) {
+  const log = STATE.life.habitLog[habitId];
+  if (!log || log[dateStr] === undefined) return 'unmarked';
+  return log[dateStr] ? 'kept' : 'broken';
+}
+function setHabitStatus(habitId, dateStr, status) {
+  if (!STATE.life.habitLog[habitId]) STATE.life.habitLog[habitId] = {};
+  if (status === null) delete STATE.life.habitLog[habitId][dateStr];
+  else STATE.life.habitLog[habitId][dateStr] = status === 'kept';
+  saveState(); render();
+}
+// Tapping the already-active state clears it back to unmarked, so a mis-tap is one tap to undo.
+function toggleHabitToday(habitId, status) {
+  const today = todayStr();
+  const current = habitStatusOn(habitId, today);
+  setHabitStatus(habitId, today, current === status ? null : status);
+}
+// Walk backward from today (or the habit's own end date, if it's already passed) counting 'kept'
+// days; 'unmarked' days are skipped over (neither counted nor breaking the streak — the whole
+// point of treating them as neutral), and the first 'broken' day (or the habit's start date) ends
+// the walk. This means a streak can span a gap of un-logged days without being wrongly zeroed out
+// by a day you just haven't gotten around to marking yet.
+function habitCurrentStreak(habit) {
+  const today = todayStr();
+  const endPoint = habit.endDate && habit.endDate < today ? habit.endDate : today;
+  let streak = 0;
+  let d = new Date(endPoint + 'T00:00:00');
+  const start = new Date(habit.startDate + 'T00:00:00');
+  while (d >= start) {
+    const dStr = dateKey(d.getFullYear(), d.getMonth(), d.getDate());
+    const status = habitStatusOn(habit.id, dStr);
+    if (status === 'broken') break;
+    if (status === 'kept') streak++;
+    d.setDate(d.getDate() - 1);
+  }
+  return streak;
+}
+// Same skip-unmarked rule, scanning the habit's whole active range for the longest run.
+function habitBestStreak(habit) {
+  let best = 0, current = 0;
+  let d = new Date(habit.startDate + 'T00:00:00');
+  const end = new Date((habit.endDate || todayStr()) + 'T00:00:00');
+  while (d <= end) {
+    const dStr = dateKey(d.getFullYear(), d.getMonth(), d.getDate());
+    const status = habitStatusOn(habit.id, dStr);
+    if (status === 'broken') current = 0;
+    else if (status === 'kept') { current++; if (current > best) best = current; }
+    d.setDate(d.getDate() + 1);
+  }
+  return best;
+}
+function addHabit() {
+  const nameEl = document.getElementById('habitName');
+  const name = nameEl.value.trim();
+  if (!name) { showToast('Give it a name'); return; }
+  const startEl = document.getElementById('habitStart');
+  const endEl = document.getElementById('habitEnd');
+  const startDate = startEl.value || todayStr();
+  const endDate = endEl.value || null;
+  STATE.life.habits.push({ id: uid(), name, startDate, endDate, createdAt: Date.now() });
+  saveState();
+  nameEl.value = ''; startEl.value = ''; endEl.value = '';
+  showToast('Habit added');
+  render();
+}
+function updateHabitField(id, field, value) {
+  const h = STATE.life.habits.find(x => x.id === id);
+  if (!h) return;
+  if (field === 'name') { const trimmed = value.trim(); if (trimmed) h.name = trimmed; }
+  else if (field === 'startDate') h.startDate = value;
+  else if (field === 'endDate') h.endDate = value || null;
+  saveState(); render();
+}
+function endHabitNow(id) {
+  const h = STATE.life.habits.find(x => x.id === id);
+  if (!h) return;
+  h.endDate = todayStr();
+  saveState(); render();
+}
+function deleteHabit(id) {
+  showConfirm('Delete this habit? Its full history goes with it.', () => {
+    STATE.life.habits = STATE.life.habits.filter(h => h.id !== id);
+    delete STATE.life.habitLog[id];
+    saveState(); render();
+  });
+}
+function renderHabitsSetup() {
+  const habits = STATE.life.habits;
+  return `
+    <div style="font-size:12px; color:var(--text-dim); margin:6px 0 14px;">A discipline push with a start (and optionally an end) — distinct from anchors, which are permanent daily routine items. The streak is the point: an unmarked day is neutral and won't break it, but doesn't grow it either.</div>
+    <div class="subtle-label" style="margin-bottom:8px;">NEW HABIT</div>
+    <div class="panel">
+      <label class="field"><span class="lbl">Name</span><input type="text" id="habitName" placeholder="e.g. No drinking"></label>
+      <div class="field-row">
+        <label class="field"><span class="lbl">Start date</span><input type="date" id="habitStart" value="${todayStr()}"></label>
+        <label class="field"><span class="lbl">End date (optional)</span><input type="date" id="habitEnd"></label>
+      </div>
+      <button class="btn btn-primary btn-sm btn-block" onclick="addHabit()">+ ADD HABIT</button>
+    </div>
+    <div class="subtle-label" style="margin:18px 0 8px;">YOUR HABITS</div>
+    <div class="stack">
+      ${habits.length ? habits.map(renderHabitSetupRow).join('') : emptyState('No habits yet — add one above.')}
+    </div>
+    ${renderHabitCalendar()}
+  `;
+}
+function renderHabitSetupRow(h) {
+  const ended = h.endDate && h.endDate < todayStr();
+  return `<div class="panel" style="${ended ? 'opacity:0.6;' : ''}">
+    <div class="field-row">
+      <label class="field" style="flex:2;"><span class="lbl">Name</span><input type="text" value="${escapeHtml(h.name)}" onchange="updateHabitField('${h.id}','name',this.value)"></label>
+      <button class="icon-btn" style="align-self:flex-end; margin-bottom:10px; color:var(--bad);" onclick="deleteHabit('${h.id}')" title="Delete habit">${icon('close')}</button>
+    </div>
+    <div class="field-row">
+      <label class="field"><span class="lbl">Start date</span><input type="date" value="${h.startDate}" onchange="updateHabitField('${h.id}','startDate',this.value)"></label>
+      <label class="field"><span class="lbl">End date</span><input type="date" value="${h.endDate || ''}" onchange="updateHabitField('${h.id}','endDate',this.value)"></label>
+    </div>
+    <div class="row" style="font-size:12px; color:var(--text-dim);">
+      <span>${ended ? `Ended ${h.endDate}` : 'Ongoing'} &middot; current streak <b style="color:var(--text);">${habitCurrentStreak(h)}</b> &middot; best <b style="color:var(--text);">${habitBestStreak(h)}</b></span>
+      ${!ended ? `<button class="btn btn-ghost btn-sm" onclick="endHabitNow('${h.id}')">END NOW</button>` : ''}
+    </div>
+  </div>`;
+}
+// Multi-habit "success calendar" — one month grid, every active-that-day habit gets a small
+// shaped mark (its own identity via shape, colored green/red for kept/broken that day, a plain
+// hollow dot if unmarked regardless of shape — shape only matters once there's a real status to
+// tell apart). Its own independent month state (HABIT_CAL_MONTH), deliberately not wired into the
+// Reminders/Schedule Calendar's CAL_ZOOM system — a separate, focused view.
+let HABIT_CAL_MONTH = null;
+function ensureHabitCalState() {
+  if (!HABIT_CAL_MONTH) { const d = new Date(); HABIT_CAL_MONTH = { year: d.getFullYear(), month: d.getMonth() }; }
+}
+function habitCalGoToMonth(delta) {
+  ensureHabitCalState();
+  let m = HABIT_CAL_MONTH.month + delta, y = HABIT_CAL_MONTH.year;
+  if (m < 0) { m = 11; y--; } else if (m > 11) { m = 0; y++; }
+  HABIT_CAL_MONTH = { year: y, month: m };
+  render();
+}
+function renderHabitCalendar() {
+  const habits = STATE.life.habits;
+  if (!habits.length) return '';
+  ensureHabitCalState();
+  const { year, month } = HABIT_CAL_MONTH;
+  const first = new Date(year, month, 1);
+  const startWeekday = first.getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const weekdayHeaders = ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(w => `<div class="cal-weekday">${w}</div>`).join('');
+  let cells = '';
+  for (let i = 0; i < startWeekday; i++) cells += `<div class="habit-cal-cell habit-cal-blank"></div>`;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dStr = dateKey(year, month, d);
+    const marks = habits.filter(h => habitIsActiveOn(h, dStr)).map(h => {
+      const status = habitStatusOn(h.id, dStr);
+      const shapeClass = status === 'unmarked' ? 'habit-shape-circle' : `habit-shape-${habitShapeFor(h.id)}`;
+      return `<span class="habit-mark ${shapeClass} habit-mark-${status}" title="${escapeHtml(h.name)}"></span>`;
+    }).join('');
+    cells += `<div class="habit-cal-cell"><span class="habit-cal-daynum">${d}</span><div class="habit-cal-marks">${marks}</div></div>`;
+  }
+  return `
+    <div class="subtle-label" style="margin:18px 0 8px;">SUCCESS CALENDAR</div>
+    <div class="week-selector" style="margin-bottom:10px;">
+      <div class="cycle-label" style="font-size:18px;">${MONTH_NAMES[month]} ${year}</div>
+      <div class="cycle-btns">
+        <button onclick="habitCalGoToMonth(-1)">&#8249;</button>
+        <button onclick="habitCalGoToMonth(1)">&#8250;</button>
+      </div>
+    </div>
+    <div class="habit-cal-legend">${habits.map(h => `<span><i class="habit-mark habit-shape-${habitShapeFor(h.id)} habit-legend-swatch"></i>${escapeHtml(h.name)}</span>`).join('')}</div>
+    <div class="habit-cal-grid">${weekdayHeaders}${cells}</div>
+  `;
 }
 
 // ---- Schedule Builder: day-of-week-specific schedules, each with Wake-Up/Bed Time boundaries
@@ -8583,7 +8788,34 @@ function renderHomeCaloriesBox() {
       </div>
     </div>`;
 }
-const HOME_BOX_RENDERERS = { reminders: renderTodaysReminders, rightnow: renderHomeScheduleCard, workouts: renderHomeWorkoutsCard, wakeup: renderHomeWakeupBox, calories: renderHomeCaloriesBox };
+// Quick today-only check-off — kept/broke for whichever habits are currently active (see
+// habitIsActiveOn()). The full list, streak history, and the multi-habit calendar all live under
+// Schedule -> Setup -> Habits; this box is deliberately just "mark today," same scope as the
+// Wake-Up/Calories boxes next to it. Conditional (no box at all with zero active habits), same
+// convention as Reminders.
+function renderHomeHabitsBox() {
+  const today = todayStr();
+  const active = STATE.life.habits.filter(h => habitIsActiveOn(h, today));
+  if (!active.length) return '';
+  const rows = active.map(h => {
+    const status = habitStatusOn(h.id, today);
+    const streak = habitCurrentStreak(h);
+    return `<div class="row" style="padding:6px 0; align-items:center;">
+      <div style="flex:1; min-width:0;">
+        <div style="font-size:13px; font-weight:600;">${escapeHtml(h.name)}</div>
+        <div style="font-size:11px; color:var(--text-faint);">${streak} day streak${h.endDate ? ` &middot; ends ${h.endDate}` : ''}</div>
+      </div>
+      <div style="display:flex; gap:6px; flex-shrink:0;">
+        <button class="btn btn-sm ${status==='kept'?'btn-good':''}" onclick="toggleHabitToday('${h.id}','kept')" title="Kept today">${icon('check')}</button>
+        <button class="btn btn-sm ${status==='broken'?'btn-danger':''}" onclick="toggleHabitToday('${h.id}','broken')" title="Broke today">${icon('close')}</button>
+      </div>
+    </div>`;
+  }).join('');
+  return `
+    <div class="subtle-label" style="margin:18px 0 8px;">HABITS</div>
+    <div class="panel">${rows}</div>`;
+}
+const HOME_BOX_RENDERERS = { reminders: renderTodaysReminders, rightnow: renderHomeScheduleCard, workouts: renderHomeWorkoutsCard, wakeup: renderHomeWakeupBox, calories: renderHomeCaloriesBox, habits: renderHomeHabitsBox };
 function renderHomeBoxesSection() {
   const L = homeLayout();
   const boxesHtml = L.boxOrder.map(id => {

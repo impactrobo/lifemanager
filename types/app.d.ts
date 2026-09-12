@@ -246,6 +246,19 @@ interface LifeState {
   guitar: GuitarState;
   skinCycleStart: string | null;
   supplementLog: Record<string, Record<string, boolean>>;
+  habits: Habit[];
+  /** habit id -> {'YYYY-MM-DD': true (kept) | false (broke)} — a date absent from the map means
+   *  unmarked, not broken. See habitStatusOn(). */
+  habitLog: Record<string, Record<string, boolean>>;
+}
+interface Habit {
+  id: string;
+  name: string;
+  startDate: string;
+  /** null = open-ended/ongoing; a date = a defined challenge, or when an open-ended habit was
+   *  manually ended. */
+  endDate: string | null;
+  createdAt: number;
 }
 
 interface MeasurementEntry {
