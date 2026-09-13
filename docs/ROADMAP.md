@@ -62,12 +62,13 @@ before starting any of these.
   confirm before starting each:
   1. ~~Dated one-off events (Reminders gain an optional end time) + a Day timeline showing
      duration~~ — **shipped 2026-09-12**, see Recently Shipped.
-  2. **Calendar as the true union of the app.** The Day view currently knows about anchors,
-     schedule activities and reminders only — `exercisePlan` (planned workouts) renders on Home
-     but never on the Calendar, and the same goes for the meal plan, habit marks (they have their
-     own separate calendar under Schedule → Setup), and budget charge due dates. Reuse the
-     `BLOCK_KIND_META` + badge system step 1 established; `renderHomeWorkoutsBox()` already has
-     the weekday → planned-workouts lookup this needs.
+  2. ~~**Calendar as the true union of the app.**~~ — **shipped 2026-09-12** for planned workouts,
+     planned meals and habits; see Recently Shipped. **Budget charge due dates were deliberately
+     left out** and remain open: unlike the other three, a `RecurringCharge` has no due-date field
+     at all (`{id, name, amount, category, active, isSavings}`), so putting one on the Calendar
+     means adding an optional `dueDay` plus the Budget → Recurring UI to set it — a data-model
+     change rather than surfacing data that already exists. That's the same work as the "Calendar
+     marker on a recurring budget charge's due date" cross-linking idea below; do it there.
   3. **Recurrence + single-day exceptions.** No recurrence exists beyond day-of-week, so monthly,
      annual (birthdays/anniversaries have no home at all), every-other-week and every-N-days are
      all unrepresentable; `periodic` anchors do cadence-days but are a due-list that never lands
@@ -300,6 +301,35 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Calendar Day view now shows the untimed half of a day too — step 2 of the scheduling
+  build-out (2026-09-12).** The Day view knew only about anchors, schedule activities and
+  reminders, so three things that are unambiguously part of "what's going on this day" never
+  appeared on the Calendar at all: planned workouts, planned meals, and habits.
+  - **The design finding that shaped this:** none of the three carry clock times.
+    `exercisePlan[weekday]` entries are `{id, workoutId}`, `diet.mealPlan[weekday]` entries are
+    `{id, mealId}`, and a habit mark is a per-date flag. So they can't be chronological timeline
+    blocks the way step 1's dated events could — inventing times for them would have been a lie.
+    They render instead as a day-level band (`renderDayUntimedItems()`, "ALSO TODAY" / "ALSO THIS
+    DAY") below the timeline, grouped by source with the same colour language as the rest of the
+    calendar. The whole band is conditional — a day with none of these renders nothing, matching
+    the Home boxes' convention rather than showing an empty panel every day.
+  - **A planned workout's "logged" state is looked up by the date being viewed, not by
+    `STATE.currentCycle`.** Workout logs are keyed `${cycle}_${workoutId}` but carry their own
+    `date`; the Day view can show any date, and the current cycle says nothing about whether a
+    workout was done on that particular day. `workoutIdsLoggedOn(dateStr)` does that lookup.
+  - Habits are markable on whatever date is being viewed, not just today — `toggleHabitOn(id,
+    status, dateStr)` generalises the old `toggleHabitToday()` (kept as a thin wrapper, since
+    Home's habits box genuinely always means today). Exactly the arrangement
+    `toggleDailyAnchor(id, dateStr)` already used, and the point of being able to look back at a
+    day you forgot to log.
+  - **Scope deliberately confined**, at the person's direction: Day view only (Month/Week grid
+    cells already carry a day number, a schedule anchor icon and a reminder dot at ~44px, so
+    more marker types there needs its own look first), and budget charges left out because they
+    have no due-date data to surface — see the note under Ideas.
+  - `tests/test_calendar_day_union.js` covers the conditional empty band, all three groups
+    rendering with their states (logged workout, kept habit, unmarked habit), marking a habit on
+    a past day without touching today, `workoutIdsLoggedOn()`'s date-scoping (a log under a
+    different cycle on a different date must not leak), and a habit past its end date dropping out.
 - **Fixed: sub-nav strips snapped back to the start the instant you tapped a button in them
   (2026-09-12).** Reported directly against Exercise Setup's GENERAL tab, but the bug lived in
   the shared `subNav()`/`attachSubnavScrollAffordances()` system (see
