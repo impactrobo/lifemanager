@@ -83,8 +83,7 @@ before starting any of these.
   4. Smaller items surfaced by the same review:
      - ~~Overlap detection between the things in a day~~ — **shipped 2026-09-13**, see Recently
        Shipped.
-     - **Forward-looking agenda — still open.** "Next 7 days across everything" — there is no such
-       view, you navigate day by day. No data gaps; everything it needs already exists.
+     - ~~Forward-looking agenda~~ — **shipped 2026-09-13**, see Recently Shipped.
      - **Time-budget rollup — still open, and it needs a data-model change first.** "Hobbies got 4h
        this week" can't be grouped that way today: schedule activities are
        `{id, start, end, title, description}` with no category, and anchors likewise. Agreed
@@ -312,6 +311,31 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Agenda: the next 7 days, forward-looking (2026-09-13).** From step 4 of the scheduling
+  build-out. Every other calendar view answers "what does this one day look like" — you had to walk
+  forward a day at a time to find out what was coming. A third Schedule subtab
+  (HOME / CALENDAR / AGENDA / SETUP) answers "what's coming up".
+  - **Shows only what's *distinctive* about each day**, which is the whole design decision.
+    Enumerating every anchor across seven days would repeat the morning routine seven times and
+    bury the one dentist appointment that's actually news. The recurring baseline is summarised as
+    a single schedule-name + booked-hours line per day; the Day view stays the place to see a day
+    in full. A day with nothing notable collapses to just its header line, so the week's shape
+    stays readable.
+  - Lists dated events and reminders (timed ones sorted by time, untimed after, recurring ones
+    marked with the repeat icon) plus planned workouts. An excepted day shows its label in
+    `var(--warn)` **and** still reports booked time — a day off whose anchors are still running
+    isn't empty, and dropping the figure would hide that. A day off pauses planned workouts here
+    too, matching the rule the Day view's untimed band already uses.
+  - Tapping any day opens it in the Calendar's Day view. This needed a fix to
+    `calSelectDayAndZoom()`, which set the zoom and selected date but not `SCHEDULE_SUBTAB` — from
+    the Agenda's own subtab that would have re-rendered the Agenda, making the tap look dead. It
+    was only ever called from the Year grid before, which is already on the Calendar subtab.
+  - `tests/test_agenda.js` covers the 7-day window and its boundaries (nothing from the past,
+    nothing beyond the window), today/tomorrow labelling, distinctive items appearing while the
+    recurring baseline is explicitly *not* enumerated, exception labelling across a multi-day
+    range with booked time retained, a day off pausing planned workouts, the recurring-reminder
+    marker, the day-tap actually landing on a rendered Day view, and graceful degradation with
+    nothing configured at all.
 - **Overlap detection between the things in a day, with an "open block" escape hatch
   (2026-09-13).** From step 4 of the scheduling build-out. Nothing caught two things colliding at
   2pm within a day — the Week At A Glance strip only ever caught two *schedules* claiming the same
