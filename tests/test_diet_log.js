@@ -24,9 +24,9 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // 1. Navigate to Health & Diet -> DIET, confirm the log starts empty for today
   await page.evaluate(() => { switchTab('health'); setHealthSubtab('diet'); });
   await settle(page);
-  const initial = await page.evaluate(() => ({ date: DIET_LOG_DATE, today: todayStr(), entries: STATE.diet.foodLog[todayStr()] }));
-  console.log('DIET_LOG_DATE defaults to today:', initial.date === initial.today, '| entries:', initial.entries);
-  if (initial.date !== initial.today) throw new Error(`Expected DIET_LOG_DATE to default to today, got "${initial.date}" vs "${initial.today}"`);
+  const initial = await page.evaluate(() => ({ date: NAV.dietLogDate, today: todayStr(), entries: STATE.diet.foodLog[todayStr()] }));
+  console.log('NAV.dietLogDate defaults to today:', initial.date === initial.today, '| entries:', initial.entries);
+  if (initial.date !== initial.today) throw new Error(`Expected NAV.dietLogDate to default to today, got "${initial.date}" vs "${initial.today}"`);
 
   // 2. Log an individual food via addFoodToLog()
   await page.evaluate(() => addFoodToLog('chicken_breast'));
@@ -74,7 +74,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // 7. Date navigation moves to a different date's (empty) log without touching today's
   await page.evaluate(() => goToLogDate(-1));
-  const yesterday = await page.evaluate(() => DIET_LOG_DATE);
+  const yesterday = await page.evaluate(() => NAV.dietLogDate);
   const yesterdayEntries = await page.evaluate((d) => (STATE.diet.foodLog[d] || []).length, yesterday);
   console.log('after goToLogDate(-1):', yesterday, '| entries there:', yesterdayEntries);
   if (yesterdayEntries !== 0) throw new Error(`Expected yesterday's log to start empty, found ${yesterdayEntries} entries`);

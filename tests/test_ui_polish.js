@@ -121,7 +121,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   await page.evaluate(() => cancelMealDraft());
 
   // 5. Sub-nav scroll affordances. Exercise Setup has 6 sub-tabs — it overflows a 390px phone.
-  await page.evaluate(() => { switchTab('train'); TRAIN_TOP_SUBTAB = 'setup'; render(); });
+  await page.evaluate(() => { switchTab('train'); NAV.trainTopSubtab = 'setup'; render(); });
   await settle(page);
   const subnavFresh = await page.evaluate(() => {
     const w = document.querySelector('#app .subnav-wrap');

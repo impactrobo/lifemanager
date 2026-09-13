@@ -89,9 +89,9 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (!rightNowPanel) throw new Error("Expected to find the RIGHT NOW box's clickable panel (fresh state has no schedule assigned, so it should show the FREE TIME/tap-to-view card)");
   await rightNowPanel.click();
   await settle(page);
-  const tabAfterEditClick = await page.evaluate(() => CURRENT_TAB);
-  console.log("CURRENT_TAB after tapping RIGHT NOW's panel while in edit mode:", tabAfterEditClick);
-  if (tabAfterEditClick !== 'home') throw new Error(`Expected tapping a box in edit mode to stay on Home, but CURRENT_TAB became "${tabAfterEditClick}"`);
+  const tabAfterEditClick = await page.evaluate(() => NAV.currentTab);
+  console.log("NAV.currentTab after tapping RIGHT NOW's panel while in edit mode:", tabAfterEditClick);
+  if (tabAfterEditClick !== 'home') throw new Error(`Expected tapping a box in edit mode to stay on Home, but NAV.currentTab became "${tabAfterEditClick}"`);
 
   // 2d. ...but the box's own hide (X) button must still work — a real click, not calling
   // hideHomeBox() directly, to prove the capturing listener's exclusion actually applies in the DOM.
@@ -115,9 +115,9 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (!rightNowPanelAgain) throw new Error("Expected RIGHT NOW's panel to still be present outside edit mode");
   await rightNowPanelAgain.click();
   await settle(page);
-  const tabAfterNormalClick = await page.evaluate(() => CURRENT_TAB);
-  console.log('CURRENT_TAB after tapping the same panel outside edit mode:', tabAfterNormalClick);
-  if (tabAfterNormalClick !== 'schedule') throw new Error(`Expected normal (non-edit-mode) tap to navigate to Schedule, got CURRENT_TAB="${tabAfterNormalClick}"`);
+  const tabAfterNormalClick = await page.evaluate(() => NAV.currentTab);
+  console.log('NAV.currentTab after tapping the same panel outside edit mode:', tabAfterNormalClick);
+  if (tabAfterNormalClick !== 'schedule') throw new Error(`Expected normal (non-edit-mode) tap to navigate to Schedule, got NAV.currentTab="${tabAfterNormalClick}"`);
   await page.evaluate(() => { switchTab('home'); toggleHomeEditMode(); }); // back to Home, back into edit mode for the rest of the test
 
   // 3. Hide the first section, confirm tile count drops by 1 and it persists to STATE

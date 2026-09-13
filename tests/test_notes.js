@@ -26,8 +26,8 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // 1. Go to Notes, confirm it lands on the Write subtab by default
   await page.evaluate(() => switchTab('notes'));
   await settle(page);
-  const subtab = await page.evaluate(() => NOTES_SUBTAB);
-  console.log('NOTES_SUBTAB on entry:', subtab);
+  const subtab = await page.evaluate(() => NAV.notesSubtab);
+  console.log('NAV.notesSubtab on entry:', subtab);
   if (subtab !== 'write') throw new Error(`Expected Notes to default to "write", got "${subtab}"`);
 
   // 2. Fill title + rich-text body (contenteditable, so set via innerHTML not fill())
@@ -92,7 +92,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   await page.evaluate((id) => editNote(id), noteId);
   await settle(page);
   const editState = await page.evaluate(() => ({
-    subtab: NOTES_SUBTAB, editId: NOTE_EDIT_ID,
+    subtab: NAV.notesSubtab, editId: NOTE_EDIT_ID,
     titleVal: document.getElementById('noteTitle').value,
     bodyHtml: document.getElementById('noteBody').innerHTML,
     hasCancelBtn: !!document.querySelector('button[onclick="cancelNoteEdit()"]'),
@@ -113,14 +113,14 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   console.log('note after edit+save:', { title: editedNote.title, bodyHtml: editedNote.bodyHtml });
   if (editedNote.title !== 'Edited via pencil button') throw new Error(`Expected the edited title to stick, got "${editedNote.title}"`);
   if (!editedNote.bodyHtml.includes('edited body text')) throw new Error(`Expected the edited body to stick, got "${editedNote.bodyHtml}"`);
-  const subtabAfterSaveEdit = await page.evaluate(() => NOTES_SUBTAB);
+  const subtabAfterSaveEdit = await page.evaluate(() => NAV.notesSubtab);
   if (subtabAfterSaveEdit !== 'view') throw new Error('Expected saving an edit to return to VIEW ALL, not a blank compose form');
 
   // 4d. CANCEL EDIT discards changes and returns to VIEW ALL without touching the note
   await page.evaluate((id) => editNote(id), noteId);
   await page.fill('#noteTitle', 'This should never be saved');
   await page.evaluate(() => cancelNoteEdit());
-  const afterCancel = await page.evaluate((id) => ({ subtab: NOTES_SUBTAB, editId: NOTE_EDIT_ID, title: STATE.notes.find(n => n.id === id).title }), noteId);
+  const afterCancel = await page.evaluate((id) => ({ subtab: NAV.notesSubtab, editId: NOTE_EDIT_ID, title: STATE.notes.find(n => n.id === id).title }), noteId);
   console.log('after CANCEL EDIT:', afterCancel);
   if (afterCancel.subtab !== 'view' || afterCancel.editId !== null) throw new Error('Expected cancelNoteEdit() to clear NOTE_EDIT_ID and return to VIEW ALL');
   if (afterCancel.title !== 'Edited via pencil button') throw new Error('Expected cancelNoteEdit() to leave the note untouched');
@@ -132,7 +132,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   await page.evaluate(() => switchTab('schedule'));
   await page.evaluate(() => switchTab('notes'));
   await settle(page);
-  const afterReturning = await page.evaluate(() => ({ subtab: NOTES_SUBTAB, editId: NOTE_EDIT_ID, titleVal: document.getElementById('noteTitle').value }));
+  const afterReturning = await page.evaluate(() => ({ subtab: NAV.notesSubtab, editId: NOTE_EDIT_ID, titleVal: document.getElementById('noteTitle').value }));
   console.log('Notes state after navigating away mid-edit and back:', afterReturning);
   if (afterReturning.editId !== null) throw new Error('Expected re-entering Notes to clear a stale in-progress edit');
   if (afterReturning.titleVal !== '') throw new Error(`Expected a blank compose form, got title "${afterReturning.titleVal}"`);

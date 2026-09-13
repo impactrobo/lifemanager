@@ -1595,7 +1595,7 @@ function restTimerSettings() {
 // The FAB/widget only make sense while a specific workout log is open — resting between sets
 // of a workout that isn't currently on screen doesn't mean anything.
 function isInWorkoutLogScreen() {
-  return CURRENT_TAB === 'train' && TRAIN_TOP_SUBTAB === 'workouts' && (TRAIN_VIEW.mode === 'log' || TRAIN_VIEW.mode === 'mesoLog');
+  return NAV.currentTab === 'train' && NAV.trainTopSubtab === 'workouts' && (NAV.trainView.mode === 'log' || NAV.trainView.mode === 'mesoLog');
 }
 function getAudioCtx() {
   if (!AUDIO_CTX) {
@@ -2531,31 +2531,53 @@ function defaultTransientUi() {
   };
 }
 let UI = defaultTransientUi();
-let CURRENT_TAB = (STATE.settings && STATE.settings.defaultPage) || 'home'; // opens to Settings -> Default Page instead of always Home
-/** @type {{ mode: string, workoutId?: any, cardioId?: any }} */
-let TRAIN_VIEW = { mode: 'grid', workoutId: null }; // {mode:'grid'} | {mode:'log', workoutId} | {mode:'cardioLog', cardioId}
-let TRAIN_TOP_SUBTAB = 'workouts'; // 'workouts' | 'progress' — top-level toggle within the Exercise tab
-let SETUP_SUBTAB = 'tm';
+
+// ---- Navigation position: "where am I" ----
+// Which tab, which subtab within it, and which date/month each dated view is parked on. Distinct
+// from UI above: this is meant to SURVIVE a navigation, which is exactly why it can't live in the
+// object that gets reset by one.
+//
+// Grouping these also collapses navSnapshot()/applyNavSnapshot(), which used to hand-map eleven
+// globals to snapshot keys and eleven keys back again -- two mirror-image lists with a renaming in
+// between, the same drift hazard resetTransientUi() had. Now one declared key list drives both.
+const NAV_SNAPSHOT_KEYS = [
+  'currentTab', 'trainTopSubtab', 'guitarSubtab', 'healthSubtab', 'setupSubtab', 'setupContext',
+  'notesSubtab', 'scheduleSubtab', 'budgetSubtab', 'scheduleSetupSubtab', 'healthSetupSubtab',
+];
+let NAV = {
+  currentTab: (STATE.settings && STATE.settings.defaultPage) || 'home', // Settings -> Default Page, not always Home
+  /** @type {{ mode: string, workoutId?: any, cardioId?: any }} */
+  trainView: { mode: 'grid', workoutId: null }, // {mode:'grid'} | {mode:'log', workoutId} | {mode:'cardioLog', cardioId}
+  trainTopSubtab: 'workouts',       // 'workouts' | 'progress' -- top-level toggle within Exercise
+  setupSubtab: 'tm',
+  setupContext: 'train',
+  progressSubtab: 'bodyweight',
+  healthSubtab: 'specs',
+  guitarSubtab: 'chords',
+  notesSubtab: 'write',
+  scheduleSubtab: 'today',
+  budgetSubtab: 'overview',
+  scheduleSetupSubtab: 'anchors',
+  healthSetupSubtab: 'builder',
+  calZoom: 'month',
+  calSelectedDate: null,            // lazily set by ensureCalState()
+  calMonth: null,
+  budgetMonth: null,
+  dietLogDate: null,
+  habitCalMonth: null,
+  volumeCycle: null,
+};
 // Which section's own Setup page is showing — Setup is no longer one shared screen: each
 // section that has configurable parameters gets its own distinct page, reachable only from
 // that section (see openSetup() / renderTabbar() / renderSetup()).
-let SETUP_CONTEXT = 'train';
 let BUILDER_TYPE = 'weights'; // 'weights' | 'cardio' | 'mobility' | 'warmup'
 let BUILDER_SELECTED = { weights: null, cardio: null, mobility: null, warmup: null };
-let PROGRESS_SUBTAB = 'bodyweight';
-let HEALTH_SUBTAB = 'specs';
-let GUITAR_SUBTAB = 'chords';
-let NOTES_SUBTAB = 'write';
-let SCHEDULE_SUBTAB = 'today';
-let BUDGET_SUBTAB = 'overview';
 // Schedule's own Setup has its own subnav (SET ANCHORS / SCHEDULE BUILDER), tracked separately
-// from Exercise's SETUP_SUBTAB so the two Setup pages never bleed into each other's tab state.
-let SCHEDULE_SETUP_SUBTAB = 'anchors';
+// from Exercise's NAV.setupSubtab so the two Setup pages never bleed into each other's tab state.
 // Which schedule (by id) is currently open for editing in the Schedule Builder — null means the
 // builder is showing its list of schedules rather than one schedule's edit form.
 let SCHEDULE_BUILDER_EDITING = null;
 // Health's own Setup subnav (MEAL BUILDER / ALL MEALS), tracked separately for the same reason.
-let HEALTH_SETUP_SUBTAB = 'builder';
 // Metric ('g'/'mL' etc.) or Imperial ('lb'/'oz'/cups/tbsp/tsp/fl oz) — a global toggle for the
 // Meal Builder's unit selectors, persisted in STATE.settings.mealUnitSystem.
 let MEAL_UNIT_SYSTEM = 'metric';
@@ -2570,7 +2592,6 @@ let MEAL_BUILDER_DRAFT = null;
 // in-session clipboard for the day copy/paste feature: {day, entries:[{mealId}]} or null.
 let MEAL_PLAN_EXPANDED = {};
 let MEAL_PLAN_CLIPBOARD = null;
-let VOLUME_CYCLE = null;
 
 // ---- Back navigation: a stack of top-level "where was I" snapshots. Every switchTab()/
 // section-subtab change pushes the CURRENT snapshot before moving on, so the topbar Back
@@ -2580,22 +2601,15 @@ let VOLUME_CYCLE = null;
 let NAV_HISTORY = [];
 let NAV_FORWARD = []; // redo stack — goBack() pushes here, goForward() pops it (mirrors browser back/forward)
 function navSnapshot() {
-  return { tab: CURRENT_TAB, trainSubtab: TRAIN_TOP_SUBTAB, guitarSubtab: GUITAR_SUBTAB, healthSubtab: HEALTH_SUBTAB, setupSubtab: SETUP_SUBTAB, setupContext: SETUP_CONTEXT, notesSubtab: NOTES_SUBTAB, scheduleSubtab: SCHEDULE_SUBTAB, budgetSubtab: BUDGET_SUBTAB, scheduleSetupSubtab: SCHEDULE_SETUP_SUBTAB, healthSetupSubtab: HEALTH_SETUP_SUBTAB };
+  const snap = {};
+  NAV_SNAPSHOT_KEYS.forEach(k => { snap[k] = NAV[k]; });
+  return snap;
 }
 function applyNavSnapshot(prev) {
   resetTransientUi(); // Back/Forward is navigation too
-  CURRENT_TAB = prev.tab;
-  TRAIN_TOP_SUBTAB = prev.trainSubtab;
-  GUITAR_SUBTAB = prev.guitarSubtab;
-  HEALTH_SUBTAB = prev.healthSubtab;
-  SETUP_SUBTAB = prev.setupSubtab;
-  SETUP_CONTEXT = prev.setupContext || 'train';
-  NOTES_SUBTAB = prev.notesSubtab;
-  SCHEDULE_SUBTAB = prev.scheduleSubtab;
-  BUDGET_SUBTAB = prev.budgetSubtab || 'overview';
-  SCHEDULE_SETUP_SUBTAB = prev.scheduleSetupSubtab || 'anchors';
-  HEALTH_SETUP_SUBTAB = prev.healthSetupSubtab || 'builder';
-  if (CURRENT_TAB === 'train') TRAIN_VIEW = { mode: 'grid', workoutId: null }; // never restore into a stale open log
+  NAV_SNAPSHOT_KEYS.forEach(k => { if (prev[k] !== undefined) NAV[k] = prev[k]; });
+  // Never restore into a stale open workout log -- those have their own in-context back button.
+  if (NAV.currentTab === 'train') NAV.trainView = { mode: 'grid', workoutId: null };
 }
 function pushNavHistory() {
   NAV_HISTORY.push(navSnapshot());
@@ -2603,33 +2617,33 @@ function pushNavHistory() {
   NAV_FORWARD = []; // any new navigation branches away from whatever redo path existed
 }
 // Closes every transient panel/mode. Called at NAVIGATION time (switchTab(), applyNavSnapshot()
-// for Back/Forward, and the direct CURRENT_TAB assignments in openSetup()/openTodayWorkout()) --
+// for Back/Forward, and the direct NAV.currentTab assignments in openSetup()/openTodayWorkout()) --
 // not inside _doRender(), because render() is rAF-deferred and would close a form that
 // `switchTab(); toggleReminderForm()` had just opened in the same tick.
 function resetTransientUi() { Object.assign(UI, defaultTransientUi()); }
 function switchTab(tab) {
   pushNavHistory();
   resetTransientUi();
-  CURRENT_TAB = tab;
-  if (tab === 'train') { TRAIN_VIEW = { mode: 'grid', workoutId: null }; TRAIN_TOP_SUBTAB = 'workouts'; }
+  NAV.currentTab = tab;
+  if (tab === 'train') { NAV.trainView = { mode: 'grid', workoutId: null }; NAV.trainTopSubtab = 'workouts'; }
   if (tab === 'notes') {
     // Same stale-edit guard as setNotesSubtab() — a fresh visit to Notes (e.g. via the bottom tab
     // bar) shouldn't resume an edit left in progress from before you navigated away.
     if (NOTE_EDIT_ID) { NOTE_EDIT_ID = null; NOTE_DRAFT_PHOTOS = []; NOTES_SELECTED_TAG = 'general'; }
-    NOTES_SUBTAB = 'write'; // Write is the default landing page for Notes
+    NAV.notesSubtab = 'write'; // Write is the default landing page for Notes
   }
   if (tab === 'schedule') {
-    SCHEDULE_SUBTAB = 'calendar';
+    NAV.scheduleSubtab = 'calendar';
     // A fresh visit to Schedule always lands on today's Day view — same unconditional-today
     // landing the old dedicated TODAY subtab gave, now that Calendar's Day zoom covers it.
     // In-tab navigation (Setup <-> Calendar, or browsing to another zoom/date) still isn't
     // affected by this — only actually leaving and re-entering the Schedule tab resets it.
-    CAL_ZOOM = 'day';
-    CAL_SELECTED_DATE = todayStr();
+    NAV.calZoom = 'day';
+    NAV.calSelectedDate = todayStr();
     const d = new Date();
-    CAL_MONTH = { year: d.getFullYear(), month: d.getMonth() };
+    NAV.calMonth = { year: d.getFullYear(), month: d.getMonth() };
   }
-  if (tab === 'budget') { BUDGET_SUBTAB = 'overview'; }
+  if (tab === 'budget') { NAV.budgetSubtab = 'overview'; }
   render();
 }
 function goHomeSection(tab) {
@@ -2642,9 +2656,9 @@ function goHomeSection(tab) {
 // renderTabbar() and each section's own setXSubtab() setter.
 function openSetup(context) {
   pushNavHistory();
-  SETUP_CONTEXT = context;
+  NAV.setupContext = context;
   resetTransientUi(); // sets the tab directly, bypassing switchTab()
-  CURRENT_TAB = 'setup';
+  NAV.currentTab = 'setup';
   AESTHETIC_GROUPS_OPEN.clear(); // every fresh visit to Settings starts with all groups collapsed — see the AESTHETIC_GROUPS_OPEN declaration
   render();
 }
@@ -2655,7 +2669,7 @@ function openSetup(context) {
 // forward history.
 function goBack() {
   const prev = NAV_HISTORY.pop();
-  if (!prev) { CURRENT_TAB = 'home'; render(); return; }
+  if (!prev) { NAV.currentTab = 'home'; render(); return; }
   NAV_FORWARD.push(navSnapshot());
   applyNavSnapshot(prev);
   render();
@@ -2855,102 +2869,102 @@ function attachScrollIndicators() {
 // section's own distinct Setup page (see openSetup()) — Home's equivalent lives behind the
 // topbar gear icon instead, since Home has no bottom bar of its own to hold one.
 function renderTabbar() {
-  if (CURRENT_TAB === 'home') return '';
+  if (NAV.currentTab === 'home') return '';
   const homeBtn = `<button onclick="switchTab('home')"><span class="ic">${icon('home')}</span>HOME</button>`;
   let sectionBtns = '';
-  if (CURRENT_TAB === 'train') {
+  if (NAV.currentTab === 'train') {
     sectionBtns = `
-      <button class="${TRAIN_TOP_SUBTAB==='workouts'?'active':''}" onclick="setTrainTopSubtab('workouts')"><span class="ic">${icon('exercise')}</span>WORKOUTS</button>
-      <button class="${TRAIN_TOP_SUBTAB==='progress'?'active':''}" onclick="setTrainTopSubtab('progress')"><span class="ic">${icon('progress')}</span>PROGRESS</button>
-      <button class="${TRAIN_TOP_SUBTAB==='setup'?'active':''}" onclick="setTrainTopSubtab('setup')"><span class="ic">${icon('setup')}</span>SETUP</button>`;
-  } else if (CURRENT_TAB === 'hobbies') {
+      <button class="${NAV.trainTopSubtab==='workouts'?'active':''}" onclick="setTrainTopSubtab('workouts')"><span class="ic">${icon('exercise')}</span>WORKOUTS</button>
+      <button class="${NAV.trainTopSubtab==='progress'?'active':''}" onclick="setTrainTopSubtab('progress')"><span class="ic">${icon('progress')}</span>PROGRESS</button>
+      <button class="${NAV.trainTopSubtab==='setup'?'active':''}" onclick="setTrainTopSubtab('setup')"><span class="ic">${icon('setup')}</span>SETUP</button>`;
+  } else if (NAV.currentTab === 'hobbies') {
     sectionBtns = `
-      <button class="${GUITAR_SUBTAB==='chords'?'active':''}" onclick="setGuitarSubtab('chords')">CHORDS</button>
-      <button class="${GUITAR_SUBTAB==='songs'?'active':''}" onclick="setGuitarSubtab('songs')">SONGS</button>
-      <button class="${GUITAR_SUBTAB==='tech'?'active':''}" onclick="setGuitarSubtab('tech')">TECH</button>
-      <button class="${GUITAR_SUBTAB==='log'?'active':''}" onclick="setGuitarSubtab('log')">LOG</button>
-      <button class="${GUITAR_SUBTAB==='progress'?'active':''}" onclick="setGuitarSubtab('progress')"><span class="ic">${icon('progress')}</span>PROGRESS</button>`;
-  } else if (CURRENT_TAB === 'health') {
+      <button class="${NAV.guitarSubtab==='chords'?'active':''}" onclick="setGuitarSubtab('chords')">CHORDS</button>
+      <button class="${NAV.guitarSubtab==='songs'?'active':''}" onclick="setGuitarSubtab('songs')">SONGS</button>
+      <button class="${NAV.guitarSubtab==='tech'?'active':''}" onclick="setGuitarSubtab('tech')">TECH</button>
+      <button class="${NAV.guitarSubtab==='log'?'active':''}" onclick="setGuitarSubtab('log')">LOG</button>
+      <button class="${NAV.guitarSubtab==='progress'?'active':''}" onclick="setGuitarSubtab('progress')"><span class="ic">${icon('progress')}</span>PROGRESS</button>`;
+  } else if (NAV.currentTab === 'health') {
     sectionBtns = `
-      <button class="${HEALTH_SUBTAB==='specs'?'active':''}" onclick="setHealthSubtab('specs')"><span class="ic">${icon('ruler')}</span>SPECS</button>
-      <button class="${HEALTH_SUBTAB==='diet'?'active':''}" onclick="setHealthSubtab('diet')"><span class="ic">${icon('drumstick')}</span>DIET</button>
-      <button class="${HEALTH_SUBTAB==='longevity'?'active':''}" onclick="setHealthSubtab('longevity')"><span class="ic">${icon('infinity')}</span>LONGEVITY</button>
-      <button class="${HEALTH_SUBTAB==='setup'?'active':''}" onclick="setHealthSubtab('setup')"><span class="ic">${icon('setup')}</span>SETUP</button>`;
-  } else if (CURRENT_TAB === 'setup') {
+      <button class="${NAV.healthSubtab==='specs'?'active':''}" onclick="setHealthSubtab('specs')"><span class="ic">${icon('ruler')}</span>SPECS</button>
+      <button class="${NAV.healthSubtab==='diet'?'active':''}" onclick="setHealthSubtab('diet')"><span class="ic">${icon('drumstick')}</span>DIET</button>
+      <button class="${NAV.healthSubtab==='longevity'?'active':''}" onclick="setHealthSubtab('longevity')"><span class="ic">${icon('infinity')}</span>LONGEVITY</button>
+      <button class="${NAV.healthSubtab==='setup'?'active':''}" onclick="setHealthSubtab('setup')"><span class="ic">${icon('setup')}</span>SETUP</button>`;
+  } else if (NAV.currentTab === 'setup') {
     // The Home/gear-icon Settings screen is the only Setup that still pops up as its own screen
     // (see openSetup()) — HOME jumps all the way out, CLOSE returns to whichever screen opened it.
     const closeBtn = `<button class="tabbar-close" onclick="goBack()"><span class="ic">${icon('close')}</span>CLOSE</button>`;
     return homeBtn + closeBtn;
-  } else if (CURRENT_TAB === 'notes') {
+  } else if (NAV.currentTab === 'notes') {
     sectionBtns = `
-      <button class="${NOTES_SUBTAB==='write'?'active':''}" onclick="setNotesSubtab('write')"><span class="ic">${icon('pencil')}</span>WRITE</button>
-      <button class="${NOTES_SUBTAB==='view'?'active':''}" onclick="setNotesSubtab('view')"><span class="ic">${icon('magnify')}</span>VIEW ALL</button>
-      <button class="${NOTES_SUBTAB==='setup'?'active':''}" onclick="setNotesSubtab('setup')"><span class="ic">${icon('setup')}</span>SETUP</button>`;
-  } else if (CURRENT_TAB === 'schedule') {
+      <button class="${NAV.notesSubtab==='write'?'active':''}" onclick="setNotesSubtab('write')"><span class="ic">${icon('pencil')}</span>WRITE</button>
+      <button class="${NAV.notesSubtab==='view'?'active':''}" onclick="setNotesSubtab('view')"><span class="ic">${icon('magnify')}</span>VIEW ALL</button>
+      <button class="${NAV.notesSubtab==='setup'?'active':''}" onclick="setNotesSubtab('setup')"><span class="ic">${icon('setup')}</span>SETUP</button>`;
+  } else if (NAV.currentTab === 'schedule') {
     // TODAY used to be its own subtab here — folded into Calendar's Day zoom (defaults to today
     // on every fresh visit, see switchTab()) so the bottom bar has one less button.
     sectionBtns = `
-      <button class="${SCHEDULE_SUBTAB==='calendar'?'active':''}" onclick="setScheduleSubtab('calendar')"><span class="ic">${icon('schedule')}</span>CALENDAR</button>
-      <button class="${SCHEDULE_SUBTAB==='agenda'?'active':''}" onclick="setScheduleSubtab('agenda')"><span class="ic">${icon('flag')}</span>AGENDA</button>
-      <button class="${SCHEDULE_SUBTAB==='setup'?'active':''}" onclick="setScheduleSubtab('setup')"><span class="ic">${icon('setup')}</span>SETUP</button>`;
-  } else if (CURRENT_TAB === 'budget') {
+      <button class="${NAV.scheduleSubtab==='calendar'?'active':''}" onclick="setScheduleSubtab('calendar')"><span class="ic">${icon('schedule')}</span>CALENDAR</button>
+      <button class="${NAV.scheduleSubtab==='agenda'?'active':''}" onclick="setScheduleSubtab('agenda')"><span class="ic">${icon('flag')}</span>AGENDA</button>
+      <button class="${NAV.scheduleSubtab==='setup'?'active':''}" onclick="setScheduleSubtab('setup')"><span class="ic">${icon('setup')}</span>SETUP</button>`;
+  } else if (NAV.currentTab === 'budget') {
     sectionBtns = `
-      <button class="${BUDGET_SUBTAB==='overview'?'active':''}" onclick="setBudgetSubtab('overview')"><span class="ic">${icon('mountain')}</span>OVERVIEW</button>
-      <button class="${BUDGET_SUBTAB==='recurring'?'active':''}" onclick="setBudgetSubtab('recurring')"><span class="ic">${icon('recurDollar')}</span>RECURRING</button>
-      <button class="${BUDGET_SUBTAB==='goals'?'active':''}" onclick="setBudgetSubtab('goals')"><span class="ic">${icon('flag')}</span>GOALS</button>`;
+      <button class="${NAV.budgetSubtab==='overview'?'active':''}" onclick="setBudgetSubtab('overview')"><span class="ic">${icon('mountain')}</span>OVERVIEW</button>
+      <button class="${NAV.budgetSubtab==='recurring'?'active':''}" onclick="setBudgetSubtab('recurring')"><span class="ic">${icon('recurDollar')}</span>RECURRING</button>
+      <button class="${NAV.budgetSubtab==='goals'?'active':''}" onclick="setBudgetSubtab('goals')"><span class="ic">${icon('flag')}</span>GOALS</button>`;
   }
   return homeBtn + sectionBtns;
 }
 function _doRender() {
   _captureSubnavScroll(); // read the outgoing DOM's scroll positions before innerHTML below destroys it
   const app = document.getElementById('app');
-  if (CURRENT_TAB === 'home') {
+  if (NAV.currentTab === 'home') {
     app.innerHTML = renderHome();
-  } else if (CURRENT_TAB === 'schedule') {
+  } else if (NAV.currentTab === 'schedule') {
     app.innerHTML = renderSchedule();
-  } else if (CURRENT_TAB === 'train') {
-    if (TRAIN_TOP_SUBTAB === 'progress') {
+  } else if (NAV.currentTab === 'train') {
+    if (NAV.trainTopSubtab === 'progress') {
       app.innerHTML = renderExerciseProgress();
       attachProgressHandlers();
-    } else if (TRAIN_TOP_SUBTAB === 'setup') {
+    } else if (NAV.trainTopSubtab === 'setup') {
       app.innerHTML = renderExerciseSetup();
-    } else if (TRAIN_VIEW.mode === 'grid') app.innerHTML = renderTrainGrid();
-    else if (TRAIN_VIEW.mode === 'cardioLog') app.innerHTML = renderCardioLog(TRAIN_VIEW.cardioId);
-    else if (TRAIN_VIEW.mode === 'mesoLog') app.innerHTML = renderMesoWorkoutLog(TRAIN_VIEW.workoutId);
-    else { app.innerHTML = renderWorkoutLog(TRAIN_VIEW.workoutId); attachWorkoutLogHandlers(TRAIN_VIEW.workoutId); }
-  } else if (CURRENT_TAB === 'hobbies') {
+    } else if (NAV.trainView.mode === 'grid') app.innerHTML = renderTrainGrid();
+    else if (NAV.trainView.mode === 'cardioLog') app.innerHTML = renderCardioLog(NAV.trainView.cardioId);
+    else if (NAV.trainView.mode === 'mesoLog') app.innerHTML = renderMesoWorkoutLog(NAV.trainView.workoutId);
+    else { app.innerHTML = renderWorkoutLog(NAV.trainView.workoutId); attachWorkoutLogHandlers(NAV.trainView.workoutId); }
+  } else if (NAV.currentTab === 'hobbies') {
     app.innerHTML = renderHobbies();
-  } else if (CURRENT_TAB === 'health') {
+  } else if (NAV.currentTab === 'health') {
     app.innerHTML = renderHealth();
-    if (HEALTH_SUBTAB === 'specs' && UI.measureFormOpen) renderMeasurePhotoRow();
-  } else if (CURRENT_TAB === 'setup') {
+    if (NAV.healthSubtab === 'specs' && UI.measureFormOpen) renderMeasurePhotoRow();
+  } else if (NAV.currentTab === 'setup') {
     app.innerHTML = renderSetup();
     attachSetupHandlers();
     // Settings (Home's Setup) hosts the Aesthetic/Accent pickers, which patch their containers
     // by id via getElementById rather than returning markup renderSetup() can inline directly.
     renderAestheticOptions(); renderAccentSwatches();
-  } else if (CURRENT_TAB === 'notes') {
+  } else if (NAV.currentTab === 'notes') {
     app.innerHTML = renderNotes();
-    if (NOTES_SUBTAB === 'write') { renderNoteTagSwatches(); renderNotePhotoRow(); }
-  } else if (CURRENT_TAB === 'budget') {
-    if (BUDGET_SUBTAB === 'recurring') app.innerHTML = renderBudgetRecurring();
-    else if (BUDGET_SUBTAB === 'goals') app.innerHTML = renderBudgetGoals();
+    if (NAV.notesSubtab === 'write') { renderNoteTagSwatches(); renderNotePhotoRow(); }
+  } else if (NAV.currentTab === 'budget') {
+    if (NAV.budgetSubtab === 'recurring') app.innerHTML = renderBudgetRecurring();
+    else if (NAV.budgetSubtab === 'goals') app.innerHTML = renderBudgetGoals();
     else app.innerHTML = renderBudgetHome();
   }
   const tabbarEl = document.getElementById('tabbar');
   tabbarEl.innerHTML = renderTabbar();
-  tabbarEl.classList.toggle('hidden', CURRENT_TAB === 'home');
+  tabbarEl.classList.toggle('hidden', NAV.currentTab === 'home');
   document.getElementById('backBtn').classList.toggle('disabled', NAV_HISTORY.length === 0);
   // Forward is always shown alongside Back now (not hidden even on first launch) — just dimmed
   // and inert whenever its own stack is empty, same treatment as Back.
   document.getElementById('forwardBtn').classList.toggle('disabled', NAV_FORWARD.length === 0);
-  document.body.classList.toggle('no-tabbar', CURRENT_TAB === 'home');
+  document.body.classList.toggle('no-tabbar', NAV.currentTab === 'home');
   // The topbar gear is a global entry point to Home's own Setup page (Aesthetic/Accent/Data) —
   // it lives in the persistent topbar (not the per-section bottom bar) precisely so it stays
   // reachable from anywhere, the same way it always has been.
-  document.getElementById('settingsBtn').classList.toggle('hidden', CURRENT_TAB === 'setup');
+  document.getElementById('settingsBtn').classList.toggle('hidden', NAV.currentTab === 'setup');
   // Edit layout only makes sense on Home — hidden everywhere else, highlighted while active.
-  document.getElementById('homeEditBtn').classList.toggle('hidden', CURRENT_TAB !== 'home');
+  document.getElementById('homeEditBtn').classList.toggle('hidden', NAV.currentTab !== 'home');
   document.getElementById('homeEditBtn').classList.toggle('home-edit-toggle-active', UI.homeEditMode);
   renderRestTimerWidget(); // re-checks isInWorkoutLogScreen() so the FAB/widget show only there
   attachScrollIndicators();
@@ -3122,8 +3136,8 @@ function renderTrainGrid() {
     </div>`;
 }
 function setTrainTopSubtab(t) {
-  TRAIN_TOP_SUBTAB = t;
-  if (t === 'workouts') TRAIN_VIEW = { mode: 'grid', workoutId: null };
+  NAV.trainTopSubtab = t;
+  if (t === 'workouts') NAV.trainView = { mode: 'grid', workoutId: null };
   render();
 }
 
@@ -3138,22 +3152,22 @@ function changeCycle(delta) {
 // mobility, and warmup workouts alike.
 function openWorkoutLog(workoutId) {
   const w = getWorkout(workoutId);
-  TRAIN_VIEW = { mode: (w && w.t1) ? 'log' : 'mesoLog', workoutId };
+  NAV.trainView = { mode: (w && w.t1) ? 'log' : 'mesoLog', workoutId };
   render();
   window.scrollTo(0, 0);
 }
 function openCardioLog(cardioId) {
-  TRAIN_VIEW = { mode: 'cardioLog', cardioId };
+  NAV.trainView = { mode: 'cardioLog', cardioId };
   render();
   window.scrollTo(0, 0);
 }
 function openMesoWorkoutLog(workoutId) {
-  TRAIN_VIEW = { mode: 'mesoLog', workoutId };
+  NAV.trainView = { mode: 'mesoLog', workoutId };
   render();
   window.scrollTo(0, 0);
 }
 function backToGrid() {
-  TRAIN_VIEW = { mode: 'grid', workoutId: null };
+  NAV.trainView = { mode: 'grid', workoutId: null };
   render();
 }
 
@@ -4132,9 +4146,9 @@ function escapeHtml(s) {
 }
 function attachWorkoutLogHandlers(_workoutId) { /* using inline onclick/onchange, nothing extra needed */ }
 // Setup is no longer one shared screen — each section with configurable parameters gets its
-// own distinct page here, picked by SETUP_CONTEXT (see openSetup()). Only that section's own
+// own distinct page here, picked by NAV.setupContext (see openSetup()). Only that section's own
 // parameters ever appear on it.
-// The only remaining thing CURRENT_TAB === 'setup' ever shows now — every other context this
+// The only remaining thing NAV.currentTab === 'setup' ever shows now — every other context this
 // used to dispatch (Exercise/Notes/Schedule/Health) is a peer subtab within its own section
 // instead (see openSetup()'s comment).
 function renderSetup() {
@@ -4148,11 +4162,11 @@ function renderSetup() {
 // Hypertrophy-style workouts, and both kinds of target need somewhere to live.
 function renderExerciseSetup() {
   let body = '';
-  if (SETUP_SUBTAB === 'tm') body = `<div class="subtle-label" style="margin-bottom:10px;">TRAINING MAXES BY CATEGORY</div>${renderTMSetup()}<div class="divider"></div>${renderVolumeLandmarksSetup()}`;
-  else if (SETUP_SUBTAB === 'builder') body = renderWorkoutBuilder();
-  else if (SETUP_SUBTAB === 'plan') body = renderPlan();
-  else if (SETUP_SUBTAB === 'viewWorkouts') body = renderViewWorkouts();
-  else if (SETUP_SUBTAB === 'planner') body = renderExercisePlanTab();
+  if (NAV.setupSubtab === 'tm') body = `<div class="subtle-label" style="margin-bottom:10px;">TRAINING MAXES BY CATEGORY</div>${renderTMSetup()}<div class="divider"></div>${renderVolumeLandmarksSetup()}`;
+  else if (NAV.setupSubtab === 'builder') body = renderWorkoutBuilder();
+  else if (NAV.setupSubtab === 'plan') body = renderPlan();
+  else if (NAV.setupSubtab === 'viewWorkouts') body = renderViewWorkouts();
+  else if (NAV.setupSubtab === 'planner') body = renderExercisePlanTab();
   else body = renderRestSettingsPanel();
 
   // PLAN/MAXES/BUILDER/VIEW WORKOUTS/PLANNER/GENERAL switch here, as a subnav across the top of
@@ -4162,12 +4176,12 @@ function renderExerciseSetup() {
   return `<div class="screen">
     <div class="section-title">Setup</div>
     ${subNav(`
-      <button class="${SETUP_SUBTAB==='plan'?'active':''}" onclick="setSetupSubtab('plan')">PLAN</button>
-      <button class="${SETUP_SUBTAB==='tm'?'active':''}" onclick="setSetupSubtab('tm')">MAXES</button>
-      <button class="${SETUP_SUBTAB==='builder'?'active':''}" onclick="setSetupSubtab('builder')">BUILDER</button>
-      <button class="${SETUP_SUBTAB==='viewWorkouts'?'active':''}" onclick="setSetupSubtab('viewWorkouts')">VIEW WORKOUTS</button>
-      <button class="${SETUP_SUBTAB==='planner'?'active':''}" onclick="setSetupSubtab('planner')">PLANNER</button>
-      <button class="${SETUP_SUBTAB==='general'?'active':''}" onclick="setSetupSubtab('general')">GENERAL</button>
+      <button class="${NAV.setupSubtab==='plan'?'active':''}" onclick="setSetupSubtab('plan')">PLAN</button>
+      <button class="${NAV.setupSubtab==='tm'?'active':''}" onclick="setSetupSubtab('tm')">MAXES</button>
+      <button class="${NAV.setupSubtab==='builder'?'active':''}" onclick="setSetupSubtab('builder')">BUILDER</button>
+      <button class="${NAV.setupSubtab==='viewWorkouts'?'active':''}" onclick="setSetupSubtab('viewWorkouts')">VIEW WORKOUTS</button>
+      <button class="${NAV.setupSubtab==='planner'?'active':''}" onclick="setSetupSubtab('planner')">PLANNER</button>
+      <button class="${NAV.setupSubtab==='general'?'active':''}" onclick="setSetupSubtab('general')">GENERAL</button>
     `)}
     ${body}
   </div>`;
@@ -4261,10 +4275,10 @@ function renderNoteTagSetupRow(key, def) {
     </div>` : ''}
   </div>`;
 }
-function setSetupSubtab(t) { SETUP_SUBTAB = t; render(); }
+function setSetupSubtab(t) { NAV.setupSubtab = t; render(); }
 
 // ---------------- SCHEDULE SETUP: Set Anchors / Schedule Builder ----------------
-function setScheduleSetupSubtab(t) { SCHEDULE_SETUP_SUBTAB = t; if (t === 'builder') SCHEDULE_BUILDER_EDITING = null; render(); }
+function setScheduleSetupSubtab(t) { NAV.scheduleSetupSubtab = t; if (t === 'builder') SCHEDULE_BUILDER_EDITING = null; render(); }
 // Schedule's own Setup: SET ANCHORS (the fixed daily habits, same every day, plus the weekly/
 // periodic check-ins) and SCHEDULE BUILDER (day-of-week-specific itineraries built from
 // Wake-Up/Bed Time plus custom activities). Nothing here applies outside Schedule.
@@ -4272,14 +4286,14 @@ function renderScheduleSetup() {
   return `<div class="screen">
     <div class="section-title">Setup</div>
     ${subNav(`
-      <button class="${SCHEDULE_SETUP_SUBTAB==='anchors'?'active':''}" onclick="setScheduleSetupSubtab('anchors')">SET ANCHORS</button>
-      <button class="${SCHEDULE_SETUP_SUBTAB==='builder'?'active':''}" onclick="setScheduleSetupSubtab('builder')">SCHEDULE BUILDER</button>
-      <button class="${SCHEDULE_SETUP_SUBTAB==='habits'?'active':''}" onclick="setScheduleSetupSubtab('habits')">HABITS</button>
-      <button class="${SCHEDULE_SETUP_SUBTAB==='exceptions'?'active':''}" onclick="setScheduleSetupSubtab('exceptions')">EXCEPTIONS</button>
+      <button class="${NAV.scheduleSetupSubtab==='anchors'?'active':''}" onclick="setScheduleSetupSubtab('anchors')">SET ANCHORS</button>
+      <button class="${NAV.scheduleSetupSubtab==='builder'?'active':''}" onclick="setScheduleSetupSubtab('builder')">SCHEDULE BUILDER</button>
+      <button class="${NAV.scheduleSetupSubtab==='habits'?'active':''}" onclick="setScheduleSetupSubtab('habits')">HABITS</button>
+      <button class="${NAV.scheduleSetupSubtab==='exceptions'?'active':''}" onclick="setScheduleSetupSubtab('exceptions')">EXCEPTIONS</button>
     `)}
-    ${SCHEDULE_SETUP_SUBTAB === 'builder' ? renderScheduleBuilder()
-      : SCHEDULE_SETUP_SUBTAB === 'habits' ? renderHabitsSetup()
-      : SCHEDULE_SETUP_SUBTAB === 'exceptions' ? renderExceptionsSetup()
+    ${NAV.scheduleSetupSubtab === 'builder' ? renderScheduleBuilder()
+      : NAV.scheduleSetupSubtab === 'habits' ? renderHabitsSetup()
+      : NAV.scheduleSetupSubtab === 'exceptions' ? renderExceptionsSetup()
       : renderSetAnchors()}
   </div>`;
 }
@@ -4575,24 +4589,23 @@ function renderHabitSetupRow(h) {
 // Multi-habit "success calendar" — one month grid, every active-that-day habit gets a small
 // shaped mark (its own identity via shape, colored green/red for kept/broken that day, a plain
 // hollow dot if unmarked regardless of shape — shape only matters once there's a real status to
-// tell apart). Its own independent month state (HABIT_CAL_MONTH), deliberately not wired into the
-// Reminders/Schedule Calendar's CAL_ZOOM system — a separate, focused view.
-let HABIT_CAL_MONTH = null;
+// tell apart). Its own independent month state (NAV.habitCalMonth), deliberately not wired into the
+// Reminders/Schedule Calendar's NAV.calZoom system — a separate, focused view.
 function ensureHabitCalState() {
-  if (!HABIT_CAL_MONTH) { const d = new Date(); HABIT_CAL_MONTH = { year: d.getFullYear(), month: d.getMonth() }; }
+  if (!NAV.habitCalMonth) { const d = new Date(); NAV.habitCalMonth = { year: d.getFullYear(), month: d.getMonth() }; }
 }
 function habitCalGoToMonth(delta) {
   ensureHabitCalState();
-  let m = HABIT_CAL_MONTH.month + delta, y = HABIT_CAL_MONTH.year;
+  let m = NAV.habitCalMonth.month + delta, y = NAV.habitCalMonth.year;
   if (m < 0) { m = 11; y--; } else if (m > 11) { m = 0; y++; }
-  HABIT_CAL_MONTH = { year: y, month: m };
+  NAV.habitCalMonth = { year: y, month: m };
   render();
 }
 function renderHabitCalendar() {
   const habits = STATE.life.habits;
   if (!habits.length) return '';
   ensureHabitCalState();
-  const { year, month } = HABIT_CAL_MONTH;
+  const { year, month } = NAV.habitCalMonth;
   const first = new Date(year, month, 1);
   const startWeekday = first.getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -4812,7 +4825,7 @@ function renderScheduleActivityRow(schedId, act) {
 
 // ---------------- HEALTH SETUP: Meal Builder / All Meals ----------------
 function setHealthSetupSubtab(t) {
-  HEALTH_SETUP_SUBTAB = t;
+  NAV.healthSetupSubtab = t;
   UI.customFoodFormOpen = false; UI.customFoodEditId = null; // don't resume a stale add/edit form across subtab switches
   render();
 }
@@ -4824,12 +4837,12 @@ function renderHealthSetup() {
   return `<div class="screen">
     <div class="section-title">Setup</div>
     ${subNav(`
-      <button class="${HEALTH_SETUP_SUBTAB==='builder'?'active':''}" onclick="setHealthSetupSubtab('builder')">MEAL BUILDER</button>
-      <button class="${HEALTH_SETUP_SUBTAB==='meals'?'active':''}" onclick="setHealthSetupSubtab('meals')">ALL MEALS</button>
-      <button class="${HEALTH_SETUP_SUBTAB==='plan'?'active':''}" onclick="setHealthSetupSubtab('plan')">MEAL PLAN</button>
-      <button class="${HEALTH_SETUP_SUBTAB==='myfoods'?'active':''}" onclick="setHealthSetupSubtab('myfoods')">MY FOODS</button>
+      <button class="${NAV.healthSetupSubtab==='builder'?'active':''}" onclick="setHealthSetupSubtab('builder')">MEAL BUILDER</button>
+      <button class="${NAV.healthSetupSubtab==='meals'?'active':''}" onclick="setHealthSetupSubtab('meals')">ALL MEALS</button>
+      <button class="${NAV.healthSetupSubtab==='plan'?'active':''}" onclick="setHealthSetupSubtab('plan')">MEAL PLAN</button>
+      <button class="${NAV.healthSetupSubtab==='myfoods'?'active':''}" onclick="setHealthSetupSubtab('myfoods')">MY FOODS</button>
     `)}
-    ${HEALTH_SETUP_SUBTAB === 'meals' ? renderAllMeals() : HEALTH_SETUP_SUBTAB === 'plan' ? renderMealPlanTab() : HEALTH_SETUP_SUBTAB === 'myfoods' ? renderMyFoodsTab() : renderMealBuilderTab()}
+    ${NAV.healthSetupSubtab === 'meals' ? renderAllMeals() : NAV.healthSetupSubtab === 'plan' ? renderMealPlanTab() : NAV.healthSetupSubtab === 'myfoods' ? renderMyFoodsTab() : renderMealBuilderTab()}
   </div>`;
 }
 function roundMacro(n) { return Math.round((n || 0) * 10) / 10; }
@@ -4851,14 +4864,14 @@ function renderMealBuilderTab() {
 }
 function startNewMeal() {
   MEAL_BUILDER_DRAFT = { id: null, name: 'New Meal', items: [], activeCategory: null, searchQuery: '' };
-  HEALTH_SETUP_SUBTAB = 'builder';
+  NAV.healthSetupSubtab = 'builder';
   render();
 }
 function editMeal(id) {
   const meal = STATE.diet.meals.find(m => m.id === id);
   if (!meal) return;
   MEAL_BUILDER_DRAFT = { id: meal.id, name: meal.name, items: meal.items.map(it => Object.assign({}, it)), activeCategory: null, searchQuery: '' };
-  HEALTH_SETUP_SUBTAB = 'builder';
+  NAV.healthSetupSubtab = 'builder';
   render();
 }
 function cancelMealDraft() {
@@ -4956,7 +4969,7 @@ function saveMealDraft() {
   saveState();
   showToast('Meal saved');
   MEAL_BUILDER_DRAFT = null;
-  HEALTH_SETUP_SUBTAB = 'meals';
+  NAV.healthSetupSubtab = 'meals';
   render();
 }
 function renderMealBuilderForm() {
@@ -5227,19 +5240,18 @@ function renderCustomFoodCard(f) {
 // weekday (0=Sun..6=Sat, recurring every week); this is keyed by real date and only ever holds
 // what actually got logged that day. Lives at the bottom of the DIET tab (renderDietSetup()),
 // under the TDEE/macro targets, so today's actual totals sit right next to what you're aiming for.
-let DIET_LOG_DATE = null; // lazily set to today
 let DIET_LOG_ACTIVE_CATEGORY = null;
 let DIET_LOG_SEARCH_QUERY = '';
-function ensureDietLogState() { if (!DIET_LOG_DATE) DIET_LOG_DATE = todayStr(); }
+function ensureDietLogState() { if (!NAV.dietLogDate) NAV.dietLogDate = todayStr(); }
 function dietLogEntriesFor(dateStr) {
   if (!STATE.diet.foodLog[dateStr]) STATE.diet.foodLog[dateStr] = [];
   return STATE.diet.foodLog[dateStr];
 }
 function goToLogDate(delta) {
   ensureDietLogState();
-  const d = new Date(DIET_LOG_DATE + 'T00:00:00');
+  const d = new Date(NAV.dietLogDate + 'T00:00:00');
   d.setDate(d.getDate() + delta);
-  DIET_LOG_DATE = dateKeyOf(d);
+  NAV.dietLogDate = dateKeyOf(d);
   DIET_LOG_ACTIVE_CATEGORY = null; DIET_LOG_SEARCH_QUERY = '';
   render();
 }
@@ -5252,7 +5264,7 @@ function addFoodToLog(foodId) {
   const food = foodById(foodId);
   if (!food) return;
   const unit = defaultMealUnitFor(food);
-  dietLogEntriesFor(DIET_LOG_DATE).push({ id: uid(), foodId, qty: defaultQtyForUnit(unit), unit });
+  dietLogEntriesFor(NAV.dietLogDate).push({ id: uid(), foodId, qty: defaultQtyForUnit(unit), unit });
   DIET_LOG_ACTIVE_CATEGORY = null; DIET_LOG_SEARCH_QUERY = '';
   saveState();
   render();
@@ -5263,7 +5275,7 @@ function logSavedMeal(mealId) {
   ensureDietLogState();
   const meal = STATE.diet.meals.find(m => m.id === mealId);
   if (!meal) return;
-  const entries = dietLogEntriesFor(DIET_LOG_DATE);
+  const entries = dietLogEntriesFor(NAV.dietLogDate);
   meal.items.forEach(it => entries.push({ id: uid(), foodId: it.foodId, qty: it.qty, unit: it.unit }));
   saveState();
   showToast(`Logged "${meal.name}"`);
@@ -5271,7 +5283,7 @@ function logSavedMeal(mealId) {
 }
 function updateLogItemQty(itemId, val) {
   ensureDietLogState();
-  const item = dietLogEntriesFor(DIET_LOG_DATE).find(it => it.id === itemId);
+  const item = dietLogEntriesFor(NAV.dietLogDate).find(it => it.id === itemId);
   if (!item) return;
   item.qty = val === '' ? '' : Number(val);
   saveState();
@@ -5279,7 +5291,7 @@ function updateLogItemQty(itemId, val) {
 }
 function updateLogItemUnit(itemId, val) {
   ensureDietLogState();
-  const item = dietLogEntriesFor(DIET_LOG_DATE).find(it => it.id === itemId);
+  const item = dietLogEntriesFor(NAV.dietLogDate).find(it => it.id === itemId);
   if (!item) return;
   item.unit = val;
   saveState();
@@ -5287,7 +5299,7 @@ function updateLogItemUnit(itemId, val) {
 }
 function removeLogItem(itemId) {
   ensureDietLogState();
-  STATE.diet.foodLog[DIET_LOG_DATE] = dietLogEntriesFor(DIET_LOG_DATE).filter(it => it.id !== itemId);
+  STATE.diet.foodLog[NAV.dietLogDate] = dietLogEntriesFor(NAV.dietLogDate).filter(it => it.id !== itemId);
   saveState();
   render();
 }
@@ -5328,11 +5340,11 @@ function renderLogItemRow(item) {
 }
 function renderDietLog() {
   ensureDietLogState();
-  const entries = dietLogEntriesFor(DIET_LOG_DATE);
+  const entries = dietLogEntriesFor(NAV.dietLogDate);
   const totals = computeMealTotals(entries);
-  const d = new Date(DIET_LOG_DATE + 'T00:00:00');
+  const d = new Date(NAV.dietLogDate + 'T00:00:00');
   const label = d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
-  const isToday = DIET_LOG_DATE === todayStr();
+  const isToday = NAV.dietLogDate === todayStr();
   return `
     <div class="subtle-label" style="margin:22px 0 10px;">DIET LOG</div>
     <div class="week-selector" style="margin-bottom:12px;">
@@ -7510,29 +7522,29 @@ const MEASURE_FIELDS = [
 let COMPARE_A = null, COMPARE_B = null;
 
 function renderHealth() {
-  if (HEALTH_SUBTAB === 'setup') return renderHealthSetup(); // already a full .screen with its own header — don't double-wrap
+  if (NAV.healthSubtab === 'setup') return renderHealthSetup(); // already a full .screen with its own header — don't double-wrap
   let body;
-  if (HEALTH_SUBTAB === 'specs') body = renderSpecs();
-  else if (HEALTH_SUBTAB === 'diet') body = renderDietSetup();
+  if (NAV.healthSubtab === 'specs') body = renderSpecs();
+  else if (NAV.healthSubtab === 'diet') body = renderDietSetup();
   else body = renderLifeLongevity();
   return `<div class="screen">
     <div class="section-title">Health &amp; Diet</div>
     ${body}
   </div>`;
 }
-function setHealthSubtab(t) { HEALTH_SUBTAB = t; render(); }
+function setHealthSubtab(t) { NAV.healthSubtab = t; render(); }
 
 function renderExerciseProgress() {
   const subnav = subNav(`
-    <button class="${PROGRESS_SUBTAB==='bodyweight'?'active':''}" onclick="setProgressSubtab('bodyweight')">BODY WEIGHT</button>
-    <button class="${PROGRESS_SUBTAB==='bodymeasurement'?'active':''}" onclick="setProgressSubtab('bodymeasurement')">BODY MEASUREMENT</button>
-    <button class="${PROGRESS_SUBTAB==='volume'?'active':''}" onclick="setProgressSubtab('volume')">SET VOLUME</button>
-    <button class="${PROGRESS_SUBTAB==='compare'?'active':''}" onclick="setProgressSubtab('compare')">COMPARE</button>
+    <button class="${NAV.progressSubtab==='bodyweight'?'active':''}" onclick="setProgressSubtab('bodyweight')">BODY WEIGHT</button>
+    <button class="${NAV.progressSubtab==='bodymeasurement'?'active':''}" onclick="setProgressSubtab('bodymeasurement')">BODY MEASUREMENT</button>
+    <button class="${NAV.progressSubtab==='volume'?'active':''}" onclick="setProgressSubtab('volume')">SET VOLUME</button>
+    <button class="${NAV.progressSubtab==='compare'?'active':''}" onclick="setProgressSubtab('compare')">COMPARE</button>
   `, { marginTop: false });
   let body;
-  if (PROGRESS_SUBTAB === 'bodyweight') body = renderBodyWeightChart();
-  else if (PROGRESS_SUBTAB === 'bodymeasurement') body = renderBodyMeasurementChart();
-  else if (PROGRESS_SUBTAB === 'compare') body = renderCompareView();
+  if (NAV.progressSubtab === 'bodyweight') body = renderBodyWeightChart();
+  else if (NAV.progressSubtab === 'bodymeasurement') body = renderBodyMeasurementChart();
+  else if (NAV.progressSubtab === 'compare') body = renderCompareView();
   else body = renderVolume();
   return `<div class="screen">
     <div class="section-title">Exercise</div>
@@ -7540,7 +7552,7 @@ function renderExerciseProgress() {
     ${body}
   </div>`;
 }
-function setProgressSubtab(t) { PROGRESS_SUBTAB = t; render(); }
+function setProgressSubtab(t) { NAV.progressSubtab = t; render(); }
 
 // ---------------- BODY MEASUREMENTS ----------------
 function renderMeasurements() {
@@ -8064,11 +8076,11 @@ function drawCompareCharts() {
 
 // ---------------- SET VOLUME ----------------
 function renderVolume() {
-  if (VOLUME_CYCLE === null) VOLUME_CYCLE = STATE.currentCycle;
-  if (VOLUME_CYCLE < 1) VOLUME_CYCLE = 1;
-  if (VOLUME_CYCLE > STATE.meso.cycles) VOLUME_CYCLE = STATE.meso.cycles;
+  if (NAV.volumeCycle === null) NAV.volumeCycle = STATE.currentCycle;
+  if (NAV.volumeCycle < 1) NAV.volumeCycle = 1;
+  if (NAV.volumeCycle > STATE.meso.cycles) NAV.volumeCycle = STATE.meso.cycles;
 
-  const data = computeVolumeForCycle(VOLUME_CYCLE);
+  const data = computeVolumeForCycle(NAV.volumeCycle);
   const maxSets = Math.max(1, ...data.map(d => d.sets));
   const anyTagged = workoutsByType('weights').some(w => Array.isArray(w.exercises) ? w.exercises.some(ex => ex.muscle) : w.t3.some(t => t.muscle))
     || STATE.categories.some(c => Object.values(c.tiers).some(t => t.muscle));
@@ -8109,11 +8121,11 @@ function renderVolume() {
     <div class="week-selector">
       <div>
         <div class="subtle-label">SETS PER MUSCLE GROUP</div>
-        <div class="cycle-label">WEEK ${VOLUME_CYCLE} <span style="color:var(--text-faint); font-size:16px;">/ ${STATE.meso.cycles}</span></div>
+        <div class="cycle-label">WEEK ${NAV.volumeCycle} <span style="color:var(--text-faint); font-size:16px;">/ ${STATE.meso.cycles}</span></div>
       </div>
       <div class="cycle-btns">
-        <button onclick="changeVolumeCycle(-1)" ${VOLUME_CYCLE <= 1 ? 'disabled style="opacity:.3"' : ''}>&#8249;</button>
-        <button onclick="changeVolumeCycle(1)" ${VOLUME_CYCLE >= STATE.meso.cycles ? 'disabled style="opacity:.3"' : ''}>&#8250;</button>
+        <button onclick="changeVolumeCycle(-1)" ${NAV.volumeCycle <= 1 ? 'disabled style="opacity:.3"' : ''}>&#8249;</button>
+        <button onclick="changeVolumeCycle(1)" ${NAV.volumeCycle >= STATE.meso.cycles ? 'disabled style="opacity:.3"' : ''}>&#8250;</button>
       </div>
     </div>
     ${!anyTagged ? `<div class="panel" style="border-color:var(--accent-dim); background:var(--accent-soft);"><div style="font-size:12px;">No exercises are tagged with a muscle group yet. Add one under <b>Setup &rarr; Training Max</b> (per category) or <b>Setup &rarr; Workout Builder</b> (per exercise/accessory) to start seeing volume here.</div></div>` : ''}
@@ -8124,16 +8136,16 @@ function renderVolume() {
   `;
 }
 function changeVolumeCycle(delta) {
-  const next = VOLUME_CYCLE + delta;
+  const next = NAV.volumeCycle + delta;
   if (next < 1 || next > STATE.meso.cycles) return;
-  VOLUME_CYCLE = next;
+  NAV.volumeCycle = next;
   render();
 }
 
 function attachProgressHandlers() {
-  if (PROGRESS_SUBTAB === 'bodyweight') setTimeout(drawWeightChart, 0);
-  else if (PROGRESS_SUBTAB === 'bodymeasurement') setTimeout(drawMeasurementChart, 0);
-  else if (PROGRESS_SUBTAB === 'compare') setTimeout(drawCompareCharts, 0);
+  if (NAV.progressSubtab === 'bodyweight') setTimeout(drawWeightChart, 0);
+  else if (NAV.progressSubtab === 'bodymeasurement') setTimeout(drawMeasurementChart, 0);
+  else if (NAV.progressSubtab === 'compare') setTimeout(drawCompareCharts, 0);
 }
 function setUnits(u) {
   STATE.units = u;
@@ -8351,17 +8363,17 @@ function setNotesSubtab(t) {
   // note, then tapped VIEW ALL instead of CANCEL EDIT, then tapped WRITE again) should land on a
   // blank compose, not silently resume the stale edit. Only fires on an actual transition, so
   // re-tapping the already-active WRITE tab never discards an in-progress NEW note's draft.
-  if (t === 'write' && NOTES_SUBTAB !== 'write' && NOTE_EDIT_ID) {
+  if (t === 'write' && NAV.notesSubtab !== 'write' && NOTE_EDIT_ID) {
     NOTE_EDIT_ID = null; NOTE_DRAFT_PHOTOS = []; NOTES_SELECTED_TAG = 'general';
   }
-  NOTES_SUBTAB = t;
+  NAV.notesSubtab = t;
   render();
 }
 function renderNotes() {
-  if (NOTES_SUBTAB === 'setup') return renderNotesSetup(); // already a full .screen with its own header — don't double-wrap
+  if (NAV.notesSubtab === 'setup') return renderNotesSetup(); // already a full .screen with its own header — don't double-wrap
   return `<div class="screen">
     <div class="section-title">Notes</div>
-    ${NOTES_SUBTAB === 'write' ? renderNotesWrite() : renderNotesView()}
+    ${NAV.notesSubtab === 'write' ? renderNotesWrite() : renderNotesView()}
   </div>`;
 }
 function renderNotesWrite() {
@@ -8464,7 +8476,7 @@ function saveNote() {
   NOTE_DRAFT_PHOTOS = [];
   NOTES_SELECTED_TAG = 'general'; // reset so the NEXT note starts back at the default tag rather than staying stuck on whatever was picked here
   NOTE_EDIT_ID = null;
-  if (editing) NOTES_SUBTAB = 'view'; // back to the list after updating, instead of landing in a blank compose form
+  if (editing) NAV.notesSubtab = 'view'; // back to the list after updating, instead of landing in a blank compose form
   saveState();
   showToast(editing ? 'Note updated' : 'Note saved');
   render();
@@ -8477,14 +8489,14 @@ function editNote(id) {
   NOTE_EDIT_ID = id;
   NOTES_SELECTED_TAG = note.tag || 'general';
   NOTE_DRAFT_PHOTOS = (note.photos || []).slice();
-  NOTES_SUBTAB = 'write';
+  NAV.notesSubtab = 'write';
   render();
 }
 function cancelNoteEdit() {
   NOTE_EDIT_ID = null;
   NOTE_DRAFT_PHOTOS = [];
   NOTES_SELECTED_TAG = 'general';
-  NOTES_SUBTAB = 'view';
+  NAV.notesSubtab = 'view';
   render();
 }
 function deleteNote(id) {
@@ -8873,7 +8885,7 @@ function updateScheduleExceptionField(id, field, value) {
 // ---- The Day view's own exception control ----
 function toggleExceptionForm() { UI.exceptionFormOpen = !UI.exceptionFormOpen; render(); }
 function saveExceptionFromDayView() {
-  const start = inputVal('excStart') || CAL_SELECTED_DATE;
+  const start = inputVal('excStart') || NAV.calSelectedDate;
   const end = inputVal('excEnd') || start;
   const scheduleId = inputVal('excSchedule') || null;
   const skipAnchors = inputChecked('excSkipAnchors');
@@ -9120,8 +9132,8 @@ function openTodayWorkout(workoutId) {
   if (!w) return;
   pushNavHistory();
   resetTransientUi(); // leaves Home directly, bypassing switchTab()
-  CURRENT_TAB = 'train';
-  TRAIN_TOP_SUBTAB = 'workouts';
+  NAV.currentTab = 'train';
+  NAV.trainTopSubtab = 'workouts';
   if (w.type === 'cardio') openCardioLog(w.id);
   else openWorkoutLog(w.id); // auto-detects GZCL vs exercises[] shape
 }
@@ -9432,8 +9444,8 @@ function renderHome() {
   </div>`;
 }
 function renderSchedule() {
-  if (SCHEDULE_SUBTAB === 'setup') return renderScheduleSetup(); // already a full .screen with its own header — don't double-wrap
-  if (SCHEDULE_SUBTAB === 'agenda') {
+  if (NAV.scheduleSubtab === 'setup') return renderScheduleSetup(); // already a full .screen with its own header — don't double-wrap
+  if (NAV.scheduleSubtab === 'agenda') {
     return `<div class="screen">
       <div class="section-title">Agenda</div>
       ${renderAgenda()}
@@ -9515,51 +9527,48 @@ function renderAgenda() {
     <div style="font-size:11px; color:var(--text-faint); margin:0 0 12px;">The next ${AGENDA_DAYS} days — what's actually coming up, not your day-to-day routine. Tap any day to open it in full.</div>
     <div class="stack">${cards}</div>`;
 }
-function setScheduleSubtab(t) { SCHEDULE_SUBTAB = t; render(); }
+function setScheduleSubtab(t) { NAV.scheduleSubtab = t; render(); }
 
 // ---------------- CALENDAR & REMINDERS ----------------
 const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-let CAL_MONTH = null;         // {year, month} — 0-indexed month, lazily set to the current month
-let CAL_SELECTED_DATE = null; // 'YYYY-MM-DD', lazily set to today
 // Zoom level for the Calendar subtab — 'year' | 'month' | 'week' | 'day'. Month is the original
 // (and default) granularity; Year and Week were added later as explicit zoom-out/zoom-in levels
 // around it, Day being what was already the reminders panel under the month grid. Not reset on
-// tab switches, same treatment as CAL_MONTH/CAL_SELECTED_DATE — it's a "where you left the
+// tab switches, same treatment as NAV.calMonth/NAV.calSelectedDate — it's a "where you left the
 // calendar" convenience, not part of the tab/subtab nav history.
-let CAL_ZOOM = 'month';
 function ensureCalState() {
-  if (!CAL_MONTH) { const d = new Date(); CAL_MONTH = { year: d.getFullYear(), month: d.getMonth() }; }
-  if (!CAL_SELECTED_DATE) CAL_SELECTED_DATE = todayStr();
+  if (!NAV.calMonth) { const d = new Date(); NAV.calMonth = { year: d.getFullYear(), month: d.getMonth() }; }
+  if (!NAV.calSelectedDate) NAV.calSelectedDate = todayStr();
 }
-function calSetZoom(z) { CAL_ZOOM = z; render(); }
+function calSetZoom(z) { NAV.calZoom = z; render(); }
 function calGoToYear(delta) {
   ensureCalState();
-  CAL_MONTH = { year: CAL_MONTH.year + delta, month: CAL_MONTH.month };
+  NAV.calMonth = { year: NAV.calMonth.year + delta, month: NAV.calMonth.month };
   render();
 }
 function calGoToMonth(delta) {
   ensureCalState();
-  let m = CAL_MONTH.month + delta, y = CAL_MONTH.year;
+  let m = NAV.calMonth.month + delta, y = NAV.calMonth.year;
   if (m < 0) { m = 11; y--; } else if (m > 11) { m = 0; y++; }
-  CAL_MONTH = { year: y, month: m };
+  NAV.calMonth = { year: y, month: m };
   render();
 }
-// Week/Day navigation shift CAL_SELECTED_DATE itself (not just CAL_MONTH) since the selected day
-// is what a week/day view is actually centered on; CAL_MONTH is kept in sync so switching back to
+// Week/Day navigation shift NAV.calSelectedDate itself (not just NAV.calMonth) since the selected day
+// is what a week/day view is actually centered on; NAV.calMonth is kept in sync so switching back to
 // Month/Year lands on the month the selected day is actually in, even across a month/year boundary.
 function calGoToWeek(delta) { calShiftSelectedDate(delta * 7); }
 function calGoToDay(delta) { calShiftSelectedDate(delta); }
 function calShiftSelectedDate(deltaDays) {
   ensureCalState();
-  const d = new Date(CAL_SELECTED_DATE + 'T00:00:00');
+  const d = new Date(NAV.calSelectedDate + 'T00:00:00');
   d.setDate(d.getDate() + deltaDays);
-  CAL_SELECTED_DATE = dateKey(d.getFullYear(), d.getMonth(), d.getDate());
-  CAL_MONTH = { year: d.getFullYear(), month: d.getMonth() };
+  NAV.calSelectedDate = dateKey(d.getFullYear(), d.getMonth(), d.getDate());
+  NAV.calMonth = { year: d.getFullYear(), month: d.getMonth() };
   UI.exceptionFormOpen = false; // a half-filled form shouldn't follow you onto another day
   render();
 }
 function calSelectDay(dateStr) {
-  CAL_SELECTED_DATE = dateStr;
+  NAV.calSelectedDate = dateStr;
   UI.reminderFormOpen = false;
   UI.exceptionFormOpen = false;
   render();
@@ -9567,21 +9576,21 @@ function calSelectDay(dateStr) {
 // Used from Year view, where a day cell has no reminders panel of its own to drop down into —
 // tapping a day there jumps straight into Day zoom for it, rather than just selecting silently.
 function calSelectDayAndZoom(dateStr, zoom) {
-  CAL_SELECTED_DATE = dateStr;
+  NAV.calSelectedDate = dateStr;
   const d = new Date(dateStr + 'T00:00:00');
-  CAL_MONTH = { year: d.getFullYear(), month: d.getMonth() };
-  CAL_ZOOM = zoom;
+  NAV.calMonth = { year: d.getFullYear(), month: d.getMonth() };
+  NAV.calZoom = zoom;
   UI.reminderFormOpen = false;
   UI.exceptionFormOpen = false;
   // The Agenda calls this too, from its own subtab — without this it would set the zoom and then
   // render the Agenda again, looking like the tap did nothing. Harmless from the Year grid, which
   // is already on the Calendar subtab.
-  SCHEDULE_SUBTAB = 'calendar';
+  NAV.scheduleSubtab = 'calendar';
   render();
 }
 function calZoomToMonth(year, month) {
-  CAL_MONTH = { year, month };
-  CAL_ZOOM = 'month';
+  NAV.calMonth = { year, month };
+  NAV.calZoom = 'month';
   render();
 }
 function dateKey(y, m, d) { return `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`; }
@@ -9637,18 +9646,18 @@ function renderScheduleCalendar() {
   ensureCalState();
   // The schedule-color legend only makes sense where the grid's own anchor icons need decoding —
   // Day zoom already names its schedule in text (see renderDailySchedule()), so it's redundant there.
-  const legend = CAL_ZOOM !== 'day' ? renderScheduleColorLegend() : '';
+  const legend = NAV.calZoom !== 'day' ? renderScheduleColorLegend() : '';
   return `
     <div class="unit-toggle cal-zoom-toggle">
-      <button class="${CAL_ZOOM==='year'?'active':''}" onclick="calSetZoom('year')">YEAR</button>
-      <button class="${CAL_ZOOM==='month'?'active':''}" onclick="calSetZoom('month')">MONTH</button>
-      <button class="${CAL_ZOOM==='week'?'active':''}" onclick="calSetZoom('week')">WEEK</button>
-      <button class="${CAL_ZOOM==='day'?'active':''}" onclick="calSetZoom('day')">DAY</button>
+      <button class="${NAV.calZoom==='year'?'active':''}" onclick="calSetZoom('year')">YEAR</button>
+      <button class="${NAV.calZoom==='month'?'active':''}" onclick="calSetZoom('month')">MONTH</button>
+      <button class="${NAV.calZoom==='week'?'active':''}" onclick="calSetZoom('week')">WEEK</button>
+      <button class="${NAV.calZoom==='day'?'active':''}" onclick="calSetZoom('day')">DAY</button>
     </div>
     ${legend}
-    ${CAL_ZOOM === 'year' ? renderCalYear()
-      : CAL_ZOOM === 'week' ? renderCalWeek()
-      : CAL_ZOOM === 'day' ? renderCalDay()
+    ${NAV.calZoom === 'year' ? renderCalYear()
+      : NAV.calZoom === 'week' ? renderCalWeek()
+      : NAV.calZoom === 'day' ? renderCalDay()
       : renderCalMonth()}`;
 }
 // A fixed rotating palette assigned by a schedule's position in STATE.life.schedules — same
@@ -9672,7 +9681,7 @@ function renderCalCell(d /* Date */, today) {
   const dStr = dateKey(d.getFullYear(), d.getMonth(), d.getDate());
   const has = remindersOn(dStr).length > 0;
   const isToday = dStr === today;
-  const isSelected = dStr === CAL_SELECTED_DATE;
+  const isSelected = dStr === NAV.calSelectedDate;
   const sched = scheduleForDate(d);
   const schedMark = sched ? `<span class="cal-anchor-icon" style="color:${scheduleColorFor(sched.id)};">${icon('anchorMark')}</span>` : '';
   return `<button class="cal-cell ${isToday?'cal-cell-today':''} ${isSelected?'cal-cell-selected':''}" onclick="calSelectDay('${dStr}')">
@@ -9682,7 +9691,7 @@ function renderCalCell(d /* Date */, today) {
   </button>`;
 }
 function renderCalMonth() {
-  const { year, month } = CAL_MONTH;
+  const { year, month } = NAV.calMonth;
   const first = new Date(year, month, 1);
   const startWeekday = first.getDay(); // 0 = Sun
   const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -9705,7 +9714,7 @@ function renderCalMonth() {
 }
 function renderCalWeek() {
   ensureCalState();
-  const days = calWeekBounds(CAL_SELECTED_DATE);
+  const days = calWeekBounds(NAV.calSelectedDate);
   const today = todayStr();
   const weekdayHeaders = ['S','M','T','W','T','F','S'].map(w => `<div class="cal-weekday">${w}</div>`).join('');
   const cells = days.map(d => renderCalCell(d, today)).join('');
@@ -9731,7 +9740,7 @@ function renderCalWeek() {
 // the merge (one screen for "what's going on this day" instead of two tabs).
 function renderCalDay() {
   ensureCalState();
-  const d = new Date(CAL_SELECTED_DATE + 'T00:00:00');
+  const d = new Date(NAV.calSelectedDate + 'T00:00:00');
   const label = d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
   return `
     <div class="week-selector" style="margin-bottom:10px;">
@@ -9741,15 +9750,15 @@ function renderCalDay() {
         <button onclick="calGoToDay(1)">&#8250;</button>
       </div>
     </div>
-    ${renderDayExceptionControl(CAL_SELECTED_DATE)}
-    ${renderDailySchedule(CAL_SELECTED_DATE)}
-    ${renderDayUntimedItems(CAL_SELECTED_DATE)}
+    ${renderDayExceptionControl(NAV.calSelectedDate)}
+    ${renderDailySchedule(NAV.calSelectedDate)}
+    ${renderDayUntimedItems(NAV.calSelectedDate)}
     <div class="divider"></div>
     ${renderSelectedDayReminders()}`;
 }
 function renderCalYear() {
   ensureCalState();
-  const { year } = CAL_MONTH;
+  const { year } = NAV.calMonth;
   const today = todayStr();
   let months = '';
   for (let m = 0; m < 12; m++) months += renderCalMiniMonth(year, m, today);
@@ -9777,7 +9786,7 @@ function renderCalMiniMonth(year, month, today) {
     const dStr = dateKey(year, month, d);
     const has = remindersOn(dStr).length > 0;
     const isToday = dStr === today;
-    const isSelected = dStr === CAL_SELECTED_DATE;
+    const isSelected = dStr === NAV.calSelectedDate;
     const sched = scheduleForDate(new Date(year, month, d));
     const schedMark = sched ? `<span class="cal-mini-anchor-dot" style="background:${scheduleColorFor(sched.id)};"></span>` : '';
     cells += `<button class="cal-mini-cell ${isToday?'cal-mini-today':''} ${isSelected?'cal-mini-selected':''} ${has?'cal-mini-has':''}" onclick="calSelectDayAndZoom('${dStr}','day')">${schedMark}${d}</button>`;
@@ -9789,8 +9798,8 @@ function renderCalMiniMonth(year, month, today) {
 }
 function renderSelectedDayReminders() {
   ensureCalState();
-  const list = remindersOn(CAL_SELECTED_DATE);
-  const d = new Date(CAL_SELECTED_DATE + 'T00:00:00');
+  const list = remindersOn(NAV.calSelectedDate);
+  const d = new Date(NAV.calSelectedDate + 'T00:00:00');
   const label = d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
   return `
     <div class="row" style="margin-bottom:10px; align-items:flex-start;">
@@ -9928,12 +9937,12 @@ function saveReminder() {
   const notesEl = document.getElementById('remNotes');
   const notes = notesEl ? notesEl.value.trim() : '';
   const id = uid();
-  const reminder = { id, date: CAL_SELECTED_DATE, time, endTime, title, notes, createdAt: Date.now(), type: isTodo ? 'todo' : 'reminder' };
+  const reminder = { id, date: NAV.calSelectedDate, time, endTime, title, notes, createdAt: Date.now(), type: isTodo ? 'todo' : 'reminder' };
   if (isTodo) reminder.items = [];
   // Recurrence only applies to plain reminders — a recurring to-do's per-occurrence reset
   // semantics are a distinct feature this doesn't attempt to build.
   const recurrence = (!isTodo && UI.reminderFormRecurrence !== 'none') ? UI.reminderFormRecurrence : null;
-  if (recurrence) { reminder.recurrence = recurrence; reminder.recurrenceId = id; reminder.anchorDate = CAL_SELECTED_DATE; }
+  if (recurrence) { reminder.recurrence = recurrence; reminder.recurrenceId = id; reminder.anchorDate = NAV.calSelectedDate; }
   STATE.reminders.push(reminder);
   UI.reminderFormOpen = false;
   UI.reminderFormDraft = {};
@@ -10054,14 +10063,14 @@ function todaysReminders() {
   return remindersOn(todayStr());
 }
 function jumpToReminderDay(dateStr) {
-  // switchTab() resets SCHEDULE_SUBTAB/CAL_ZOOM/CAL_SELECTED_DATE/CAL_MONTH to today's Day view —
+  // switchTab() resets NAV.scheduleSubtab/NAV.calZoom/NAV.calSelectedDate/NAV.calMonth to today's Day view —
   // call it first, then override with the actual target date below (Day zoom shows the day's
   // reminders and anchors together, which is exactly what tapping a specific reminder wants).
   goHomeSection('schedule');
-  CAL_SELECTED_DATE = dateStr;
+  NAV.calSelectedDate = dateStr;
   const d = new Date(dateStr + 'T00:00:00');
-  CAL_MONTH = { year: d.getFullYear(), month: d.getMonth() };
-  CAL_ZOOM = 'day';
+  NAV.calMonth = { year: d.getFullYear(), month: d.getMonth() };
+  NAV.calZoom = 'day';
   render();
 }
 function renderTodaysReminders() {
@@ -10083,23 +10092,22 @@ function renderTodaysReminders() {
 
 // ================= BUDGET =================
 // Month state is shared across all three Budget subtabs (Home/Income/Recurring) so paging
-// to a different month in one carries over to the others, same spirit as CAL_MONTH.
-let BUDGET_MONTH = null; // {year, month} — 0-indexed month, lazily set to the current month
+// to a different month in one carries over to the others, same spirit as NAV.calMonth.
 function ensureBudgetMonth() {
-  if (!BUDGET_MONTH) { const d = new Date(); BUDGET_MONTH = { year: d.getFullYear(), month: d.getMonth() }; }
+  if (!NAV.budgetMonth) { const d = new Date(); NAV.budgetMonth = { year: d.getFullYear(), month: d.getMonth() }; }
 }
 function budgetMonthKey() {
   ensureBudgetMonth();
-  return `${BUDGET_MONTH.year}-${String(BUDGET_MONTH.month + 1).padStart(2, '0')}`;
+  return `${NAV.budgetMonth.year}-${String(NAV.budgetMonth.month + 1).padStart(2, '0')}`;
 }
 function budgetGoToMonth(delta) {
   ensureBudgetMonth();
-  let m = BUDGET_MONTH.month + delta, y = BUDGET_MONTH.year;
+  let m = NAV.budgetMonth.month + delta, y = NAV.budgetMonth.year;
   if (m < 0) { m = 11; y--; } else if (m > 11) { m = 0; y++; }
-  BUDGET_MONTH = { year: y, month: m };
+  NAV.budgetMonth = { year: y, month: m };
   render();
 }
-function setBudgetSubtab(t) { BUDGET_SUBTAB = t; render(); }
+function setBudgetSubtab(t) { NAV.budgetSubtab = t; render(); }
 
 function budgetIncomeEntriesForMonth(key) { return STATE.budget.incomeLog[key] || []; }
 function budgetIncidentalsForMonth(key) { return STATE.budget.incidentals[key] || []; }
@@ -10676,7 +10684,7 @@ function renderBudgetBar(key) {
 function renderBudgetHome() {
   ensureBudgetMonth();
   const key = budgetMonthKey();
-  const monthLabel = `${MONTH_NAMES[BUDGET_MONTH.month]} ${BUDGET_MONTH.year}`;
+  const monthLabel = `${MONTH_NAMES[NAV.budgetMonth.month]} ${NAV.budgetMonth.year}`;
   const incomeEntries = budgetIncomeEntriesForMonth(key).slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
   const incidentals = budgetIncidentalsForMonth(key).slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
   const recurringTotal = budgetRecurringTotal();
@@ -11012,14 +11020,14 @@ function renderLifeGuitar() {
       </div>
     </div>`;
   let body = '';
-  if (GUITAR_SUBTAB === 'chords') body = renderGuitarChords();
-  else if (GUITAR_SUBTAB === 'songs') body = renderGuitarSongs();
-  else if (GUITAR_SUBTAB === 'tech') body = renderGuitarTech();
-  else if (GUITAR_SUBTAB === 'progress') body = renderHobbiesProgress();
+  if (NAV.guitarSubtab === 'chords') body = renderGuitarChords();
+  else if (NAV.guitarSubtab === 'songs') body = renderGuitarSongs();
+  else if (NAV.guitarSubtab === 'tech') body = renderGuitarTech();
+  else if (NAV.guitarSubtab === 'progress') body = renderHobbiesProgress();
   else body = renderGuitarPracticeLog();
   return summary + body;
 }
-function setGuitarSubtab(t) { GUITAR_SUBTAB = t; render(); }
+function setGuitarSubtab(t) { NAV.guitarSubtab = t; render(); }
 // ---------------- HOBBIES PROGRESS: timeline of learned chords/songs ----------------
 function renderHobbiesProgress() {
   const g = STATE.life.guitar;

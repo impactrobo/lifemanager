@@ -39,9 +39,9 @@ const SECTIONS = ['schedule', 'train', 'hobbies', 'health', 'notes', 'budget'];
   for (const id of SECTIONS) {
     await page.evaluate((sectionId) => goHomeSection(sectionId), id);
     await settle(page);
-    const current = await page.evaluate(() => CURRENT_TAB);
-    console.log(`navigated to "${id}" -> CURRENT_TAB is "${current}"`);
-    if (current !== id) throw new Error(`Expected CURRENT_TAB "${id}" after goHomeSection, got "${current}"`);
+    const current = await page.evaluate(() => NAV.currentTab);
+    console.log(`navigated to "${id}" -> NAV.currentTab is "${current}"`);
+    if (current !== id) throw new Error(`Expected NAV.currentTab "${id}" after goHomeSection, got "${current}"`);
     // back to Home between each for a clean baseline
     await page.evaluate(() => switchTab('home'));
     await settle(page);

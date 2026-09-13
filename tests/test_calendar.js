@@ -28,11 +28,11 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   await page.evaluate(() => setScheduleSubtab('calendar'));
   await page.evaluate(() => calSetZoom('month'));
   await settle(page);
-  const startMonth = await page.evaluate(() => ({ ...CAL_MONTH }));
-  console.log('starting CAL_MONTH:', startMonth);
+  const startMonth = await page.evaluate(() => ({ ...NAV.calMonth }));
+  console.log('starting NAV.calMonth:', startMonth);
 
   // 1b. Today's cell carries its own highlight class, distinct from selection — on first visit
-  // CAL_SELECTED_DATE defaults to today, so both classes land on the same cell at once, which is
+  // NAV.calSelectedDate defaults to today, so both classes land on the same cell at once, which is
   // exactly the case that used to swallow today's marker (see the box-shadow comment in
   // styles.css). Confirm the class is present and its color actually differs from --accent (the
   // .cal-cell-selected color) so it reads as its own signal, not a dimmer selection.
@@ -55,27 +55,27 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // 2. Month navigation forward and back returns to the same month
   await page.evaluate(() => calGoToMonth(1));
-  const nextMonth = await page.evaluate(() => ({ ...CAL_MONTH }));
+  const nextMonth = await page.evaluate(() => ({ ...NAV.calMonth }));
   console.log('after +1 month:', nextMonth);
   const expectedNext = startMonth.month === 11 ? { year: startMonth.year + 1, month: 0 } : { year: startMonth.year, month: startMonth.month + 1 };
   if (nextMonth.year !== expectedNext.year || nextMonth.month !== expectedNext.month) {
     throw new Error(`Expected month to advance to ${JSON.stringify(expectedNext)}, got ${JSON.stringify(nextMonth)}`);
   }
   await page.evaluate(() => calGoToMonth(-1));
-  const backMonth = await page.evaluate(() => ({ ...CAL_MONTH }));
+  const backMonth = await page.evaluate(() => ({ ...NAV.calMonth }));
   if (backMonth.year !== startMonth.year || backMonth.month !== startMonth.month) {
     throw new Error(`Expected month to return to ${JSON.stringify(startMonth)}, got ${JSON.stringify(backMonth)}`);
   }
 
-  // 3. Select a specific day, confirm CAL_SELECTED_DATE updates
+  // 3. Select a specific day, confirm NAV.calSelectedDate updates
   const testDate = await page.evaluate(() => {
-    const { year, month } = CAL_MONTH;
+    const { year, month } = NAV.calMonth;
     return dateKey(year, month, 15); // the 15th, safely mid-month for any month length
   });
   await page.evaluate((d) => calSelectDay(d), testDate);
-  const selected = await page.evaluate(() => CAL_SELECTED_DATE);
+  const selected = await page.evaluate(() => NAV.calSelectedDate);
   console.log('selected date:', selected, '(expected', testDate + ')');
-  if (selected !== testDate) throw new Error(`Expected CAL_SELECTED_DATE "${testDate}", got "${selected}"`);
+  if (selected !== testDate) throw new Error(`Expected NAV.calSelectedDate "${testDate}", got "${selected}"`);
 
   const remindersBefore = await page.evaluate(() => STATE.reminders.length);
 

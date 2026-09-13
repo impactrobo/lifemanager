@@ -115,7 +115,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // ---- 6. Tapping a day opens it in the Calendar's Day view (not just silently set state) ----
   await page.evaluate(() => { [...document.querySelectorAll('.agenda-day')][1].click(); });
   await settle(page);
-  const landed = await page.evaluate(() => ({ subtab: SCHEDULE_SUBTAB, zoom: CAL_ZOOM, selected: CAL_SELECTED_DATE, showsDay: !!document.querySelector('#app .day-row') }));
+  const landed = await page.evaluate(() => ({ subtab: NAV.scheduleSubtab, zoom: NAV.calZoom, selected: NAV.calSelectedDate, showsDay: !!document.querySelector('#app .day-row') }));
   console.log('after tapping tomorrow:', landed);
   if (landed.subtab !== 'calendar') throw new Error('Tapping an agenda day must switch to the Calendar subtab, or the tap appears to do nothing');
   if (landed.zoom !== 'day') throw new Error('Tapping an agenda day must open Day zoom');

@@ -48,7 +48,7 @@ const DIRTY = '__dirty__';
     return { total: keys.length, stillDirty, extraKeys: Object.keys(UI).filter(k => !keys.includes(k)) };
   }, { route, DIRTY });
 
-  // A workout for the openTodayWorkout() route (it leaves Home by assigning CURRENT_TAB directly).
+  // A workout for the openTodayWorkout() route (it leaves Home by assigning NAV.currentTab directly).
   await page.evaluate(() => { const w = createWorkout('weights', 'P-Zero (GZCL)'); window.__probeWorkoutId = w.id; });
 
   // ---- 1. Every route that changes the tab resets the entire object ----

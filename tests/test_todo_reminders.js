@@ -79,7 +79,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // 6. A plain (pre-existing, no `type` field at all) reminder still works exactly as before
   const plainId = await page.evaluate(() => {
     const id = uid();
-    STATE.reminders.push({ id, date: CAL_SELECTED_DATE, time: null, title: 'Old Plain Reminder', notes: 'some notes', createdAt: Date.now() }); // no `type` field
+    STATE.reminders.push({ id, date: NAV.calSelectedDate, time: null, title: 'Old Plain Reminder', notes: 'some notes', createdAt: Date.now() }); // no `type` field
     saveState(); render();
     return id;
   });

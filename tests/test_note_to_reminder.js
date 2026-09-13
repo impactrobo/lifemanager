@@ -45,7 +45,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (!noteStillExists) throw new Error('Expected the original note to still exist after converting');
 
   // 3. It navigated to that date's Calendar Day view
-  const landedOn = await page.evaluate(() => ({ tab: CURRENT_TAB, zoom: CAL_ZOOM, date: CAL_SELECTED_DATE }));
+  const landedOn = await page.evaluate(() => ({ tab: NAV.currentTab, zoom: NAV.calZoom, date: NAV.calSelectedDate }));
   console.log('landed on after converting:', landedOn);
   if (landedOn.tab !== 'schedule' || landedOn.zoom !== 'day' || landedOn.date !== '2026-10-10') {
     throw new Error(`Expected to land on Calendar Day zoom for 2026-10-10, got ${JSON.stringify(landedOn)}`);

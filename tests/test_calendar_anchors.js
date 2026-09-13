@@ -56,9 +56,9 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     const s = { id: uid(), name: 'Future Test Schedule', days: [d.getDay()], wakeStart: '', wakeEnd: '', bedStart: '', bedEnd: '', activities: [] };
     STATE.life.schedules.push(s);
     saveState();
-    CAL_SELECTED_DATE = dateStr;
-    CAL_MONTH = { year: d.getFullYear(), month: d.getMonth() };
-    CAL_ZOOM = 'day';
+    NAV.calSelectedDate = dateStr;
+    NAV.calMonth = { year: d.getFullYear(), month: d.getMonth() };
+    NAV.calZoom = 'day';
     render();
     return { dateStr, scheduleId: s.id };
   });
@@ -69,17 +69,17 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // Toggle the first anchor for that future date
   const firstAnchorId = await page.evaluate(() => STATE.life.anchors[0].id);
-  const beforeFuture = await page.evaluate((id) => !!lifeLogForDate(CAL_SELECTED_DATE)[id], firstAnchorId);
-  await page.evaluate((id) => toggleDailyAnchor(id, CAL_SELECTED_DATE), firstAnchorId);
+  const beforeFuture = await page.evaluate((id) => !!lifeLogForDate(NAV.calSelectedDate)[id], firstAnchorId);
+  await page.evaluate((id) => toggleDailyAnchor(id, NAV.calSelectedDate), firstAnchorId);
   await settle(page);
-  const afterFuture = await page.evaluate((id) => !!lifeLogForDate(CAL_SELECTED_DATE)[id], firstAnchorId);
+  const afterFuture = await page.evaluate((id) => !!lifeLogForDate(NAV.calSelectedDate)[id], firstAnchorId);
   const todayUnaffected = await page.evaluate((id) => !todayLifeLog()[id], firstAnchorId);
   console.log('future date anchor toggled before/after:', beforeFuture, '/', afterFuture, '| today log unaffected:', todayUnaffected);
   if (afterFuture === beforeFuture) throw new Error('Expected toggleDailyAnchor(id, dateStr) to flip completion for that specific date');
   if (!todayUnaffected) throw new Error('Expected toggling a future date\'s anchor to NOT write into today\'s own dailyLog entry');
 
   // 4. The per-schedule color-coded anchor icon shows on the Month grid for a day that schedule covers
-  await page.evaluate(() => { CAL_ZOOM = 'month'; render(); });
+  await page.evaluate(() => { NAV.calZoom = 'month'; render(); });
   await settle(page);
   const iconCount = await page.evaluate(() => document.querySelectorAll('.cal-anchor-icon').length);
   console.log('.cal-anchor-icon count in Month zoom (weekly-recurring schedule, so several days match):', iconCount);

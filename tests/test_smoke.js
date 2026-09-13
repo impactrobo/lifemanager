@@ -31,15 +31,15 @@ const TABS = ['home', 'train', 'hobbies', 'health', 'notes', 'schedule', 'budget
   console.log('booted with aesthetic:', aesthetic);
   if (!aesthetic) throw new Error('no data-aesthetic applied to <html> on load');
 
-  // Every section renders something and sets CURRENT_TAB.
+  // Every section renders something and sets NAV.currentTab.
   for (const tab of TABS) {
     await page.evaluate(t => switchTab(t), tab);
     await settle(page); // render() defers to rAF
     const len = await page.evaluate(() => document.getElementById('app').innerHTML.trim().length);
-    const current = await page.evaluate(() => CURRENT_TAB);
-    console.log(`  ${tab}: #app ${len} chars, CURRENT_TAB=${current}`);
+    const current = await page.evaluate(() => NAV.currentTab);
+    console.log(`  ${tab}: #app ${len} chars, NAV.currentTab=${current}`);
     if (len === 0) throw new Error(`#app empty after switchTab('${tab}')`);
-    if (current !== tab) throw new Error(`CURRENT_TAB is '${current}', expected '${tab}'`);
+    if (current !== tab) throw new Error(`NAV.currentTab is '${current}', expected '${tab}'`);
   }
 
   // Narrow-viewport tabbar must scroll, never clip buttons off-screen (regression guard —

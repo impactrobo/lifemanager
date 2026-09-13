@@ -78,7 +78,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (created.items.some(i => i.done)) throw new Error('Expected every generated checklist item to start unchecked');
 
   // 4. It actually navigated to that date's Calendar Day view (jumpToReminderDay() behavior)
-  const landedOn = await page.evaluate(() => ({ tab: CURRENT_TAB, subtab: SCHEDULE_SUBTAB, zoom: CAL_ZOOM, date: CAL_SELECTED_DATE }));
+  const landedOn = await page.evaluate(() => ({ tab: NAV.currentTab, subtab: NAV.scheduleSubtab, zoom: NAV.calZoom, date: NAV.calSelectedDate }));
   console.log('landed on after generating:', landedOn);
   if (landedOn.tab !== 'schedule' || landedOn.zoom !== 'day' || landedOn.date !== targetDate) {
     throw new Error(`Expected to land on Schedule/Calendar Day zoom for ${targetDate}, got ${JSON.stringify(landedOn)}`);
