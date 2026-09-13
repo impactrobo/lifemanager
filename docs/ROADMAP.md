@@ -56,15 +56,11 @@ These are **not** requested features — they're natural extensions given the cu
 app, logged here so they're not lost, not so they get built unprompted. Confirm with the person
 before starting any of these.
 
-- **Home becomes the calendar's own Day view (raised 2026-09-13, needs scoping).** Raised while
-  deciding whether Home should gain a planned-meals box to match Calendar Day. The better question
-  underneath it: Home and the Calendar Day view are now two renderings of the *same* `dayModel()`
-  data, differing mainly in which parts they show and how much you can act on inline. Unifying them
-  would remove that duplication entirely rather than keep adding one box at a time to close the gap.
-  Deliberately **not** scoped yet — it touches Home's whole box/layout system (`homeLayout()`,
-  `HOME_BOX_RENDERERS`, the drag-to-reorder edit mode), which is the most customisable surface in
-  the app, so the real question is what happens to that customisation. The day model landing first
-  is what makes it tractable at all.
+- ~~Home becomes the calendar's own Day view~~ — **shipped 2026-09-13** as "Home Becomes Today",
+  see Recently Shipped. The version that actually got built dropped the customisation question
+  this entry raised rather than answering it: Home's day content (RIGHT NOW/WORKOUTS/HABITS) is no
+  longer independently rearrangeable, on the view that a fixed daily rhythm needs less tinkering
+  than six independent sections did. The section tile grid stayed drag/hide-able.
 
 - **Codebase survey findings not acted on (2026-09-13)** — from the same investigation whose
   three fixes are under Recently Shipped. Ranked; all confirmed, none urgent:
