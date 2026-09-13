@@ -2650,7 +2650,7 @@ function pushNavHistory() {
 // for Back/Forward, and the direct NAV.currentTab assignments in openSetup()/openTodayWorkout()) --
 // not inside _doRender(), because render() is rAF-deferred and would close a form that
 // `switchTab(); toggleReminderForm()` had just opened in the same tick.
-function resetTransientUi() { Object.assign(UI, defaultTransientUi()); }
+function resetTransientUi() { Object.assign(UI, defaultTransientUi()); LINK_PICKER = null; LINK_PICKER_QUERY = ''; }
 function switchTab(tab) {
   pushNavHistory();
   resetTransientUi();
@@ -2981,6 +2981,8 @@ function _doRender() {
     else if (NAV.budgetSubtab === 'goals') app.innerHTML = renderBudgetGoals();
     else app.innerHTML = renderBudgetHome();
   }
+  // The link picker is an overlay, appended after the screen's own markup so it sits above it.
+  app.innerHTML += renderLinkPicker();
   const tabbarEl = document.getElementById('tabbar');
   tabbarEl.innerHTML = renderTabbar();
   tabbarEl.classList.toggle('hidden', NAV.currentTab === 'home');
@@ -4614,6 +4616,7 @@ function renderHabitSetupRow(h) {
       <span>${ended ? `Ended ${h.endDate}` : 'Ongoing'} &middot; current streak <b style="color:var(--text);">${habitCurrentStreak(h)}</b> &middot; best <b style="color:var(--text);">${habitBestStreak(h)}</b></span>
       ${!ended ? `<button class="btn btn-ghost btn-sm" onclick="endHabitNow('${h.id}')">END NOW</button>` : ''}
     </div>
+    ${renderLinkChips('habit', h.id)}
   </div>`;
 }
 // Multi-habit "success calendar" — one month grid, every active-that-day habit gets a small
@@ -4850,6 +4853,7 @@ function renderScheduleActivityRow(schedId, act) {
     </label>
     ${timeCategorySelect(act.category, `updateScheduleActivityField('${schedId}','${act.id}','category',this.value)`)}
     <label class="field" style="margin-bottom:0;"><span class="lbl">Description (optional)</span><textarea onchange="updateScheduleActivityField('${schedId}','${act.id}','description',this.value)">${escapeHtml(act.description||'')}</textarea></label>
+    ${renderLinkChips('activity', act.id)}
   </div>`;
 }
 
@@ -5434,6 +5438,7 @@ function renderMealCard(meal) {
       </div>
       <button class="icon-btn" style="color:var(--bad); flex-shrink:0;" onclick="event.stopPropagation(); deleteMeal('${meal.id}')" title="Delete meal">${icon('close')}</button>
     </div>
+    ${renderLinkChips('meal', meal.id)}
   </div>`;
 }
 function deleteMeal(id) {
@@ -6820,6 +6825,7 @@ function renderWorkoutCard(w) {
       </div>
       <button class="icon-btn" style="color:var(--bad); flex-shrink:0;" onclick="event.stopPropagation(); deleteWorkout('${w.id}')" title="Delete workout">${icon('close')}</button>
     </div>
+    ${renderLinkChips('workout', w.id)}
   </div>`;
 }
 function editWorkout(id) {
@@ -8613,6 +8619,7 @@ function renderNoteCard(n) {
     ${n.title ? `<div style="font-weight:700; font-size:14px; margin-bottom:4px;">${escapeHtml(n.title)}</div>` : ''}
     <div class="note-body rich-text" style="font-size:13px; color:var(--text);">${safeHtml}</div>
     ${renderPhotoThumbs(n.photos)}
+    ${renderLinkChips('note', n.id)}
   </div>`;
 }
 // The filtered+sorted results only — factored out so both the initial render and
@@ -9985,6 +9992,7 @@ function renderReminderCard(r) {
     ${r.time && r.endTime ? `<div style="font-size:10px; color:var(--text-faint); margin-top:6px;">${icon('anchorMark')} On your day's schedule &middot; ${fmtReminderTime(r.time)}&ndash;${fmtReminderTime(r.endTime)}</div>` : ''}
     ${r.recurrence ? `<div style="font-size:10px; color:var(--text-faint); margin-top:6px;">${icon('repeat')} Repeats ${RECURRENCE_LABELS[r.recurrence].toLowerCase()} &middot; set when this series was created, not editable per-occurrence</div>` : ''}
     ${isTodo ? renderReminderTodoItems(r) : `<label class="field" style="margin-top:8px; margin-bottom:0;"><span class="lbl">Notes</span><textarea placeholder="Any details..." onchange="updateReminderField('${r.id}','notes',this.value)">${escapeHtml(r.notes || '')}</textarea></label>`}
+    ${renderLinkChips('reminder', r.id)}
   </div>`;
 }
 function updateReminderField(id, field, value) {
@@ -10101,6 +10109,246 @@ function renderTodaysReminders() {
         <button class="icon-btn" onclick="event.stopPropagation(); deleteReminder('${r.id}')">${icon('close')}</button>
       </div>`).join('')}
     </div>`;
+}
+
+// ================= CROSS-ENTITY LINKS =================
+// One optional `links: [{type, id}]` array that any entity can carry, plus one registry
+// describing every linkable kind. Before this, each cross-feature connection was its own
+// bespoke feature -- and "cross-linking" mostly meant copying (convertNoteToReminder duplicates
+// a note into a reminder and keeps no relationship at all). This is the general mechanism those
+// one-offs were each re-inventing: any two things in the app can be marked as being about each
+// other, and every screen renders that the same way.
+//
+// Deliberately NOT folded in here: SavingsGoal.recurringChargeId. That one drives behaviour --
+// ticking a charge's monthly box auto-creates a goal contribution -- so it's machinery, not an
+// association. A generic untyped link can't express it and shouldn't try.
+//
+// Untyped on purpose: a link means "these are about each other", nothing more. There's no
+// vocabulary to invent or keep consistent, and adding optional labels later is additive.
+
+// Every linkable kind, in one place. Adding a type is one entry -- how to list them, how to title
+// one, and how to open it -- rather than per-type UI anywhere.
+//
+// `section` is a HOME_SECTION_META key, so a link chip carries its home section's own colour and
+// you can tell at a glance which part of your life it comes from.
+const LINKABLE_TYPES = {
+  note: {
+    label: 'Note', section: 'notes',
+    all: () => STATE.notes,
+    title: n => (n.title && n.title.trim()) || notePlainTextBody(n).slice(0, 60) || 'Untitled note',
+    subtitle: n => n.date || '',
+    open: n => { switchTab('notes'); editNote(n.id); },
+  },
+  reminder: {
+    label: 'Reminder', section: 'schedule',
+    all: () => STATE.reminders,
+    title: r => r.title || 'Untitled reminder',
+    subtitle: r => r.date + (r.time ? ' ' + fmtReminderTime(r.time) : ''),
+    open: r => jumpToReminderDay(r.date),
+  },
+  workout: {
+    label: 'Workout', section: 'train',
+    all: () => STATE.workouts,
+    title: w => w.name || 'Untitled workout',
+    subtitle: w => WORKOUT_TYPE_LABELS[w.type] || '',
+    open: w => openTodayWorkout(w.id),
+  },
+  meal: {
+    label: 'Meal', section: 'health',
+    all: () => STATE.diet.meals,
+    title: m => m.name || 'Untitled meal',
+    subtitle: m => (m.items || []).length + ' item' + ((m.items || []).length === 1 ? '' : 's'),
+    open: () => { switchTab('health'); setHealthSubtab('setup'); setHealthSetupSubtab('builder'); },
+  },
+  habit: {
+    label: 'Habit', section: 'schedule',
+    all: () => STATE.life.habits || [],
+    title: h => h.name || 'Untitled habit',
+    subtitle: h => h.startDate ? 'since ' + h.startDate : '',
+    open: () => { switchTab('schedule'); setScheduleSubtab('setup'); setScheduleSetupSubtab('habits'); },
+  },
+  charge: {
+    label: 'Charge', section: 'budget',
+    all: () => STATE.budget.recurring,
+    title: c => c.name || 'Untitled charge',
+    subtitle: c => fmtMoney(c.amount),
+    open: () => { switchTab('budget'); setBudgetSubtab('recurring'); },
+  },
+  goal: {
+    label: 'Goal', section: 'budget',
+    all: () => STATE.budget.goals || [],
+    title: g => g.name || 'Untitled goal',
+    subtitle: g => fmtMoney(g.targetAmount),
+    open: () => { switchTab('budget'); setBudgetSubtab('goals'); },
+  },
+  // Schedule activities live nested inside their schedule rather than in a flat array, so `all()`
+  // flattens them and stamps the parent id on for `open`.
+  activity: {
+    label: 'Activity', section: 'schedule',
+    all: () => (STATE.life.schedules || []).flatMap(s => (s.activities || []).map(a => Object.assign({ _schedId: s.id, _schedName: s.name }, a))),
+    title: a => a.title || 'Untitled activity',
+    subtitle: a => (a._schedName || '') + (a.start ? ' ' + fmtReminderTime(a.start) : ''),
+    open: () => { switchTab('schedule'); setScheduleSubtab('setup'); setScheduleSetupSubtab('builder'); },
+  },
+};
+
+// Resolve a {type, id} reference to something renderable. `exists: false` for a reference whose
+// target has since been deleted -- links are deliberately tolerant of that rather than requiring
+// cleanup on every delete path (the same degrade-gracefully choice scheduleForDate() makes for an
+// exception pointing at a deleted schedule).
+function resolveEntity(type, id) {
+  const meta = LINKABLE_TYPES[type];
+  if (!meta) return { type, id, exists: false, label: type, title: 'Unknown', subtitle: '', section: null };
+  const e = meta.all().find(x => x.id === id);
+  if (!e) return { type, id, exists: false, label: meta.label, title: 'Deleted', subtitle: '', section: meta.section };
+  return {
+    type, id, exists: true, entity: e, label: meta.label,
+    title: meta.title(e), subtitle: meta.subtitle(e) || '', section: meta.section,
+  };
+}
+function entityOf(type, id) {
+  const meta = LINKABLE_TYPES[type];
+  return meta ? meta.all().find(x => x.id === id) : null;
+}
+function linkColor(section) {
+  return (HOME_SECTION_META[section] && HOME_SECTION_META[section].color) || 'var(--text-dim)';
+}
+
+// Outbound: what this entity itself points at.
+function outboundLinks(type, id) {
+  const e = entityOf(type, id);
+  return (e && Array.isArray(e.links)) ? e.links : [];
+}
+// Inbound: anything, anywhere, pointing back here. Scanned rather than stored, so a link is one
+// fact in one place and the two directions can never disagree -- the drift that caused both the
+// navigation-leak and reset-list bugs. At this data size the scan is free.
+function inboundLinks(type, id) {
+  const hits = [];
+  Object.keys(LINKABLE_TYPES).forEach(t => {
+    LINKABLE_TYPES[t].all().forEach(e => {
+      if (!Array.isArray(e.links)) return;
+      if (e.links.some(l => l.type === type && l.id === id)) hits.push({ type: t, id: e.id });
+    });
+  });
+  return hits;
+}
+// Everything connected to this entity, in either direction, de-duplicated: a pair linked from
+// both ends is still one connection.
+function linkedEntities(type, id) {
+  const seen = new Set([type + ':' + id]);
+  const out = [];
+  outboundLinks(type, id).concat(inboundLinks(type, id)).forEach(l => {
+    const key = l.type + ':' + l.id;
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(resolveEntity(l.type, l.id));
+  });
+  return out;
+}
+function addEntityLink(fromType, fromId, toType, toId) {
+  if (fromType === toType && fromId === toId) return;           // nothing links to itself
+  const e = entityOf(fromType, fromId);
+  if (!e || !entityOf(toType, toId)) return;
+  if (!Array.isArray(e.links)) e.links = [];
+  if (e.links.some(l => l.type === toType && l.id === toId)) return;
+  // Already connected from the other side? Then it's the same connection; don't store it twice.
+  if (inboundLinks(fromType, fromId).some(l => l.type === toType && l.id === toId)) return;
+  e.links.push({ type: toType, id: toId });
+  saveState(); render();
+}
+// Removes the connection whichever side actually stores it, so the X on a chip always works
+// regardless of which end created the link.
+function removeEntityLink(fromType, fromId, toType, toId) {
+  const a = entityOf(fromType, fromId);
+  if (a && Array.isArray(a.links)) a.links = a.links.filter(l => !(l.type === toType && l.id === toId));
+  const b = entityOf(toType, toId);
+  if (b && Array.isArray(b.links)) b.links = b.links.filter(l => !(l.type === fromType && l.id === fromId));
+  saveState(); render();
+}
+function navigateToEntity(type, id) {
+  const meta = LINKABLE_TYPES[type];
+  const e = entityOf(type, id);
+  if (!meta || !e) { showToast('That item no longer exists'); return; }
+  meta.open(e);
+}
+
+// ---- The shared chip row, rendered identically wherever an entity is shown ----
+let LINK_PICKER = null;   // { type, id } of the entity currently choosing something to link to
+let LINK_PICKER_QUERY = '';
+function openLinkPicker(type, id) { LINK_PICKER = { type, id }; LINK_PICKER_QUERY = ''; render(); }
+function closeLinkPicker() { LINK_PICKER = null; LINK_PICKER_QUERY = ''; render(); }
+function setLinkPickerQuery(v) {
+  LINK_PICKER_QUERY = v;
+  // Patch just the results list rather than re-rendering: a full render() would replace the input
+  // and drop focus mid-typing.
+  const box = document.getElementById('linkPickerResults');
+  if (box) box.innerHTML = linkPickerResultsHtml();
+}
+function pickLinkTarget(toType, toId) {
+  if (!LINK_PICKER) return;
+  const { type, id } = LINK_PICKER;
+  LINK_PICKER = null; LINK_PICKER_QUERY = '';
+  addEntityLink(type, id, toType, toId);   // saves + renders
+}
+function linkPickerResultsHtml() {
+  if (!LINK_PICKER) return '';
+  const q = (LINK_PICKER_QUERY || '').trim().toLowerCase();
+  const already = new Set(linkedEntities(LINK_PICKER.type, LINK_PICKER.id).map(r => r.type + ':' + r.id));
+  const rows = [];
+  Object.keys(LINKABLE_TYPES).forEach(t => {
+    LINKABLE_TYPES[t].all().forEach(e => {
+      if (t === LINK_PICKER.type && e.id === LINK_PICKER.id) return;   // not itself
+      if (already.has(t + ':' + e.id)) return;                          // not already connected
+      const r = resolveEntity(t, e.id);
+      const hay = (r.title + ' ' + r.subtitle + ' ' + r.label).toLowerCase();
+      if (q && !hay.includes(q)) return;
+      rows.push(r);
+    });
+  });
+  rows.sort((a, b) => a.title.localeCompare(b.title));
+  const shown = rows.slice(0, 40);
+  if (!shown.length) {
+    return `<div style="font-size:12px; color:var(--text-faint); padding:10px 0;">${q ? 'Nothing matches that.' : 'Nothing else to link to yet.'}</div>`;
+  }
+  return shown.map(r => `
+    <div class="link-result" onclick="pickLinkTarget('${r.type}','${r.id}')">
+      <i class="link-swatch" style="background:${linkColor(r.section)};"></i>
+      <span class="link-result-title">${escapeHtml(r.title)}</span>
+      <span class="link-result-meta">${escapeHtml(r.label)}${r.subtitle ? ' &middot; ' + escapeHtml(r.subtitle) : ''}</span>
+    </div>`).join('') + (rows.length > shown.length
+      ? `<div style="font-size:10px; color:var(--text-faint); padding:8px 0 0;">${rows.length - shown.length} more — keep typing to narrow it down.</div>`
+      : '');
+}
+function renderLinkPicker() {
+  if (!LINK_PICKER) return '';
+  const from = resolveEntity(LINK_PICKER.type, LINK_PICKER.id);
+  return `
+    <div class="link-picker-backdrop" onclick="closeLinkPicker()"></div>
+    <div class="link-picker">
+      <div class="row" style="margin-bottom:8px;">
+        <div style="min-width:0;">
+          <div class="subtle-label" style="margin-bottom:2px;">LINK TO</div>
+          <div style="font-size:12px; color:var(--text-dim);">from ${escapeHtml(from.title)}</div>
+        </div>
+        <button class="icon-btn" onclick="closeLinkPicker()">${icon('close')}</button>
+      </div>
+      <label class="field"><input type="text" id="linkPickerQuery" placeholder="Search anything…" oninput="setLinkPickerQuery(this.value)"></label>
+      <div id="linkPickerResults" class="link-results">${linkPickerResultsHtml()}</div>
+    </div>`;
+}
+// Drop this wherever an entity is rendered. Shows every connection in both directions plus a
+// "+ LINK" affordance; renders nothing but the button when there are no links yet.
+function renderLinkChips(type, id) {
+  const links = linkedEntities(type, id);
+  const chips = links.map(r => `
+    <span class="link-chip ${r.exists ? '' : 'link-chip-dead'}" style="--lc:${linkColor(r.section)};">
+      <i class="link-swatch" style="background:${linkColor(r.section)};"></i>
+      <span class="link-chip-label" ${r.exists ? `onclick="navigateToEntity('${r.type}','${r.id}')"` : ''}>${escapeHtml(r.title)}</span>
+      <button class="link-chip-x" onclick="removeEntityLink('${type}','${id}','${r.type}','${r.id}')" title="Unlink">${icon('close')}</button>
+    </span>`).join('');
+  // onclick guard: several cards (meals, workouts) are themselves clickable, so a chip tap must
+  // not also fire the card's own open-editor handler.
+  return `<div class="link-row" onclick="event.stopPropagation()">${chips}<button class="link-add" onclick="openLinkPicker('${type}','${id}')">+ LINK</button></div>`;
 }
 
 // ================= BUDGET =================
@@ -10357,6 +10605,7 @@ function renderGoalCard(g) {
       <div class="subtle-label" style="margin-bottom:8px;">${g.resetsAnnually ? `${new Date().getFullYear()} ` : ''}CONTRIBUTIONS</div>
       <div class="entry-list">${contribs.length ? contribs.map(c => renderGoalContributionCard(g.id, c)).join('') : emptyState('Nothing logged yet.')}</div>
     ` : ''}
+    ${renderLinkChips('goal', g.id)}
   </div>`;
 }
 // A recurring-sourced contribution already carries the AUTO badge, which implies budget-linkage
@@ -10621,6 +10870,7 @@ function renderRecurringRow(r) {
       <input type="checkbox" ${r.isSavings ? 'checked' : ''} onchange="toggleRecurringSavings('${r.id}', this.checked)">
       Savings / Investment — money you're paying yourself, not spending
     </label>
+    ${renderLinkChips('charge', r.id)}
   </div>`;
 }
 

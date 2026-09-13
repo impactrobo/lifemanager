@@ -226,6 +226,10 @@ interface PeriodicAnchor { id: string; label: string; cadenceDays: number; caden
  *  day. Stored as an explicit range so a week off is one row rather than seven. Overlapping
  *  ranges resolve first-match-wins, the same convention scheduleForDate() already uses for two
  *  schedules claiming the same weekday. See scheduleExceptionForDate(). */
+/** An untyped association to another entity: "these two things are about each other". Stored on
+ *  whichever side created it; the reverse direction is computed by scanning (inboundLinks()), so
+ *  one connection is always exactly one stored fact. See LINKABLE_TYPES in app.js. */
+interface EntityLink { type: string; id: string }
 interface ScheduleException {
   id: string;
   startDate: string;

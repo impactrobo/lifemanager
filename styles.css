@@ -710,6 +710,31 @@ select { -webkit-appearance: none; appearance: none; background-image: linear-gr
   .past-due-mark { animation: none; text-shadow: 0 0 4px currentColor, 0 0 10px currentColor; }
 }
 
+
+/* ---------- Cross-entity links (renderLinkChips / renderLinkPicker) ----------
+   A chip carries its target's home-section colour (HOME_SECTION_META), so which part of your life
+   a connection points into is legible at a glance rather than needing to be read. */
+.link-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; }
+.link-chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 4px 3px 7px; border-radius: 999px;
+  background: color-mix(in srgb, var(--lc) 14%, var(--surface)); border: 1px solid color-mix(in srgb, var(--lc) 45%, transparent);
+  font-size: 11px; font-weight: 600; max-width: 100%; }
+.link-chip-label { cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; }
+.link-chip-dead .link-chip-label { opacity: .5; text-decoration: line-through; cursor: default; }
+.link-chip-x { background: none; border: none; padding: 0 2px; color: var(--text-faint); display: flex; align-items: center; font-size: 10px; }
+.link-swatch { width: 7px; height: 7px; border-radius: 2px; flex-shrink: 0; }
+.link-add { background: none; border: 1px dashed var(--border); color: var(--text-faint);
+  border-radius: 999px; padding: 3px 9px; font-size: 10px; font-weight: 700; letter-spacing: .04em; }
+
+.link-picker-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 60; }
+.link-picker { position: fixed; left: 50%; transform: translateX(-50%); top: 8vh; width: min(92vw, 460px);
+  max-height: 80vh; overflow-y: auto; z-index: 61; background: var(--surface); border: 1px solid var(--accent);
+  border-radius: var(--radius); padding: 14px; box-shadow: 0 12px 40px rgba(0,0,0,.5); }
+.link-results { max-height: 52vh; overflow-y: auto; }
+.link-result { display: flex; align-items: baseline; gap: 8px; padding: 8px 0; cursor: pointer; }
+.link-result + .link-result { border-top: 1px solid var(--border-soft); }
+.link-result-title { font-size: 13px; font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.link-result-meta { font-size: 10px; color: var(--text-faint); flex-shrink: 0; }
+
 /* ---------- Settings: aesthetic picker ---------- */
 .aesthetic-card { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px; position: relative; color: var(--text); }
 .aesthetic-card.active { border-color: var(--accent); }
