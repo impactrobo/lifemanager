@@ -72,11 +72,10 @@ before starting any of these.
   3. **Recurrence + single-day exceptions — split in two, first half shipped.** Scoped into two
      unrelated pieces before building, since they touch different parts of the data model:
      - ~~Recurring reminders (annual + monthly)~~ — **shipped 2026-09-12**, see Recently Shipped.
-     - **Schedule single-day exceptions — still open.** A schedule is a weekday template with no
-       way to say "this Tuesday is different" — a holiday, a vacation week, a sick day — nor to
-       skip one occurrence. Scoped (not yet built): an override can be either "skip the schedule
-       entirely that day" (anchors still apply) or "swap in a different named schedule for one
-       day," picked per the person's own direction when this was scoped.
+     - ~~Schedule exceptions (date-range overrides)~~ — **shipped 2026-09-12**, see Recently
+       Shipped. Built fuller than the original minimal scoping: date *ranges* rather than single
+       days, creation on the Day view **and** a review list in Setup, a per-exception anchors
+       choice, and a day off pausing planned workouts/meals/habits too.
      Every-other-week/every-N-days recurrence and `periodic` anchors landing on actual calendar
      dates (they're currently a cadence-days due-list that never does) were both considered and
      deliberately left out of the recurring-reminders half — annual + monthly were judged the
@@ -307,6 +306,49 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Schedule exceptions: date-range overrides of the weekday templates — step 3 complete, and with
+  it the scheduling build-out's main arc (2026-09-12).** A schedule was a weekday template with no
+  way to say "this particular Tuesday is different" — a holiday, a vacation week, a sick day.
+  Scoped with four questions first, and the fuller option was chosen on every one, so this is
+  noticeably bigger than the minimal version that was offered.
+  - **`scheduleForDate()` turned out to be a single chokepoint** with three callers (the Day
+    timeline via `scheduleBlocksForDate()`, the Month/Week grid's schedule icon, the Year grid's
+    dot), so overriding inside it propagates to every calendar view automatically with no
+    per-view changes.
+  - **The semantic, worth keeping straight:** anchors are the permanent baseline, everything else
+    is "the plan". A **day off** (`scheduleId === null`) cancels the plan — no schedule, and
+    `renderDayUntimedItems()` pauses planned workouts, meals and habit prompts too — while anchors
+    keep running unless the exception also sets `skipAnchors`. A **swap** (`scheduleId` set) is
+    *not* a day off: it's a differently-shaped day, so the untimed band is left completely alone.
+    **Dated one-off events are never suppressed by either** — a dentist appointment booked for a
+    holiday is still a real appointment, and exceptions only override the weekday *template* world.
+  - Stored as explicit `startDate`/`endDate` ranges (`STATE.life.scheduleExceptions`), so a week
+    off is one row rather than seven. Overlapping ranges resolve first-match-wins, the same
+    convention `scheduleForDate()` already used for two schedules claiming one weekday. A backwards
+    range is normalised on save rather than stored where it can never match, and editing either end
+    past the other carries the other end along. A swap pointing at a since-deleted schedule
+    degrades to a day off rather than silently falling back to the template it was meant to
+    override.
+  - **Two entry points, on purpose**: created from the Calendar's Day view (where you're standing
+    when you decide a day is different — `renderDayExceptionControl()`, which also shows a
+    `var(--warn)` banner explaining what's in effect plus a REMOVE button), and reviewed/cleared
+    from a new EXCEPTIONS tab under Schedule → Setup, which is the only place to see them all at
+    once. `scheduleExceptionEffect()` generates the one-line description for both, so the two
+    surfaces can't drift apart in wording.
+  - Note that the Week At A Glance strip in Schedule Builder deliberately does *not* reflect
+    exceptions — it's a weekday-template overview, and exceptions are date-based.
+  - **Fixed a rotted test fixture found by this change**: `test_ui_polish.js` used Schedule Setup
+    as its example of a *non-overflowing* sub-nav ("2 tabs", per a comment already stale by one
+    tab), so adding the EXCEPTIONS tab made it overflow and the assertion failed. The behaviour
+    under test was fine; the fixture had drifted into testing a tab count. It now builds a
+    two-button strip from `subNav()` directly and asserts the fixture genuinely doesn't overflow
+    before checking that no affordances show, so it can't rot the same way again.
+  - `tests/test_schedule_exceptions.js` covers range inclusivity at both ends, first-match-wins on
+    overlap, all four `scheduleForDate()` outcomes (day off / swap / deleted-swap / fall-through),
+    `skipAnchors`, dated events surviving an exception, the untimed band pausing on a day off but
+    not on a swap, creation through the real Day view form, backwards-range normalisation,
+    coherent range editing from either end, delete, reload persistence, and a pre-feature save
+    backfilling to an empty array.
 - **Recurring reminders: annual + monthly — first half of step 3 of the scheduling build-out
   (2026-09-12).** Scoped explicitly before building: step 3 turned out to be two unrelated
   data-model changes (recurring reminders vs. schedule single-day exceptions), so it was split
