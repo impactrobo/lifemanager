@@ -2564,6 +2564,9 @@ let VIEW = {
   notesFilterTag: null,              // null = all tags
   notesSearchQuery: '',
   noteDraftPhotos: [],
+  noteDraftType: 'note',             // 'note' | 'recipe' -- which kind the compose form is building
+  noteDraftIngredients: [],          // recipe only; same {id, foodId, qty, unit} shape as Meal.items
+  noteDraftIngredientQuery: '',      // the ingredient search box's current text
   noteEditId: null,
   goalExpanded: null,                // which goal's ledger is open, one at a time
 };
@@ -2982,7 +2985,7 @@ function _doRender() {
     else app.innerHTML = renderBudgetHome();
   }
   // The link picker is an overlay, appended after the screen's own markup so it sits above it.
-  app.innerHTML += renderLinkPicker();
+  app.innerHTML += renderLinkPicker() + renderRecipeCustomFoodOverlay();
   const tabbarEl = document.getElementById('tabbar');
   tabbarEl.innerHTML = renderTabbar();
   tabbarEl.classList.toggle('hidden', NAV.currentTab === 'home');
@@ -5079,10 +5082,20 @@ function renderCategoryFoodList(catId, addFn) {
 }
 // Search matches across every category (not just the currently-open one), each row tagged with
 // its category so a match is still identifiable once it's out of its usual category grouping.
+// Every typed word must appear somewhere in the name, in any order -- so "breast chicken" and
+// "chicken breast" both land, and "rolled oats" finds "Oats, rolled, dry" which a strict substring
+// match missed entirely. No fuzzy/edit-distance matching on purpose: it surfaces confidently wrong
+// suggestions, and "+ NEW INGREDIENT" is the honest escape hatch for anything genuinely absent.
+function foodMatchesQuery(food, q) {
+  const words = q.split(/\s+/).filter(Boolean);
+  if (!words.length) return true;
+  const name = food.name.toLowerCase();
+  return words.every(w => name.includes(w));
+}
 function renderFoodSearchResults(query, addFn) {
   addFn = addFn || 'addFoodToMeal';
   const q = query.trim().toLowerCase();
-  const matches = allFoods().filter(f => f.name.toLowerCase().includes(q)).slice().sort((a, b) => a.name.localeCompare(b.name));
+  const matches = allFoods().filter(f => foodMatchesQuery(f, q)).slice().sort((a, b) => a.name.localeCompare(b.name));
   if (!matches.length) {
     return `<div class="panel" style="margin-bottom:18px;"><div style="font-size:12px; color:var(--text-faint); text-align:center; padding:6px 0;">No foods match &quot;${escapeHtml(query.trim())}&quot;.</div></div>`;
   }
@@ -8396,19 +8409,251 @@ function renderNotes() {
     ${NAV.notesSubtab === 'write' ? renderNotesWrite() : renderNotesView()}
   </div>`;
 }
+// ---- Recipe notes ----
+// A recipe is a distinct KIND of note, not a tag: tags here are fully user-editable (renameable,
+// deletable) and carry no behaviour, whereas a recipe has its own structured fields and its own
+// action. Same precedent as a to-do reminder being Reminder.type rather than a tag.
+//
+// Its ingredients deliberately use the identical {id, foodId, qty, unit} shape as Meal.items, so
+// "add to Meals" is a copy rather than a translation and computeItemMacro()/computeMealTotals()
+// work on both unchanged. The prose body underneath stays exactly what a note always was --
+// method, notes, photos.
+function isRecipeNote(n) { return !!n && n.type === 'recipe'; }
+function recipeIngredients(n) { return Array.isArray(n && n.ingredients) ? n.ingredients : []; }
+function recipeTotals(n) {
+  const totals = computeMealTotals(recipeIngredients(n));
+  const servings = Number(n && n.servings) || 0;
+  return { totals, servings, perServingCal: servings > 0 ? totals.cal / servings : null };
+}
+function fmtRecipeTime(n) {
+  const prep = Number(n && n.prepMinutes) || 0;
+  const cook = Number(n && n.cookMinutes) || 0;
+  const parts = [];
+  if (prep) parts.push(fmtDuration(prep) + ' prep');
+  if (cook) parts.push(fmtDuration(cook) + ' cook');
+  return parts.join(' + ');
+}
+
+// ---- Composing a recipe ----
+// The note form reads title and body straight from the DOM at save time, so anything that
+// re-renders mid-compose would wipe the contenteditable body. Ingredient edits therefore PATCH
+// their own container (renderNoteIngredientRows) instead of calling render() -- exactly what
+// renderNotePhotoRow() already does for draft photos. For the two places a real re-render is
+// unavoidable (switching NOTE <-> RECIPE, and the custom-food overlay), captureNoteDraftText()
+// parks the typed text in VIEW and renderNotesWrite() reads it back.
+function captureNoteDraftText() {
+  const t = document.getElementById('noteTitle');
+  const b = document.getElementById('noteBody');
+  if (t) VIEW.noteDraftTitle = t.value;
+  if (b) VIEW.noteDraftBody = b.innerHTML;
+  ['noteServings', 'notePrep', 'noteCook'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) VIEW['noteDraft_' + id] = el.value;
+  });
+}
+function clearNoteDraftText() {
+  VIEW.noteDraftTitle = null; VIEW.noteDraftBody = null;
+  VIEW.noteDraft_noteServings = ''; VIEW.noteDraft_notePrep = ''; VIEW.noteDraft_noteCook = '';
+  VIEW.noteDraftIngredients = []; VIEW.noteDraftIngredientQuery = '';
+}
+function setNoteDraftType(t) {
+  captureNoteDraftText();
+  VIEW.noteDraftType = t;
+  render();
+}
+function setNoteIngredientQuery(v) {
+  VIEW.noteDraftIngredientQuery = v;
+  const box = document.getElementById('noteIngredientResults');
+  if (box) box.innerHTML = v.trim() ? renderFoodSearchResults(v, 'addNoteIngredient') : '';
+}
+function addNoteIngredient(foodId) {
+  const food = foodById(foodId);
+  if (!food) return;
+  VIEW.noteDraftIngredients.push({ id: uid(), foodId, qty: food.unit === 'count' ? 1 : 100, unit: food.base });
+  VIEW.noteDraftIngredientQuery = '';
+  const box = document.getElementById('noteIngredientResults'); if (box) box.innerHTML = '';
+  const search = document.getElementById('noteIngredientSearch'); if (search) search.value = '';
+  renderNoteIngredientRows();
+}
+function removeNoteIngredient(id) {
+  VIEW.noteDraftIngredients = VIEW.noteDraftIngredients.filter(i => i.id !== id);
+  renderNoteIngredientRows();
+}
+function updateNoteIngredientQty(id, v) {
+  const it = VIEW.noteDraftIngredients.find(i => i.id === id);
+  if (it) { it.qty = Math.max(0, Number(v) || 0); renderNoteIngredientRows(); }
+}
+function updateNoteIngredientUnit(id, v) {
+  const it = VIEW.noteDraftIngredients.find(i => i.id === id);
+  if (it) { it.unit = v; renderNoteIngredientRows(); }
+}
+function renderNoteIngredientRows() {
+  const host = document.getElementById('noteIngredientRows');
+  if (!host) return;
+  const items = VIEW.noteDraftIngredients;
+  if (!items.length) {
+    host.innerHTML = `<div style="font-size:12px; color:var(--text-faint); padding:6px 0;">No ingredients yet — search above, or add a new one if it isn't in the list.</div>`;
+    return;
+  }
+  const totals = computeMealTotals(items);
+  host.innerHTML = items.map(it => {
+    const food = foodById(it.foodId);
+    if (!food) return '';
+    const isCount = food.unit === 'count';
+    const opts = mealUnitOptions(food);
+    return `<div class="recipe-ing-row">
+      <span class="recipe-ing-name">${escapeHtml(food.name)}</span>
+      <input type="number" min="0" step="any" value="${it.qty}" class="recipe-ing-qty" onchange="updateNoteIngredientQty('${it.id}',this.value)">
+      ${isCount
+        ? `<span class="recipe-ing-unit">${escapeHtml(food.itemLabel)}${(Number(it.qty) || 0) === 1 ? '' : 's'}</span>`
+        : `<select class="recipe-ing-unit" onchange="updateNoteIngredientUnit('${it.id}',this.value)">${opts.map(o => `<option value="${o.value}" ${it.unit === o.value ? 'selected' : ''}>${o.label}</option>`).join('')}</select>`}
+      <button class="icon-btn" style="flex-shrink:0; color:var(--bad);" onclick="removeNoteIngredient('${it.id}')" title="Remove">${icon('close')}</button>
+    </div>`;
+  }).join('') + `<div class="recipe-ing-total">${Math.round(totals.cal)} cal total &middot; ${Math.round(totals.protein)}p / ${Math.round(totals.carb)}c / ${Math.round(totals.fat)}f</div>`;
+}
+function renderRecipeFields() {
+  const q = VIEW.noteDraftIngredientQuery || '';
+  return `
+    <div class="field-row">
+      <label class="field"><span class="lbl">Servings</span><input type="number" min="0" step="1" id="noteServings" placeholder="4" value="${escapeHtml(VIEW.noteDraft_noteServings || '')}"></label>
+      <label class="field"><span class="lbl">Prep (min)</span><input type="number" min="0" step="1" id="notePrep" placeholder="15" value="${escapeHtml(VIEW.noteDraft_notePrep || '')}"></label>
+      <label class="field"><span class="lbl">Cook (min)</span><input type="number" min="0" step="1" id="noteCook" placeholder="30" value="${escapeHtml(VIEW.noteDraft_noteCook || '')}"></label>
+    </div>
+    <div class="subtle-label" style="margin:10px 0 6px;">INGREDIENTS</div>
+    <label class="field" style="margin-bottom:6px;">
+      <input type="text" id="noteIngredientSearch" placeholder="Search ingredients…" value="${escapeHtml(q)}" oninput="setNoteIngredientQuery(this.value)">
+    </label>
+    <div id="noteIngredientResults">${q.trim() ? renderFoodSearchResults(q, 'addNoteIngredient') : ''}</div>
+    <button class="btn btn-ghost btn-sm" style="margin-bottom:10px;" onclick="openRecipeCustomFood()">+ NEW INGREDIENT</button>
+    <div id="noteIngredientRows"></div>`;
+}
+
+// ---- "+ NEW INGREDIENT" ----
+// Reuses the real Custom Foods form rather than a cut-down copy: that screen already collects and
+// validates a food in exactly the shape allFoods() searches, including the micronutrients a
+// second form would inevitably omit. It renders here as an overlay so composing never leaves the
+// Notes screen -- navigating away would lose the in-progress note, whose title and body live only
+// in the DOM.
+function openRecipeCustomFood() {
+  captureNoteDraftText();
+  VIEW.recipeCustomFoodOpen = true;
+  UI.customFoodFormOpen = true;
+  UI.customFoodEditId = null;
+  render();
+}
+function closeRecipeCustomFood() {
+  VIEW.recipeCustomFoodOpen = false;
+  UI.customFoodFormOpen = false;
+  render();
+}
+// Wraps saveCustomFood() rather than modifying it: it validates, saves and toasts on its own, and
+// the only extra step is dropping whatever it just created straight into the recipe.
+function saveRecipeCustomFood() {
+  const before = STATE.diet.customFoods.length;
+  saveCustomFood();
+  const foods = STATE.diet.customFoods;
+  if (foods.length > before) {
+    const added = foods[foods.length - 1];
+    VIEW.noteDraftIngredients.push({ id: uid(), foodId: added.id, qty: added.unit === 'count' ? 1 : 100, unit: added.base });
+    VIEW.recipeCustomFoodOpen = false;
+  }
+}
+function renderRecipeCustomFoodOverlay() {
+  if (!VIEW.recipeCustomFoodOpen) return '';
+  return `
+    <div class="link-picker-backdrop" onclick="closeRecipeCustomFood()"></div>
+    <div class="link-picker">
+      <div class="row" style="margin-bottom:8px;">
+        <div class="subtle-label" style="margin-bottom:0;">NEW INGREDIENT</div>
+        <button class="icon-btn" onclick="closeRecipeCustomFood()">${icon('close')}</button>
+      </div>
+      ${renderCustomFoodForm()}
+      <button class="btn btn-primary btn-block" style="margin-top:10px;" onclick="saveRecipeCustomFood()">SAVE &amp; ADD TO RECIPE</button>
+    </div>`;
+}
+
+// ---- Recipe -> Meal ----
+// The choice is offered every time rather than assumed, but only shown when there IS one: a
+// 4-serving tray bake and a single-serving bowl both exist, and silently guessing wrong produces a
+// Meal whose macros are 4x off everywhere they're displayed or planned against. Two visible
+// buttons rather than a prompt -- the options are the point, so they shouldn't be hidden behind a
+// modal whose Cancel button means "whole batch".
+function recipeAddToMealsHtml(n) {
+  const servings = Number(n.servings) || 0;
+  if (!recipeIngredients(n).length) return '';
+  if (servings > 1) {
+    return `<div class="recipe-actions">
+      <button class="btn btn-sm btn-primary" onclick="addRecipeToMeals('${n.id}', true)">ADD 1 SERVING</button>
+      <button class="btn btn-sm" onclick="addRecipeToMeals('${n.id}', false)">ADD WHOLE BATCH</button>
+    </div>`;
+  }
+  return `<div class="recipe-actions"><button class="btn btn-sm btn-primary" onclick="addRecipeToMeals('${n.id}', false)">ADD TO MEALS</button></div>`;
+}
+function addRecipeToMeals(noteId, perServing) {
+  const n = STATE.notes.find(x => x.id === noteId);
+  if (!n) return;
+  const items = recipeIngredients(n);
+  if (!items.length) { showToast('Add some ingredients first'); return; }
+  const servings = Number(n.servings) || 0;
+  const divisor = (perServing && servings > 1) ? servings : 1;
+  const meal = {
+    id: uid(),
+    name: (n.title || 'Recipe').trim() + (divisor > 1 ? ' (1 serving)' : ''),
+    unitSystem: MEAL_UNIT_SYSTEM,
+    // Quantities scale; food and unit carry across untouched.
+    items: items.map(it => ({ id: uid(), foodId: it.foodId, qty: Math.round((it.qty / divisor) * 100) / 100, unit: it.unit })),
+    createdAt: Date.now(), updatedAt: Date.now(),
+  };
+  STATE.diet.meals.push(meal);
+  // The link is the whole point: the meal carries the macros and feeds the planner, the recipe
+  // keeps the method and the story, and each shows the other.
+  addEntityLink('note', n.id, 'meal', meal.id); // saves + renders
+  showToast(divisor > 1 ? 'Added one serving to Meals' : 'Added to Meals');
+}
+// The recipe half of a note card: what it is at a glance, plus the action.
+function renderRecipeCardBody(n) {
+  const { totals, servings, perServingCal } = recipeTotals(n);
+  const items = recipeIngredients(n);
+  const time = fmtRecipeTime(n);
+  const meta = [];
+  if (servings) meta.push(servings + ' serving' + (servings === 1 ? '' : 's'));
+  if (time) meta.push(time);
+  if (items.length) meta.push(Math.round(totals.cal) + ' cal' + (perServingCal ? ' · ' + Math.round(perServingCal) + '/serving' : ''));
+  return `
+    ${meta.length ? `<div class="recipe-meta">${meta.join(' &middot; ')}</div>` : ''}
+    ${items.length ? `<div class="recipe-ing-list">${items.map(it => {
+      const f = foodById(it.foodId);
+      return f ? `<span class="recipe-ing-pill">${escapeHtml(f.name)} <b>${it.qty}${f.unit === 'count' ? '' : escapeHtml(it.unit)}</b></span>` : '';
+    }).join('')}</div>` : ''}
+    ${recipeAddToMealsHtml(n)}`;
+}
+
 function renderNotesWrite() {
   const editing = VIEW.noteEditId ? STATE.notes.find(n => n.id === VIEW.noteEditId) : null;
+  const isRecipe = VIEW.noteDraftType === 'recipe';
+  // Captured text wins over the entity's own: it exists only when a re-render happened mid-compose
+  // (a type switch, or the new-ingredient overlay), and losing what was typed there would be worse
+  // than any staleness.
+  const titleVal = VIEW.noteDraftTitle !== null && VIEW.noteDraftTitle !== undefined
+    ? VIEW.noteDraftTitle : (editing ? editing.title || '' : '');
+  const bodyVal = VIEW.noteDraftBody !== null && VIEW.noteDraftBody !== undefined
+    ? VIEW.noteDraftBody : (editing ? getNoteBodyHtml(editing) : '');
   return `
     <div class="row" style="margin:14px 0 8px; align-items:center;">
-      <div class="subtle-label" style="margin-bottom:0;">${editing ? 'EDIT NOTE' : 'NEW NOTE'}</div>
+      <div class="subtle-label" style="margin-bottom:0;">${editing ? (isRecipe ? 'EDIT RECIPE' : 'EDIT NOTE') : (isRecipe ? 'NEW RECIPE' : 'NEW NOTE')}</div>
       ${editing ? `<button class="btn btn-ghost btn-sm" onclick="cancelNoteEdit()">CANCEL EDIT</button>` : ''}
+    </div>
+    <div class="unit-toggle" style="margin-bottom:12px;">
+      <button class="${!isRecipe ? 'active' : ''}" onclick="setNoteDraftType('note')">NOTE</button>
+      <button class="${isRecipe ? 'active' : ''}" onclick="setNoteDraftType('recipe')">RECIPE</button>
     </div>
     <div class="panel">
       <label class="field" style="margin-bottom:12px;">
-        <span class="lbl">Title (optional)</span>
-        <input type="text" id="noteTitle" placeholder="Give it a title..." value="${editing ? escapeHtml(editing.title || '') : ''}">
+        <span class="lbl">${isRecipe ? 'Recipe name' : 'Title (optional)'}</span>
+        <input type="text" id="noteTitle" placeholder="${isRecipe ? 'e.g. Overnight oats' : 'Give it a title...'}" value="${escapeHtml(titleVal)}">
       </label>
-      <div class="lbl" style="margin-bottom:6px;">Note</div>
+      ${isRecipe ? renderRecipeFields() : ''}
+      <div class="lbl" style="margin-bottom:6px;">${isRecipe ? 'Method' : 'Note'}</div>
       <div class="rt-toolbar">
         <button type="button" class="rt-btn" style="font-weight:800;" onmousedown="event.preventDefault()" onclick="execNoteCmd('bold')" title="Bold">B</button>
         <button type="button" class="rt-btn" style="font-style:italic;" onmousedown="event.preventDefault()" onclick="execNoteCmd('italic')" title="Italic">I</button>
@@ -8416,7 +8661,7 @@ function renderNotesWrite() {
         <button type="button" class="rt-btn" onmousedown="event.preventDefault()" onclick="execNoteCmd('insertUnorderedList')" title="Bulleted list">&bull;&nbsp;List</button>
         <button type="button" class="rt-btn" onmousedown="event.preventDefault()" onclick="execNoteCmd('insertOrderedList')" title="Numbered list">1.&nbsp;List</button>
       </div>
-      <div id="noteBody" class="note-editor rich-text" contenteditable="true" data-placeholder="Write it down...">${editing ? getNoteBodyHtml(editing) : ''}</div>
+      <div id="noteBody" class="note-editor rich-text" contenteditable="true" data-placeholder="${isRecipe ? 'Steps, tips, where it came from...' : 'Write it down...'}">${bodyVal}</div>
     </div>
     <div class="subtle-label" style="margin:16px 0 8px;">PHOTOS</div>
     <div class="photo-thumb-row" id="notePhotoRow"></div>
@@ -8482,18 +8727,34 @@ function saveNote() {
   const bodyHtml = sanitizeNoteHtml(bodyEl ? bodyEl.innerHTML : '');
   const probe = document.createElement('div');
   probe.innerHTML = bodyHtml;
-  if (!probe.textContent.trim() && VIEW.noteDraftPhotos.length === 0) { showToast('Write something or add a photo first'); return; }
+  const isRecipe = VIEW.noteDraftType === 'recipe';
+  // A recipe earns its keep on ingredients alone -- the method can come later -- so the
+  // "write something" gate accepts those too rather than forcing prose into an empty body.
+  if (!probe.textContent.trim() && VIEW.noteDraftPhotos.length === 0 && !(isRecipe && VIEW.noteDraftIngredients.length)) {
+    showToast(isRecipe ? 'Add an ingredient, some method, or a photo first' : 'Write something or add a photo first'); return;
+  }
+  const num = id => { const v = inputVal(id); const n = Number(v); return v !== '' && isFinite(n) && n > 0 ? n : null; };
+  const recipeFields = {
+    type: isRecipe ? 'recipe' : 'note',
+    ingredients: isRecipe ? VIEW.noteDraftIngredients.slice() : [],
+    servings: isRecipe ? num('noteServings') : null,
+    prepMinutes: isRecipe ? num('notePrep') : null,
+    cookMinutes: isRecipe ? num('noteCook') : null,
+  };
   const editing = VIEW.noteEditId ? STATE.notes.find(n => n.id === VIEW.noteEditId) : null;
   if (editing) {
     editing.title = title;
     editing.bodyHtml = bodyHtml;
     editing.tag = VIEW.notesSelectedTag;
     editing.photos = VIEW.noteDraftPhotos.slice();
+    Object.assign(editing, recipeFields);
     delete editing.text; // clear the legacy plain-text field if this was an old pre-rich-text note — bodyHtml now takes over for good, see getNoteBodyHtml()
   } else {
-    STATE.notes.push({ id: uid(), date: todayStr(), createdAt: Date.now(), title, bodyHtml, tag: VIEW.notesSelectedTag, photos: VIEW.noteDraftPhotos.slice() });
+    STATE.notes.push(Object.assign({ id: uid(), date: todayStr(), createdAt: Date.now(), title, bodyHtml, tag: VIEW.notesSelectedTag, photos: VIEW.noteDraftPhotos.slice() }, recipeFields));
   }
   VIEW.noteDraftPhotos = [];
+  clearNoteDraftText();          // also clears the recipe draft (ingredients, servings, times)
+  VIEW.noteDraftType = 'note';   // the NEXT note starts as a plain note, not another recipe
   VIEW.notesSelectedTag = 'general'; // reset so the NEXT note starts back at the default tag rather than staying stuck on whatever was picked here
   VIEW.noteEditId = null;
   if (editing) NAV.notesSubtab = 'view'; // back to the list after updating, instead of landing in a blank compose form
@@ -8509,12 +8770,22 @@ function editNote(id) {
   VIEW.noteEditId = id;
   VIEW.notesSelectedTag = note.tag || 'general';
   VIEW.noteDraftPhotos = (note.photos || []).slice();
+  // Load the recipe half back into the draft. Any captured mid-compose text is cleared first, or
+  // it would shadow the note actually being opened.
+  clearNoteDraftText();
+  VIEW.noteDraftType = isRecipeNote(note) ? 'recipe' : 'note';
+  VIEW.noteDraftIngredients = recipeIngredients(note).map(i => Object.assign({}, i));
+  VIEW.noteDraft_noteServings = note.servings != null ? String(note.servings) : '';
+  VIEW.noteDraft_notePrep = note.prepMinutes != null ? String(note.prepMinutes) : '';
+  VIEW.noteDraft_noteCook = note.cookMinutes != null ? String(note.cookMinutes) : '';
   NAV.notesSubtab = 'write';
   render();
 }
 function cancelNoteEdit() {
   VIEW.noteEditId = null;
   VIEW.noteDraftPhotos = [];
+  clearNoteDraftText();
+  VIEW.noteDraftType = 'note';
   VIEW.notesSelectedTag = 'general';
   NAV.notesSubtab = 'view';
   render();
@@ -8617,6 +8888,7 @@ function renderNoteCard(n) {
       </div>
     </div>
     ${n.title ? `<div style="font-weight:700; font-size:14px; margin-bottom:4px;">${escapeHtml(n.title)}</div>` : ''}
+    ${isRecipeNote(n) ? renderRecipeCardBody(n) : ''}
     <div class="note-body rich-text" style="font-size:13px; color:var(--text);">${safeHtml}</div>
     ${renderPhotoThumbs(n.photos)}
     ${renderLinkChips('note', n.id)}

@@ -735,6 +735,25 @@ select { -webkit-appearance: none; appearance: none; background-image: linear-gr
 .link-result-title { font-size: 13px; font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .link-result-meta { font-size: 10px; color: var(--text-faint); flex-shrink: 0; }
 
+
+/* ---------- Recipe notes ---------- */
+.recipe-meta { font-size: 11px; color: var(--text-dim); margin-bottom: 8px; font-weight: 600; }
+.recipe-ing-list { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px; }
+.recipe-ing-pill { font-size: 11px; padding: 2px 7px; border-radius: 999px; background: var(--surface2); border: 1px solid var(--border-soft); }
+.recipe-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+/* Compose-form ingredient rows: name flexes, qty stays narrow, unit fixed -- so a long food name
+   truncates rather than squeezing the number it belongs to. */
+.recipe-ing-row { display: flex; align-items: center; gap: 6px; padding: 6px 0; }
+.recipe-ing-row + .recipe-ing-row { border-top: 1px solid var(--border-soft); }
+.recipe-ing-name { flex: 1; min-width: 0; font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Descendant-scoped (0,2,0) on purpose: styles.css's own `input[type="number"], select { width:
+   100% }` is (0,1,1) and BEATS a bare class, which shoved the qty box to full width, pushed the
+   row past the panel edge and squeezed the ingredient name to nothing. Same specificity trap
+   CLAUDE.md documents for .btn/.btn-primary. */
+.recipe-ing-row .recipe-ing-qty { width: 68px; flex-shrink: 0; }
+.recipe-ing-row .recipe-ing-unit { width: 96px; flex-shrink: 0; font-size: 12px; color: var(--text-dim); }
+.recipe-ing-total { font-size: 11px; color: var(--text-dim); font-weight: 700; padding-top: 8px; margin-top: 4px; border-top: 1px solid var(--border-soft); }
+
 /* ---------- Settings: aesthetic picker ---------- */
 .aesthetic-card { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px; position: relative; color: var(--text); }
 .aesthetic-card.active { border-color: var(--accent); }

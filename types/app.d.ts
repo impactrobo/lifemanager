@@ -320,6 +320,19 @@ interface Note {
   text?: string;
   tag?: NoteTag | string;
   photos?: string[];
+  /** 'note' (default, absent on every pre-existing note) | 'recipe'. A distinct kind of note
+   *  rather than a tag: tags are fully user-editable (renameable, deletable) and carry no
+   *  behaviour, whereas a recipe has its own fields and its own "add to Meals" action. Same
+   *  precedent as Reminder.type's 'reminder' | 'todo'. */
+  type?: 'note' | 'recipe';
+  /** Recipe only. Deliberately the SAME item shape as Meal.items, so converting a recipe into a
+   *  Meal is a copy rather than a translation, and computeItemMacro() works on both unchanged. */
+  ingredients?: Array<{ id: string; foodId: string; qty: number; unit: string }>;
+  /** Recipe only. Servings drives the per-serving macros shown on the card, and the
+   *  batch-or-single choice offered when adding the recipe to Meals. */
+  servings?: number | null;
+  prepMinutes?: number | null;
+  cookMinutes?: number | null;
 }
 interface Reminder {
   id: string;
