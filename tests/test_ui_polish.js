@@ -38,12 +38,23 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   console.log('toast visible after waiting past auto-hide timeout:', hiddenState);
   if (hiddenState) throw new Error('Expected the toast to auto-hide on its own after ~1.8s');
 
-  // 2. Tabbar is hidden entirely on Home, shown inside any section
+  // 2. The tabbar shows on every screen, Home included. Home used to be the one screen without
+  // one, which is why Calendar and Agenda cost two taps from it; it renders the day now, so it
+  // carries the day's own screens. index.html still ships the bar as .hidden so an empty one never
+  // flashes before the first render, which is what makes this worth asserting at all.
   await page.evaluate(() => switchTab('home'));
   await settle(page);
-  const hiddenOnHome = await page.evaluate(() => document.getElementById('tabbar').classList.contains('hidden'));
-  console.log('tabbar hidden on Home:', hiddenOnHome);
-  if (!hiddenOnHome) throw new Error('Expected #tabbar to carry the "hidden" class while on Home');
+  const homeBar = await page.evaluate(() => ({
+    hidden: document.getElementById('tabbar').classList.contains('hidden'),
+    labels: Array.from(document.querySelectorAll('#tabbar button')).map(b => b.textContent.trim()),
+    activeIsHome: (document.querySelector('#tabbar button.active') || {}).textContent === 'HOME',
+  }));
+  console.log('Home bottom bar:', homeBar);
+  if (homeBar.hidden) throw new Error('Expected #tabbar to be revealed on Home');
+  if (JSON.stringify(homeBar.labels) !== JSON.stringify(['HOME', 'CALENDAR', 'AGENDA', 'SETUP'])) {
+    throw new Error(`Expected Home's bar to be HOME/CALENDAR/AGENDA/SETUP, got ${JSON.stringify(homeBar.labels)}`);
+  }
+  if (!homeBar.activeIsHome) throw new Error("Home's own bar button should read as the active one");
 
   await page.evaluate(() => switchTab('notes'));
   await settle(page);

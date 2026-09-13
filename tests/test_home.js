@@ -80,7 +80,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // directly), since this exercises the capturing listener that intercepts it. The target used to
   // be RIGHT NOW's "FREE TIME, tap to view" panel; that box folded into the day box, whose
   // OPEN CALENDAR button is the equivalent way out of Home.
-  const dayBoxLink = await page.$('.home-edit-box [onclick*="goHomeSection"]');
+  const dayBoxLink = await page.$('.home-edit-box [onclick*="goSchedule"]');
   if (!dayBoxLink) throw new Error("Expected the day box to offer a way through to Schedule (fresh state has the 12 default anchors, so the day box renders)");
   await dayBoxLink.click();
   await settle(page);
@@ -106,7 +106,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   await settle(page);
   const editModeOff = await page.evaluate(() => UI.homeEditMode === false);
   if (!editModeOff) throw new Error('Expected UI.homeEditMode to be false after toggling #homeEditBtn a second time');
-  const dayBoxLinkAgain = await page.$('[onclick*="goHomeSection(\'schedule\')"]');
+  const dayBoxLinkAgain = await page.$('[onclick*="goSchedule"]');
   if (!dayBoxLinkAgain) throw new Error("Expected the day box's link through to Schedule to still be present outside edit mode");
   await dayBoxLinkAgain.click();
   await settle(page);
@@ -140,10 +140,12 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   const restoredOrder = await page.evaluate(() => STATE.settings.homeLayout.sectionOrder);
   if (!restoredOrder.includes(targetId)) throw new Error(`Expected '${targetId}' restored to sectionOrder after showHomeSection`);
 
-  // 6. Each of the 6 section tiles gets its own fixed color (not shared/generic) as a vignette on
-  // the tile's own background (homeTileGlowStyle()) — checked via the raw `style` attribute text
+  // 6. Each section tile gets its own fixed color (not shared/generic) as a vignette on the tile's
+  // own background (homeTileGlowStyle()) — checked via the raw `style` attribute text
   // (unnormalized), since the color is embedded inside a radial-gradient() string rather than
   // being its own recognized CSS property browsers would normalize on read-back.
+  // Counted off sectionOrder rather than hardcoded: SCHEDULE retired as a tile when Home started
+  // rendering the schedule itself, and the number will move again.
   await page.evaluate(() => { switchTab('home'); });
   await settle(page);
   const tileColors = await page.evaluate(() => {
@@ -155,25 +157,31 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   });
   console.log('tile vignette colors:', tileColors);
   const uniqueColors = new Set(tileColors.map(t => t.expected));
-  if (uniqueColors.size !== 6) throw new Error(`Expected all 6 sections to have distinct colors, got ${uniqueColors.size} unique: ${JSON.stringify([...uniqueColors])}`);
+  if (!tileColors.length) throw new Error('Expected Home to render some section tiles');
+  if (uniqueColors.size !== tileColors.length) {
+    throw new Error(`Expected all ${tileColors.length} sections to have distinct colors, got ${uniqueColors.size} unique: ${JSON.stringify([...uniqueColors])}`);
+  }
   for (const t of tileColors) {
     if (!t.tileStyle || !t.tileStyle.includes(t.expected)) throw new Error(`Expected tile "${t.id}" to embed its color ${t.expected}, got style="${t.tileStyle}"`);
   }
 
   // 7. The color follows the section id through a reorder, not the position — drag "budget" to
-  // the front and confirm its vignette is still its own, not whatever "schedule" (the old first
-  // tile) used to have.
-  await page.evaluate(() => reorderHomeList('sections', 'budget', 'schedule')); // move budget to sit before schedule
+  // the front and confirm its vignette is still its own, not whatever the tile previously sitting
+  // first had. The incumbent is read off the live order rather than named: it used to be SCHEDULE,
+  // which stopped being a tile when Home started rendering the schedule itself.
+  const incumbentId = tileColors[0].id;
+  if (incumbentId === 'budget') throw new Error('This check needs budget to start somewhere other than first');
+  await page.evaluate((first) => reorderHomeList('sections', 'budget', first), incumbentId);
   await settle(page);
   const budgetStyleAfter = await page.evaluate(() => {
     const tile = [...document.querySelectorAll('.home-tile')].find(t => t.textContent.includes(HOME_SECTION_META.budget.label));
     return tile ? tile.getAttribute('style') : null;
   });
-  console.log('budget tile style after reordering to the front:', budgetStyleAfter);
+  console.log(`budget tile style after reordering ahead of "${incumbentId}":`, budgetStyleAfter);
   const budgetColor = tileColors.find(t => t.id === 'budget').expected;
-  const scheduleColor = tileColors.find(t => t.id === 'schedule').expected;
+  const incumbentColor = tileColors[0].expected;
   if (!budgetStyleAfter || !budgetStyleAfter.includes(budgetColor)) throw new Error(`Expected budget's tile to keep its own color ${budgetColor} after moving to the front, got "${budgetStyleAfter}"`);
-  if (budgetStyleAfter.includes(scheduleColor)) throw new Error('Expected budget\'s tile to NOT pick up schedule\'s old position color');
+  if (budgetStyleAfter.includes(incumbentColor)) throw new Error(`Expected budget's tile to NOT pick up "${incumbentId}"'s old position color`);
 
   // 8. reorderHomeList()'s insertAfter fix: dropping "before" a target could never actually land
   // an item in the true last slot (nothing exists after the last item to drop "before" into) —

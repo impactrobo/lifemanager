@@ -79,7 +79,6 @@ body {
   min-height: 100vh;
   overscroll-behavior-y: contain;
 }
-body.no-tabbar { padding-bottom: 20px; }
 h1, h2, h3, .head { font-family: var(--font-head); font-weight: 700; letter-spacing: 0.01em; margin: 0; }
 .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 button { font-family: var(--font-body); cursor: pointer; }
@@ -750,6 +749,27 @@ select { -webkit-appearance: none; appearance: none; background-image: linear-gr
   .entity-flash { animation: none; box-shadow: 0 0 0 2px var(--accent); }
 }
 
+
+
+/* ---------- Home's section tiles: one compact row ---------- */
+/* Five sections, not six -- SCHEDULE retired when Home started rendering the schedule itself.
+   Five doesn't fill a 3-column grid, and full-size tiles pushed the day off the first screen,
+   so they drop to a single row of five. Overrides .workout-grid's 3 columns and .workout-cell's
+   square ratio: those size the Exercise grid, where a big square tile is the point. Here the
+   tiles are navigation sitting above the thing you actually came to read.
+
+   Note .workout-cell sizes its icon wrapper with an inline font-size from app.js, so the wrapper
+   (not the SVG) is what sets the row's height -- see CLAUDE.md's note on re-shaped tiles. */
+.workout-grid.home-tile-row { grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.home-tile-row .workout-cell { aspect-ratio: auto; min-height: 62px; padding: 8px 2px; gap: 5px; }
+.home-tile-row .workout-cell > div:first-of-type { font-size: 20px !important; line-height: 1; }
+.home-tile-row .workout-cell .cell-icon svg,
+.home-tile-row .workout-cell svg { width: 20px !important; height: 20px !important; }
+.workout-cell.home-tile .wname, .home-tile-row .workout-cell.home-tile .wname {
+  font-size: 8px; font-weight: 700; line-height: 1.15; letter-spacing: 0.02em;
+}
+/* Edit mode adds a hide (X) button per tile; at this size it needs to not swamp the tile. */
+.home-tile-row .home-edit-x { transform: scale(0.8); }
 
 /* ---------- Collapsed day timeline ---------- */
 /* The day folds around the moment you're in: what's behind you and what's ahead collapse to a

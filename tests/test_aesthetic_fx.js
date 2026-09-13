@@ -351,12 +351,19 @@ async function checkAmbientModule(page, key, baseProps) {
     await page.waitForFunction(fxInstalled, [FX_CANVAS, baseProps], { timeout: 5000 });
 
     if (await page.$(FX_CANVAS)) {
-      // A settle wait: the canvas element can exist a frame or two before its first paint lands,
-      // and which particle shape this is (tap-triggered vs. continuous, see
-      // checkContinuousParticleModule() below) is told apart by whether it's ALREADY drawing —
-      // sampling too early would misread a continuous module as the tap-triggered shape.
-      await settle(page);
-      const startsLit = (await litPixels(page)) > 0;
+      // Which particle shape this is (tap-triggered vs. continuous, see
+      // checkContinuousParticleModule() below) is told apart by whether it's ALREADY drawing.
+      // This used to allow two animation frames for that first paint, which is not a reliable
+      // budget under full-suite load: a continuous module that simply hadn't painted yet got
+      // misread as the tap-triggered shape, and then failed on "canvas should start empty" —
+      // a phantom failure about a module that was working perfectly. Give the paint a real frame
+      // budget and let running out of it BE the answer: still dark after this many frames means
+      // it genuinely waits for input.
+      let startsLit = false;
+      for (let f = 0; f < 60 && !startsLit; f += 2) {
+        startsLit = (await litPixels(page)) > 0;
+        if (!startsLit) await settle(page);   // two frames per iteration
+      }
       if (startsLit) await checkContinuousParticleModule(page, key);
       else await checkParticleModule(page, key);
     } else {

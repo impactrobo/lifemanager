@@ -337,6 +337,46 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Home becomes the schedule: it carries the day's bottom bar, and the SCHEDULE tile retires
+  (2026-09-13).** Steps 3 and 4 of the "Home Becomes Today" scope, on top of the fold and the day
+  box shipped earlier the same day. Only step 5 (regrouping the WAKE-UP and CALORIES quick-logs into
+  one band) is left.
+  - **Home was the one screen in the app with no bottom bar**, which is exactly why Calendar and
+    Agenda cost two taps from it — you had to leave through the SCHEDULE tile. Home renders the day
+    now, so it carries the day's own screens: `HOME / CALENDAR / AGENDA / SETUP`, with `goSchedule()`
+    as the single entry point (also used by the day box's own link). It routes through
+    `switchTab('schedule')`, which is what snaps the calendar back to today's Day view — so arriving
+    from Home never drops you on a date you browsed to twenty minutes ago.
+  - **The word stays HOME on every bar, including Home's own.** The screen changed; the name for
+    "the screen you start on" didn't, and the date line under the title already says which day you
+    are looking at. Considered and rejected: renaming to TODAY everywhere (touches all seven tabbar
+    branches for a word), and title-Today/button-HOME (the button and its destination's heading
+    would disagree).
+  - **Five tiles, one compact row.** Five doesn't fill a 3-column grid, and full-size tiles pushed
+    the day itself off the first screen — which matters more now Home leads with the day rather than
+    with navigation. `.home-tile-row` overrides `.workout-grid`'s columns and `.workout-cell`'s
+    square ratio; those size the Exercise grid, where a big square tile *is* the point.
+  - **`HOME_SECTION_META.schedule` deliberately SURVIVES the tile's removal.** `LINKABLE_TYPES`
+    colours every reminder, habit and activity link chip from it, so deleting the entry would drop
+    those chips to an unstyled fallback with nothing failing anywhere. This is also why the retired
+    tile has to be filtered out of saved layouts *by name* rather than left to the stale-id guard —
+    the guard keys off `HOME_SECTION_META`, which still has the entry.
+  - **`initialTab()` — a real ordering bug the test caught.** `NAV.currentTab` is initialised at
+    NAV's declaration, top-level and in source order, which runs BEFORE `loadState()`'s migrations.
+    Migrating `defaultPage: 'schedule'` to `'home'` therefore corrected what was stored and still
+    booted you onto the dead tab. The landing tab is now validated at the point of use, so it can't
+    depend on that ordering, and anything unrecognised falls back to Home.
+  - `body.no-tabbar` and its CSS rule are gone — nothing can reach them now that every screen has
+    a bar. `index.html` still ships the bar as `.hidden` so an empty one never flashes before the
+    first render.
+  - **Two long-standing suite flakes fixed, both the same measurement-unit mistake.**
+    `test_aesthetic_external.js` waited for a *stylesheet fetch* using two animation frames and
+    failed intermittently with phantom "missing tokens"; `test_aesthetic_fx.js` told a continuous
+    particle module from a tap-triggered one by whether it had painted within two frames, and under
+    load misread cartomancer as tap-triggered, then failed on "canvas should start empty". Both now
+    wait for the condition itself on a real budget. The suite ran clean three times in a row after,
+    which it had not managed all session.
+
 - **Home and Schedule start merging: the day folds, and Home renders it (2026-09-13).** Steps 1
   and 2 of the "Home Becomes Today" scope — Home stops being a menu you pass through on the way to
   your day. Steps 3-5 (Home gains a bottom bar, the Schedule tile retires, the quick-logs regroup)

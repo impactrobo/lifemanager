@@ -58,7 +58,17 @@ const REQUIRED_TOKENS = [
 
   for (const key of externals) {
     await page.evaluate(k => setAesthetic(k), key);
-    await settle(page); // let the stylesheet fetch + apply
+    // Applying an external aesthetic is a stylesheet FETCH, not a render. settle()'s two animation
+    // frames are the wrong unit to measure that in: under parallel suite load the CSS hadn't landed
+    // within them, and this failed intermittently with phantom "missing tokens" against a theme
+    // that was perfectly fine. Wait for the condition itself instead of a proxy for it. A timeout
+    // here isn't fatal — it falls through to the real assertions below, which say what's wrong.
+    await page.waitForFunction((args) => {
+      const link = document.getElementById('aestheticCss');
+      if (!link || link.getAttribute('href') !== args.href) return false;
+      const cs = getComputedStyle(document.documentElement);
+      return args.tokens.every(t => cs.getPropertyValue(t).trim());
+    }, { href: `aesthetics/${key}/theme.css`, tokens: REQUIRED_TOKENS }, { timeout: 8000 }).catch(() => {});
 
     const href = await page.evaluate(() => document.getElementById('aestheticCss').getAttribute('href'));
     if (href !== `aesthetics/${key}/theme.css`) {

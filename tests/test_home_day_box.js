@@ -147,7 +147,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   await settle(page);
   const homeDom = await page.evaluate(() => ({
     hasLabel: /YOUR DAY/.test(document.getElementById('app').innerHTML),
-    hasLink: !!document.querySelector('[onclick*="goHomeSection(\'schedule\')"]'),
+    hasLink: !!document.querySelector('[onclick*="goSchedule"]'),
     bands: document.querySelectorAll('.day-band').length,
   }));
   console.log('Home DOM:', homeDom);

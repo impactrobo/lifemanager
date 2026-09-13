@@ -1418,7 +1418,10 @@ function defaultWorkouts() {
 // rather than storing per-item objects, so re-ordering is just an array splice.
 function defaultHomeLayout() {
   return {
-    sectionOrder: ['schedule', 'train', 'hobbies', 'health', 'notes', 'budget'],
+    // No 'schedule' tile: Home *is* the schedule now. HOME_SECTION_META keeps its entry --
+    // LINKABLE_TYPES colours every reminder, habit and activity link chip from it, so deleting the
+    // entry would silently drop those chips back to an unstyled fallback.
+    sectionOrder: ['train', 'hobbies', 'health', 'notes', 'budget'],
     sectionHidden: [],
     boxOrder: ['reminders', 'day', 'wakeup', 'calories'],
     boxHidden: [],
@@ -1879,6 +1882,10 @@ function migrateState() {
   if (!STATE.settings.mealUnitSystem) STATE.settings.mealUnitSystem = 'metric';
   MEAL_UNIT_SYSTEM = STATE.settings.mealUnitSystem;
   if (!STATE.settings.defaultPage) STATE.settings.defaultPage = 'home';
+  // 'schedule' was a valid landing page while it was its own tile. Home shows the day now, so that
+  // choice means Home -- and a save still holding it would otherwise boot to a tab with no way
+  // back to Home in its bar's first slot.
+  if (STATE.settings.defaultPage === 'schedule') STATE.settings.defaultPage = 'home';
   if (!STATE.settings.homeLayout) STATE.settings.homeLayout = defaultHomeLayout();
   else {
     const L = STATE.settings.homeLayout, D = defaultHomeLayout();
@@ -1886,6 +1893,11 @@ function migrateState() {
     if (!Array.isArray(L.sectionHidden)) L.sectionHidden = [];
     if (!Array.isArray(L.boxOrder)) L.boxOrder = D.boxOrder;
     if (!Array.isArray(L.boxHidden)) L.boxHidden = [];
+    // The SCHEDULE tile retired -- Home renders the schedule itself, so a tile pointing at it is a
+    // tile pointing at where you already are. Dropped from both lists rather than left to the
+    // stale-id filter below, so the intent is stated where someone will look for it.
+    L.sectionOrder = L.sectionOrder.filter(id => id !== 'schedule');
+    L.sectionHidden = L.sectionHidden.filter(id => id !== 'schedule');
     // RIGHT NOW / TODAY'S WORKOUTS / HABITS merged into one `day` box. A saved layout still names
     // the old three, so fold them down. `day` is only visible if at least one of them was --
     // somebody who hid all three wanted their Home without the day on it, and that intent survives.
@@ -1903,6 +1915,11 @@ function migrateState() {
     // Any id that's neither ordered nor hidden (e.g. a newly-added box/section from an app
     // update) gets appended as visible, so it isn't silently lost from either list.
     D.sectionOrder.forEach(id => { if (!L.sectionOrder.includes(id) && !L.sectionHidden.includes(id)) L.sectionOrder.push(id); });
+    // Same stale-id guard the boxes get: a section id with no HOME_SECTION_META entry would render
+    // as an empty tile. 'schedule' still HAS an entry (the link chips need it), which is exactly
+    // why it has to be filtered by name above rather than left to this.
+    L.sectionOrder = L.sectionOrder.filter(id => HOME_SECTION_META[id]);
+    L.sectionHidden = L.sectionHidden.filter(id => HOME_SECTION_META[id]);
     D.boxOrder.forEach(id => { if (!L.boxOrder.includes(id) && !L.boxHidden.includes(id)) L.boxOrder.push(id); });
     // A stale id from an older build (or a hand-edited save) would otherwise render as an
     // permanently empty box that Home's edit mode still lets you drag around.
@@ -2606,8 +2623,17 @@ const NAV_SNAPSHOT_KEYS = [
   'currentTab', 'trainTopSubtab', 'guitarSubtab', 'healthSubtab', 'setupSubtab', 'setupContext',
   'notesSubtab', 'scheduleSubtab', 'budgetSubtab', 'scheduleSetupSubtab', 'healthSetupSubtab',
 ];
+// Which tab to boot into. Validated rather than read straight out of settings, because this runs
+// at NAV's declaration -- top-level, in source order -- which is BEFORE loadState()'s migrations
+// get a chance to fix a stale value. Migrating `defaultPage` alone therefore corrects what's
+// stored and still boots you onto the dead tab; caught exactly that way by test_home_bar.js.
+// Anything unrecognised falls back to Home instead of stranding you on a tab nothing renders.
+function initialTab() {
+  const want = (STATE.settings && STATE.settings.defaultPage) || 'home';
+  return HOME_SECTION_META[want] && want !== 'schedule' ? want : 'home';
+}
 let NAV = {
-  currentTab: (STATE.settings && STATE.settings.defaultPage) || 'home', // Settings -> Default Page, not always Home
+  currentTab: initialTab(), // Settings -> Default Page, not always Home
   /** @type {{ mode: string, workoutId?: any, cardioId?: any }} */
   trainView: { mode: 'grid', workoutId: null }, // {mode:'grid'} | {mode:'log', workoutId} | {mode:'cardioLog', cardioId}
   trainTopSubtab: 'workouts',       // 'workouts' | 'progress' -- top-level toggle within Exercise
@@ -2924,9 +2950,26 @@ function attachScrollIndicators() {
 // on sections that actually have configurable parameters (Exercise, Notes, Schedule, Health) and opens that
 // section's own distinct Setup page (see openSetup()) — Home's equivalent lives behind the
 // topbar gear icon instead, since Home has no bottom bar of its own to hold one.
+// One way into Schedule's three screens, used by Home's bar and by the day box's link. Always
+// goes through switchTab(), which snaps the calendar back to today's Day view on every fresh
+// entry -- so arriving from Home never drops you on a date you browsed to twenty minutes ago.
+function goSchedule(subtab) {
+  switchTab('schedule');                                   // already lands on today's Day view
+  if (subtab && subtab !== 'calendar') setScheduleSubtab(subtab);
+}
 function renderTabbar() {
-  if (NAV.currentTab === 'home') return '';
-  const homeBtn = `<button onclick="switchTab('home')"><span class="ic">${icon('home')}</span>HOME</button>`;
+  const homeBtn = `<button class="${NAV.currentTab === 'home' ? 'active' : ''}" onclick="switchTab('home')"><span class="ic">${icon('home')}</span>HOME</button>`;
+  // Home used to be the one screen with no bottom bar, which is why Calendar and Agenda cost two
+  // taps from it -- you had to go through the SCHEDULE tile. Home shows the day now, so it carries
+  // the day's own screens. The word stays HOME on every bar including this one: the screen changed,
+  // the name for "the screen you start on" didn't, and the date line under the title already says
+  // which day you are looking at.
+  if (NAV.currentTab === 'home') {
+    return homeBtn + `
+      <button onclick="goSchedule('calendar')"><span class="ic">${icon('schedule')}</span>CALENDAR</button>
+      <button onclick="goSchedule('agenda')"><span class="ic">${icon('flag')}</span>AGENDA</button>
+      <button onclick="goSchedule('setup')"><span class="ic">${icon('setup')}</span>SETUP</button>`;
+  }
   let sectionBtns = '';
   if (NAV.currentTab === 'train') {
     sectionBtns = `
@@ -3011,12 +3054,13 @@ function _doRender() {
   app.innerHTML += renderLinkPicker() + renderRecipeCustomFoodOverlay();
   const tabbarEl = document.getElementById('tabbar');
   tabbarEl.innerHTML = renderTabbar();
-  tabbarEl.classList.toggle('hidden', NAV.currentTab === 'home');
+  // index.html ships the bar as .hidden so an empty one never flashes before the first render.
+  // Every screen has a bar now, Home included, so this only ever needs to reveal it.
+  tabbarEl.classList.remove('hidden');
   document.getElementById('backBtn').classList.toggle('disabled', NAV_HISTORY.length === 0);
   // Forward is always shown alongside Back now (not hidden even on first launch) — just dimmed
   // and inert whenever its own stack is empty, same treatment as Back.
   document.getElementById('forwardBtn').classList.toggle('disabled', NAV_FORWARD.length === 0);
-  document.body.classList.toggle('no-tabbar', NAV.currentTab === 'home');
   // The topbar gear is a global entry point to Home's own Setup page (Aesthetic/Accent/Data) —
   // it lives in the persistent topbar (not the per-section bottom bar) precisely so it stays
   // reachable from anywhere, the same way it always has been.
@@ -4249,8 +4293,10 @@ function renderExerciseSetup() {
 // here, only things that apply to the whole app.
 function renderHomeSetup() {
   const defaultPage = STATE.settings.defaultPage || 'home';
+  // No SCHEDULE entry: Home opens on the day, so "open to Schedule" and "open to Home" are the
+  // same choice now.
   const pageOptions = [
-    ['home', 'HOME'], ['schedule', 'SCHEDULE'], ['train', 'EXERCISE'], ['hobbies', 'HOBBIES'],
+    ['home', 'HOME'], ['train', 'EXERCISE'], ['hobbies', 'HOBBIES'],
     ['health', 'HEALTH & DIET'], ['notes', 'NOTES'], ['budget', 'FINANCIAL'],
   ];
   return `<div class="screen">
@@ -9541,7 +9587,7 @@ function renderHomeSectionsGrid() {
   }).join('');
   return `
     <div style="position:relative; ${UI.homeEditMode ? 'margin-bottom:22px;' : ''}">
-      <div class="workout-grid">${tiles}</div>
+      <div class="workout-grid home-tile-row">${tiles}</div>
       ${UI.homeEditMode ? `<button class="home-add-btn" onclick="openHomeAddPopup('sections')" title="Add back a hidden section">+</button>` : ''}
     </div>`;
 }
@@ -9606,7 +9652,7 @@ function renderHomeDayBox() {
     <div class="subtle-label" style="margin:18px 0 8px;">YOUR DAY</div>
     ${timeline}
     ${untimed}
-    <button class="btn btn-ghost btn-block btn-sm" style="margin-top:10px;" onclick="goHomeSection('schedule')">OPEN CALENDAR &rsaquo;</button>
+    <button class="btn btn-ghost btn-block btn-sm" style="margin-top:10px;" onclick="goSchedule('calendar')">OPEN CALENDAR &rsaquo;</button>
   `;
 }
 const HOME_BOX_RENDERERS = { reminders: renderTodaysReminders, day: renderHomeDayBox, wakeup: renderHomeWakeupBox, calories: renderHomeCaloriesBox };
