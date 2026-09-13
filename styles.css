@@ -736,6 +736,20 @@ select { -webkit-appearance: none; appearance: none; background-image: linear-gr
 .link-result-meta { font-size: 10px; color: var(--text-faint); flex-shrink: 0; }
 
 
+
+/* Brief highlight on the thing you just navigated to (flashEntity()). Several destinations are
+   lists where the entity is one row among many, so landing on the right screen isn't the same as
+   finding the row. Uses --accent so it reads as "here" in every aesthetic. */
+@keyframes entity-flash-fade {
+  0%   { box-shadow: 0 0 0 2px var(--accent), 0 0 18px color-mix(in srgb, var(--accent) 60%, transparent); }
+  100% { box-shadow: 0 0 0 2px transparent, 0 0 0 transparent; }
+}
+.entity-flash { animation: entity-flash-fade 1.4s ease-out; border-radius: var(--radius); }
+@media (prefers-reduced-motion: reduce) {
+  /* Still mark it, just without the fade -- the point is finding the row, not the animation. */
+  .entity-flash { animation: none; box-shadow: 0 0 0 2px var(--accent); }
+}
+
 /* ---------- Recipe notes ---------- */
 .recipe-meta { font-size: 11px; color: var(--text-dim); margin-bottom: 8px; font-weight: 600; }
 .recipe-ing-list { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px; }

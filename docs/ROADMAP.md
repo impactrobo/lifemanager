@@ -326,6 +326,30 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **`navigateToEntity(type, id)`: one way to open any entity, from anywhere (2026-09-13).** The
+  link primitive already had this logic inline; pulling it out as its own function made a latent
+  bug obvious. The individual editors were the entry points, and several of them never navigated:
+  `editNote()` and `editMeal()` set their screen's subtab and loaded the entity but left
+  `NAV.currentTab` alone, so calling either from another tab opened an editor you could not see.
+  Verified empirically before fixing ("tab after editNote from Budget: budget"). It stayed
+  invisible because every caller at the time already happened to be on the right screen — an
+  assumption a link chip breaks by definition, since a chip fires from whatever screen you are on.
+  - **`ensureTab(tab)` rather than `switchTab(tab)`** everywhere a navigation might be a no-op.
+    `switchTab()` pushes Back history and resets transient UI, so calling it unconditionally from
+    an in-screen action (the pencil on a note card) would put a move that never happened on the
+    Back stack. Order matters in the editors: `ensureTab()` must come *first*, because
+    `switchTab('notes')` calls `resetTransientUi()` and would wipe the edit state set before it.
+  - **Landing on the right screen is not the same as landing on the entity.** Destinations split
+    into two shapes: editor screens (note, workout, meal) *are* the entity, so opening the editor
+    loaded with it is the whole job; list screens (reminder, habit, charge, goal, activity) show it
+    as one row among many, so `flashEntity()` stamps `data-entity="type:id"` on each row, scrolls
+    it into view and pulses `--accent` for 1.4s. Scheduled past two `requestAnimationFrame`s
+    because `render()` is rAF-deferred — the element does not exist yet when `open()` returns.
+  - Writing the test found two handlers that did neither: the meal handler opened the meal builder
+    screen without loading the meal, and the activity handler opened the schedule builder without
+    opening the parent schedule the activity is nested inside — so in both cases you arrived and
+    still had to go find the thing. Both now open the entity itself.
+
 - **Recipe notes: a second kind of note, with structured ingredients and one-tap conversion to a
   Meal (2026-09-13).** A recipe is a distinct `Note.type === 'recipe'` rather than a tag — tags
   here are fully user-editable (renameable, deletable) and carry no behaviour, whereas a recipe has

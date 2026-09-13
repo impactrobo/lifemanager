@@ -4606,7 +4606,7 @@ function renderHabitsSetup() {
 }
 function renderHabitSetupRow(h) {
   const ended = h.endDate && h.endDate < todayStr();
-  return `<div class="panel" style="${ended ? 'opacity:0.6;' : ''}">
+  return `<div class="panel" ${entityAttr('habit', h.id)} style="${ended ? 'opacity:0.6;' : ''}">
     <div class="field-row">
       <label class="field" style="flex:2;"><span class="lbl">Name</span><input type="text" value="${escapeHtml(h.name)}" onchange="updateHabitField('${h.id}','name',this.value)"></label>
       <button class="icon-btn" style="align-self:flex-end; margin-bottom:10px; color:var(--bad);" onclick="deleteHabit('${h.id}')" title="Delete habit">${icon('close')}</button>
@@ -4841,7 +4841,7 @@ function renderScheduleBuilderForm(sched) {
   `;
 }
 function renderScheduleActivityRow(schedId, act) {
-  return `<div class="panel">
+  return `<div class="panel" ${entityAttr('activity', act.id)}>
     <div class="field-row">
       <label class="field" style="flex:2;"><span class="lbl">Title</span><input type="text" value="${escapeHtml(act.title||'')}" onchange="updateScheduleActivityField('${schedId}','${act.id}','title',this.value)"></label>
       <button class="icon-btn" style="align-self:flex-end; margin-bottom:10px; color:var(--bad);" onclick="deleteScheduleActivity('${schedId}','${act.id}')" title="Delete activity">${icon('close')}</button>
@@ -4907,6 +4907,8 @@ function startNewMeal() {
 function editMeal(id) {
   const meal = STATE.diet.meals.find(m => m.id === id);
   if (!meal) return;
+  ensureTab('health');
+  NAV.healthSubtab = 'setup';
   VIEW.mealBuilderDraft = { id: meal.id, name: meal.name, items: meal.items.map(it => Object.assign({}, it)), activeCategory: null, searchQuery: '' };
   NAV.healthSetupSubtab = 'builder';
   render();
@@ -5443,7 +5445,7 @@ function renderAllMeals() {
 }
 function renderMealCard(meal) {
   const totals = computeMealTotals(meal.items);
-  return `<div class="panel" onclick="editMeal('${meal.id}')" style="cursor:pointer;">
+  return `<div class="panel" ${entityAttr('meal', meal.id)} onclick="editMeal('${meal.id}')" style="cursor:pointer;">
     <div class="row" style="align-items:flex-start;">
       <div>
         <div style="font-size:14px; font-weight:700;">${escapeHtml(meal.name || 'Untitled meal')}</div>
@@ -6830,7 +6832,7 @@ function renderWorkoutCard(w) {
   } else {
     summary = `${w.exercises.length} exercise${w.exercises.length===1?'':'s'}`;
   }
-  return `<div class="panel" onclick="editWorkout('${w.id}')" style="cursor:pointer;">
+  return `<div class="panel" ${entityAttr('workout', w.id)} onclick="editWorkout('${w.id}')" style="cursor:pointer;">
     <div class="row" style="align-items:flex-start;">
       <div>
         <div style="font-size:14px; font-weight:700;">${escapeHtml(w.name)}</div>
@@ -6844,6 +6846,8 @@ function renderWorkoutCard(w) {
 function editWorkout(id) {
   const w = getWorkout(id);
   if (!w) return;
+  ensureTab('train');
+  NAV.trainTopSubtab = 'setup';
   VIEW.builderType = w.type;
   VIEW.builderSelected[w.type] = w.id;
   UI.builderStylePickerOpen = false;
@@ -8767,6 +8771,9 @@ function saveNote() {
 function editNote(id) {
   const note = STATE.notes.find(n => n.id === id);
   if (!note) return;
+  // ensureTab FIRST: switchTab('notes') clears any in-progress edit and forces the 'write'
+  // subtab, so setting the edit state before it would be wiped on the way in.
+  ensureTab('notes');
   VIEW.noteEditId = id;
   VIEW.notesSelectedTag = note.tag || 'general';
   VIEW.noteDraftPhotos = (note.photos || []).slice();
@@ -8875,7 +8882,7 @@ function renderNoteCard(n) {
   const c = tagColor(n.tag);
   const label = noteTagLabel(n.tag);
   const safeHtml = sanitizeNoteHtml(getNoteBodyHtml(n)); // defense-in-depth for notes that arrived via Import Backup
-  return `<div class="note-card" style="border-left: 4px solid ${c};">
+  return `<div class="note-card" ${entityAttr('note', n.id)} style="border-left: 4px solid ${c};">
     <div class="row" style="align-items:flex-start; margin-bottom:6px;">
       <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
         <span class="note-tag-label" style="color:${c}; border-color:${c};">${escapeHtml(label).toUpperCase()}</span>
@@ -10251,7 +10258,7 @@ function saveReminder() {
 // time, delete) works exactly like a normal reminder.
 function renderReminderCard(r) {
   const isTodo = r.type === 'todo';
-  return `<div class="entry-card">
+  return `<div class="entry-card" ${entityAttr('reminder', r.id)}>
     <div class="ehead">
       ${pastDueMark(r)}
       <input type="text" value="${escapeHtml(r.title)}" placeholder="Title" style="font-weight:700; font-size:14px; border:none; background:transparent; padding:0; color:var(--text); font-family:var(--font-body); flex:1; min-width:0;" onchange="updateReminderField('${r.id}','title',this.value)">
@@ -10409,7 +10416,7 @@ const LINKABLE_TYPES = {
     all: () => STATE.notes,
     title: n => (n.title && n.title.trim()) || notePlainTextBody(n).slice(0, 60) || 'Untitled note',
     subtitle: n => n.date || '',
-    open: n => { switchTab('notes'); editNote(n.id); },
+    open: n => editNote(n.id),
   },
   reminder: {
     label: 'Reminder', section: 'schedule',
@@ -10430,28 +10437,28 @@ const LINKABLE_TYPES = {
     all: () => STATE.diet.meals,
     title: m => m.name || 'Untitled meal',
     subtitle: m => (m.items || []).length + ' item' + ((m.items || []).length === 1 ? '' : 's'),
-    open: () => { switchTab('health'); setHealthSubtab('setup'); setHealthSetupSubtab('builder'); },
+    open: m => editMeal(m.id),   // loads the meal into the builder, not just the builder screen
   },
   habit: {
     label: 'Habit', section: 'schedule',
     all: () => STATE.life.habits || [],
     title: h => h.name || 'Untitled habit',
     subtitle: h => h.startDate ? 'since ' + h.startDate : '',
-    open: () => { switchTab('schedule'); setScheduleSubtab('setup'); setScheduleSetupSubtab('habits'); },
+    open: () => { ensureTab('schedule'); setScheduleSubtab('setup'); setScheduleSetupSubtab('habits'); },
   },
   charge: {
     label: 'Charge', section: 'budget',
     all: () => STATE.budget.recurring,
     title: c => c.name || 'Untitled charge',
     subtitle: c => fmtMoney(c.amount),
-    open: () => { switchTab('budget'); setBudgetSubtab('recurring'); },
+    open: () => { ensureTab('budget'); setBudgetSubtab('recurring'); },
   },
   goal: {
     label: 'Goal', section: 'budget',
     all: () => STATE.budget.goals || [],
     title: g => g.name || 'Untitled goal',
     subtitle: g => fmtMoney(g.targetAmount),
-    open: () => { switchTab('budget'); setBudgetSubtab('goals'); },
+    open: () => { ensureTab('budget'); setBudgetSubtab('goals'); },
   },
   // Schedule activities live nested inside their schedule rather than in a flat array, so `all()`
   // flattens them and stamps the parent id on for `open`.
@@ -10460,7 +10467,7 @@ const LINKABLE_TYPES = {
     all: () => (STATE.life.schedules || []).flatMap(s => (s.activities || []).map(a => Object.assign({ _schedId: s.id, _schedName: s.name }, a))),
     title: a => a.title || 'Untitled activity',
     subtitle: a => (a._schedName || '') + (a.start ? ' ' + fmtReminderTime(a.start) : ''),
-    open: () => { switchTab('schedule'); setScheduleSubtab('setup'); setScheduleSetupSubtab('builder'); },
+    open: a => { ensureTab('schedule'); setScheduleSubtab('setup'); setScheduleSetupSubtab('builder'); openScheduleEdit(a._schedId); },
   },
 };
 
@@ -10537,12 +10544,46 @@ function removeEntityLink(fromType, fromId, toType, toId) {
   if (b && Array.isArray(b.links)) b.links = b.links.filter(l => !(l.type === fromType && l.id === fromId));
   saveState(); render();
 }
+// ---- Going to a specific thing ----
+// Switches to `tab` only when not already on it. The distinction matters: switchTab() pushes nav
+// history and resets transient UI, so calling it unconditionally from an in-screen action (the
+// pencil on a note card) would pollute the Back stack with a "navigation" that never happened.
+// From another tab it's a real move and does both, correctly.
+function ensureTab(tab) {
+  if (NAV.currentTab !== tab) switchTab(tab);
+}
+// The single way to open any entity, from anywhere. Delegates to the same LINKABLE_TYPES registry
+// the link chips use, so a type is described once and every caller -- chips, search, a future
+// notification tap -- gets identical behaviour.
+//
+// Before this, the individual editors were the entry points and several of them didn't actually
+// navigate: editNote() and editMeal() set their screen's subtab and loaded the entity, but left
+// NAV.currentTab alone, so calling either from another tab silently opened an editor you couldn't
+// see. That was invisible only because every existing caller already happened to be on the right
+// screen.
 function navigateToEntity(type, id) {
   const meta = LINKABLE_TYPES[type];
-  const e = entityOf(type, id);
+  const e = meta && entityOf(type, id);
   if (!meta || !e) { showToast('That item no longer exists'); return; }
   meta.open(e);
+  flashEntity(type, id);
 }
+// After navigating, briefly mark the target so it's obvious which thing you just jumped to --
+// several destinations are lists where the entity is one row among many, and landing on the right
+// screen isn't the same as finding the row. Scheduled past the rAF-deferred render() that the
+// open() above almost certainly queued, since the element doesn't exist until then.
+function flashEntity(type, id) {
+  const sel = '[data-entity="' + type + ':' + id + '"]';
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    const el = document.querySelector(sel);
+    if (!el) return;   // destination doesn't render that entity as its own element; landing there is enough
+    el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    el.classList.add('entity-flash');
+    setTimeout(() => el.classList.remove('entity-flash'), 1400);
+  }));
+}
+// Stamp an entity's own element so flashEntity() can find it. Spread into the element's tag.
+function entityAttr(type, id) { return 'data-entity="' + type + ':' + id + '"'; }
 
 // ---- The shared chip row, rendered identically wherever an entity is shown ----
 let LINK_PICKER = null;   // { type, id } of the entity currently choosing something to link to
@@ -10837,7 +10878,7 @@ function renderGoalCard(g) {
   const expanded = VIEW.goalExpanded === g.id;
   const linkedCharge = g.recurringChargeId ? STATE.budget.recurring.find(r => r.id === g.recurringChargeId) : null;
   const contribs = goalContributionsInScope(g).slice().sort((a, b) => b.date.localeCompare(a.date));
-  return `<div class="panel" style="${complete ? 'border-color:var(--good);' : ''}">
+  return `<div class="panel" ${entityAttr('goal', g.id)} style="${complete ? 'border-color:var(--good);' : ''}">
     <div class="row" style="align-items:flex-start; cursor:pointer;" onclick="toggleGoalExpanded('${g.id}')">
       <div style="flex:1; min-width:0;">
         <div style="font-size:14px; font-weight:700;">${escapeHtml(g.name)}${g.resetsAnnually ? ` <span style="font-size:10px; font-weight:700; color:var(--text-faint);">&middot; ${new Date().getFullYear()}</span>` : ''}${complete ? ` <span style="color:var(--good); font-size:11px; font-weight:700;">&#10003; COMPLETE</span>` : ''}</div>
@@ -11125,7 +11166,7 @@ function deleteRecurringCharge(id) {
   });
 }
 function renderRecurringRow(r) {
-  return `<div class="entry-card" style="${r.active ? '' : 'opacity:0.5;'} ${r.isSavings ? 'border-color:var(--savings);' : ''}">
+  return `<div class="entry-card" ${entityAttr('charge', r.id)} style="${r.active ? '' : 'opacity:0.5;'} ${r.isSavings ? 'border-color:var(--savings);' : ''}">
     <div class="ehead">
       <div>${r.isSavings ? `<span class="savings-badge">${icon('recurDollar')} SAVINGS</span>` : ''}<input type="text" value="${escapeHtml(r.name)}" placeholder="e.g. Rent" style="font-weight:700; font-size:14px; border:none; background:transparent; padding:0; color:var(--text); font-family:var(--font-body);" onchange="updateRecurringField('${r.id}','name',this.value)"></div>
       <button class="icon-btn" onclick="deleteRecurringCharge('${r.id}')">${icon('close')}</button>
