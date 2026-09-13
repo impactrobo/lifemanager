@@ -9330,25 +9330,120 @@ function renderSelectedDayReminders() {
     ${REMINDER_FORM_OPEN ? renderReminderForm() : ''}
     <div class="entry-list">${list.length ? list.map(renderReminderCard).join('') : emptyState('No reminders for this day.')}</div>`;
 }
-function toggleReminderForm() { REMINDER_FORM_OPEN = !REMINDER_FORM_OPEN; REMINDER_FORM_TYPE = 'reminder'; render(); }
-function setReminderFormType(t) { REMINDER_FORM_TYPE = t; render(); }
+// ---- Recurring reminders (annual / monthly) ----
+// Materialized, not virtual: setting a recurrence on a reminder immediately generates real,
+// independent Reminder rows for its next several occurrences, rather than storing a rule and
+// computing instances on the fly. Every existing reminder code path — remindersOn(),
+// scheduleBlocksForDate(), the Month/Year calendar dots, push sync — already just reads
+// STATE.reminders, so this needed zero changes to any of them.
+//
+// The deliberate tradeoff: there's no "edit changes all future occurrences." Editing or deleting
+// any one occurrence (via the ordinary updateReminderField()/deleteReminder() already used for
+// every reminder) only ever touches that single row. Deleting every remaining occurrence in a
+// series is how you stop it repeating — there's no separate cancel-series flag to maintain.
+const RECURRENCE_LABELS = { annual: 'ANNUALLY', monthly: 'MONTHLY' };
+const RECURRENCE_HORIZON = { annual: 2, monthly: 6 }; // occurrences kept materialized beyond the seed
+function addMonthsClamped(dateStr, months) {
+  const [y, m, d] = dateStr.split('-').map(Number); // m is 1-indexed
+  const totalMonths0 = (y * 12 + (m - 1)) + months; // absolute 0-indexed month count
+  const targetY = Math.floor(totalMonths0 / 12);
+  const targetM0 = ((totalMonths0 % 12) + 12) % 12;
+  const lastDay = new Date(targetY, targetM0 + 1, 0).getDate();
+  return dateKey(targetY, targetM0, Math.min(d, lastDay));
+}
+function addYearsClamped(dateStr, years) {
+  const [y, m, d] = dateStr.split('-').map(Number); // m is 1-indexed
+  const targetY = y + years;
+  const lastDay = new Date(targetY, m, 0).getDate(); // "day 0 of 1-indexed month m" = last day of month m
+  return dateKey(targetY, m - 1, Math.min(d, lastDay));
+}
+// The Nth occurrence's date, computed from the series' own unchanging anchor date rather than by
+// rolling forward from the previous occurrence — matches how real calendar apps treat "monthly on
+// the 31st": Jan 31 -> Feb 28 -> Mar 31 -> Apr 30, not permanently drifting down to the 28th the
+// first time a short month clamps it.
+function recurrenceOccurrenceDate(anchorDate, recurrence, n) {
+  if (n === 0) return anchorDate;
+  return recurrence === 'annual' ? addYearsClamped(anchorDate, n) : addMonthsClamped(anchorDate, n);
+}
+// Tops every recurring series back up to its horizon. Idempotent (deterministic
+// `${recurrenceId}_r${n}` ids mean re-running never duplicates a row), so it's safe to call both
+// right after creating a recurring reminder (so its future occurrences show up immediately,
+// without waiting for a reload) and on every app load (so a series someone set up a year ago keeps
+// extending forward the whole time the app keeps getting opened).
+function ensureRecurringReminderOccurrences() {
+  const series = new Map(); // recurrenceId -> { anchorDate, recurrence, maxIndex }
+  STATE.reminders.forEach(r => {
+    if (!r.recurrence || !r.recurrenceId || !r.anchorDate) return;
+    const m = /_r(\d+)$/.exec(r.id);
+    const idx = m ? Number(m[1]) : 0;
+    const existing = series.get(r.recurrenceId);
+    if (!existing) series.set(r.recurrenceId, { anchorDate: r.anchorDate, recurrence: r.recurrence, maxIndex: idx });
+    else if (idx > existing.maxIndex) existing.maxIndex = idx;
+  });
+  let changed = false;
+  series.forEach((info, recurrenceId) => {
+    const horizon = RECURRENCE_HORIZON[info.recurrence] || 0;
+    for (let n = info.maxIndex + 1; n <= horizon; n++) {
+      const id = `${recurrenceId}_r${n}`;
+      if (STATE.reminders.some(r => r.id === id)) continue;
+      // Cloned from whichever existing row in the series is most recently dated, not always the
+      // original seed — the seed itself may since have been edited or deleted, and later
+      // occurrences should still generate sensible new ones rather than reaching for a stale row.
+      const template = STATE.reminders.filter(r => r.recurrenceId === recurrenceId).sort((a, b) => b.date.localeCompare(a.date))[0];
+      if (!template) continue;
+      STATE.reminders.push({
+        id, date: recurrenceOccurrenceDate(info.anchorDate, info.recurrence, n),
+        time: template.time, endTime: template.endTime || null, title: template.title,
+        notes: template.notes || '', createdAt: Date.now(), type: 'reminder',
+        recurrence: info.recurrence, recurrenceId, anchorDate: info.anchorDate,
+      });
+      changed = true;
+    }
+  });
+  if (changed) { saveState(); queueReminderPushSync(); }
+}
+
+let REMINDER_FORM_RECURRENCE = 'none'; // 'none' | 'annual' | 'monthly' — resets whenever the form opens/closes
+// Whatever's currently typed into the open form, captured right before a toggle (REPEATS or
+// REMINDER/TO-DO) forces renderReminderForm() to regenerate fresh, empty inputs. The REPEATS
+// selector sits below Title/Time — unlike the REMINDER/TO-DO toggle above it, which is always
+// tapped before anyone's typed anything — so without this, choosing ANNUALLY/MONTHLY after typing
+// a title would silently wipe it. Reset whenever the form actually opens or closes.
+let REMINDER_FORM_DRAFT = {};
+function captureReminderFormDraft() {
+  const get = id => { const el = document.getElementById(id); return el ? el.value : undefined; };
+  const draft = { title: get('remTitle'), time: get('remTime'), endTime: get('remEndTime'), notes: get('remNotes') };
+  Object.keys(draft).forEach(k => { if (draft[k] !== undefined) REMINDER_FORM_DRAFT[k] = draft[k]; });
+}
+function setReminderFormRecurrence(v) { captureReminderFormDraft(); REMINDER_FORM_RECURRENCE = v; render(); }
+function toggleReminderForm() { REMINDER_FORM_OPEN = !REMINDER_FORM_OPEN; REMINDER_FORM_TYPE = 'reminder'; REMINDER_FORM_RECURRENCE = 'none'; REMINDER_FORM_DRAFT = {}; render(); }
+function setReminderFormType(t) { captureReminderFormDraft(); REMINDER_FORM_TYPE = t; render(); }
 function renderReminderForm() {
   const isTodo = REMINDER_FORM_TYPE === 'todo';
+  const draft = REMINDER_FORM_DRAFT;
   return `
     <div class="panel">
       <div class="unit-toggle" style="margin-bottom:12px;">
         <button class="${!isTodo?'active':''}" onclick="setReminderFormType('reminder')">REMINDER</button>
         <button class="${isTodo?'active':''}" onclick="setReminderFormType('todo')">TO-DO LIST</button>
       </div>
-      <label class="field"><span class="lbl">Title</span><input type="text" id="remTitle" placeholder="${isTodo ? 'e.g. Grocery Shopping' : 'e.g. Call the doctor'}"></label>
+      <label class="field"><span class="lbl">Title</span><input type="text" id="remTitle" value="${escapeHtml(draft.title || '')}" placeholder="${isTodo ? 'e.g. Grocery Shopping' : 'e.g. Call the doctor'}"></label>
       <div class="field-row">
-        <label class="field"><span class="lbl">Time (optional)</span><input type="time" id="remTime"></label>
-        <label class="field"><span class="lbl">End Time (optional)</span><input type="time" id="remEndTime"></label>
+        <label class="field"><span class="lbl">Time (optional)</span><input type="time" id="remTime" value="${draft.time || ''}"></label>
+        <label class="field"><span class="lbl">End Time (optional)</span><input type="time" id="remEndTime" value="${draft.endTime || ''}"></label>
       </div>
       <div style="font-size:11px; color:var(--text-faint); margin:-4px 0 10px;">Add an end time and this becomes a real block on your day's schedule — an appointment, not just a nudge.</div>
       ${isTodo
         ? `<div style="font-size:11px; color:var(--text-faint); margin-bottom:10px;">Add checklist items after saving.</div>`
-        : `<label class="field"><span class="lbl">Notes (optional)</span><textarea id="remNotes" placeholder="Any details..."></textarea></label>`}
+        : `
+      <div class="subtle-label" style="margin-bottom:6px;">REPEATS</div>
+      <div class="unit-toggle" style="margin-bottom:4px;">
+        <button class="${REMINDER_FORM_RECURRENCE==='none'?'active':''}" onclick="setReminderFormRecurrence('none')">NEVER</button>
+        <button class="${REMINDER_FORM_RECURRENCE==='annual'?'active':''}" onclick="setReminderFormRecurrence('annual')">ANNUALLY</button>
+        <button class="${REMINDER_FORM_RECURRENCE==='monthly'?'active':''}" onclick="setReminderFormRecurrence('monthly')">MONTHLY</button>
+      </div>
+      <div style="font-size:11px; color:var(--text-faint); margin-bottom:10px;">${REMINDER_FORM_RECURRENCE === 'none' ? 'A one-off reminder on this date only.' : `Generates the next few occurrences now — this one plus ${RECURRENCE_HORIZON[REMINDER_FORM_RECURRENCE]} more. Each occurrence edits/deletes independently, same as any reminder.`}</div>
+      <label class="field"><span class="lbl">Notes (optional)</span><textarea id="remNotes" placeholder="Any details...">${escapeHtml(draft.notes || '')}</textarea></label>`}
       <button class="btn btn-primary btn-block" onclick="saveReminder()">${isTodo ? 'SAVE TO-DO LIST' : 'SAVE REMINDER'}</button>
     </div>`;
 }
@@ -9364,11 +9459,18 @@ function saveReminder() {
   const isTodo = REMINDER_FORM_TYPE === 'todo';
   const notesEl = document.getElementById('remNotes');
   const notes = notesEl ? notesEl.value.trim() : '';
-  const reminder = { id: uid(), date: CAL_SELECTED_DATE, time, endTime, title, notes, createdAt: Date.now(), type: isTodo ? 'todo' : 'reminder' };
+  const id = uid();
+  const reminder = { id, date: CAL_SELECTED_DATE, time, endTime, title, notes, createdAt: Date.now(), type: isTodo ? 'todo' : 'reminder' };
   if (isTodo) reminder.items = [];
+  // Recurrence only applies to plain reminders — a recurring to-do's per-occurrence reset
+  // semantics are a distinct feature this doesn't attempt to build.
+  const recurrence = (!isTodo && REMINDER_FORM_RECURRENCE !== 'none') ? REMINDER_FORM_RECURRENCE : null;
+  if (recurrence) { reminder.recurrence = recurrence; reminder.recurrenceId = id; reminder.anchorDate = CAL_SELECTED_DATE; }
   STATE.reminders.push(reminder);
   REMINDER_FORM_OPEN = false;
+  REMINDER_FORM_DRAFT = {};
   saveState();
+  if (recurrence) ensureRecurringReminderOccurrences(); // materializes the rest of the series right away
   queueReminderPushSync(); // no-op unless reminder notifications are enabled — see REMINDER PUSH section
   showToast(isTodo ? 'To-do list saved' : 'Reminder saved');
   render();
@@ -9391,6 +9493,7 @@ function renderReminderCard(r) {
       <label class="field" style="margin-bottom:0;"><span class="lbl">End Time</span><input type="time" value="${r.endTime || ''}" onchange="updateReminderField('${r.id}','endTime',this.value)"></label>
     </div>
     ${r.time && r.endTime ? `<div style="font-size:10px; color:var(--text-faint); margin-top:6px;">${icon('anchorMark')} On your day's schedule &middot; ${fmtReminderTime(r.time)}&ndash;${fmtReminderTime(r.endTime)}</div>` : ''}
+    ${r.recurrence ? `<div style="font-size:10px; color:var(--text-faint); margin-top:6px;">${icon('repeat')} Repeats ${RECURRENCE_LABELS[r.recurrence].toLowerCase()} &middot; set when this series was created, not editable per-occurrence</div>` : ''}
     ${isTodo ? renderReminderTodoItems(r) : `<label class="field" style="margin-top:8px; margin-bottom:0;"><span class="lbl">Notes</span><textarea placeholder="Any details..." onchange="updateReminderField('${r.id}','notes',this.value)">${escapeHtml(r.notes || '')}</textarea></label>`}
   </div>`;
 }
@@ -9464,8 +9567,15 @@ function deleteReminderTodoItem(reminderId, itemId) {
   saveState(); render();
 }
 function deleteReminder(id) {
-  showConfirm('Delete this reminder?', () => {
-    STATE.reminders = STATE.reminders.filter(r => r.id !== id);
+  const r = STATE.reminders.find(x => x.id === id);
+  // Deleting is per-occurrence, same as editing — there's no "delete the whole series" action.
+  // The message just makes that explicit for a recurring one, since deleting every remaining
+  // occurrence (one at a time) is also how a series actually gets stopped.
+  const msg = r && r.recurrence
+    ? `Delete this occurrence? It repeats ${RECURRENCE_LABELS[r.recurrence].toLowerCase()} — other occurrences aren't affected. Delete all of them individually to stop the series.`
+    : 'Delete this reminder?';
+  showConfirm(msg, () => {
+    STATE.reminders = STATE.reminders.filter(x => x.id !== id);
     saveState();
     queueReminderPushSync(); // no-op unless reminder notifications are enabled — see REMINDER PUSH section
     render();
@@ -10668,6 +10778,7 @@ document.addEventListener('wheel', function(e) {
 }, { passive: false });
 
 updateAllTMs();
+ensureRecurringReminderOccurrences(); // tops up every recurring reminder series on each app open
 applyAesthetic();
 document.getElementById('settingsBtn').innerHTML = icon('settings');
 document.getElementById('homeEditBtn').innerHTML = icon('pencil');

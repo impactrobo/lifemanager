@@ -305,6 +305,21 @@ interface Reminder {
    *  case for every pre-existing reminder) means a point in time, which behaves exactly as before:
    *  list + push notification only, never a timeline block. */
   endTime?: string | null;
+  /** 'annual' | 'monthly' — this reminder is one occurrence of a materialized recurring series
+   *  (see ensureRecurringReminderOccurrences()). Only ever set on type 'reminder', never 'todo' —
+   *  a recurring checklist's per-occurrence reset semantics are a distinct feature, not this one.
+   *  Present on every occurrence in the series, not just the first, so top-up logic can find the
+   *  series and its rule even if the original occurrence is later edited or deleted. */
+  recurrence?: 'annual' | 'monthly' | null;
+  /** Shared by every occurrence of one series — the seed occurrence's own id. Generated
+   *  occurrences use the deterministic id `${recurrenceId}_r${n}`, which is what makes
+   *  ensureRecurringReminderOccurrences() idempotent to re-run. */
+  recurrenceId?: string;
+  /** The series' original date, unchanged on every occurrence — later occurrences are computed
+   *  from this anchor (not by rolling forward from the previous occurrence), so a monthly
+   *  reminder anchored on the 31st lands on the 31st whenever the target month has one rather
+   *  than permanently drifting down to 28 the first time a short month clamps it. */
+  anchorDate?: string;
   /** Only meaningful when type === 'todo'. */
   items?: Array<{ id: string; text: string; done: boolean }>;
 }
