@@ -1025,7 +1025,7 @@ const FOOD_DB = [
 // FOOD_DB plus this person's own added foods (STATE.diet.customFoods) — the single list every
 // lookup/browse/search function should use so a custom food behaves identically to a built-in
 // one everywhere (Meal Builder's category list and search, foodById()). Defensive Array.isArray
-// guard rather than relying solely on updateAllTMs()'s migration (which only runs lazily, the
+// guard rather than relying solely on migrateState()'s migration (which only runs lazily, the
 // first time Exercise Setup's MAXES tab renders) — an old save visiting Health & Diet directly
 // shouldn't be able to hit this before that guard has ever run.
 function allFoods() { return FOOD_DB.concat(Array.isArray(STATE.diet.customFoods) ? STATE.diet.customFoods : []); }
@@ -1476,7 +1476,7 @@ function defaultState() {
     // weights/cardio, its own `style` — Workout Style is a per-workout choice made in Workout
     // Builder, not a single Plan-tab setting. See createWorkout()/DATA_MODEL.md.
     workouts: [],
-    mesoWorkouts: [],   // legacy MESO1 slots — only ever populated pre-migration, see updateAllTMs()
+    mesoWorkouts: [],   // legacy MESO1 slots — only ever populated pre-migration, see migrateState()
     mesoLogs: {},        // legacy — folded into `logs` on migration
     muscleLandmarks: defaultMuscleLandmarks(),
     life: defaultLifeState(),
@@ -1484,7 +1484,7 @@ function defaultState() {
     logs: {},          // key `${cycle}_${workoutId}` -> {date, entries:{}, notes, complete} — every workout type shares this
     measurements: [],  // [{id,date,fields:{...cm/kg canonical},photos}] — photos is an array of resized data-URI JPEGs
     weightLog: [],     // [{id,date,weightLb,calories,cardioCalories}]
-    cardioWorkouts: [], // legacy — only ever populated pre-migration, see updateAllTMs()
+    cardioWorkouts: [], // legacy — only ever populated pre-migration, see migrateState()
     cardioLogs: {},      // legacy — folded into `logs` on migration
     // Weekday assignment for saved workouts (any type), Sun=0..Sat=6 — matches the Meal Plan
     // convention. Each day is a list of slots: {id, workoutId}. See Setup -> Exercise Planner.
@@ -1841,7 +1841,28 @@ function computeTM(tier) {
   const c = Number(tier.conv) || 0;
   return w * c;
 }
-function updateAllTMs() {
+// Derives every tier's base training max from its tested weight. Cheap, pure and idempotent —
+// safe to call on a render, which is the point of it being separate from migrateState(): the
+// Training Maxes screen needs current numbers on every visit, not a 200-line save migration.
+// Must run AFTER migrateState() on a fresh load, because the testType/conv snapping in there is
+// what computeTM() reads.
+function recomputeTMs() {
+  STATE.categories.forEach(cat => {
+    Object.keys(cat.tiers).forEach(k => {
+      cat.tiers[k].tmLb = computeTM(cat.tiers[k]); // base TM — does NOT include queued increases
+    });
+  });
+}
+// One-time save migrations: backfills every field added since a save was written, folds legacy
+// shapes (MESO1 slots, cardioWorkouts, the old built-in note tags) into their current homes, and
+// finishes by deriving the training maxes.
+//
+// Was updateAllTMs(), which undersold it — the name described the last few lines and hid the fact
+// that ~200 lines of migration were running on every visit to the Training Maxes screen via
+// renderTMSetup(). Harmless in itself (no saveState() inside, and every step is idempotent), but a
+// migration on a hot render path is one careless edit away from writing on every frame. Boot calls
+// this; renders call recomputeTMs() alone.
+function migrateState() {
   if (!STATE.diet) STATE.diet = { tdee: null, calc: { weight: null, weightUnit: 'Lb', sex: 'M', height: null, heightUnit: 'in', age: null, activity: 'Light' } };
   if (!STATE.diet.calc) STATE.diet.calc = { weight: null, weightUnit: 'Lb', sex: 'M', height: null, heightUnit: 'in', age: null, activity: 'Light' };
   if (!STATE.diet.macro) STATE.diet.macro = { energy: null, energyUnit: 'Cal', weight: null, weightUnit: 'Lb', proteinPerUnit: null, fatPerUnit: null, carbPerUnit: null };
@@ -1928,7 +1949,6 @@ function updateAllTMs() {
         tier.testType = tierGroup === 'T1' ? '1RM' : '10RM';
         tier.conv = convForTest(tierGroup, tier.testType);
       }
-      tier.tmLb = computeTM(tier); // base TM from the tested weight — does NOT include queued increases
       if (!Array.isArray(tier.adjustments)) tier.adjustments = [];
       if (tier.muscle === undefined) tier.muscle = legacyMuscle;
       if (k !== 'T1' && tier.exerciseName === undefined) tier.exerciseName = '';
@@ -2048,6 +2068,9 @@ function updateAllTMs() {
     });
     STATE.settings.noteTagsMigrated = true;
   }
+
+  // Derive the training maxes last: the testType/conv snapping above is what computeTM() reads.
+  recomputeTMs();
 }
 function getCategory(id) { return STATE.categories.find(c => c.id === id); }
 function getWorkout(id) { return STATE.workouts.find(w => w.id === id); }
@@ -2116,7 +2139,7 @@ function deleteWorkout(id) {
 // getMesoWorkout/getCardioWorkout/mesoLogKey/cardioLogKey/getMesoLog/getCardioLog are aliases,
 // kept so the exercises[]-shaped and cardio render/logging code below (unchanged since before
 // the unified model) still reads the same -- STATE.mesoWorkouts/cardioWorkouts and STATE.mesoLogs/
-// cardioLogs folded into STATE.workouts/STATE.logs once, on migration (see updateAllTMs()).
+// cardioLogs folded into STATE.workouts/STATE.logs once, on migration (see migrateState()).
 function getMesoWorkout(id) { return getWorkout(id); }
 function getCardioWorkout(id) { return getWorkout(id); }
 function mesoLogKey(cycle, workoutId) { return logKey(cycle, workoutId); }
@@ -2417,10 +2440,12 @@ function showToast(msg) {
 }
 
 function uid() { return Math.random().toString(36).slice(2, 10); }
-function todayStr() {
-  const d = new Date();
-  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
-}
+// Date -> 'YYYY-MM-DD', in LOCAL time. (toISOString() would be wrong here: it converts to UTC, so
+// an evening in a negative-offset zone reports tomorrow's date.) dateKey() takes a 0-indexed month
+// to match Date#getMonth(); this is the Date-shaped wrapper. There were three copies of this same
+// concatenation before — todayStr(), dateKeyOf() and dateKey() — now all one.
+function dateKeyOf(d) { return dateKey(d.getFullYear(), d.getMonth(), d.getDate()); }
+function todayStr() { return dateKeyOf(new Date()); }
 
 // ================= PHOTO ATTACHMENTS (shared by Notes + Health & Diet Measurements) =================
 // Photos are stored as base64 JPEG data URIs directly in STATE (and therefore localStorage), so
@@ -5193,12 +5218,11 @@ function dietLogEntriesFor(dateStr) {
   if (!STATE.diet.foodLog[dateStr]) STATE.diet.foodLog[dateStr] = [];
   return STATE.diet.foodLog[dateStr];
 }
-function fmtDateKey(d) { return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
 function goToLogDate(delta) {
   ensureDietLogState();
   const d = new Date(DIET_LOG_DATE + 'T00:00:00');
   d.setDate(d.getDate() + delta);
-  DIET_LOG_DATE = fmtDateKey(d);
+  DIET_LOG_DATE = dateKeyOf(d);
   DIET_LOG_ACTIVE_CATEGORY = null; DIET_LOG_SEARCH_QUERY = '';
   render();
 }
@@ -5979,7 +6003,15 @@ function importData(evt) {
   reader.onload = function(e) {
     try {
       const data = JSON.parse(String(e.target.result));
-      STATE = Object.assign(defaultState(), data);
+      // Adopt it exactly the way boot adopts a save: write it, then loadState() + migrateState().
+      // A bare Object.assign(defaultState(), data) — what this used to do — is a *shallow* merge,
+      // so an older backup's `life` object replaced the default wholesale and took every field
+      // added since with it, and nothing ever backfilled them. Visiting Training Maxes used to
+      // migrate it by accident (renderTMSetup() called the whole migration); that crutch is gone
+      // now that renders only recompute, so the import has to do it properly itself.
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      STATE = loadState();
+      migrateState();
       saveState();
       showToast('Backup restored');
       render();
@@ -6128,8 +6160,12 @@ function pullThenSync() {
       const remoteUpdatedAt = remote.updatedAt || 0;
       const localUpdatedAt = STATE.updatedAt || 0;
       if (remoteUpdatedAt > localUpdatedAt) {
-        const remoteState = JSON.parse(remote.data);
-        STATE = Object.assign(defaultState(), remoteState);
+        // Same adoption contract as boot and as importing a backup (see importData): the remote
+        // blob may have been written by an older build, so it needs loadState()'s per-key merge
+        // and migrateState()'s backfills, not a shallow assign.
+        localStorage.setItem(STORAGE_KEY, remote.data);
+        STATE = loadState();
+        migrateState();
         localStorage.setItem(STORAGE_KEY, JSON.stringify(STATE)); // skip saveState() here — avoid re-triggering a push of what we just pulled
         showToast('Synced — pulled your other device\'s newer data');
         render();
@@ -6417,7 +6453,7 @@ function updateLandmark(muscle, field, val) {
 }
 
 function renderTMSetup() {
-  updateAllTMs();
+  recomputeTMs(); // just the numbers — the save migration belongs at boot, not on every visit
   return STATE.categories.map(cat => {
     // Representative value for the shared dropdown: T1's muscle (they're kept in sync by updateCategoryMuscle)
     const sharedMuscle = cat.tiers.T1.muscle;
@@ -8135,7 +8171,7 @@ const NOTE_TAG_COLOR_PALETTE = [
   { key: 'calves',  label: 'Chartreuse', dark: '#E7FF81', light: '#6b7a00' },
 ];
 const NOTE_TAG_MAX = NOTE_TAG_COLOR_PALETTE.length;
-// One-time migration seed (see the "Notes tag migration" step inside updateAllTMs) -- the five
+// One-time migration seed (see the "Notes tag migration" step inside migrateState) -- the five
 // tags that used to be hardcoded into NOTE_TAGS itself, now just the starting contents of a
 // pre-existing save's customNoteTags, so the default tag set is unchanged after migration.
 const LEGACY_BUILTIN_NOTE_TAGS = [
@@ -10130,7 +10166,7 @@ function syncGoalContributionForRecurringCharge(monthKey, chargeId, checked) {
     // can differ (e.g. catching up on last month's box after the month has turned over).
     const [y, m] = monthKey.split('-').map(Number);
     const lastDay = new Date(y, m, 0).getDate();
-    const date = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    const date = dateKey(y, m - 1, lastDay); // m is 1-indexed out of the monthKey; dateKey wants 0-indexed
     // A recurring-charge-linked contribution is always effectively counted against the budget —
     // it's the reserved slice itself, not a separate Incidental — so this is unconditionally true
     // here, unlike the opt-in checkbox on a manual contribution below.
@@ -11223,7 +11259,7 @@ document.addEventListener('wheel', function(e) {
   }
 }, { passive: false });
 
-updateAllTMs();
+migrateState();
 ensureRecurringReminderOccurrences(); // tops up every recurring reminder series on each app open
 applyAesthetic();
 document.getElementById('settingsBtn').innerHTML = icon('settings');
