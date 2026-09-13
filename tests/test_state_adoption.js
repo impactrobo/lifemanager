@@ -9,7 +9,7 @@
 // migration on every render; splitting that into recomputeTMs() removed the crutch and made the
 // real bug visible.
 const { chromium } = require('playwright');
-const { settle } = require('./helpers');
+const { settle, appSource } = require('./helpers');
 const path = require('path');
 
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
@@ -112,8 +112,7 @@ const EXPECT = [
   check('cloud pull  ', pulled.missing, pulled.preserved);
 
   // ---- 4. The source guard: no route may go back to a bare shallow assign ----
-  const fs = require('fs');
-  const src = fs.readFileSync(path.resolve(__dirname, '..', 'app.js'), 'utf8');
+    const src = appSource();
   const shallow = [...src.matchAll(/STATE = Object\.assign\(defaultState\(\)/g)];
   console.log('bare `STATE = Object.assign(defaultState(), ...)` sites:', shallow.length);
   if (shallow.length) {

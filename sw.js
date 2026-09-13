@@ -1,5 +1,5 @@
 // Minimal offline cache for LIFEMan.EXE.
-// Caches the app shell (index.html + the extracted app.js / styles.css) so it still opens with
+// Caches the app shell (index.html + the src/app-*.js scripts / styles.css) so it still opens with
 // no signal. Lazily-loaded per-aesthetic CSS (aesthetics/<key>/theme.css) is deliberately NOT
 // pre-cached — the fetch handler below caches each one the first time it's actually used, so an
 // install only carries the themes that device has looked at.
@@ -8,8 +8,28 @@
 // on an installed (esp. iOS) PWA is handled in app.js by the <meta name="app-build"> check —
 // NOT by this file. Bump CACHE_NAME only to force-purge the offline cache (e.g. you removed a
 // file from APP_SHELL or a cached response went bad); it is not part of the normal deploy step.
-const CACHE_NAME = 'lifeman-v3';
-const APP_SHELL = ['./', './index.html', './app.js', './styles.css', './manifest.json'];
+const CACHE_NAME = 'lifeman-v4'; // v4: app.js split into src/app-*.js -- old caches hold a now-404 './app.js'
+const APP_SHELL = ['./', './index.html', './styles.css', './manifest.json']
+  .concat([
+    './src/app-aesthetics.js',
+    './src/app-data.js',
+    './src/app-state.js',
+    './src/app-shell.js',
+    './src/app-train-log.js',
+    './src/app-schedule-setup.js',
+    './src/app-diet.js',
+    './src/app-sync.js',
+    './src/app-train-setup.js',
+    './src/app-body.js',
+    './src/app-notes.js',
+    './src/app-home.js',
+    './src/app-calendar.js',
+    './src/app-links.js',
+    './src/app-budget.js',
+    './src/app-day.js',
+    './src/app-hobbies.js',
+    './src/app-boot.js',
+  ]);
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

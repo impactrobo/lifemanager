@@ -6,16 +6,15 @@
 // throws at runtime -- which is exactly how saveReminder() once crashed when #remEndTime didn't
 // exist yet. The static guard at the end fails the suite if a bare read creeps back in.
 const { chromium } = require('playwright');
-const { settle } = require('./helpers');
+const { settle, appSource } = require('./helpers');
 const path = require('path');
-const fs = require('fs');
 
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
 (async () => {
   // ---- 1. Static guard: no bare literal-id .value/.checked READS anywhere in app.js ----
   // Assignments (`.value = ...`) are fine and excluded; only reads are the hazard.
-  const src = fs.readFileSync(path.resolve(__dirname, '..', 'app.js'), 'utf8');
+  const src = appSource();
   const bare = [...src.matchAll(/document\.getElementById\('([^']+)'\)\.(value|checked)(?!\s*=[^=])/g)];
   console.log('bare literal-id input reads in app.js:', bare.length);
   if (bare.length) {

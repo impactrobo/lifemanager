@@ -3,8 +3,8 @@
   // reports type errors (`npm run typecheck`). The shipped code is still plain JS loaded as a
   // classic <script>. See docs/ARCHITECTURE.md > "Type checking".
   //
-  // Deliberately permissive for now: `strict` and `noImplicitAny` are off so a 7.9k-line
-  // legacy file doesn't drown the signal. Tighten incrementally. New `aesthetics/**/*.ts` FX
+  // Deliberately permissive for now: `strict` and `noImplicitAny` are off so a 12k-line
+  // legacy codebase doesn't drown the signal. Tighten incrementally. New `aesthetics/**/*.ts` FX
   // modules are held to a higher bar via their own settings below is not possible in one
   // tsconfig, so treat lint discipline there as a review convention (see ARCHITECTURE.md).
   "compilerOptions": {
@@ -24,5 +24,5 @@
   },
   // aesthetics/**/*.ts is deliberately excluded — tsconfig.fx.json owns those under stricter
   // settings and is the config that emits their .js. Both run under `npm run typecheck`.
-  "include": ["app.js", "types/**/*.d.ts"]
+  "include": ["src/*.js", "types/**/*.d.ts"]
 }

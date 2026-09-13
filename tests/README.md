@@ -8,7 +8,7 @@ or all at once with `npm test` (`run_all.js` runs every `test_*.js` and prints a
 nonzero exit if any fail). No test runner, no npm install needed beyond the dev deps in
 `package.json` (`playwright`, `typescript`) — see setup note below.
 
-The app now loads its logic from `../app.js` (a classic `<script>`, so it loads fine over the
+The app loads its logic from `../src/app-*.js` (ordered classic `<script>`s, so they load fine over the
 `file://` URL these tests use). `npm run typecheck` (from the repo root) is a separate gate —
 see `docs/ARCHITECTURE.md` > "Type checking".
 

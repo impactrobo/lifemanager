@@ -198,6 +198,40 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Architecture & infrastructure
 
+- **`app.js` split into 18 ordered `src/app-*.js` scripts (2026-09-13).** Purely structural: no
+  feature change, no user-visible change. 12.5k lines in one file became 18 averaging ~700, each
+  with a header saying what it holds and what load order does and doesn't constrain.
+  - **Done as pure slicing, not reorganisation** — every file is a contiguous range of the original,
+    in the original order. That bought a verification that a feature-based reshuffle could not: the
+    18 files reassemble to the original byte-for-byte, and a code-only comparison (comments and
+    blank lines stripped) confirms all **10,568 lines of code survive in identical order**. The
+    consequence is that a few files are positional rather than thematic — `app-day.js` is the daily
+    timeline sitting where it always sat, between Budget and Hobbies. Reordering into pure feature
+    files is a separate, riskier step deliberately not taken here.
+  - **Only two code changes were needed**, both forced by the split and both fixing a real latent
+    fragility:
+    - `HOME_BOX_RENDERERS` held bare references to functions that landed in a *later* file. A
+      `const` initializer runs during its own file's evaluation, so it read them before they
+      existed and threw — taking the rest of that file's evaluation with it, which is why Home
+      rendered blank. Each value is now an arrow, deferring the lookup to call time. The call site
+      is unchanged: it already invoked whatever it found there.
+    - **The FX loader's dynamic `import()` broke silently.** A dynamic import's specifier resolves
+      against *the importing script's own URL*, not the document — so `./aesthetics/<key>/fx.js`
+      started resolving to `src/aesthetics/...` the moment the code moved into `src/`. The failed
+      import is caught by design (so a theme still renders without its effects), which means **every
+      maximalist aesthetic would have quietly lost its runtime effects with nothing failing**. Only
+      `test_aesthetic_fx.js` caught it. Now resolved via `new URL(..., document.baseURI)`, which is
+      also correct under the GitHub Pages project subpath that a leading-slash path would break.
+  - **`sw.js` was the other thing that would have broken silently.** `APP_SHELL` hardcoded
+    `./app.js`, and `cache.addAll()` rejects *wholesale* if any single entry 404s — so a stale name
+    there doesn't degrade the offline cache, it stops the whole thing from ever installing.
+    `CACHE_NAME` bumped to `lifeman-v4` to clear the old entry for anyone already carrying it.
+  - **`appSource()` in `tests/helpers.js`** replaces four tests' hardcoded `readFileSync('app.js')`.
+    It reads the `<script src>` list straight out of `index.html`, so the structural assertions
+    ("no render surface hardcodes a section hex", "no surface bypasses `dayModel()`") can never
+    silently narrow when a file is split further — a hardcoded list would keep passing while
+    quietly no longer covering the moved code.
+
 - **`app.js` / `styles.css` split out of `index.html`** — the app used to be one file; it now
   ships as `index.html` (~90-line shell), `styles.css` (base + components + the inline
   aesthetics) and `app.js` (~7.9k lines, loaded as a **classic** script so its top-level

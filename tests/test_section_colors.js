@@ -11,9 +11,8 @@
 // not the current hex values — a test asserting "habits are #819FFF" would just be the same
 // hand-copied literal in a second place.
 const { chromium } = require('playwright');
-const { settle } = require('./helpers');
+const { settle, appSource } = require('./helpers');
 const path = require('path');
-const fs = require('fs');
 
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
@@ -95,7 +94,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // This is what stops the drift coming back: the colours exist once, in HOME_SECTION_META, and
   // every entity surface derives from it. A literal reappearing in one of these functions is the
   // exact mistake that produced the purple habits.
-  const src = fs.readFileSync(path.resolve(__dirname, '..', 'app.js'), 'utf8');
+  const src = appSource();
   const hexes = await page.evaluate(() => Object.keys(HOME_SECTION_META).map(k => HOME_SECTION_META[k].color));
   const bodyOf = (name) => {
     const start = src.indexOf('\nfunction ' + name + '(');

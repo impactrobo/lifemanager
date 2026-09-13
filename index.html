@@ -7,7 +7,7 @@
      app.js re-fetches this page on launch + on foreground and reloads if this value moved —
      that's what lets an installed iOS PWA self-update instead of getting stuck on a snapshot.
      Format is just a sortable stamp; the value only has to differ from the last deploy. -->
-<meta name="app-build" content="2026.09.13-16">
+<meta name="app-build" content="2026.09.13-17">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#15171a">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -89,6 +89,27 @@
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
-<script src="app.js"></script>
+<!-- The app, split across ordered classic scripts (NOT modules -- inline onclick= handlers
+     need these functions global). Order matters only for code that runs at load time; see
+     the header comment in any of them, and docs/ARCHITECTURE.md > "Source layout".
+     app-boot.js runs the startup sequence and must stay last. -->
+<script src="src/app-aesthetics.js"></script>
+<script src="src/app-data.js"></script>
+<script src="src/app-state.js"></script>
+<script src="src/app-shell.js"></script>
+<script src="src/app-train-log.js"></script>
+<script src="src/app-schedule-setup.js"></script>
+<script src="src/app-diet.js"></script>
+<script src="src/app-sync.js"></script>
+<script src="src/app-train-setup.js"></script>
+<script src="src/app-body.js"></script>
+<script src="src/app-notes.js"></script>
+<script src="src/app-home.js"></script>
+<script src="src/app-calendar.js"></script>
+<script src="src/app-links.js"></script>
+<script src="src/app-budget.js"></script>
+<script src="src/app-day.js"></script>
+<script src="src/app-hobbies.js"></script>
+<script src="src/app-boot.js"></script>
 </body>
 </html>

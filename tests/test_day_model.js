@@ -9,9 +9,8 @@
 // The claim this protects is that agreement is now structural rather than coincidental: the rule is
 // stated once in dayModel() and a surface only chooses what to *show*, never what is true.
 const { chromium } = require('playwright');
-const { settle } = require('./helpers');
+const { settle, appSource } = require('./helpers');
 const path = require('path');
-const fs = require('fs');
 
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
@@ -156,7 +155,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // ---- 7. No surface re-derives the plan behind the model's back ----
   // This is what stops the bug from growing back: agreement holds only while every surface reads
   // the model instead of reaching for the raw weekday arrays itself.
-  const src = fs.readFileSync(path.resolve(__dirname, '..', 'app.js'), 'utf8');
+  const src = appSource();
   const bodyOf = (name) => {
     const start = src.indexOf('\nfunction ' + name + '(');
     if (start === -1) throw new Error(`Could not find ${name}() to inspect`);

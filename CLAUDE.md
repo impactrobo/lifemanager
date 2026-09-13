@@ -4,11 +4,32 @@ Personal life-tracking web app (exercise, schedule, hobbies, health/diet, notes,
 Local-first via localStorage. No bundler / no build step to deploy. Read this before making
 any change.
 
-The app ships as three files: `index.html` (a ~90-line shell), `styles.css` (base + component
-styles + the twelve inline aesthetics), and `app.js` (all application logic, ~7.9k lines,
-loaded as a classic `<script>` so its top-level `function`s stay global for the inline
-`onclick=` handlers). It used to be one file; the split is what makes type checking possible.
-There is still no compile step — everything is served as-is.
+The app ships as `index.html` (a ~100-line shell), `styles.css` (base + component styles + the
+twelve inline aesthetics), and **`src/app-*.js` — 18 ordered classic `<script>`s** holding all
+application logic (~12.5k lines). They are NOT modules: top-level `function`s stay global so the
+inline `onclick=` handlers keep working. There is still no compile step — everything is served
+as-is.
+
+**What load order does and doesn't constrain.** A function in any file may call a function in any
+other, in either direction: `function` declarations are hoisted and global, and every call happens
+long after all 18 files have loaded. What order *does* constrain is anything that runs *while a
+file is being evaluated* — a `const` initializer, an `addEventListener` registration — since that
+can only reach what earlier files already defined. Two consequences worth knowing:
+
+- `src/app-boot.js` runs the startup sequence and **must stay last**.
+- A `const` holding bare references to functions from a later file will throw (and kill the rest of
+  its own file's evaluation). `HOME_BOX_RENDERERS` in `src/app-home.js` wraps each renderer in an
+  arrow for exactly this reason — see its comment.
+
+A dynamic `import()`'s specifier resolves against **the importing script's own URL**, not the
+document — so any such path inside `src/` needs `new URL(..., document.baseURI)`, as the FX loader
+in `src/app-aesthetics.js` does. DOM `href`/`src` attributes, `fetch()` and
+`serviceWorker.register()` are all document-relative and need no such care.
+
+Adding or renaming a file here means updating **four** places: the `<script>` list in `index.html`,
+`APP_SHELL` in `sw.js` (plus a `CACHE_NAME` bump, since `addAll()` rejects wholesale on a single
+404 and would silently stop the offline cache from ever installing), and nothing else — `tsconfig`
+globs `src/*.js`, and the tests read the script list out of `index.html` via `appSource()`.
 
 Maximalist aesthetics additionally get their own lazily-loaded `aesthetics/<key>/theme.css`
 (see "Aesthetic file layout" below).
@@ -30,14 +51,14 @@ Maximalist aesthetics additionally get their own lazily-loaded `aesthetics/<key>
    they're actually verified — don't let this silently go stale.
 
 ## Source of truth
-`index.html` + `app.js` are the entire app. If a doc goes stale relative to them, trust the
+`index.html` + `src/app-*.js` are the entire app. If a doc goes stale relative to them, trust the
 files and fix the doc. (The `docs/` folder — PROJECT_OVERVIEW / ARCHITECTURE / DATA_MODEL /
 ROADMAP — still describes the pre-split, pre-Cloud-Sync, publish-as-Artifact era in places;
 this file and the code are ahead of it.)
 
 ## Type checking
 `npm run typecheck` runs `tsc` in check-only mode (`allowJs` + `checkJs`, no emit) over
-`app.js` against the ambient types in `types/app.d.ts`. It is deliberately loose right now
+`src/*.js` against the ambient types in `types/app.d.ts`. It is deliberately loose right now
 (`strict` / `noImplicitAny` off) and **must stay at zero errors** — treat a new error as a
 real signal, not noise to suppress.
 
@@ -62,7 +83,7 @@ Two kinds of aesthetic, chosen by the `external` flag on the `AESTHETICS` entry:
 
 **Inverting light/dark within a theme** (e.g. Y2K Chrome: black backdrop, silver panels with
 dark text). Do NOT try to flip `--text*` at `:root` and override classes — ~25 components paint
-themselves from `var(--surface)`/`var(--surface2)` rather than `.panel`, and `app.js` sets
+themselves from `var(--surface)`/`var(--surface2)` rather than `.panel`, and the app's JS sets
 `color: var(--text-faint)` **inline** on some backdrop elements, which no class rule can beat.
 Instead keep `:root` matching the *backdrop*, and re-declare `--text`/`--text-dim`/`--text-faint`/
 `--border`/`--surface` **on the surface elements themselves**. Custom properties inherit, so every
@@ -142,7 +163,7 @@ the tiles overrun their grid track (this has now bitten twice — C.R.E.A.M's ge
 talons both pushed the third column off screen). Two things to budget for:
 - `styles.css` sizes `.workout-cell .cell-icon svg` with `!important`, so shrinking the icon
   needs `!important` too.
-- **The icon's wrapper `<div>` carries an inline `font-size:36px` from `app.js`**, so its line
+- **The icon's wrapper `<div>` carries an inline `font-size:36px` from `src/app-home.js`**, so its line
   box stays ~42px tall however small you make the SVG inside. That wrapper, not the icon, is
   what the vertical budget actually has to fit.
 
@@ -220,7 +241,7 @@ Settings, same discipline as Cloud Sync above.
 - **iOS gate:** Push only works for a Home Screen install, never a Safari tab.
   `isInstalledStandalone()` checks `navigator.standalone` (Safari) / the `display-mode: standalone`
   media query and blocks enabling with a toast on iOS until the app is actually installed.
-- **VAPID:** `VAPID_PUBLIC_KEY` in app.js is the public half of a keypair; the matching private
+- **VAPID:** `VAPID_PUBLIC_KEY` in `src/app-sync.js` is the public half of a keypair; the matching private
   key is a secret and lives only on the backend (a Cloudflare Worker secret, once deployed) —
   never commit it.
 - **Data sent to the backend is deliberately minimal:** only reminder *definitions*
@@ -242,8 +263,11 @@ Settings, same discipline as Cloud Sync above.
 Canonical test files live in `tests/` as individual `test_*.js` Node scripts using Playwright
 directly (no test runner) — run each with `node tests/test_whatever.js`; nonzero exit = failure.
 `npm test` (`tests/run_all.js`) runs every `test_*.js` in sequence and reports a summary.
-See `tests/README.md` for setup. Tests load `file://.../index.html`; the extracted `app.js`
-loads fine over `file://` since it's a classic (non-module) script.
+See `tests/README.md` for setup. Tests load `file://.../index.html`; the `src/app-*.js` scripts
+load fine over `file://` since they're classic (non-module) scripts. A handful of tests assert on
+the source text itself ("no render surface hardcodes a section hex") — those use `appSource()`
+from `tests/helpers.js`, which reads the script list out of `index.html` so it can never silently
+fall behind a further split.
 
 Added alongside the app.js split: `test_smoke.js` (boots clean + every section renders + the
 narrow-viewport tabbar guard) and `test_state_persistence.js` (the `loadState()` migration
@@ -262,12 +286,12 @@ do a freshness check against whatever's currently live before overwriting a host
 
 ## Hosting & deploying
 Deployed via GitHub Pages, served from `index.html` at repo root (which pulls in `styles.css`
-+ `app.js`). Basic PWA setup (`manifest.json`, `sw.js`, `icons/`) so it installs to an iOS
++ the `src/app-*.js` scripts). Basic PWA setup (`manifest.json`, `sw.js`, `icons/`) so it installs to an iOS
 home screen via Safari's "Add to Home Screen."
 
-**Every deploy that changes `index.html` / `app.js` / `styles.css` / an aesthetic MUST bump
+**Every deploy that changes `index.html` / any `src/app-*.js` / `styles.css` / an aesthetic MUST bump
 `<meta name="app-build" content="...">` in `index.html`.** That stamp is how installed apps
-self-update: `autoUpdate()` in app.js re-fetches the page on launch and on every return to the
+self-update: `autoUpdate()` in `src/app-boot.js` re-fetches the page on launch and on every return to the
 foreground, compares the stamp, and reloads if it moved (deferring while a field is focused;
 a one-time "Updated to the latest version" toast after). Without a bump, an installed iOS PWA
 can stay on a stale build indefinitely (iOS resumes it from a snapshot without re-navigating).
