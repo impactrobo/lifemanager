@@ -30,32 +30,43 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     schedules: JSON.parse(JSON.stringify(STATE.life.schedules)),
   }));
 
-  // Times are built by offsetting the real clock rather than mocking it, so these assertions stay
-  // honest about what the app actually computes at run time.
+  // Every offset case is anchored to today's own calendar date with its target minute-of-day
+  // clamped to [1, 1439], rather than literally adding/subtracting minutes from the wall clock and
+  // letting the result land wherever it lands. A naive version of this broke for real near local
+  // midnight: e.g. at 22:36, "90 minutes from now" is 00:06 the *next* calendar day, but a reminder
+  // dated "today" with time "00:06" reads as very early in today, not 90 minutes from now —
+  // reminderIsPastDue() correctly saw the numerically-small time as already past, exactly as it
+  // should for that (wrong) input. None of these cases care about the exact real elapsed time,
+  // only "clearly before/after now" — clamping keeps every one correct and same-day regardless of
+  // what time this test happens to run, without mocking Date itself.
   const cases = await page.evaluate(() => {
     const pad = n => String(n).padStart(2, '0');
-    const at = offsetMin => {
-      const d = new Date(Date.now() + offsetMin * 60000);
-      return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
-    };
     const today = todayStr();
     const y = new Date(Date.now() - 86400000), t = new Date(Date.now() + 86400000);
     const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const now = new Date();
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    const clampedTime = offsetMin => {
+      const m = Math.min(1439, Math.max(1, nowMin + offsetMin));
+      return `${pad(Math.floor(m / 60))}:${pad(m % 60)}`;
+    };
     const r = o => Object.assign({ id: 'x', date: today, time: null, endTime: null, title: 'T', notes: '', createdAt: 1, type: 'reminder' }, o);
+    const atCase = (offsetMin, extra) => r(Object.assign({ time: clampedTime(offsetMin) }, extra));
+    const eventCase = (startOffset, endOffset, extra) => r(Object.assign({ time: clampedTime(startOffset), endTime: clampedTime(endOffset) }, extra));
     return {
       pastDate:      reminderIsPastDue(r({ date: ymd(y), time: '09:00' })),
       futureDate:    reminderIsPastDue(r({ date: ymd(t), time: '09:00' })),
       pastDateNoTime:reminderIsPastDue(r({ date: ymd(y), time: null })),
-      timePassed:    reminderIsPastDue(r({ time: at(-90) })),
-      timeFuture:    reminderIsPastDue(r({ time: at(90) })),
+      timePassed:    reminderIsPastDue(atCase(-90)),
+      timeFuture:    reminderIsPastDue(atCase(90)),
       noTimeToday:   reminderIsPastDue(r({ time: null })),
-      eventLive:     reminderIsPastDue(r({ time: at(-15), endTime: at(15) })),
-      eventOver:     reminderIsPastDue(r({ time: at(-90), endTime: at(-30) })),
-      eventFuture:   reminderIsPastDue(r({ time: at(30), endTime: at(90) })),
-      todoAllDone:   reminderIsPastDue(r({ time: at(-90), type: 'todo', items: [{ id: 'a', text: 'x', done: true }, { id: 'b', text: 'y', done: true }] })),
-      todoPartial:   reminderIsPastDue(r({ time: at(-90), type: 'todo', items: [{ id: 'a', text: 'x', done: true }, { id: 'b', text: 'y', done: false }] })),
-      todoEmpty:     reminderIsPastDue(r({ time: at(-90), type: 'todo', items: [] })),
-      todoDoneFuture:reminderIsPastDue(r({ time: at(90), type: 'todo', items: [{ id: 'a', text: 'x', done: false }] })),
+      eventLive:     reminderIsPastDue(eventCase(-15, 15)),
+      eventOver:     reminderIsPastDue(eventCase(-90, -30)),
+      eventFuture:   reminderIsPastDue(eventCase(30, 90)),
+      todoAllDone:   reminderIsPastDue(atCase(-90, { type: 'todo', items: [{ id: 'a', text: 'x', done: true }, { id: 'b', text: 'y', done: true }] })),
+      todoPartial:   reminderIsPastDue(atCase(-90, { type: 'todo', items: [{ id: 'a', text: 'x', done: true }, { id: 'b', text: 'y', done: false }] })),
+      todoEmpty:     reminderIsPastDue(atCase(-90, { type: 'todo', items: [] })),
+      todoDoneFuture:reminderIsPastDue(atCase(90, { type: 'todo', items: [{ id: 'a', text: 'x', done: false }] })),
     };
   });
   console.log('reminderIsPastDue cases:', cases);
@@ -72,14 +83,25 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // ---- The mark itself, through the real render path ----
   await page.evaluate(() => {
     const pad = n => String(n).padStart(2, '0');
-    const at = off => { const d = new Date(Date.now() + off * 60000); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+    // Both reminders need to land on the SAME calendar day (today) so they both show up in one
+    // Day-zoom view — unlike the pure-function cases above, an exact real elapsed offset doesn't
+    // matter here, just "clearly in the past" / "clearly in the future" within today. Clamping the
+    // target minute-of-day to [1, 1439] keeps it on today regardless of what time this test
+    // happens to run, rather than reintroducing the midnight-rollover bug this file was just fixed
+    // for by naively adding/subtracting 90 minutes from the wall clock.
+    const now = new Date();
+    const clampedAt = offsetMin => {
+      const m = Math.min(1439, Math.max(1, now.getHours() * 60 + now.getMinutes() + offsetMin));
+      return `${pad(Math.floor(m / 60))}:${pad(m % 60)}`;
+    };
+    const today = todayStr();
     STATE.life.anchors = []; STATE.life.schedules = [];
     STATE.reminders = [
-      { id: 'late1', date: todayStr(), time: at(-90), endTime: null, title: 'Overdue one', notes: '', createdAt: 1, type: 'reminder' },
-      { id: 'soon1', date: todayStr(), time: at(90), endTime: null, title: 'Upcoming one', notes: '', createdAt: 2, type: 'reminder' },
+      { id: 'late1', date: today, time: clampedAt(-90), endTime: null, title: 'Overdue one', notes: '', createdAt: 1, type: 'reminder' },
+      { id: 'soon1', date: today, time: clampedAt(90), endTime: null, title: 'Upcoming one', notes: '', createdAt: 2, type: 'reminder' },
     ];
     saveState();
-    switchTab('schedule'); calSetZoom('day'); calSelectDay(todayStr());
+    switchTab('schedule'); calSetZoom('day'); calSelectDay(today);
   });
   await page.waitForTimeout(200);
 
