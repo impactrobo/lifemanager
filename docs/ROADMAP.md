@@ -105,7 +105,9 @@ before starting any of these.
      - ~~Time-budget rollup~~ — **shipped 2026-09-13**, see Recently Shipped.
   Explicitly ruled out as groupware that doesn't apply to a single-user local-first app: invites,
   attendees, free/busy sharing, calendar subscriptions.
-- **Cross-feature linking, other candidates surfaced 2026-09-12** (four of the batch already
+- **Cross-feature linking — a general mechanism now exists (see the link primitive under Recently
+  Shipped, 2026-09-13), so the remaining candidates are instances of it rather than new features.**
+  Original note follows. **Cross-feature linking, other candidates surfaced 2026-09-12** (four of the batch already
   shipped, most recently Note -> Reminder — see Recently Shipped): a Calendar marker on a
   recurring budget charge's due date (same spirit as the schedule anchor icon); tagging a Note to
   the specific workout/exercise day it's about, rather than just a freeform date. (A noticeable
@@ -324,6 +326,37 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Cross-entity links: one primitive replacing bespoke cross-feature wiring (2026-09-13).** The
+  app was six well-built sections sharing one STATE and one render loop, where every connection
+  between them was its own feature. Now any two things in the app can be marked as being about
+  each other, and every screen renders that identically.
+  - **One optional `links: [{type, id}]` on any entity, plus one registry.** `LINKABLE_TYPES`
+    describes all eight linkable kinds (note, reminder, workout, meal, habit, charge, goal,
+    schedule activity) in one table — how to list them, title them, subtitle them and open them.
+    Adding a ninth type is one entry, not per-type UI anywhere.
+  - **A link is ONE stored fact.** It lives on whichever side created it; the reverse direction is
+    computed by scanning (`inboundLinks()`) rather than written to both entities. So the two halves
+    of a connection can never disagree — the same drift that caused the navigation-leak and
+    reset-list bugs fixed earlier today, avoided by construction rather than by discipline. At this
+    data size the scan is free, and unlinking works from either end regardless of which side stores it.
+  - **Untyped on purpose.** A link means "these are about each other", nothing more — no vocabulary
+    to invent or keep consistent, and optional labels remain additive later.
+  - **Chips carry their target's home-section colour** (`HOME_SECTION_META`), so which part of your
+    life a connection points into is legible at a glance rather than needing to be read. The picker
+    searches across every type at once — which is also the seed of the app-wide search idea, since
+    it already indexes every entity by title.
+  - **Deliberately not folded in:** `SavingsGoal.recurringChargeId`. That drives behaviour (ticking
+    a charge's monthly box auto-creates a goal contribution), so it's machinery, not an
+    association; a generic untyped link can't express it. `convertNoteToReminder` likewise stays a
+    copy — it duplicates a note into a reminder and deliberately keeps no relationship.
+  - Dead links degrade rather than break: a link to a since-deleted entity renders visibly dead
+    instead of vanishing or throwing, so no cleanup pass is needed on every delete path — the same
+    tolerance `scheduleForDate()` shows for an exception pointing at a deleted schedule.
+  - `tests/test_entity_links.js` covers all eight types resolving with real section colours, the
+    store-once/compute-reverse claim asserted directly (the non-creating side must store *nothing*),
+    fan-out across every type, de-duplication from both directions, refused self-links, unlinking
+    from either end, dead-link rendering, the picker's cross-type search and exclusions, a chip row
+    present on all eight surfaces, closing on navigation, and persistence across a reload.
 - **Survey item 6: the UI-state globals, consolidated onto three objects (2026-09-13).** The last
   and largest finding of the codebase survey — 82 module-level `let`s holding all UI state, 1,405
   references across 454 of 706 functions. Landed in three slices, each mechanical (same functions,
