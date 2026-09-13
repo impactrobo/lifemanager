@@ -399,6 +399,12 @@ interface Reminder {
   anchorDate?: string;
   /** Only meaningful when type === 'todo'. */
   items?: Array<{ id: string; text: string; done: boolean }>;
+  /** Checked off by hand. Deliberately does NOT delete the reminder -- it stays on the day so you
+   *  can look back and see you did it, just dimmed and no longer past-due. For a to-do, every item
+   *  being ticked counts as done on its own; see reminderIsDone(), which is the single definition
+   *  the past-due mark, the dimming and the push payload all read. A done reminder is dropped from
+   *  the push sync entirely, since the backend has no concept of "done". */
+  done?: boolean;
   /** The date this reminder is actually ABOUT, when it fires earlier than that -- absent/null
    *  means `date` IS the due date (every reminder before this field existed, and every reminder
    *  without a lead time). Display-only: nothing that looks the reminder up by date (remindersOn,

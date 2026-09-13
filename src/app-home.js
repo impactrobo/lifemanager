@@ -1104,7 +1104,7 @@ function renderAgenda() {
     const items = [
       ...reminders.map(r => ({
         sort: r.time || '99:99',
-        html: `<div class="agenda-item">
+        html: `<div class="agenda-item ${reminderIsDone(r) ? 'reminder-done' : ''}">
           <span class="agenda-time mono">${r.time ? fmtReminderTime(r.time) : 'all day'}</span>
           <span class="agenda-label">${escapeHtml(r.title)}${r.endTime ? `<span class="day-chip" style="background:${BLOCK_KIND_META.event.color}22; color:${BLOCK_KIND_META.event.color};">EVENT</span>` : ''}${r.recurrence ? `<span class="agenda-repeat">${icon('repeat')}</span>` : ''}</span>
         </div>`,

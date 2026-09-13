@@ -91,10 +91,27 @@ function fmtReminderTime(hhmm) {
 //
 // A reminder with no time at all is an all-day thing — it isn't late until the day itself is over,
 // rather than the instant the day begins.
+// One answer to "is this reminder finished", used by the past-due mark, the dimming on every
+// surface a reminder appears on, and the push payload. A to-do with every box ticked counts
+// without the parent also being checked — that was already the rule the past-due check used, and
+// making it the shared definition is what stops the checkbox and the checklist disagreeing about
+// the same reminder. An empty checklist still counts as outstanding.
+function reminderIsDone(r) {
+  if (r.done) return true;
+  return r.type === 'todo' && Array.isArray(r.items) && r.items.length > 0 && r.items.every(i => i.done);
+}
+// Checking a reminder off does NOT delete it. The whole point is being able to look back at a day
+// and see that you did the thing, rather than being left wondering because the row vanished.
+function toggleReminderDone(id) {
+  const r = STATE.reminders.find(x => x.id === id);
+  if (!r) return;
+  r.done = !r.done;
+  saveState();
+  queueReminderPushSync(); // a reminder you've already finished shouldn't still buzz at you
+  render();
+}
 function reminderIsPastDue(r) {
-  // A to-do list with every box ticked is finished, whatever the clock says — nagging about a
-  // completed checklist is just noise. An empty checklist still counts as outstanding.
-  if (r.type === 'todo' && Array.isArray(r.items) && r.items.length && r.items.every(i => i.done)) return false;
+  if (reminderIsDone(r)) return false;
   const today = todayStr();
   if (r.date < today) return true;
   if (r.date > today) return false;
@@ -503,8 +520,10 @@ function saveReminder() {
 // time, delete) works exactly like a normal reminder.
 function renderReminderCard(r) {
   const isTodo = r.type === 'todo';
-  return `<div class="entry-card" ${entityAttr('reminder', r.id)}>
+  const done = reminderIsDone(r);
+  return `<div class="entry-card ${done ? 'reminder-done' : ''}" ${entityAttr('reminder', r.id)}>
     <div class="ehead">
+      <button class="hit-mark ${r.done ? 'hit' : ''}" style="flex-shrink:0;" onclick="toggleReminderDone('${r.id}')" title="${r.done ? 'Mark not done' : 'Mark done'}" aria-pressed="${!!r.done}">${r.done ? icon('check') : ''}</button>
       ${pastDueMark(r)}
       <input type="text" value="${escapeHtml(r.title)}" placeholder="Title" style="font-weight:700; font-size:14px; border:none; background:transparent; padding:0; color:var(--text); font-family:var(--font-body); flex:1; min-width:0;" onchange="updateReminderField('${r.id}','title',this.value)">
       <button class="icon-btn" onclick="deleteReminder('${r.id}')">${icon('close')}</button>
@@ -513,6 +532,10 @@ function renderReminderCard(r) {
       <label class="field" style="margin-bottom:0;"><span class="lbl">Time</span><input type="time" value="${r.time || ''}" onchange="updateReminderField('${r.id}','time',this.value)"></label>
       <label class="field" style="margin-bottom:0;"><span class="lbl">End Time</span><input type="time" value="${r.endTime || ''}" onchange="updateReminderField('${r.id}','endTime',this.value)"></label>
     </div>
+    ${isTodo ? '' : `
+    <div class="field-row" style="margin-top:8px;">
+      <label class="field" style="margin-bottom:0; max-width:150px;"><span class="lbl">Remind me early (days)</span><input type="number" min="0" step="1" value="${r.leadDays || ''}" placeholder="0" onchange="updateReminderField('${r.id}','leadDays',this.value)"></label>
+    </div>`}
     ${r.time && r.endTime ? `<div style="font-size:10px; color:var(--text-faint); margin-top:6px;">${icon('anchorMark')} On your day's schedule &middot; ${fmtReminderTime(r.time)}&ndash;${fmtReminderTime(r.endTime)}</div>` : ''}
     ${r.recurrence ? `<div style="font-size:10px; color:var(--text-faint); margin-top:6px;">${icon('repeat')} Repeats ${RECURRENCE_LABELS[r.recurrence].toLowerCase()} &middot; set when this series was created, not editable per-occurrence</div>` : ''}
     ${reminderDueContext(r) ? `<div style="margin-top:6px;">${reminderDueBadge(r)}</div>` : ''}
@@ -529,6 +552,15 @@ function updateReminderField(id, field, value) {
     if (!r.time) r.endTime = null; // clearing the start leaves nothing for an end to anchor to
   }
   else if (field === 'endTime') r.endTime = (r.time && value) ? value : null;
+  else if (field === 'leadDays') {
+    const n = Math.max(0, Math.round(Number(value)) || 0);
+    // A reminder created without a lead time carries no dueDate: its `date` IS the day it's about,
+    // so that becomes the due date the moment a lead time is added. From then on `date` is derived
+    // and `dueDate` is the fixed thing, which is the same split saveReminder() makes up front.
+    if (!r.dueDate) r.dueDate = r.date;
+    r.date = computeLeadDates(r.dueDate, n).date;
+    r.leadDays = n || null;
+  }
   else if (field === 'notes') r.notes = (value || '').trim();
   saveState();
   queueReminderPushSync(); // no-op unless reminder notifications are enabled — see REMINDER PUSH section
@@ -626,9 +658,10 @@ function renderTodaysReminders() {
     <div class="subtle-label" style="margin:18px 0 8px;">TODAY'S REMINDERS</div>
     <div class="panel" style="padding:2px 14px;">
       ${list.map((r, i) => `
-      <div onclick="jumpToReminderDay('${r.date}')" style="display:flex; gap:10px; align-items:flex-start; padding:10px 0; ${i < list.length-1 ? 'border-bottom:1px solid var(--border-soft);' : ''} cursor:pointer;">
+      <div class="${reminderIsDone(r) ? 'reminder-done' : ''}" onclick="jumpToReminderDay('${r.date}')" style="display:flex; gap:10px; align-items:flex-start; padding:10px 0; ${i < list.length-1 ? 'border-bottom:1px solid var(--border-soft);' : ''} cursor:pointer;">
+        <button class="hit-mark ${r.done ? 'hit' : ''}" style="flex-shrink:0; margin-top:1px;" onclick="event.stopPropagation(); toggleReminderDone('${r.id}')" title="${r.done ? 'Mark not done' : 'Mark done'}" aria-pressed="${!!r.done}">${r.done ? icon('check') : ''}</button>
         <div style="flex:1;">
-          <div style="font-size:13px; font-weight:600;">${pastDueMark(r)}${escapeHtml(r.title)}${r.time ? ` <span style="color:var(--text-faint); font-weight:500; font-size:11px;">${fmtReminderTime(r.time)}</span>` : ''}</div>
+          <div class="reminder-title" style="font-size:13px; font-weight:600;">${pastDueMark(r)}${escapeHtml(r.title)}${r.time ? ` <span style="color:var(--text-faint); font-weight:500; font-size:11px;">${fmtReminderTime(r.time)}</span>` : ''}</div>
           ${r.notes ? `<div style="font-size:11px; color:var(--text-dim); margin-top:2px;">${escapeHtml(r.notes)}</div>` : ''}
         </div>
         <button class="icon-btn" onclick="event.stopPropagation(); deleteReminder('${r.id}')">${icon('close')}</button>

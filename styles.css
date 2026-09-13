@@ -344,6 +344,13 @@ select { -webkit-appearance: none; appearance: none; background-image: linear-gr
 .set-row .amrap-tag { font-size: 9px; color: var(--accent); font-weight: 700; text-align: center; }
 .hit-mark { width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 1px solid var(--border); flex-shrink: 0; }
 .hit-mark.hit { border-color: var(--accent); background: var(--accent-soft); }
+/* .hit-mark is a <div> everywhere it only displays state, and a <button> where it's also the
+   control (a reminder's done toggle). A button brings UA padding, background and font with it --
+   and since .hit-mark is display:flex inside a fixed 20px circle, that padding leaves ~6px of
+   content box and squashes the 14px check into an invisible sliver. It renders the whole time;
+   you just can't see it. Resetting the button-specific defaults is all that's needed: the
+   .hit-mark.hit background above still wins on specificity (0,2,0 beats this rule's 0,1,1). */
+button.hit-mark { padding: 0; background: none; font: inherit; color: inherit; cursor: pointer; }
 .set-row .hit-mark { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; border: 1px solid var(--border); color: var(--text-faint); background: none; }
 .set-row .hit-mark.hit { background: var(--good-soft); border-color: var(--good); color: var(--good); }
 .set-row .hit-mark.miss { background: var(--bad-soft); border-color: var(--bad); color: var(--bad); }
@@ -755,6 +762,22 @@ select { -webkit-appearance: none; appearance: none; background-image: linear-gr
 
 
 
+
+/* ---------- A checked-off reminder ---------- */
+/* It stays exactly where it was rather than disappearing -- the point is being able to look back
+   at a day and see that you did the thing, instead of wondering because the row vanished. So this
+   only lowers its claim on your attention; it never hides anything.
+
+   Dimming each CHILD rather than the container is deliberate. opacity on a parent compounds onto
+   everything inside it and cannot be raised back by a child, so `.reminder-done { opacity: .5 }`
+   plus `.hit-mark { opacity: 1 }` renders the tick at 0.5 anyway -- making the one control you
+   need in order to UNDO this the hardest thing on the card to see. Excluding the tick from the
+   dimmed set is the only way it stays at full strength. .ehead is excluded from the first
+   selector so its children aren't dimmed twice (0.55 * 0.55). */
+.reminder-done > *:not(.hit-mark):not(.ehead),
+.reminder-done > .ehead > *:not(.hit-mark) { opacity: 0.55; }
+.reminder-done .reminder-title,
+.reminder-done > .ehead input[type="text"] { text-decoration: line-through; }
 
 /* ---------- Quick-log strips (LOG · AM / LOG · PM) ---------- */
 /* Replaced two panels of always-visible number inputs -- ~360px of Home for four fields that sat

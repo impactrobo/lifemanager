@@ -365,6 +365,34 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Reminders can be checked off, and their lead time edited after creation (2026-09-13).**
+  - **Checking off deliberately does not delete.** The reminder stays on its day so you can look
+    back and see that you did it, rather than being left wondering because the row vanished — which
+    is the whole reason for it. What changes is that it stops claiming attention: dimmed and struck
+    through on the Day view, Home's today box and the Agenda, and no longer marked past due.
+  - **`reminderIsDone()` is the single definition** the past-due mark, the dimming and the push
+    payload all read. A to-do with every box ticked counts as done without the parent also being
+    checked — that was already the past-due rule, and unifying it is what stops the checkbox and the
+    checklist ending up disagreeing about one reminder.
+  - **A done reminder is dropped from the push sync entirely**, not dimmed there. The backend has no
+    concept of "done" — it fires whatever it was last given on the matching date+time — so not
+    sending it is the only way to stop the notification. Un-checking re-syncs it.
+  - **Lead time is now editable on any reminder**, closing the gap where it could only be set at
+    creation, so fixing one meant deleting and remaking the reminder. Adding a lead time to a
+    reminder that had none adopts its existing `date` as the `dueDate`; every later edit recomputes
+    the fire date *from* that due date rather than shifting again from the current one, which would
+    otherwise compound and walk the reminder further into the past with each edit.
+  - **Two CSS traps worth recording**, both caught by looking at the rendered result rather than
+    trusting the markup:
+    - Dimming is applied to each CHILD, not the card. `opacity` on a parent compounds onto
+      everything inside and **cannot be raised back by a child**, so `.reminder-done { opacity }`
+      plus `.hit-mark { opacity: 1 }` still renders the tick dimmed — making the one control you
+      need in order to UNDO this the hardest thing on the card to see.
+    - `.hit-mark` is `display: flex` in a fixed 20px circle, and is a `<div>` everywhere it only
+      shows state. Used as a `<button>` for the first time here, its UA padding left ~6px of content
+      box and squashed the 14px check into an invisible sliver — it rendered the entire time.
+      `button.hit-mark` now resets padding/background/font.
+
 - **Budget charge due dates: a calendar marker, an opt-in push reminder, and a general lead-time
   field on any reminder (2026-09-13).** The one piece deliberately left out of the earlier
   calendar-union work — a `RecurringCharge` had no due-date field at all.

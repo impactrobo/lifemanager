@@ -328,7 +328,10 @@ let _reminderPushSyncDebounceTimer = null;
 // reads as wrong rather than early. Pulled out as its own function so this is testable directly,
 // without mocking the network call it would otherwise be buried inside.
 function reminderPushPayload() {
-  return STATE.reminders.map(r => {
+  // Checked-off reminders are dropped rather than dimmed here: the backend has no concept of
+  // "done", it just fires whatever it was last given on the matching date+time. Not sending it is
+  // the only way to stop the notification, and un-checking re-syncs it on the next edit.
+  return STATE.reminders.filter(r => !reminderIsDone(r)).map(r => {
     const ctx = reminderDueContext(r);
     return ctx ? Object.assign({}, r, { title: `${r.title} — due ${fmtDueDate(ctx.dueDate)}` }) : r;
   });
