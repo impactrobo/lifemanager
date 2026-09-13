@@ -28,7 +28,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   await page.evaluate(() => createSchedule());
   await settle(page);
   const schedulesAfterCreate = await page.evaluate(() => STATE.life.schedules.length);
-  const editingId = await page.evaluate(() => SCHEDULE_BUILDER_EDITING);
+  const editingId = await page.evaluate(() => VIEW.scheduleBuilderEditing);
   console.log('schedules before/after create:', schedulesBefore, '/', schedulesAfterCreate, '| now editing:', editingId);
   if (schedulesAfterCreate !== schedulesBefore + 1) throw new Error('Expected createSchedule() to add one schedule');
   if (!editingId) throw new Error('Expected createSchedule() to open the new schedule for editing immediately');

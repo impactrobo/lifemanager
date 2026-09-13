@@ -71,8 +71,8 @@ const EXPECTED_AESTHETIC_COUNT = 23;
   // 6. Settings picker UI: every fresh visit lands with all aesthetic groups collapsed
   await page.evaluate(() => openSetup('home'));
   await settle(page);
-  const openGroupsOnEntry = await page.evaluate(() => [...AESTHETIC_GROUPS_OPEN]);
-  console.log('AESTHETIC_GROUPS_OPEN right after opening Settings:', openGroupsOnEntry);
+  const openGroupsOnEntry = await page.evaluate(() => [...VIEW.aestheticGroupsOpen]);
+  console.log('VIEW.aestheticGroupsOpen right after opening Settings:', openGroupsOnEntry);
   if (openGroupsOnEntry.length !== 0) throw new Error(`Expected Settings to open with zero groups expanded, got ${JSON.stringify(openGroupsOnEntry)}`);
   const visibleCardsOnEntry = await page.evaluate(() => document.querySelectorAll('.aesthetic-card').length);
   if (visibleCardsOnEntry !== 0) throw new Error(`Expected zero aesthetic cards visible with every group collapsed, found ${visibleCardsOnEntry}`);
@@ -80,12 +80,12 @@ const EXPECTED_AESTHETIC_COUNT = 23;
   // Leaving Settings and reopening it re-collapses everything, even a group left open
   const cyberpunkGroup = await page.evaluate(() => AESTHETICS.cyberpunk.group);
   await page.evaluate((g) => toggleAestheticGroup(g), cyberpunkGroup);
-  const openAfterToggle = await page.evaluate(() => [...AESTHETIC_GROUPS_OPEN]);
-  if (!openAfterToggle.includes(cyberpunkGroup)) throw new Error(`Expected toggling "${cyberpunkGroup}" open to add it to AESTHETIC_GROUPS_OPEN`);
+  const openAfterToggle = await page.evaluate(() => [...VIEW.aestheticGroupsOpen]);
+  if (!openAfterToggle.includes(cyberpunkGroup)) throw new Error(`Expected toggling "${cyberpunkGroup}" open to add it to VIEW.aestheticGroupsOpen`);
   await page.evaluate(() => switchTab('home'));
   await page.evaluate(() => openSetup('home'));
-  const openOnReturn = await page.evaluate(() => [...AESTHETIC_GROUPS_OPEN]);
-  console.log('AESTHETIC_GROUPS_OPEN on a second visit, after leaving a group open last time:', openOnReturn);
+  const openOnReturn = await page.evaluate(() => [...VIEW.aestheticGroupsOpen]);
+  console.log('VIEW.aestheticGroupsOpen on a second visit, after leaving a group open last time:', openOnReturn);
   if (openOnReturn.length !== 0) throw new Error(`Expected re-opening Settings to collapse everything again, got ${JSON.stringify(openOnReturn)}`);
 
   // 7. The accent/palette picker is inlined right after the ACTIVE aesthetic's own card, not a

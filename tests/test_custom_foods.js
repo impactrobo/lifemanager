@@ -83,7 +83,7 @@ const NUTRIENT_KEYS = ['cal', 'protein', 'carb', 'fat', 'fiber', 'sodium', 'pota
 
   await page.evaluate(() => addFoodToMeal(STATE.diet.customFoods[STATE.diet.customFoods.length - 1].id));
   const itemMacro = await page.evaluate(() => {
-    const item = MEAL_BUILDER_DRAFT.items[MEAL_BUILDER_DRAFT.items.length - 1];
+    const item = VIEW.mealBuilderDraft.items[VIEW.mealBuilderDraft.items.length - 1];
     return computeItemMacro(item); // default qty is 100g for a fresh weight-type item
   });
   console.log('macro for 100g of the custom lasagna (per100.cal=180):', itemMacro.cal);

@@ -67,14 +67,14 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // 4. COMPARE view: navigate there, select the Squat T1 metric alongside default Body Weight
   await page.evaluate(() => { switchTab('train'); setTrainTopSubtab('progress'); setProgressSubtab('compare'); });
   await settle(page);
-  const defaultSelected = await page.evaluate(() => [...COMPARE_SELECTED]);
-  console.log('default COMPARE_SELECTED:', defaultSelected);
+  const defaultSelected = await page.evaluate(() => [...VIEW.compareSelected]);
+  console.log('default VIEW.compareSelected:', defaultSelected);
   if (!defaultSelected.includes('bodyweight')) throw new Error('Expected Body Weight to be selected by default');
 
   const squatId = await page.evaluate(() => compareMetricId('squat', 't1'));
   await page.evaluate((id) => toggleCompareMetric(id), squatId);
   await settle(page);
-  const afterToggle = await page.evaluate(() => [...COMPARE_SELECTED]);
+  const afterToggle = await page.evaluate(() => [...VIEW.compareSelected]);
   console.log('after selecting Squat T1:', afterToggle);
   if (!afterToggle.includes(squatId)) throw new Error('Expected toggleCompareMetric() to add the Squat T1 metric');
 
@@ -91,22 +91,22 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (chipActive !== true) throw new Error(`Expected the "${squatSlot.label}" picker chip to show active after selecting it`);
 
   // 7. Cap at COMPARE_MAX_METRICS — deselect everything, then try to select more than the cap
-  await page.evaluate(() => { COMPARE_SELECTED = []; render(); });
+  await page.evaluate(() => { VIEW.compareSelected = []; render(); });
   await settle(page);
   const max = await page.evaluate(() => COMPARE_MAX_METRICS);
   const ids = ['bodyweight', squatId, 'lift:bench:t1', 'lift:deadlift:t1', 'lift:ohp:t1']; // more than max, most non-existent lifts are fine — toggling just adds the id
   for (const id of ids) await page.evaluate((i) => toggleCompareMetric(i), id);
   await settle(page);
-  const capped = await page.evaluate(() => [...COMPARE_SELECTED]);
+  const capped = await page.evaluate(() => [...VIEW.compareSelected]);
   console.log('selection after trying to exceed the cap:', capped, '(max', max + ')');
   if (capped.length !== max) throw new Error(`Expected selection to stop growing at COMPARE_MAX_METRICS (${max}), got ${capped.length}: ${JSON.stringify(capped)}`);
 
   // 8. Deselecting removes it and its chart
-  await page.evaluate(() => { COMPARE_SELECTED = ['bodyweight']; render(); });
+  await page.evaluate(() => { VIEW.compareSelected = ['bodyweight']; render(); });
   await settle(page);
   await page.evaluate((id) => toggleCompareMetric(id), 'bodyweight');
   await settle(page);
-  const afterDeselect = await page.evaluate(() => [...COMPARE_SELECTED]);
+  const afterDeselect = await page.evaluate(() => [...VIEW.compareSelected]);
   if (afterDeselect.includes('bodyweight')) throw new Error('Expected toggleCompareMetric() to remove an already-selected metric');
 
   // cleanup

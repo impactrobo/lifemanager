@@ -38,9 +38,9 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   const tagKeys = await page.evaluate(() => Object.keys(allNoteTags()));
   const targetTag = tagKeys.find(k => k !== 'general') || tagKeys[0];
   await page.evaluate((key) => selectNoteTag(key), targetTag);
-  const selectedTag = await page.evaluate(() => NOTES_SELECTED_TAG);
+  const selectedTag = await page.evaluate(() => VIEW.notesSelectedTag);
   console.log('selected tag:', selectedTag, '(target was', targetTag + ')');
-  if (selectedTag !== targetTag) throw new Error(`Expected NOTES_SELECTED_TAG "${targetTag}", got "${selectedTag}"`);
+  if (selectedTag !== targetTag) throw new Error(`Expected VIEW.notesSelectedTag "${targetTag}", got "${selectedTag}"`);
 
   // 4. Save it, confirm it landed in STATE.notes with the right fields
   await page.evaluate(() => saveNote());
@@ -92,13 +92,13 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   await page.evaluate((id) => editNote(id), noteId);
   await settle(page);
   const editState = await page.evaluate(() => ({
-    subtab: NAV.notesSubtab, editId: NOTE_EDIT_ID,
+    subtab: NAV.notesSubtab, editId: VIEW.noteEditId,
     titleVal: document.getElementById('noteTitle').value,
     bodyHtml: document.getElementById('noteBody').innerHTML,
     hasCancelBtn: !!document.querySelector('button[onclick="cancelNoteEdit()"]'),
   }));
   console.log('state after editNote():', editState);
-  if (editState.subtab !== 'write' || editState.editId !== noteId) throw new Error('Expected editNote() to switch to Write with NOTE_EDIT_ID set');
+  if (editState.subtab !== 'write' || editState.editId !== noteId) throw new Error('Expected editNote() to switch to Write with VIEW.noteEditId set');
   if (editState.titleVal !== 'Test note title') throw new Error(`Expected the title input pre-filled, got "${editState.titleVal}"`);
   if (!editState.bodyHtml.includes('hello')) throw new Error(`Expected the body pre-filled with the note's text, got "${editState.bodyHtml}"`);
   if (!editState.hasCancelBtn) throw new Error('Expected a CANCEL EDIT button while editing');
@@ -120,9 +120,9 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   await page.evaluate((id) => editNote(id), noteId);
   await page.fill('#noteTitle', 'This should never be saved');
   await page.evaluate(() => cancelNoteEdit());
-  const afterCancel = await page.evaluate((id) => ({ subtab: NAV.notesSubtab, editId: NOTE_EDIT_ID, title: STATE.notes.find(n => n.id === id).title }), noteId);
+  const afterCancel = await page.evaluate((id) => ({ subtab: NAV.notesSubtab, editId: VIEW.noteEditId, title: STATE.notes.find(n => n.id === id).title }), noteId);
   console.log('after CANCEL EDIT:', afterCancel);
-  if (afterCancel.subtab !== 'view' || afterCancel.editId !== null) throw new Error('Expected cancelNoteEdit() to clear NOTE_EDIT_ID and return to VIEW ALL');
+  if (afterCancel.subtab !== 'view' || afterCancel.editId !== null) throw new Error('Expected cancelNoteEdit() to clear VIEW.noteEditId and return to VIEW ALL');
   if (afterCancel.title !== 'Edited via pencil button') throw new Error('Expected cancelNoteEdit() to leave the note untouched');
 
   // 4e. Stale-edit guard: starting an edit, then leaving Notes entirely and coming back, must
@@ -132,7 +132,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   await page.evaluate(() => switchTab('schedule'));
   await page.evaluate(() => switchTab('notes'));
   await settle(page);
-  const afterReturning = await page.evaluate(() => ({ subtab: NAV.notesSubtab, editId: NOTE_EDIT_ID, titleVal: document.getElementById('noteTitle').value }));
+  const afterReturning = await page.evaluate(() => ({ subtab: NAV.notesSubtab, editId: VIEW.noteEditId, titleVal: document.getElementById('noteTitle').value }));
   console.log('Notes state after navigating away mid-edit and back:', afterReturning);
   if (afterReturning.editId !== null) throw new Error('Expected re-entering Notes to clear a stale in-progress edit');
   if (afterReturning.titleVal !== '') throw new Error(`Expected a blank compose form, got title "${afterReturning.titleVal}"`);

@@ -67,7 +67,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // 4. Copy Monday's plan
   await page.evaluate((day) => copyDayPlan(day), MONDAY);
-  const clipboard = await page.evaluate(() => MEAL_PLAN_CLIPBOARD);
+  const clipboard = await page.evaluate(() => VIEW.mealPlanClipboard);
   console.log('clipboard after copyDayPlan(Monday):', clipboard);
   if (!clipboard || clipboard.day !== MONDAY || clipboard.entries.length !== 1) {
     throw new Error(`Expected clipboard to hold Monday's 1 entry, got ${JSON.stringify(clipboard)}`);

@@ -58,24 +58,24 @@ const TEST_PHOTO_B64 = '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAA0JCgsKCA0LCgsODg0PEyAV
   await page.setInputFiles('#measurePhotoInput', tmpPhoto);
   await settle(page); // resizeImageFile is async (FileReader + Image decode)
 
-  const draftPhotos = await page.evaluate(() => MEASURE_DRAFT_PHOTOS.length);
-  console.log('MEASURE_DRAFT_PHOTOS after attaching one photo:', draftPhotos);
+  const draftPhotos = await page.evaluate(() => VIEW.measureDraftPhotos.length);
+  console.log('VIEW.measureDraftPhotos after attaching one photo:', draftPhotos);
   if (draftPhotos !== 1) throw new Error(`Expected 1 draft photo after attaching one file, got ${draftPhotos}`);
 
   // 3. Max-count enforcement: attach 4 more (5 total) — the 5th should be rejected with a toast
   //    since MAX_MEASURE_PHOTOS is 4.
   await page.setInputFiles('#measurePhotoInput', [tmpPhoto, tmpPhoto, tmpPhoto, tmpPhoto]);
   await page.waitForTimeout(500);
-  const draftPhotosAfterBulk = await page.evaluate(() => MEASURE_DRAFT_PHOTOS.length);
+  const draftPhotosAfterBulk = await page.evaluate(() => VIEW.measureDraftPhotos.length);
   const toastText = await page.evaluate(() => document.getElementById('toast').textContent);
-  console.log('MEASURE_DRAFT_PHOTOS after attempting 4 more (5 total):', draftPhotosAfterBulk, '| toast:', toastText);
+  console.log('VIEW.measureDraftPhotos after attempting 4 more (5 total):', draftPhotosAfterBulk, '| toast:', toastText);
   if (draftPhotosAfterBulk !== 4) throw new Error(`Expected the count to cap at MAX_MEASURE_PHOTOS=4, got ${draftPhotosAfterBulk}`);
   if (!toastText.includes('Up to 4 photos')) throw new Error(`Expected the max-photos toast, got "${toastText}"`);
 
   // 4. Remove one before saving
   await page.evaluate(() => removeMeasureDraftPhoto(0));
-  const draftPhotosAfterRemove = await page.evaluate(() => MEASURE_DRAFT_PHOTOS.length);
-  console.log('MEASURE_DRAFT_PHOTOS after removing one:', draftPhotosAfterRemove);
+  const draftPhotosAfterRemove = await page.evaluate(() => VIEW.measureDraftPhotos.length);
+  console.log('VIEW.measureDraftPhotos after removing one:', draftPhotosAfterRemove);
   if (draftPhotosAfterRemove !== 3) throw new Error(`Expected 3 draft photos after removing one, got ${draftPhotosAfterRemove}`);
 
   // 5. Save the measurement, confirm the photos landed in STATE.measurements
@@ -91,8 +91,8 @@ const TEST_PHOTO_B64 = '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAA0JCgsKCA0LCgsODg0PEyAV
   if (!saved.photos[0].startsWith('data:image/jpeg')) throw new Error('Expected saved photos to be JPEG data URIs');
 
   // 6. Draft state clears after saving, ready for a fresh entry next time
-  const draftAfterSave = await page.evaluate(() => MEASURE_DRAFT_PHOTOS.length);
-  if (draftAfterSave !== 0) throw new Error(`Expected MEASURE_DRAFT_PHOTOS to clear to 0 after saving, got ${draftAfterSave}`);
+  const draftAfterSave = await page.evaluate(() => VIEW.measureDraftPhotos.length);
+  if (draftAfterSave !== 0) throw new Error(`Expected VIEW.measureDraftPhotos to clear to 0 after saving, got ${draftAfterSave}`);
 
   // 7. Persistence across reload
   await page.reload();

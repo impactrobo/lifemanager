@@ -510,7 +510,6 @@ const AESTHETIC_GROUP_ORDER = ['Maximalist', 'Vibrant', 'Contrast', 'Light'];
 // Starts (and is reset by openSetup(), below) all-closed: with 20+ aesthetics across four
 // groups, "everything open" meant a long scroll past every card before reaching anything else in
 // Settings. Collapsed by default trades that for one tap to open whichever group you want.
-let AESTHETIC_GROUPS_OPEN = new Set();
 function currentAesthetic() {
   const key = STATE.settings && STATE.settings.aesthetic;
   // Falls back to the default (Cyberpunk Neon) if the stored choice is a retired aesthetic (e.g.
@@ -595,8 +594,8 @@ function aestheticCardHtml(key) {
   </button>`;
 }
 function toggleAestheticGroup(name) {
-  if (AESTHETIC_GROUPS_OPEN.has(name)) AESTHETIC_GROUPS_OPEN.delete(name);
-  else AESTHETIC_GROUPS_OPEN.add(name);
+  if (VIEW.aestheticGroupsOpen.has(name)) VIEW.aestheticGroupsOpen.delete(name);
+  else VIEW.aestheticGroupsOpen.add(name);
   renderAestheticOptions();
   // The group just opened (or closed) may be the one holding the active aesthetic's inline
   // accent picker (see aestheticGroupCardsHtml()) — repopulate it now that its container has
@@ -624,7 +623,7 @@ function renderAestheticOptions() {
   for (const groupName of AESTHETIC_GROUP_ORDER) {
     const keys = Object.keys(AESTHETICS).filter(k => AESTHETICS[k].group === groupName);
     if (!keys.length) continue;
-    const open = AESTHETIC_GROUPS_OPEN.has(groupName);
+    const open = VIEW.aestheticGroupsOpen.has(groupName);
     html += `<div class="aesthetic-group">
       <button class="aesthetic-group-header" onclick="toggleAestheticGroup('${groupName}')">
         <span>${groupName}</span>${open ? icon('up') : icon('down')}
@@ -2502,8 +2501,8 @@ function renderPhotoThumbs(photos, extraStyle) {
 // place. Here the defaults literal below IS the reset, so adding a field to one adds it to both.
 //
 // Only transient state belongs here. Navigation position (which tab/subtab/date you're on) has to
-// survive a nav by definition, and content drafts with their own lifecycle (MEAL_BUILDER_DRAFT,
-// MEASURE_DRAFT_PHOTOS) should resume rather than discard -- both stay outside.
+// survive a nav by definition, and content drafts with their own lifecycle (VIEW.mealBuilderDraft,
+// VIEW.measureDraftPhotos) should resume rather than discard -- both stay outside.
 function defaultTransientUi() {
   return {
     reminderFormOpen: false,
@@ -2531,6 +2530,43 @@ function defaultTransientUi() {
   };
 }
 let UI = defaultTransientUi();
+
+// ---- Per-screen view state: selections, filters, drafts, what's expanded ----
+// Session-only presentation state -- none of it is persisted, and none of it is "where am I"
+// (NAV) or "what's open right now" (UI). Grouped so the three kinds are told apart at a glance,
+// and so the file split this is a prerequisite for has something it can actually move.
+//
+// Deliberately NOT reset by resetTransientUi(): a half-built meal, a set of draft photos or a
+// notes filter should still be there when you come back to that screen. That's the same boundary
+// slice A drew, now made explicit by which object a field lives on.
+let VIEW = {
+  aestheticGroupsOpen: new Set(),    // which Settings aesthetic groups are expanded
+  builderType: 'weights',            // 'weights' | 'cardio' | 'mobility' | 'warmup'
+  builderSelected: { weights: null, cardio: null, mobility: null, warmup: null },
+  scheduleBuilderEditing: null,
+  mealBuilderDraft: null,            // an in-progress meal; survives navigation on purpose
+  mealPlanExpanded: {},
+  mealPlanClipboard: null,
+  dietLogActiveCategory: null,
+  dietLogSearchQuery: '',
+  exPlanExpanded: {},
+  exPlanClipboard: null,
+  autofillProgram: null,
+  autofillDays: [],
+  compareA: null,
+  compareB: null,
+  compareSelected: ['bodyweight'],
+  measureDraftPhotos: [],            // draft photos on an unsaved measurement
+  selectedWeightMetric: 'weight',
+  selectedMeasurementField: 'weight',
+  notesSelectedTag: 'general',       // tag for a new note; saveNote() puts this back to 'general'
+  notesSort: 'date',                 // 'date' | 'tag'
+  notesFilterTag: null,              // null = all tags
+  notesSearchQuery: '',
+  noteDraftPhotos: [],
+  noteEditId: null,
+  goalExpanded: null,                // which goal's ledger is open, one at a time
+};
 
 // ---- Navigation position: "where am I" ----
 // Which tab, which subtab within it, and which date/month each dated view is parked on. Distinct
@@ -2570,13 +2606,10 @@ let NAV = {
 // Which section's own Setup page is showing — Setup is no longer one shared screen: each
 // section that has configurable parameters gets its own distinct page, reachable only from
 // that section (see openSetup() / renderTabbar() / renderSetup()).
-let BUILDER_TYPE = 'weights'; // 'weights' | 'cardio' | 'mobility' | 'warmup'
-let BUILDER_SELECTED = { weights: null, cardio: null, mobility: null, warmup: null };
 // Schedule's own Setup has its own subnav (SET ANCHORS / SCHEDULE BUILDER), tracked separately
 // from Exercise's NAV.setupSubtab so the two Setup pages never bleed into each other's tab state.
 // Which schedule (by id) is currently open for editing in the Schedule Builder — null means the
 // builder is showing its list of schedules rather than one schedule's edit form.
-let SCHEDULE_BUILDER_EDITING = null;
 // Health's own Setup subnav (MEAL BUILDER / ALL MEALS), tracked separately for the same reason.
 // Metric ('g'/'mL' etc.) or Imperial ('lb'/'oz'/cups/tbsp/tsp/fl oz) — a global toggle for the
 // Meal Builder's unit selectors, persisted in STATE.settings.mealUnitSystem.
@@ -2586,12 +2619,9 @@ let MEAL_UNIT_SYSTEM = 'metric';
 // opened via editMeal() is a working copy, so canceling never mutates the saved meal.
 // Shape: { id (null for a brand-new unsaved meal, else the existing meal's id), name,
 //          items:[{id, foodId, qty, unit}], activeCategory (id or null) }
-let MEAL_BUILDER_DRAFT = null;
 // Meal Plan: which plan-entry rows are expanded to show their constituent foods (id -> bool) —
 // purely a display toggle, intentionally not persisted (always starts fully collapsed). And an
 // in-session clipboard for the day copy/paste feature: {day, entries:[{mealId}]} or null.
-let MEAL_PLAN_EXPANDED = {};
-let MEAL_PLAN_CLIPBOARD = null;
 
 // ---- Back navigation: a stack of top-level "where was I" snapshots. Every switchTab()/
 // section-subtab change pushes the CURRENT snapshot before moving on, so the topbar Back
@@ -2629,7 +2659,7 @@ function switchTab(tab) {
   if (tab === 'notes') {
     // Same stale-edit guard as setNotesSubtab() — a fresh visit to Notes (e.g. via the bottom tab
     // bar) shouldn't resume an edit left in progress from before you navigated away.
-    if (NOTE_EDIT_ID) { NOTE_EDIT_ID = null; NOTE_DRAFT_PHOTOS = []; NOTES_SELECTED_TAG = 'general'; }
+    if (VIEW.noteEditId) { VIEW.noteEditId = null; VIEW.noteDraftPhotos = []; VIEW.notesSelectedTag = 'general'; }
     NAV.notesSubtab = 'write'; // Write is the default landing page for Notes
   }
   if (tab === 'schedule') {
@@ -2659,7 +2689,7 @@ function openSetup(context) {
   NAV.setupContext = context;
   resetTransientUi(); // sets the tab directly, bypassing switchTab()
   NAV.currentTab = 'setup';
-  AESTHETIC_GROUPS_OPEN.clear(); // every fresh visit to Settings starts with all groups collapsed — see the AESTHETIC_GROUPS_OPEN declaration
+  VIEW.aestheticGroupsOpen.clear(); // every fresh visit to Settings starts with all groups collapsed — see the VIEW.aestheticGroupsOpen declaration
   render();
 }
 // Back/Forward mirror a browser's: goBack() undoes the last switchTab()/openSetup() transition
@@ -4278,7 +4308,7 @@ function renderNoteTagSetupRow(key, def) {
 function setSetupSubtab(t) { NAV.setupSubtab = t; render(); }
 
 // ---------------- SCHEDULE SETUP: Set Anchors / Schedule Builder ----------------
-function setScheduleSetupSubtab(t) { NAV.scheduleSetupSubtab = t; if (t === 'builder') SCHEDULE_BUILDER_EDITING = null; render(); }
+function setScheduleSetupSubtab(t) { NAV.scheduleSetupSubtab = t; if (t === 'builder') VIEW.scheduleBuilderEditing = null; render(); }
 // Schedule's own Setup: SET ANCHORS (the fixed daily habits, same every day, plus the weekly/
 // periodic check-ins) and SCHEDULE BUILDER (day-of-week-specific itineraries built from
 // Wake-Up/Bed Time plus custom activities). Nothing here applies outside Schedule.
@@ -4640,10 +4670,10 @@ function renderHabitCalendar() {
 // render time (see scheduleBlocksForDate()) rather than being copied into each one. ----
 const WEEKDAY_LABELS = ['S','M','T','W','T','F','S'];
 function renderScheduleBuilder() {
-  if (SCHEDULE_BUILDER_EDITING) {
-    const sched = STATE.life.schedules.find(s => s.id === SCHEDULE_BUILDER_EDITING);
+  if (VIEW.scheduleBuilderEditing) {
+    const sched = STATE.life.schedules.find(s => s.id === VIEW.scheduleBuilderEditing);
     if (sched) return renderScheduleBuilderForm(sched);
-    SCHEDULE_BUILDER_EDITING = null;
+    VIEW.scheduleBuilderEditing = null;
   }
   return renderScheduleBuilderList();
 }
@@ -4717,15 +4747,15 @@ function createSchedule() {
   const s = { id: uid(), name: 'New Schedule', days: [], wakeStart: '', wakeEnd: '', bedStart: '', bedEnd: '', activities: [] };
   STATE.life.schedules.push(s);
   saveState();
-  SCHEDULE_BUILDER_EDITING = s.id;
+  VIEW.scheduleBuilderEditing = s.id;
   render();
 }
-function openScheduleEdit(id) { SCHEDULE_BUILDER_EDITING = id; render(); }
-function closeScheduleEdit() { SCHEDULE_BUILDER_EDITING = null; render(); }
+function openScheduleEdit(id) { VIEW.scheduleBuilderEditing = id; render(); }
+function closeScheduleEdit() { VIEW.scheduleBuilderEditing = null; render(); }
 function deleteSchedule(id) {
   showConfirm('Delete this schedule?', () => {
     STATE.life.schedules = STATE.life.schedules.filter(s => s.id !== id);
-    if (SCHEDULE_BUILDER_EDITING === id) SCHEDULE_BUILDER_EDITING = null;
+    if (VIEW.scheduleBuilderEditing === id) VIEW.scheduleBuilderEditing = null;
     saveState(); render();
   });
 }
@@ -4854,7 +4884,7 @@ function defaultQtyForUnit(unit) {
   return 100; // g, mL, lb
 }
 function renderMealBuilderTab() {
-  if (MEAL_BUILDER_DRAFT) return renderMealBuilderForm();
+  if (VIEW.mealBuilderDraft) return renderMealBuilderForm();
   return `
     <div style="margin:24px 0 4px; text-align:center;">
       <button class="btn btn-primary" onclick="startNewMeal()">+ NEW MEAL</button>
@@ -4863,35 +4893,35 @@ function renderMealBuilderTab() {
   `;
 }
 function startNewMeal() {
-  MEAL_BUILDER_DRAFT = { id: null, name: 'New Meal', items: [], activeCategory: null, searchQuery: '' };
+  VIEW.mealBuilderDraft = { id: null, name: 'New Meal', items: [], activeCategory: null, searchQuery: '' };
   NAV.healthSetupSubtab = 'builder';
   render();
 }
 function editMeal(id) {
   const meal = STATE.diet.meals.find(m => m.id === id);
   if (!meal) return;
-  MEAL_BUILDER_DRAFT = { id: meal.id, name: meal.name, items: meal.items.map(it => Object.assign({}, it)), activeCategory: null, searchQuery: '' };
+  VIEW.mealBuilderDraft = { id: meal.id, name: meal.name, items: meal.items.map(it => Object.assign({}, it)), activeCategory: null, searchQuery: '' };
   NAV.healthSetupSubtab = 'builder';
   render();
 }
 function cancelMealDraft() {
-  MEAL_BUILDER_DRAFT = null;
+  VIEW.mealBuilderDraft = null;
   render();
 }
 // Only one category's food dropdown can be open at a time — clicking the active one closes it.
 function toggleMealCategory(catId) {
-  if (!MEAL_BUILDER_DRAFT) return;
-  MEAL_BUILDER_DRAFT.activeCategory = MEAL_BUILDER_DRAFT.activeCategory === catId ? null : catId;
+  if (!VIEW.mealBuilderDraft) return;
+  VIEW.mealBuilderDraft.activeCategory = VIEW.mealBuilderDraft.activeCategory === catId ? null : catId;
   render();
 }
 function addFoodToMeal(foodId) {
-  if (!MEAL_BUILDER_DRAFT) return;
+  if (!VIEW.mealBuilderDraft) return;
   const food = foodById(foodId);
   if (!food) return;
   const unit = defaultMealUnitFor(food);
-  MEAL_BUILDER_DRAFT.items.push({ id: uid(), foodId, qty: defaultQtyForUnit(unit), unit });
-  MEAL_BUILDER_DRAFT.activeCategory = null; // close the dropdown once a food is picked
-  MEAL_BUILDER_DRAFT.searchQuery = ''; // and reset the search box back to the category picker
+  VIEW.mealBuilderDraft.items.push({ id: uid(), foodId, qty: defaultQtyForUnit(unit), unit });
+  VIEW.mealBuilderDraft.activeCategory = null; // close the dropdown once a food is picked
+  VIEW.mealBuilderDraft.searchQuery = ''; // and reset the search box back to the category picker
   render();
 }
 // Live search-as-you-type: this deliberately does NOT go through the normal render() pipeline.
@@ -4899,35 +4929,35 @@ function addFoodToMeal(foodId) {
 // on every keystroke and steal focus/cursor position mid-type. Instead it patches only the
 // results container directly, leaving the input element itself untouched.
 function onMealSearchInput(val) {
-  if (!MEAL_BUILDER_DRAFT) return;
-  MEAL_BUILDER_DRAFT.searchQuery = val;
+  if (!VIEW.mealBuilderDraft) return;
+  VIEW.mealBuilderDraft.searchQuery = val;
   const container = document.getElementById('mealFoodPicker');
   if (!container) return;
-  container.innerHTML = (val && val.trim()) ? renderFoodSearchResults(val) : renderMealCategoryPicker(MEAL_BUILDER_DRAFT);
+  container.innerHTML = (val && val.trim()) ? renderFoodSearchResults(val) : renderMealCategoryPicker(VIEW.mealBuilderDraft);
   attachScrollIndicators();
 }
 function updateMealItemQty(itemId, val) {
-  if (!MEAL_BUILDER_DRAFT) return;
-  const item = MEAL_BUILDER_DRAFT.items.find(it => it.id === itemId);
+  if (!VIEW.mealBuilderDraft) return;
+  const item = VIEW.mealBuilderDraft.items.find(it => it.id === itemId);
   if (!item) return;
   item.qty = val === '' ? '' : Number(val);
   render();
 }
 function updateMealItemUnit(itemId, val) {
-  if (!MEAL_BUILDER_DRAFT) return;
-  const item = MEAL_BUILDER_DRAFT.items.find(it => it.id === itemId);
+  if (!VIEW.mealBuilderDraft) return;
+  const item = VIEW.mealBuilderDraft.items.find(it => it.id === itemId);
   if (!item) return;
   item.unit = val;
   render();
 }
 function removeMealItem(itemId) {
-  if (!MEAL_BUILDER_DRAFT) return;
-  MEAL_BUILDER_DRAFT.items = MEAL_BUILDER_DRAFT.items.filter(it => it.id !== itemId);
+  if (!VIEW.mealBuilderDraft) return;
+  VIEW.mealBuilderDraft.items = VIEW.mealBuilderDraft.items.filter(it => it.id !== itemId);
   render();
 }
 function updateMealName(val) {
-  if (!MEAL_BUILDER_DRAFT) return;
-  MEAL_BUILDER_DRAFT.name = val;
+  if (!VIEW.mealBuilderDraft) return;
+  VIEW.mealBuilderDraft.name = val;
   render();
 }
 // Switching Metric/Imperial re-expresses every draft item's quantity in the new system's unit
@@ -4939,8 +4969,8 @@ function setMealUnitSystem(sys) {
   if (!STATE.settings) STATE.settings = defaultState().settings;
   STATE.settings.mealUnitSystem = sys;
   saveState();
-  if (MEAL_BUILDER_DRAFT) {
-    MEAL_BUILDER_DRAFT.items.forEach(it => {
+  if (VIEW.mealBuilderDraft) {
+    VIEW.mealBuilderDraft.items.forEach(it => {
       const food = foodById(it.foodId);
       if (!food || food.unit === 'count') return;
       const qty = Number(it.qty) || 0;
@@ -4955,7 +4985,7 @@ function setMealUnitSystem(sys) {
   render();
 }
 function saveMealDraft() {
-  const draft = MEAL_BUILDER_DRAFT;
+  const draft = VIEW.mealBuilderDraft;
   if (!draft || !draft.items.length) return;
   const name = (draft.name || '').trim() || 'Untitled meal';
   const items = draft.items.map(it => ({ id: it.id, foodId: it.foodId, qty: Number(it.qty) || 0, unit: it.unit }));
@@ -4968,12 +4998,12 @@ function saveMealDraft() {
   }
   saveState();
   showToast('Meal saved');
-  MEAL_BUILDER_DRAFT = null;
+  VIEW.mealBuilderDraft = null;
   NAV.healthSetupSubtab = 'meals';
   render();
 }
 function renderMealBuilderForm() {
-  const draft = MEAL_BUILDER_DRAFT;
+  const draft = VIEW.mealBuilderDraft;
   const totals = computeMealTotals(draft.items);
   return `
     <div style="margin:18px 0 4px;">
@@ -5240,8 +5270,6 @@ function renderCustomFoodCard(f) {
 // weekday (0=Sun..6=Sat, recurring every week); this is keyed by real date and only ever holds
 // what actually got logged that day. Lives at the bottom of the DIET tab (renderDietSetup()),
 // under the TDEE/macro targets, so today's actual totals sit right next to what you're aiming for.
-let DIET_LOG_ACTIVE_CATEGORY = null;
-let DIET_LOG_SEARCH_QUERY = '';
 function ensureDietLogState() { if (!NAV.dietLogDate) NAV.dietLogDate = todayStr(); }
 function dietLogEntriesFor(dateStr) {
   if (!STATE.diet.foodLog[dateStr]) STATE.diet.foodLog[dateStr] = [];
@@ -5252,11 +5280,11 @@ function goToLogDate(delta) {
   const d = new Date(NAV.dietLogDate + 'T00:00:00');
   d.setDate(d.getDate() + delta);
   NAV.dietLogDate = dateKeyOf(d);
-  DIET_LOG_ACTIVE_CATEGORY = null; DIET_LOG_SEARCH_QUERY = '';
+  VIEW.dietLogActiveCategory = null; VIEW.dietLogSearchQuery = '';
   render();
 }
 function toggleLogCategory(catId) {
-  DIET_LOG_ACTIVE_CATEGORY = DIET_LOG_ACTIVE_CATEGORY === catId ? null : catId;
+  VIEW.dietLogActiveCategory = VIEW.dietLogActiveCategory === catId ? null : catId;
   render();
 }
 function addFoodToLog(foodId) {
@@ -5265,7 +5293,7 @@ function addFoodToLog(foodId) {
   if (!food) return;
   const unit = defaultMealUnitFor(food);
   dietLogEntriesFor(NAV.dietLogDate).push({ id: uid(), foodId, qty: defaultQtyForUnit(unit), unit });
-  DIET_LOG_ACTIVE_CATEGORY = null; DIET_LOG_SEARCH_QUERY = '';
+  VIEW.dietLogActiveCategory = null; VIEW.dietLogSearchQuery = '';
   saveState();
   render();
 }
@@ -5306,16 +5334,16 @@ function removeLogItem(itemId) {
 // Same targeted-update reasoning as onMealSearchInput(): patches only the results container, so
 // typing doesn't tear out and rebuild the search input on every keystroke.
 function onLogSearchInput(val) {
-  DIET_LOG_SEARCH_QUERY = val;
+  VIEW.dietLogSearchQuery = val;
   const container = document.getElementById('dietLogFoodPicker');
   if (!container) return;
   container.innerHTML = (val && val.trim()) ? renderFoodSearchResults(val, 'addFoodToLog') : renderLogCategoryPicker();
 }
 function renderLogCategoryPicker() {
-  return `<div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:${DIET_LOG_ACTIVE_CATEGORY ? '8px' : '4px'};">
-      ${MEAL_CATEGORIES.map(c => `<button class="btn btn-sm ${DIET_LOG_ACTIVE_CATEGORY===c.id?'btn-primary':''}" onclick="toggleLogCategory('${c.id}')">${escapeHtml(c.label)}</button>`).join('')}
+  return `<div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:${VIEW.dietLogActiveCategory ? '8px' : '4px'};">
+      ${MEAL_CATEGORIES.map(c => `<button class="btn btn-sm ${VIEW.dietLogActiveCategory===c.id?'btn-primary':''}" onclick="toggleLogCategory('${c.id}')">${escapeHtml(c.label)}</button>`).join('')}
     </div>
-    ${DIET_LOG_ACTIVE_CATEGORY ? renderCategoryFoodList(DIET_LOG_ACTIVE_CATEGORY, 'addFoodToLog') : ''}`;
+    ${VIEW.dietLogActiveCategory ? renderCategoryFoodList(VIEW.dietLogActiveCategory, 'addFoodToLog') : ''}`;
 }
 function renderLogItemRow(item) {
   const food = foodById(item.foodId);
@@ -5362,10 +5390,10 @@ function renderDietLog() {
         </select>
       </label>` : ''}
     <label class="field" style="margin-bottom:8px;"><span class="lbl">Or log one food</span>
-      <input type="text" placeholder="Search foods…" value="${escapeHtml(DIET_LOG_SEARCH_QUERY)}" oninput="onLogSearchInput(this.value)">
+      <input type="text" placeholder="Search foods…" value="${escapeHtml(VIEW.dietLogSearchQuery)}" oninput="onLogSearchInput(this.value)">
     </label>
     <div id="dietLogFoodPicker">
-      ${DIET_LOG_SEARCH_QUERY.trim() ? renderFoodSearchResults(DIET_LOG_SEARCH_QUERY, 'addFoodToLog') : renderLogCategoryPicker()}
+      ${VIEW.dietLogSearchQuery.trim() ? renderFoodSearchResults(VIEW.dietLogSearchQuery, 'addFoodToLog') : renderLogCategoryPicker()}
     </div>
     <div class="stack" style="margin-bottom:16px;">
       ${entries.length ? entries.map(renderLogItemRow).join('') : emptyState('Nothing logged for this day yet.')}
@@ -5423,7 +5451,7 @@ function addPlanMealSlot(day) {
 }
 function removePlanMealSlot(day, entryId) {
   STATE.diet.mealPlan[day] = (STATE.diet.mealPlan[day] || []).filter(e => e.id !== entryId);
-  delete MEAL_PLAN_EXPANDED[entryId];
+  delete VIEW.mealPlanExpanded[entryId];
   saveState(); render();
 }
 function setPlanMealSlotMeal(day, entryId, mealId) {
@@ -5434,19 +5462,19 @@ function setPlanMealSlotMeal(day, entryId, mealId) {
 }
 // Purely a display toggle — never persisted, so the plan always opens fully collapsed.
 function togglePlanMealExpanded(entryId) {
-  MEAL_PLAN_EXPANDED[entryId] = !MEAL_PLAN_EXPANDED[entryId];
+  VIEW.mealPlanExpanded[entryId] = !VIEW.mealPlanExpanded[entryId];
   render();
 }
 function copyDayPlan(day) {
   const entries = (STATE.diet.mealPlan[day] || []).map(e => ({ mealId: e.mealId }));
-  MEAL_PLAN_CLIPBOARD = { day, entries };
+  VIEW.mealPlanClipboard = { day, entries };
   showToast(MEAL_PLAN_DAY_LABELS[day] + "'s meal plan copied");
   render();
 }
 function pasteDayPlan(day) {
-  if (!MEAL_PLAN_CLIPBOARD) return;
+  if (!VIEW.mealPlanClipboard) return;
   const doPaste = () => {
-    STATE.diet.mealPlan[day] = MEAL_PLAN_CLIPBOARD.entries.map(e => ({ id: uid(), mealId: e.mealId }));
+    STATE.diet.mealPlan[day] = VIEW.mealPlanClipboard.entries.map(e => ({ id: uid(), mealId: e.mealId }));
     saveState();
     showToast("Pasted into " + MEAL_PLAN_DAY_LABELS[day]);
     render();
@@ -5458,8 +5486,8 @@ function pasteDayPlan(day) {
   }
 }
 function renderMealPlanTab() {
-  const clipboardLabel = MEAL_PLAN_CLIPBOARD
-    ? `${MEAL_PLAN_DAY_LABELS[MEAL_PLAN_CLIPBOARD.day]} (${MEAL_PLAN_CLIPBOARD.entries.length} meal${MEAL_PLAN_CLIPBOARD.entries.length === 1 ? '' : 's'})`
+  const clipboardLabel = VIEW.mealPlanClipboard
+    ? `${MEAL_PLAN_DAY_LABELS[VIEW.mealPlanClipboard.day]} (${VIEW.mealPlanClipboard.entries.length} meal${VIEW.mealPlanClipboard.entries.length === 1 ? '' : 's'})`
     : null;
   return `
     <div style="font-size:11px; color:var(--text-dim); margin:18px 0 14px;">Assign saved meals to each day of the week. Copy a day's plan to reuse it elsewhere.</div>
@@ -5546,7 +5574,7 @@ function renderMealPlanDay(day) {
       <div style="font-size:15px; font-weight:700;">${MEAL_PLAN_DAY_LABELS[day]}</div>
       <div style="display:flex; gap:6px;">
         <button class="btn btn-sm btn-ghost" onclick="copyDayPlan(${day})" title="Copy this day's plan">COPY</button>
-        <button class="btn btn-sm btn-ghost" ${MEAL_PLAN_CLIPBOARD ? '' : 'disabled'} onclick="pasteDayPlan(${day})" title="Paste the copied plan here">PASTE</button>
+        <button class="btn btn-sm btn-ghost" ${VIEW.mealPlanClipboard ? '' : 'disabled'} onclick="pasteDayPlan(${day})" title="Paste the copied plan here">PASTE</button>
       </div>
     </div>
     <div class="stack" style="margin-bottom:${entries.length ? '10px' : '0'};">
@@ -5575,7 +5603,7 @@ function renderPlanMealEntry(day, entry) {
   }
   const meal = STATE.diet.meals.find(m => m.id === entry.mealId);
   if (!meal) return renderPlanMealEntry(day, Object.assign({}, entry, { mealId: null })); // referenced meal was deleted elsewhere
-  const expanded = !!MEAL_PLAN_EXPANDED[entry.id];
+  const expanded = !!VIEW.mealPlanExpanded[entry.id];
   const totals = computeMealTotals(meal.items);
   return `<div class="panel">
     <div class="row" onclick="togglePlanMealExpanded('${entry.id}')" style="cursor:pointer;">
@@ -6419,8 +6447,8 @@ function resetUI() {
     UI.builderStylePickerOpen = false;
     UI.autofillPickerOpen = false;
     UI.noteTagPaletteOpen = null;
-    MEAL_PLAN_EXPANDED = {};
-    EXPLAN_EXPANDED = {};
+    VIEW.mealPlanExpanded = {};
+    VIEW.exPlanExpanded = {};
     saveState();
     applyAesthetic();
     renderAestheticOptions();
@@ -6609,21 +6637,21 @@ const WEIGHTS_STYLES = ['P-Zero (GZCL)', 'Hypertrophy (RP Strength)', 'Free Entr
 const CARDIO_STYLES = ['Time/Dist/Cal', 'Interval'];
 
 function renderWorkoutBuilder() {
-  const list = workoutsByType(BUILDER_TYPE);
-  if (!BUILDER_SELECTED[BUILDER_TYPE] || !list.find(w => w.id === BUILDER_SELECTED[BUILDER_TYPE])) {
-    BUILDER_SELECTED[BUILDER_TYPE] = list.length ? list[0].id : null;
+  const list = workoutsByType(VIEW.builderType);
+  if (!VIEW.builderSelected[VIEW.builderType] || !list.find(w => w.id === VIEW.builderSelected[VIEW.builderType])) {
+    VIEW.builderSelected[VIEW.builderType] = list.length ? list[0].id : null;
   }
 
   const typeToggle = `
     <div class="unit-toggle" style="margin-bottom:16px; width:100%; display:flex; flex-wrap:wrap; gap:6px;">
-      <button style="flex:1 1 45%; ${BUILDER_TYPE==='weights' ? 'background:var(--accent); color:#17181b;' : ''}" onclick="setBuilderType('weights')"><span class="ic">${icon('exercise')}</span>WEIGHTS</button>
-      <button style="flex:1 1 45%; ${BUILDER_TYPE==='cardio' ? 'background:var(--accent); color:#17181b;' : ''}" onclick="setBuilderType('cardio')"><span class="ic">${icon('progress')}</span>CARDIO</button>
-      <button style="flex:1 1 45%; ${BUILDER_TYPE==='mobility' ? 'background:var(--accent); color:#17181b;' : ''}" onclick="setBuilderType('mobility')"><span class="ic">${icon('mobility')}</span>MOBILITY</button>
-      <button style="flex:1 1 45%; ${BUILDER_TYPE==='warmup' ? 'background:var(--accent); color:#17181b;' : ''}" onclick="setBuilderType('warmup')"><span class="ic">${icon('warmup')}</span>WARMUP</button>
+      <button style="flex:1 1 45%; ${VIEW.builderType==='weights' ? 'background:var(--accent); color:#17181b;' : ''}" onclick="setBuilderType('weights')"><span class="ic">${icon('exercise')}</span>WEIGHTS</button>
+      <button style="flex:1 1 45%; ${VIEW.builderType==='cardio' ? 'background:var(--accent); color:#17181b;' : ''}" onclick="setBuilderType('cardio')"><span class="ic">${icon('progress')}</span>CARDIO</button>
+      <button style="flex:1 1 45%; ${VIEW.builderType==='mobility' ? 'background:var(--accent); color:#17181b;' : ''}" onclick="setBuilderType('mobility')"><span class="ic">${icon('mobility')}</span>MOBILITY</button>
+      <button style="flex:1 1 45%; ${VIEW.builderType==='warmup' ? 'background:var(--accent); color:#17181b;' : ''}" onclick="setBuilderType('warmup')"><span class="ic">${icon('warmup')}</span>WARMUP</button>
     </div>`;
 
   if (UI.builderStylePickerOpen) {
-    const styles = BUILDER_TYPE === 'weights' ? WEIGHTS_STYLES : CARDIO_STYLES;
+    const styles = VIEW.builderType === 'weights' ? WEIGHTS_STYLES : CARDIO_STYLES;
     return typeToggle + `
       <div class="panel">
         <div class="subtle-label" style="margin-bottom:10px;">CHOOSE A STYLE</div>
@@ -6636,7 +6664,7 @@ function renderWorkoutBuilder() {
 
   // Cardio gets two extra one-tap buttons to bulk-create a whole program's tagged weekly
   // session set — see generateProgramWorkouts(). Safe to tap again later; it only tops up.
-  const generateButtons = BUILDER_TYPE === 'cardio' ? `
+  const generateButtons = VIEW.builderType === 'cardio' ? `
     <div class="field-row" style="margin-bottom:14px;">
       <button class="btn btn-sm" style="flex:1;" onclick="generateProgramWorkouts('C25K')">+ C25K SET</button>
       <button class="btn btn-sm" style="flex:1;" onclick="generateProgramWorkouts('C2Triathlon')">+ C2TRIATHLON SET</button>
@@ -6646,20 +6674,20 @@ function renderWorkoutBuilder() {
     return typeToggle + generateButtons + `
       <div class="empty-state">
         <div class="big">${icon('lock')}</div>
-        No ${WORKOUT_TYPE_LABELS[BUILDER_TYPE].toLowerCase()} workouts yet.
+        No ${WORKOUT_TYPE_LABELS[VIEW.builderType].toLowerCase()} workouts yet.
       </div>
       <div style="margin:14px 0 4px; text-align:center;">
         <button class="btn btn-primary" onclick="startNewWorkout()">+ NEW WORKOUT</button>
       </div>`;
   }
 
-  const w = getWorkout(BUILDER_SELECTED[BUILDER_TYPE]);
+  const w = getWorkout(VIEW.builderSelected[VIEW.builderType]);
   const header = `
     <div>
       ${typeToggle}
       ${generateButtons}
       <label class="field" style="margin-bottom:10px;">
-        <span class="lbl">${WORKOUT_TYPE_LABELS[BUILDER_TYPE]}</span>
+        <span class="lbl">${WORKOUT_TYPE_LABELS[VIEW.builderType]}</span>
         <select onchange="setBuilderSelected(this.value)">
           ${list.map((wo, i) => `<option value="${wo.id}" ${wo.id === w.id ? 'selected' : ''}>${i + 1} — ${escapeHtml(wo.name)}</option>`).join('')}
         </select>
@@ -6678,30 +6706,30 @@ function renderWorkoutBuilder() {
   return header + editor;
 }
 function setBuilderType(type) {
-  BUILDER_TYPE = type;
+  VIEW.builderType = type;
   UI.builderStylePickerOpen = false;
   render();
 }
 function setBuilderSelected(id) {
-  BUILDER_SELECTED[BUILDER_TYPE] = id;
+  VIEW.builderSelected[VIEW.builderType] = id;
   render();
 }
 // "+ NEW WORKOUT" -- weights/cardio need a style choice first (it fixes the workout's shape for
 // good, see createWorkout()); mobility/warmup have only one shape, so they're created immediately.
 function startNewWorkout() {
-  if (BUILDER_TYPE === 'weights' || BUILDER_TYPE === 'cardio') {
+  if (VIEW.builderType === 'weights' || VIEW.builderType === 'cardio') {
     UI.builderStylePickerOpen = true;
     render();
     return;
   }
-  const w = createWorkout(BUILDER_TYPE, null);
-  BUILDER_SELECTED[BUILDER_TYPE] = w.id;
+  const w = createWorkout(VIEW.builderType, null);
+  VIEW.builderSelected[VIEW.builderType] = w.id;
   saveState();
   render();
 }
 function finishNewWorkout(style) {
-  const w = createWorkout(BUILDER_TYPE, style);
-  BUILDER_SELECTED[BUILDER_TYPE] = w.id;
+  const w = createWorkout(VIEW.builderType, style);
+  VIEW.builderSelected[VIEW.builderType] = w.id;
   UI.builderStylePickerOpen = false;
   saveState();
   render();
@@ -6797,8 +6825,8 @@ function renderWorkoutCard(w) {
 function editWorkout(id) {
   const w = getWorkout(id);
   if (!w) return;
-  BUILDER_TYPE = w.type;
-  BUILDER_SELECTED[w.type] = w.id;
+  VIEW.builderType = w.type;
+  VIEW.builderSelected[w.type] = w.id;
   UI.builderStylePickerOpen = false;
   setSetupSubtab('builder');
 }
@@ -6809,8 +6837,6 @@ function editWorkout(id) {
 // the cycle-based Train Grid rather than replacing it: Train Grid is still where you log a
 // cycle's sets against training maxes; the Planner (plus Home's weekday card) is just "what's
 // on the schedule today" convenience layered on top.
-let EXPLAN_EXPANDED = {};
-let EXPLAN_CLIPBOARD = null;
 function addPlanWorkoutSlot(day) {
   if (!Array.isArray(STATE.exercisePlan[day])) STATE.exercisePlan[day] = [];
   STATE.exercisePlan[day].push({ id: uid(), workoutId: null });
@@ -6818,7 +6844,7 @@ function addPlanWorkoutSlot(day) {
 }
 function removePlanWorkoutSlot(day, entryId) {
   STATE.exercisePlan[day] = (STATE.exercisePlan[day] || []).filter(e => e.id !== entryId);
-  delete EXPLAN_EXPANDED[entryId];
+  delete VIEW.exPlanExpanded[entryId];
   saveState(); render();
 }
 function setPlanWorkoutSlotWorkout(day, entryId, workoutId) {
@@ -6829,14 +6855,14 @@ function setPlanWorkoutSlotWorkout(day, entryId, workoutId) {
 }
 function copyDayWorkoutPlan(day) {
   const entries = (STATE.exercisePlan[day] || []).map(e => ({ workoutId: e.workoutId }));
-  EXPLAN_CLIPBOARD = { day, entries };
+  VIEW.exPlanClipboard = { day, entries };
   showToast(MEAL_PLAN_DAY_LABELS[day] + "'s workout plan copied");
   render();
 }
 function pasteDayWorkoutPlan(day) {
-  if (!EXPLAN_CLIPBOARD) return;
+  if (!VIEW.exPlanClipboard) return;
   const doPaste = () => {
-    STATE.exercisePlan[day] = EXPLAN_CLIPBOARD.entries.map(e => ({ id: uid(), workoutId: e.workoutId }));
+    STATE.exercisePlan[day] = VIEW.exPlanClipboard.entries.map(e => ({ id: uid(), workoutId: e.workoutId }));
     saveState();
     showToast('Pasted into ' + MEAL_PLAN_DAY_LABELS[day]);
     render();
@@ -6848,8 +6874,8 @@ function pasteDayWorkoutPlan(day) {
   }
 }
 function renderExercisePlanTab() {
-  const clipboardLabel = EXPLAN_CLIPBOARD
-    ? `${MEAL_PLAN_DAY_LABELS[EXPLAN_CLIPBOARD.day]} (${EXPLAN_CLIPBOARD.entries.length} workout${EXPLAN_CLIPBOARD.entries.length === 1 ? '' : 's'})`
+  const clipboardLabel = VIEW.exPlanClipboard
+    ? `${MEAL_PLAN_DAY_LABELS[VIEW.exPlanClipboard.day]} (${VIEW.exPlanClipboard.entries.length} workout${VIEW.exPlanClipboard.entries.length === 1 ? '' : 's'})`
     : null;
   const hasProgram = programWorkouts('C25K').length > 0 || programWorkouts('C2Triathlon').length > 0;
   return `
@@ -6869,7 +6895,7 @@ function renderExercisePlanDay(day) {
       <div style="font-size:15px; font-weight:700;">${MEAL_PLAN_DAY_LABELS[day]}</div>
       <div style="display:flex; gap:6px;">
         <button class="btn btn-sm btn-ghost" onclick="copyDayWorkoutPlan(${day})" title="Copy this day's plan">COPY</button>
-        <button class="btn btn-sm btn-ghost" ${EXPLAN_CLIPBOARD ? '' : 'disabled'} onclick="pasteDayWorkoutPlan(${day})" title="Paste the copied plan here">PASTE</button>
+        <button class="btn btn-sm btn-ghost" ${VIEW.exPlanClipboard ? '' : 'disabled'} onclick="pasteDayWorkoutPlan(${day})" title="Paste the copied plan here">PASTE</button>
       </div>
     </div>
     <div class="stack" style="margin-bottom:${entries.length ? '10px' : '0'};">
@@ -6912,12 +6938,10 @@ function renderPlanWorkoutEntry(day, entry) {
 // (matters for C2Triathlon's swim/run/bike sequence) — additive, appends rather than replacing
 // whatever's already on that day. Wraps if fewer/more days are picked than the program has
 // sessions (e.g. picking 2 days for C25K's 3 sessions just cycles back to session 1).
-let AUTOFILL_PROGRAM = null;
-let AUTOFILL_DAYS = [];
 function openAutoFillPicker() {
   UI.autofillPickerOpen = true;
-  AUTOFILL_PROGRAM = programWorkouts('C25K').length ? 'C25K' : 'C2Triathlon';
-  AUTOFILL_DAYS = [];
+  VIEW.autofillProgram = programWorkouts('C25K').length ? 'C25K' : 'C2Triathlon';
+  VIEW.autofillDays = [];
   render();
 }
 function closeAutoFillPicker() {
@@ -6925,50 +6949,50 @@ function closeAutoFillPicker() {
   render();
 }
 function setAutoFillProgram(program) {
-  AUTOFILL_PROGRAM = program;
-  AUTOFILL_DAYS = [];
+  VIEW.autofillProgram = program;
+  VIEW.autofillDays = [];
   render();
 }
 function toggleAutoFillDay(day) {
-  const idx = AUTOFILL_DAYS.indexOf(day);
-  if (idx >= 0) AUTOFILL_DAYS.splice(idx, 1);
-  else AUTOFILL_DAYS.push(day);
+  const idx = VIEW.autofillDays.indexOf(day);
+  if (idx >= 0) VIEW.autofillDays.splice(idx, 1);
+  else VIEW.autofillDays.push(day);
   render();
 }
 function renderAutoFillPicker() {
   const programs = [];
   if (programWorkouts('C25K').length) programs.push('C25K');
   if (programWorkouts('C2Triathlon').length) programs.push('C2Triathlon');
-  const sessions = programWorkouts(AUTOFILL_PROGRAM);
+  const sessions = programWorkouts(VIEW.autofillProgram);
   return `<div class="panel" style="margin-bottom:14px;">
     <div class="subtle-label" style="margin-bottom:8px;">AUTO-FILL</div>
     ${programs.length > 1 ? `
       <div class="field-row" style="margin-bottom:10px;">
-        ${programs.map(p => `<button class="btn btn-sm ${AUTOFILL_PROGRAM===p?'btn-primary':''}" style="flex:1;" onclick="setAutoFillProgram('${p}')">${p}</button>`).join('')}
+        ${programs.map(p => `<button class="btn btn-sm ${VIEW.autofillProgram===p?'btn-primary':''}" style="flex:1;" onclick="setAutoFillProgram('${p}')">${p}</button>`).join('')}
       </div>` : ''}
-    <div style="font-size:11px; color:var(--text-dim); margin-bottom:8px;">Tap days in the order you want ${escapeHtml(AUTOFILL_PROGRAM || '')}'s ${sessions.length} weekly session${sessions.length===1?'':'s'} to land, in sequence.</div>
+    <div style="font-size:11px; color:var(--text-dim); margin-bottom:8px;">Tap days in the order you want ${escapeHtml(VIEW.autofillProgram || '')}'s ${sessions.length} weekly session${sessions.length===1?'':'s'} to land, in sequence.</div>
     <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px;">
       ${MEAL_PLAN_DAY_ORDER.map(day => {
-        const pos = AUTOFILL_DAYS.indexOf(day);
+        const pos = VIEW.autofillDays.indexOf(day);
         return `<button class="btn btn-sm ${pos>=0?'btn-primary':''}" onclick="toggleAutoFillDay(${day})">${MEAL_PLAN_DAY_LABELS[day].slice(0,3).toUpperCase()}${pos>=0?' '+(pos+1):''}</button>`;
       }).join('')}
     </div>
     <div class="field-row">
-      <button class="btn btn-good" style="flex:1; ${AUTOFILL_DAYS.length ? '' : 'opacity:.4;'}" ${AUTOFILL_DAYS.length ? '' : 'disabled'} onclick="applyAutoFill()">APPLY</button>
+      <button class="btn btn-good" style="flex:1; ${VIEW.autofillDays.length ? '' : 'opacity:.4;'}" ${VIEW.autofillDays.length ? '' : 'disabled'} onclick="applyAutoFill()">APPLY</button>
       <button class="btn btn-ghost" style="flex:1;" onclick="closeAutoFillPicker()">CANCEL</button>
     </div>
   </div>`;
 }
 function applyAutoFill() {
-  const sessions = programWorkouts(AUTOFILL_PROGRAM);
-  if (!sessions.length || !AUTOFILL_DAYS.length) return;
-  AUTOFILL_DAYS.forEach((day, i) => {
+  const sessions = programWorkouts(VIEW.autofillProgram);
+  if (!sessions.length || !VIEW.autofillDays.length) return;
+  VIEW.autofillDays.forEach((day, i) => {
     const w = sessions[i % sessions.length];
     if (!Array.isArray(STATE.exercisePlan[day])) STATE.exercisePlan[day] = [];
     STATE.exercisePlan[day].push({ id: uid(), workoutId: w.id });
   });
   saveState();
-  showToast(AUTOFILL_PROGRAM + ' scheduled');
+  showToast(VIEW.autofillProgram + ' scheduled');
   UI.autofillPickerOpen = false;
   render();
 }
@@ -7519,7 +7543,6 @@ const MEASURE_FIELDS = [
   { key: 'rCalf', label: 'R Calf', unit: 'length' },
   { key: 'lCalf', label: 'L Calf', unit: 'length' },
 ];
-let COMPARE_A = null, COMPARE_B = null;
 
 function renderHealth() {
   if (NAV.healthSubtab === 'setup') return renderHealthSetup(); // already a full .screen with its own header — don't double-wrap
@@ -7585,7 +7608,7 @@ function renderMeasurements() {
 }
 function toggleMeasureForm() {
   UI.measureFormOpen = !UI.measureFormOpen;
-  if (UI.measureFormOpen) MEASURE_DRAFT_PHOTOS = [];
+  if (UI.measureFormOpen) VIEW.measureDraftPhotos = [];
   render();
 }
 function renderMeasureForm() {
@@ -7607,28 +7630,27 @@ function renderMeasureForm() {
       <button class="btn btn-block" style="margin-top:8px;" onclick="toggleMeasureForm()">CANCEL ENTRY</button>
     </div>`;
 }
-let MEASURE_DRAFT_PHOTOS = [];
 const MAX_MEASURE_PHOTOS = 4;
 async function handleMeasurePhotoInput(evt) {
   const files = Array.from(evt.target.files || []);
   evt.target.value = '';
   for (const file of files) {
-    if (MEASURE_DRAFT_PHOTOS.length >= MAX_MEASURE_PHOTOS) { showToast(`Up to ${MAX_MEASURE_PHOTOS} photos per entry`); break; }
+    if (VIEW.measureDraftPhotos.length >= MAX_MEASURE_PHOTOS) { showToast(`Up to ${MAX_MEASURE_PHOTOS} photos per entry`); break; }
     try {
       const dataUrl = await resizeImageFile(file, PHOTO_MAX_DIM, PHOTO_QUALITY);
-      MEASURE_DRAFT_PHOTOS.push(dataUrl);
+      VIEW.measureDraftPhotos.push(dataUrl);
     } catch (e) { showToast('Could not read that photo'); }
   }
   renderMeasurePhotoRow(); // targeted — a full render() would wipe whatever numbers were already typed in
 }
 function removeMeasureDraftPhoto(idx) {
-  MEASURE_DRAFT_PHOTOS.splice(idx, 1);
+  VIEW.measureDraftPhotos.splice(idx, 1);
   renderMeasurePhotoRow();
 }
 function renderMeasurePhotoRow() {
   const row = document.getElementById('measurePhotoRow');
   if (!row) return;
-  row.innerHTML = MEASURE_DRAFT_PHOTOS.map((src, i) => `
+  row.innerHTML = VIEW.measureDraftPhotos.map((src, i) => `
     <div class="photo-thumb">
       <img src="${src}" onclick="showImageLightbox(this.src)">
       <button type="button" class="photo-thumb-remove" onclick="removeMeasureDraftPhoto(${i})">${icon('close')}</button>
@@ -7645,9 +7667,9 @@ function saveMeasurement() {
     else if (f.unit === 'length') fields[f.key] = displayToCm(raw);
     else fields[f.key] = Number(raw);
   });
-  STATE.measurements.push({ id: uid(), date, fields, photos: MEASURE_DRAFT_PHOTOS.slice() });
+  STATE.measurements.push({ id: uid(), date, fields, photos: VIEW.measureDraftPhotos.slice() });
   UI.measureFormOpen = false;
-  MEASURE_DRAFT_PHOTOS = [];
+  VIEW.measureDraftPhotos = [];
   saveState();
   showToast('Measurement saved');
   render();
@@ -7659,10 +7681,10 @@ function deleteMeasurement(id) {
   });
 }
 function renderCompareBlock(list) {
-  if (!COMPARE_A) COMPARE_A = list[list.length - 1].id;
-  if (!COMPARE_B) COMPARE_B = list[0].id;
-  const a = STATE.measurements.find(m => m.id === COMPARE_A);
-  const b = STATE.measurements.find(m => m.id === COMPARE_B);
+  if (!VIEW.compareA) VIEW.compareA = list[list.length - 1].id;
+  if (!VIEW.compareB) VIEW.compareB = list[0].id;
+  const a = STATE.measurements.find(m => m.id === VIEW.compareA);
+  const b = STATE.measurements.find(m => m.id === VIEW.compareB);
   const opts = list.map(m => `<option value="${m.id}">${m.date}</option>`).join('');
   let rows = '';
   if (a && b) {
@@ -7684,8 +7706,8 @@ function renderCompareBlock(list) {
     <div class="panel">
       <div class="subtle-label">COMPARE</div>
       <div class="field-row" style="margin-bottom:10px;">
-        <select onchange="COMPARE_A=this.value; render();">${opts.replace(`value="${COMPARE_A}"`, `value="${COMPARE_A}" selected`)}</select>
-        <select onchange="COMPARE_B=this.value; render();">${opts.replace(`value="${COMPARE_B}"`, `value="${COMPARE_B}" selected`)}</select>
+        <select onchange="VIEW.compareA=this.value; render();">${opts.replace(`value="${VIEW.compareA}"`, `value="${VIEW.compareA}" selected`)}</select>
+        <select onchange="VIEW.compareB=this.value; render();">${opts.replace(`value="${VIEW.compareB}"`, `value="${VIEW.compareB}" selected`)}</select>
       </div>
       ${rows || '<div style="font-size:12px;color:var(--text-faint)">No overlapping fields between these two entries.</div>'}
     </div>`;
@@ -7794,7 +7816,7 @@ let weightChartInstance = null;
 function drawWeightChart() {
   const canvas = document.getElementById('weightChart');
   if (!canvas || typeof Chart === 'undefined') return;
-  const metric = WEIGHT_METRICS.find(m => m.key === SELECTED_WEIGHT_METRIC) || WEIGHT_METRICS[0];
+  const metric = WEIGHT_METRICS.find(m => m.key === VIEW.selectedWeightMetric) || WEIGHT_METRICS[0];
   const isWeight = metric.key === 'weight';
   const list = STATE.weightLog
     .filter(e => isWeight ? e.weightLb != null : e[metric.key] != null)
@@ -7843,22 +7865,21 @@ function drawWeightChart() {
 // ---------------- PROGRESS: chart-only views (data entry lives on the Health & Diet tab) ----------------
 // Same three metrics the weight-log entry form can capture (weight required, body fat %/body
 // water % optional smart-scale readings) \u2014 one chart at a time via this selector, same UX
-// convention as SELECTED_MEASUREMENT_FIELD's dropdown below for Body Measurements.
+// convention as VIEW.selectedMeasurementField's dropdown below for Body Measurements.
 const WEIGHT_METRICS = [
   { key: 'weight', label: 'Weight' },
   { key: 'bodyFatPct', label: 'Body Fat %' },
   { key: 'bodyWaterPct', label: 'Body Water %' },
 ];
-let SELECTED_WEIGHT_METRIC = 'weight';
-function setWeightMetric(m) { SELECTED_WEIGHT_METRIC = m; render(); }
+function setWeightMetric(m) { VIEW.selectedWeightMetric = m; render(); }
 function renderBodyWeightChart() {
-  const metric = WEIGHT_METRICS.find(m => m.key === SELECTED_WEIGHT_METRIC) || WEIGHT_METRICS[0];
+  const metric = WEIGHT_METRICS.find(m => m.key === VIEW.selectedWeightMetric) || WEIGHT_METRICS[0];
   const isWeight = metric.key === 'weight';
   const selector = `
     <label class="field" style="margin-bottom:12px;">
       <span class="lbl">Metric</span>
       <select onchange="setWeightMetric(this.value)">
-        ${WEIGHT_METRICS.map(m => `<option value="${m.key}" ${m.key===SELECTED_WEIGHT_METRIC?'selected':''}>${m.label}</option>`).join('')}
+        ${WEIGHT_METRICS.map(m => `<option value="${m.key}" ${m.key===VIEW.selectedWeightMetric?'selected':''}>${m.label}</option>`).join('')}
       </select>
     </label>`;
   const list = STATE.weightLog.filter(e => isWeight ? e.weightLb != null : e[metric.key] != null);
@@ -7867,17 +7888,16 @@ function renderBodyWeightChart() {
   }
   return selector + `<div class="chart-wrap"><canvas id="weightChart" height="180"></canvas></div>`;
 }
-let SELECTED_MEASUREMENT_FIELD = 'weight';
-function setMeasurementField(field) { SELECTED_MEASUREMENT_FIELD = field; render(); }
+function setMeasurementField(field) { VIEW.selectedMeasurementField = field; render(); }
 function renderBodyMeasurementChart() {
   const fieldSelect = `
     <label class="field" style="margin-bottom:12px;">
       <span class="lbl">Measurement</span>
       <select onchange="setMeasurementField(this.value)">
-        ${MEASURE_FIELDS.map(f => `<option value="${f.key}" ${f.key===SELECTED_MEASUREMENT_FIELD?'selected':''}>${f.label}</option>`).join('')}
+        ${MEASURE_FIELDS.map(f => `<option value="${f.key}" ${f.key===VIEW.selectedMeasurementField?'selected':''}>${f.label}</option>`).join('')}
       </select>
     </label>`;
-  const field = MEASURE_FIELDS.find(f => f.key === SELECTED_MEASUREMENT_FIELD) || MEASURE_FIELDS[0];
+  const field = MEASURE_FIELDS.find(f => f.key === VIEW.selectedMeasurementField) || MEASURE_FIELDS[0];
   const list = [...STATE.measurements]
     .filter(m => m.fields[field.key] !== undefined)
     .sort((a,b) => a.date.localeCompare(b.date));
@@ -7890,7 +7910,7 @@ let measurementChartInstance = null;
 function drawMeasurementChart() {
   const canvas = document.getElementById('measurementChart');
   if (!canvas || typeof Chart === 'undefined') return;
-  const field = MEASURE_FIELDS.find(f => f.key === SELECTED_MEASUREMENT_FIELD) || MEASURE_FIELDS[0];
+  const field = MEASURE_FIELDS.find(f => f.key === VIEW.selectedMeasurementField) || MEASURE_FIELDS[0];
   const list = [...STATE.measurements]
     .filter(m => m.fields[field.key] !== undefined)
     .sort((a,b) => a.date.localeCompare(b.date));
@@ -7989,14 +8009,13 @@ function compareMetricSeries(id) {
   const [, categoryId, tierKey] = id.split(':');
   return liftHistorySeries(categoryId, tierKey);
 }
-let COMPARE_SELECTED = ['bodyweight']; // session-only, same lifetime as SELECTED_MEASUREMENT_FIELD
 const COMPARE_MAX_METRICS = 4; // small multiples stacked on a phone screen — more than this stops being scannable
 function toggleCompareMetric(id) {
-  const idx = COMPARE_SELECTED.indexOf(id);
-  if (idx !== -1) { COMPARE_SELECTED.splice(idx, 1); }
+  const idx = VIEW.compareSelected.indexOf(id);
+  if (idx !== -1) { VIEW.compareSelected.splice(idx, 1); }
   else {
-    if (COMPARE_SELECTED.length >= COMPARE_MAX_METRICS) { showToast(`Up to ${COMPARE_MAX_METRICS} at once`); return; }
-    COMPARE_SELECTED.push(id);
+    if (VIEW.compareSelected.length >= COMPARE_MAX_METRICS) { showToast(`Up to ${COMPARE_MAX_METRICS} at once`); return; }
+    VIEW.compareSelected.push(id);
   }
   render();
 }
@@ -8009,13 +8028,13 @@ function toggleCompareMetric(id) {
 function renderCompareView() {
   const liftSlots = trackedLiftSlots();
   const chips = [
-    `<button class="tag-pill ${COMPARE_SELECTED.includes('bodyweight')?'active':''}" onclick="toggleCompareMetric('bodyweight')">Body Weight</button>`,
+    `<button class="tag-pill ${VIEW.compareSelected.includes('bodyweight')?'active':''}" onclick="toggleCompareMetric('bodyweight')">Body Weight</button>`,
     ...liftSlots.map(s => {
       const id = compareMetricId(s.categoryId, s.tierKey);
-      return `<button class="tag-pill ${COMPARE_SELECTED.includes(id)?'active':''}" onclick="toggleCompareMetric('${id}')">${escapeHtml(s.label)}</button>`;
+      return `<button class="tag-pill ${VIEW.compareSelected.includes(id)?'active':''}" onclick="toggleCompareMetric('${id}')">${escapeHtml(s.label)}</button>`;
     }),
   ].join('');
-  const charts = COMPARE_SELECTED.map(renderCompareMiniChart).join('');
+  const charts = VIEW.compareSelected.map(renderCompareMiniChart).join('');
   return `
     <div style="font-size:11px; color:var(--text-dim); margin-bottom:8px;">Pick up to ${COMPARE_MAX_METRICS} to compare side by side — body weight and any lift with a Training Max tier (T1/T2) assigned in Setup &rarr; Workout Builder. Each point is the heaviest completed set logged that session, not just the programmed target.</div>
     <div class="tag-pill-row">${chips}</div>
@@ -8036,14 +8055,14 @@ let compareChartInstances = {};
 function drawCompareCharts() {
   // Drop any instance for a metric that's no longer selected (or lost its canvas some other way)
   Object.keys(compareChartInstances).forEach(id => {
-    if (!COMPARE_SELECTED.includes(id) || !document.getElementById(compareCanvasId(id))) {
+    if (!VIEW.compareSelected.includes(id) || !document.getElementById(compareCanvasId(id))) {
       compareChartInstances[id].destroy();
       delete compareChartInstances[id];
     }
   });
   if (typeof Chart === 'undefined') return;
   const styles = getComputedStyle(document.documentElement);
-  COMPARE_SELECTED.forEach(id => {
+  VIEW.compareSelected.forEach(id => {
     const series = compareMetricSeries(id);
     if (series.length < 2) return;
     const canvas = document.getElementById(compareCanvasId(id));
@@ -8274,8 +8293,8 @@ function removeNoteTagByKey(key) {
   showConfirm(`Delete the "${t.label}" tag? Notes using it will move to General.`, () => {
     STATE.settings.customNoteTags = customNoteTags().filter(x => x.key !== key);
     STATE.notes.forEach(n => { if (n.tag === key) n.tag = 'general'; });
-    if (NOTES_SELECTED_TAG === key) NOTES_SELECTED_TAG = 'general';
-    if (NOTES_FILTER_TAG === key) NOTES_FILTER_TAG = null;
+    if (VIEW.notesSelectedTag === key) VIEW.notesSelectedTag = 'general';
+    if (VIEW.notesFilterTag === key) VIEW.notesFilterTag = null;
     if (UI.noteTagPaletteOpen === key) UI.noteTagPaletteOpen = null;
     saveState();
     showToast('Tag deleted');
@@ -8346,14 +8365,9 @@ function getNoteBodyHtml(n) {
   if (n.bodyHtml !== undefined) return n.bodyHtml;
   return escapeHtml(n.text || '').replace(/\n/g, '<br>'); // legacy plain-text notes
 }
-let NOTES_SELECTED_TAG = 'general'; // default tag for a new note; saveNote() resets this back to 'general' after each save
-let NOTES_SORT = 'date'; // 'date' | 'tag'
-let NOTES_FILTER_TAG = null; // null = all tags
-let NOTE_DRAFT_PHOTOS = [];
 // Id of the note being edited via editNote() (see the pencil button on each VIEW ALL card), or
 // null when Write is composing a brand new note. saveNote() branches on this; renderNotesWrite()
 // pre-fills from it.
-let NOTE_EDIT_ID = null;
 // Key of the tag whose color palette is currently expanded in Notes Setup (renderNoteTagSetupRow),
 // or null when every row is collapsed. Only one row's palette is open at a time; clicking a row's
 // color dot toggles it via toggleNoteTagPalette, and picking a color or hitting CANCEL closes it.
@@ -8363,8 +8377,8 @@ function setNotesSubtab(t) {
   // note, then tapped VIEW ALL instead of CANCEL EDIT, then tapped WRITE again) should land on a
   // blank compose, not silently resume the stale edit. Only fires on an actual transition, so
   // re-tapping the already-active WRITE tab never discards an in-progress NEW note's draft.
-  if (t === 'write' && NAV.notesSubtab !== 'write' && NOTE_EDIT_ID) {
-    NOTE_EDIT_ID = null; NOTE_DRAFT_PHOTOS = []; NOTES_SELECTED_TAG = 'general';
+  if (t === 'write' && NAV.notesSubtab !== 'write' && VIEW.noteEditId) {
+    VIEW.noteEditId = null; VIEW.noteDraftPhotos = []; VIEW.notesSelectedTag = 'general';
   }
   NAV.notesSubtab = t;
   render();
@@ -8377,7 +8391,7 @@ function renderNotes() {
   </div>`;
 }
 function renderNotesWrite() {
-  const editing = NOTE_EDIT_ID ? STATE.notes.find(n => n.id === NOTE_EDIT_ID) : null;
+  const editing = VIEW.noteEditId ? STATE.notes.find(n => n.id === VIEW.noteEditId) : null;
   return `
     <div class="row" style="margin:14px 0 8px; align-items:center;">
       <div class="subtle-label" style="margin-bottom:0;">${editing ? 'EDIT NOTE' : 'NEW NOTE'}</div>
@@ -8417,22 +8431,22 @@ async function handleNotePhotoInput(evt) {
   const files = Array.from(evt.target.files || []);
   evt.target.value = ''; // allow re-selecting the same file later
   for (const file of files) {
-    if (NOTE_DRAFT_PHOTOS.length >= MAX_NOTE_PHOTOS) { showToast(`Up to ${MAX_NOTE_PHOTOS} photos per note`); break; }
+    if (VIEW.noteDraftPhotos.length >= MAX_NOTE_PHOTOS) { showToast(`Up to ${MAX_NOTE_PHOTOS} photos per note`); break; }
     try {
       const dataUrl = await resizeImageFile(file, PHOTO_MAX_DIM, PHOTO_QUALITY);
-      NOTE_DRAFT_PHOTOS.push(dataUrl);
+      VIEW.noteDraftPhotos.push(dataUrl);
     } catch (e) { showToast('Could not read that photo'); }
   }
   renderNotePhotoRow(); // targeted — a full render() would wipe the draft title/body
 }
 function removeNoteDraftPhoto(idx) {
-  NOTE_DRAFT_PHOTOS.splice(idx, 1);
+  VIEW.noteDraftPhotos.splice(idx, 1);
   renderNotePhotoRow();
 }
 function renderNotePhotoRow() {
   const row = document.getElementById('notePhotoRow');
   if (!row) return;
-  row.innerHTML = NOTE_DRAFT_PHOTOS.map((src, i) => `
+  row.innerHTML = VIEW.noteDraftPhotos.map((src, i) => `
     <div class="photo-thumb">
       <img src="${src}" onclick="showImageLightbox(this.src)">
       <button type="button" class="photo-thumb-remove" onclick="removeNoteDraftPhoto(${i})">${icon('close')}</button>
@@ -8445,14 +8459,14 @@ function renderNoteTagSwatches() {
     const label = noteTagLabel(key);
     const sw = tagColor(key);
     return `<div class="accent-swatch-item">
-      <button class="accent-swatch ${key===NOTES_SELECTED_TAG?'active':''}" style="--sw:${sw}" onclick="selectNoteTag('${key}')" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}"></button>
+      <button class="accent-swatch ${key===VIEW.notesSelectedTag?'active':''}" style="--sw:${sw}" onclick="selectNoteTag('${key}')" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}"></button>
       <div class="accent-swatch-label">${escapeHtml(label).toUpperCase()}</div>
     </div>`;
   }).join('');
 }
 function selectNoteTag(key) {
   if (!allNoteTags()[key]) return;
-  NOTES_SELECTED_TAG = key;
+  VIEW.notesSelectedTag = key;
   renderNoteTagSwatches(); // just the swatch grid — a full render() would wipe the draft title/body
 }
 function saveNote() {
@@ -8462,20 +8476,20 @@ function saveNote() {
   const bodyHtml = sanitizeNoteHtml(bodyEl ? bodyEl.innerHTML : '');
   const probe = document.createElement('div');
   probe.innerHTML = bodyHtml;
-  if (!probe.textContent.trim() && NOTE_DRAFT_PHOTOS.length === 0) { showToast('Write something or add a photo first'); return; }
-  const editing = NOTE_EDIT_ID ? STATE.notes.find(n => n.id === NOTE_EDIT_ID) : null;
+  if (!probe.textContent.trim() && VIEW.noteDraftPhotos.length === 0) { showToast('Write something or add a photo first'); return; }
+  const editing = VIEW.noteEditId ? STATE.notes.find(n => n.id === VIEW.noteEditId) : null;
   if (editing) {
     editing.title = title;
     editing.bodyHtml = bodyHtml;
-    editing.tag = NOTES_SELECTED_TAG;
-    editing.photos = NOTE_DRAFT_PHOTOS.slice();
+    editing.tag = VIEW.notesSelectedTag;
+    editing.photos = VIEW.noteDraftPhotos.slice();
     delete editing.text; // clear the legacy plain-text field if this was an old pre-rich-text note — bodyHtml now takes over for good, see getNoteBodyHtml()
   } else {
-    STATE.notes.push({ id: uid(), date: todayStr(), createdAt: Date.now(), title, bodyHtml, tag: NOTES_SELECTED_TAG, photos: NOTE_DRAFT_PHOTOS.slice() });
+    STATE.notes.push({ id: uid(), date: todayStr(), createdAt: Date.now(), title, bodyHtml, tag: VIEW.notesSelectedTag, photos: VIEW.noteDraftPhotos.slice() });
   }
-  NOTE_DRAFT_PHOTOS = [];
-  NOTES_SELECTED_TAG = 'general'; // reset so the NEXT note starts back at the default tag rather than staying stuck on whatever was picked here
-  NOTE_EDIT_ID = null;
+  VIEW.noteDraftPhotos = [];
+  VIEW.notesSelectedTag = 'general'; // reset so the NEXT note starts back at the default tag rather than staying stuck on whatever was picked here
+  VIEW.noteEditId = null;
   if (editing) NAV.notesSubtab = 'view'; // back to the list after updating, instead of landing in a blank compose form
   saveState();
   showToast(editing ? 'Note updated' : 'Note saved');
@@ -8486,16 +8500,16 @@ function saveNote() {
 function editNote(id) {
   const note = STATE.notes.find(n => n.id === id);
   if (!note) return;
-  NOTE_EDIT_ID = id;
-  NOTES_SELECTED_TAG = note.tag || 'general';
-  NOTE_DRAFT_PHOTOS = (note.photos || []).slice();
+  VIEW.noteEditId = id;
+  VIEW.notesSelectedTag = note.tag || 'general';
+  VIEW.noteDraftPhotos = (note.photos || []).slice();
   NAV.notesSubtab = 'write';
   render();
 }
 function cancelNoteEdit() {
-  NOTE_EDIT_ID = null;
-  NOTE_DRAFT_PHOTOS = [];
-  NOTES_SELECTED_TAG = 'general';
+  VIEW.noteEditId = null;
+  VIEW.noteDraftPhotos = [];
+  VIEW.notesSelectedTag = 'general';
   NAV.notesSubtab = 'view';
   render();
 }
@@ -8505,12 +8519,11 @@ function deleteNote(id) {
     saveState(); render();
   });
 }
-function setNotesSort(mode) { NOTES_SORT = mode; render(); }
+function setNotesSort(mode) { VIEW.notesSort = mode; render(); }
 function toggleNotesFilter(key) {
-  NOTES_FILTER_TAG = (NOTES_FILTER_TAG === key) ? null : key;
+  VIEW.notesFilterTag = (VIEW.notesFilterTag === key) ? null : key;
   render();
 }
-let NOTES_SEARCH_QUERY = ''; // session-only, same lifetime as NOTES_FILTER_TAG/NOTES_SORT below
 // Plain-text haystack for search: title + body with formatting tags stripped (bodyHtml only ever
 // holds the NOTE_ALLOWED_TAGS allowlist, so this can't pull in anything unsafe — same scratch-div
 // trick sanitizeNoteHtml() already uses, just reading .textContent instead of re-serializing).
@@ -8555,11 +8568,11 @@ function notesMatchingQuery(notes, query) {
 function renderNotesSearchRow() {
   return `<label class="field" style="margin-bottom:12px;">
     <span class="lbl">Search</span>
-    <input type="text" id="notesSearchInput" placeholder="Search notes…" value="${escapeHtml(NOTES_SEARCH_QUERY)}" oninput="onNotesSearchInput(this.value)">
+    <input type="text" id="notesSearchInput" placeholder="Search notes…" value="${escapeHtml(VIEW.notesSearchQuery)}" oninput="onNotesSearchInput(this.value)">
   </label>`;
 }
 function onNotesSearchInput(val) {
-  NOTES_SEARCH_QUERY = val;
+  VIEW.notesSearchQuery = val;
   const container = document.getElementById('notesResultsList');
   if (!container) return;
   container.innerHTML = renderNotesResultsBody();
@@ -8568,16 +8581,16 @@ function renderNotesFilterRow() {
   const tagPills = Object.keys(allNoteTags()).map(key => {
     const label = noteTagLabel(key);
     const c = tagColor(key);
-    const active = NOTES_FILTER_TAG === key;
+    const active = VIEW.notesFilterTag === key;
     return `<button class="tag-pill ${active?'active':''}" style="--tc:${c}" onclick="toggleNotesFilter('${key}')">${escapeHtml(label)}</button>`;
   }).join('');
   return `
     ${subNav(`
-      <button class="${NOTES_SORT==='date'?'active':''}" onclick="setNotesSort('date')">NEWEST FIRST</button>
-      <button class="${NOTES_SORT==='tag'?'active':''}" onclick="setNotesSort('tag')">GROUP BY TAG</button>
+      <button class="${VIEW.notesSort==='date'?'active':''}" onclick="setNotesSort('date')">NEWEST FIRST</button>
+      <button class="${VIEW.notesSort==='tag'?'active':''}" onclick="setNotesSort('tag')">GROUP BY TAG</button>
     `)}
     <div class="tag-pill-row">
-      <button class="tag-pill ${!NOTES_FILTER_TAG?'active':''}" style="--tc:var(--text-dim)" onclick="toggleNotesFilter(null)">ALL</button>
+      <button class="tag-pill ${!VIEW.notesFilterTag?'active':''}" style="--tc:var(--text-dim)" onclick="toggleNotesFilter(null)">ALL</button>
       ${tagPills}
     </div>`;
 }
@@ -8606,19 +8619,19 @@ function renderNoteCard(n) {
 // onNotesSearchInput()'s targeted #notesResultsList replace share one filtering path.
 function renderNotesResultsBody() {
   let notes = STATE.notes.slice();
-  if (NOTES_FILTER_TAG) notes = notes.filter(n => n.tag === NOTES_FILTER_TAG);
-  notes = notesMatchingQuery(notes, NOTES_SEARCH_QUERY);
+  if (VIEW.notesFilterTag) notes = notes.filter(n => n.tag === VIEW.notesFilterTag);
+  notes = notesMatchingQuery(notes, VIEW.notesSearchQuery);
   if (notes.length === 0) {
     let msg = 'No notes yet — write your first one on the Write tab.';
     if (STATE.notes.length) {
-      const searching = !!NOTES_SEARCH_QUERY.trim();
-      if (searching && NOTES_FILTER_TAG) msg = 'No notes match that search in this tag.';
+      const searching = !!VIEW.notesSearchQuery.trim();
+      if (searching && VIEW.notesFilterTag) msg = 'No notes match that search in this tag.';
       else if (searching) msg = 'No notes match your search.';
       else msg = 'No notes with this tag yet.';
     }
     return emptyState(msg);
   }
-  if (NOTES_SORT === 'tag') {
+  if (VIEW.notesSort === 'tag') {
     return Object.keys(allNoteTags()).map(key => {
       const group = notes.filter(n => n.tag === key).sort((a,b) => b.createdAt - a.createdAt);
       if (!group.length) return '';
@@ -10271,8 +10284,7 @@ function availableRecurringChargesForGoal(currentGoalId) {
   const claimedByOther = new Set(STATE.budget.goals.filter(g => g.id !== currentGoalId && g.recurringChargeId).map(g => g.recurringChargeId));
   return STATE.budget.recurring.filter(r => r.isSavings && r.active && !claimedByOther.has(r.id));
 }
-let GOAL_EXPANDED = null; // which goal's contribution ledger + add-contribution form is open, one at a time
-function toggleGoalExpanded(id) { GOAL_EXPANDED = GOAL_EXPANDED === id ? null : id; render(); }
+function toggleGoalExpanded(id) { VIEW.goalExpanded = VIEW.goalExpanded === id ? null : id; render(); }
 function renderBudgetGoals() {
   const goals = STATE.budget.goals;
   return `<div class="screen">
@@ -10302,7 +10314,7 @@ function renderGoalCard(g) {
   const progress = goalProgress(g);
   const pct = goalPct(g);
   const complete = goalIsComplete(g);
-  const expanded = GOAL_EXPANDED === g.id;
+  const expanded = VIEW.goalExpanded === g.id;
   const linkedCharge = g.recurringChargeId ? STATE.budget.recurring.find(r => r.id === g.recurringChargeId) : null;
   const contribs = goalContributionsInScope(g).slice().sort((a, b) => b.date.localeCompare(a.date));
   return `<div class="panel" style="${complete ? 'border-color:var(--good);' : ''}">

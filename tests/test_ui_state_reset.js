@@ -74,9 +74,9 @@ const DIRTY = '__dirty__';
   // ---- 3. Boundary: a content draft with its own lifecycle is NOT wiped ----
   const draft = await page.evaluate(() => {
     switchTab('health'); setHealthSubtab('setup'); startNewMeal();
-    new Function('MEAL_BUILDER_DRAFT.name = "Half-built oats"')();
+    new Function('VIEW.mealBuilderDraft.name = "Half-built oats"')();
     switchTab('home'); switchTab('health');
-    const d = new Function('return MEAL_BUILDER_DRAFT')();
+    const d = new Function('return VIEW.mealBuilderDraft')();
     cancelMealDraft();
     return d && d.name;
   });
