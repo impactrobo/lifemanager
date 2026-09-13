@@ -105,7 +105,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (warn.insideOpen.work) throw new Error('The open container itself must never be flagged');
   // A block colliding with two others names both. With A=10:00-12:00, B=11:00-13:00 and
   // C=11:30-11:45, all three genuinely overlap each other — C sits inside both A and B.
-  if (!warn.threeWay.b || warn.threeWay.b.length !== 2) throw new Error(`Expected B to collide with both A and C, got ${JSON.stringify(warn.threeWay.b)}`);
+  if (JSON.stringify(warn.threeWay.b) !== JSON.stringify(['A', 'C'])) throw new Error(`Expected B to collide with exactly A and C, got ${JSON.stringify(warn.threeWay.b)}`);
   if (JSON.stringify(warn.threeWay.a) !== JSON.stringify(['B', 'C'])) throw new Error(`Expected A to collide with B and C, got ${JSON.stringify(warn.threeWay.a)}`);
   if (JSON.stringify(warn.threeWay.c) !== JSON.stringify(['A', 'B'])) throw new Error(`Expected C to collide with A and B, got ${JSON.stringify(warn.threeWay.c)}`);
   if (Object.keys(warn.adjacent).length !== 0) throw new Error('Back-to-back blocks must not be flagged');

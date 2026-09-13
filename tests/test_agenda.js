@@ -65,11 +65,15 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   });
   await settle(page);
 
-  // ---- 1. Exactly 7 day cards, today first ----
+  // ---- 1. One card per day of the window, today first ----
+  // Reads AGENDA_DAYS rather than hardcoding 7: the window length is the app's to choose, and a
+  // literal here would fail as "expected 7, got 10" if it ever changed -- blaming the test's own
+  // stale number for a deliberate product decision.
+  const agendaDays = await page.evaluate(() => AGENDA_DAYS);
   const cards = await page.evaluate(() => [...document.querySelectorAll('.agenda-day')].map(c => c.textContent.replace(/\s+/g, ' ').trim()));
-  console.log('agenda cards:');
+  console.log(`agenda cards (AGENDA_DAYS=${agendaDays}):`);
   cards.forEach(c => console.log('  ' + c));
-  if (cards.length !== 7) throw new Error(`Expected 7 day cards, got ${cards.length}`);
+  if (cards.length !== agendaDays) throw new Error(`Expected one card per day of the ${agendaDays}-day window, got ${cards.length}`);
   if (!/^TODAY/.test(cards[0])) throw new Error(`First card should be TODAY, got "${cards[0]}"`);
   if (!/^TOMORROW/.test(cards[1])) throw new Error(`Second card should be TOMORROW, got "${cards[1]}"`);
   const todayHighlighted = await page.evaluate(() => document.querySelectorAll('.agenda-day')[0].classList.contains('agenda-today'));
@@ -127,10 +131,10 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     const html = renderAgenda();
     // Counts agenda-daylabel, exactly one per card — a bare /agenda-day/ also matches inside
     // "agenda-daylabel" and double-counts.
-    return { cards: (html.match(/agenda-daylabel/g) || []).length, mentionsNoSchedule: /No schedule/.test(html) };
+    return { cards: (html.match(/agenda-daylabel/g) || []).length, agendaDays: AGENDA_DAYS, mentionsNoSchedule: /No schedule/.test(html) };
   });
   console.log('bare state:', bare);
-  if (bare.cards !== 7) throw new Error('The agenda should still render 7 days with nothing configured');
+  if (bare.cards !== bare.agendaDays) throw new Error(`The agenda should still render all ${bare.agendaDays} days with nothing configured, got ${bare.cards}`);
   if (!bare.mentionsNoSchedule) throw new Error('A day with no schedule should say so rather than render a blank context');
 
   // cleanup

@@ -83,7 +83,11 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   })));
   console.log('day-extra rows:', rows);
   const byName = n => rows.find(r => r.name === n);
-  if (rows.length !== 6) throw new Error(`Expected 6 rows (2 workouts + 2 meals + 2 habits), got ${rows.length}`);
+  // Per-group rather than a bare total: a total of 6 says nothing about *which* six, and would
+  // break if the band ever gained a fourth group even though all three of these still rendered.
+  const expectRows = ['Lower Body', 'Zone 2 Ride', 'Oats & Whey', 'Chicken & Rice', 'No drinking', 'Read 20 min'];
+  const missing = expectRows.filter(n => !rows.some(r => r.name === n));
+  if (missing.length) throw new Error(`Missing from the untimed band: ${missing.join(', ')} (got ${rows.map(r => r.name).join(', ')})`);
 
   // Planned workouts, with the logged one marked from the *date*, not the cycle.
   if (!byName('Lower Body')) throw new Error('Expected the planned weights workout to be listed');

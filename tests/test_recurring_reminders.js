@@ -61,7 +61,10 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   const afterCreate = await page.evaluate(() => STATE.reminders.map(r => ({ id: r.id, date: r.date, recurrence: r.recurrence, recurrenceId: r.recurrenceId, anchorDate: r.anchorDate, title: r.title })).sort((a,b) => a.date.localeCompare(b.date)));
   console.log('materialized on creation:', afterCreate);
-  if (afterCreate.length !== 7) throw new Error(`Expected 7 rows (seed + 6 monthly), got ${afterCreate.length}`);
+  // seed + RECURRENCE_HORIZON.monthly, read from the app: the horizon is a product decision, and a
+  // literal 7 here would fail misleadingly the day it's tuned.
+  const monthlyHorizon = await page.evaluate(() => RECURRENCE_HORIZON.monthly);
+  if (afterCreate.length !== monthlyHorizon + 1) throw new Error(`Expected the seed plus ${monthlyHorizon} monthly occurrences (${monthlyHorizon + 1} rows), got ${afterCreate.length}`);
   const seed = afterCreate.find(r => r.date === '2026-01-31');
   if (!seed || seed.id !== seed.recurrenceId) throw new Error('Expected the seed occurrence\'s own id to double as the series recurrenceId');
   if (afterCreate.some(r => r.recurrenceId !== seed.recurrenceId)) throw new Error('Expected every occurrence to share the same recurrenceId');
