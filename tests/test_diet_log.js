@@ -2,6 +2,7 @@
 // against a real date (distinct from Meal Plan's weekly template), editing/removing logged
 // items, date navigation, day totals (macros + micronutrients), and persistence across reload.
 const { chromium } = require('playwright');
+const { settle } = require('./helpers');
 const path = require('path');
 
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
@@ -18,11 +19,11 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   });
 
   await page.goto(APP_PATH);
-  await page.waitForTimeout(300);
+  await settle(page);
 
   // 1. Navigate to Health & Diet -> DIET, confirm the log starts empty for today
   await page.evaluate(() => { switchTab('health'); setHealthSubtab('diet'); });
-  await page.waitForTimeout(150);
+  await settle(page);
   const initial = await page.evaluate(() => ({ date: DIET_LOG_DATE, today: todayStr(), entries: STATE.diet.foodLog[todayStr()] }));
   console.log('DIET_LOG_DATE defaults to today:', initial.date === initial.today, '| entries:', initial.entries);
   if (initial.date !== initial.today) throw new Error(`Expected DIET_LOG_DATE to default to today, got "${initial.date}" vs "${initial.today}"`);
@@ -83,7 +84,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // 8. Persists across reload
   await page.reload();
-  await page.waitForTimeout(300);
+  await settle(page);
   const persisted = await page.evaluate(() => (STATE.diet.foodLog[todayStr()] || []).length);
   console.log('entries persisted after reload:', persisted);
   if (persisted !== 2) throw new Error(`Expected 2 entries to persist after reload, got ${persisted}`);

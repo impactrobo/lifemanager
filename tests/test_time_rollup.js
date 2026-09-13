@@ -9,6 +9,7 @@
 // actually get time this week", not "where did all 168 hours go", so untagged blocks are left out
 // entirely rather than lumped into an "other" pile that Work and sleep would dominate.
 const { chromium } = require('playwright');
+const { settle } = require('./helpers');
 const path = require('path');
 
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
@@ -25,7 +26,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   });
 
   await page.goto(APP_PATH);
-  await page.waitForTimeout(300);
+  await settle(page);
 
   const snapshot = await page.evaluate(() => ({
     anchors: JSON.parse(JSON.stringify(STATE.life.anchors)),

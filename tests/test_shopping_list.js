@@ -2,6 +2,7 @@
 // (grouped by food+unit, summed across every meal assigned Sun-Sat) into a to-do-type Reminder on
 // a chosen date, via generateShoppingListItems()/generateShoppingListReminder().
 const { chromium } = require('playwright');
+const { settle } = require('./helpers');
 const path = require('path');
 
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
@@ -18,7 +19,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   });
 
   await page.goto(APP_PATH);
-  await page.waitForTimeout(300);
+  await settle(page);
 
   // Snapshot + clear the meal plan so this test's math is exact regardless of other state.
   const snapshot = await page.evaluate(() => JSON.parse(JSON.stringify(STATE.diet.mealPlan)));
@@ -26,7 +27,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // 1. No meals assigned -> no items, GENERATE disabled
   await page.evaluate(() => { switchTab('health'); setHealthSubtab('setup'); setHealthSetupSubtab('plan'); });
-  await page.waitForTimeout(150);
+  await settle(page);
   const emptyItems = await page.evaluate(() => generateShoppingListItems());
   console.log('items with nothing planned:', emptyItems);
   if (emptyItems.length !== 0) throw new Error(`Expected 0 items with nothing planned, got ${JSON.stringify(emptyItems)}`);
@@ -46,7 +47,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     return { foodId, mealAId, mealBId };
   });
   await page.evaluate(() => render());
-  await page.waitForTimeout(150);
+  await settle(page);
 
   const items = await page.evaluate(() => generateShoppingListItems());
   console.log('aggregated items (200g + 150g = 350g):', items);
@@ -62,11 +63,11 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   });
   if (!generateEnabled) throw new Error('Expected the GENERATE button to be enabled once items exist');
   await page.evaluate(() => toggleShoppingListForm());
-  await page.waitForTimeout(100);
+  await settle(page);
   const targetDate = '2026-10-05';
   await page.fill('#shoppingListDate', targetDate);
   await page.evaluate(() => generateShoppingListReminder());
-  await page.waitForTimeout(150);
+  await settle(page);
 
   const created = await page.evaluate((date) => STATE.reminders.find(r => r.title === 'Shopping List' && r.date === date), targetDate);
   console.log('created shopping-list reminder:', created);

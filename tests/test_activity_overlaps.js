@@ -6,6 +6,7 @@
 // geometry, a block can be marked `open` (a container others are *expected* to sit inside), which
 // exempts it and anything overlapping it. Two non-open blocks sharing any minute is a real clash.
 const { chromium } = require('playwright');
+const { settle } = require('./helpers');
 const path = require('path');
 
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
@@ -22,7 +23,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   });
 
   await page.goto(APP_PATH);
-  await page.waitForTimeout(300);
+  await settle(page);
 
   const snapshot = await page.evaluate(() => ({
     anchors: JSON.parse(JSON.stringify(STATE.life.anchors)),

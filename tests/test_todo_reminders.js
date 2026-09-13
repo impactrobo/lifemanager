@@ -3,6 +3,7 @@
 // deleting checklist items on the card, and that an old/plain reminder (no `type` field at all)
 // still renders and edits exactly as it always did.
 const { chromium } = require('playwright');
+const { settle } = require('./helpers');
 const path = require('path');
 
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
@@ -19,25 +20,25 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   });
 
   await page.goto(APP_PATH);
-  await page.waitForTimeout(300);
+  await settle(page);
 
   await page.evaluate(() => { switchTab('schedule'); setScheduleSubtab('calendar'); calSetZoom('day'); });
-  await page.waitForTimeout(150);
+  await settle(page);
 
   // 1. Opening the form defaults to the plain 'reminder' type; the toggle switches to 'todo'
   await page.evaluate(() => toggleReminderForm());
-  await page.waitForTimeout(100);
+  await settle(page);
   const defaultType = await page.evaluate(() => REMINDER_FORM_TYPE);
   if (defaultType !== 'reminder') throw new Error(`Expected the form to default to type "reminder", got "${defaultType}"`);
   await page.evaluate(() => setReminderFormType('todo'));
-  await page.waitForTimeout(100);
+  await settle(page);
   const notesHidden = await page.evaluate(() => !document.getElementById('remNotes'));
   if (!notesHidden) throw new Error('Expected the Notes field to be hidden once TO-DO LIST is selected');
 
   // 2. Save a to-do list — starts with an empty items array
   await page.fill('#remTitle', 'Test Shopping List');
   await page.evaluate(() => saveReminder());
-  await page.waitForTimeout(100);
+  await settle(page);
   const todo = await page.evaluate(() => STATE.reminders.find(r => r.title === 'Test Shopping List'));
   console.log('saved todo reminder:', todo);
   if (todo.type !== 'todo' || !Array.isArray(todo.items) || todo.items.length !== 0) {
@@ -47,10 +48,10 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // 3. Add checklist items via the real card UI
   await page.fill(`#todoNewItem_${todo.id}`, 'Milk');
   await page.evaluate((id) => addReminderTodoItem(id), todo.id);
-  await page.waitForTimeout(100);
+  await settle(page);
   await page.fill(`#todoNewItem_${todo.id}`, 'Eggs');
   await page.evaluate((id) => addReminderTodoItem(id), todo.id);
-  await page.waitForTimeout(100);
+  await settle(page);
   const afterAdd = await page.evaluate((id) => STATE.reminders.find(r => r.id === id).items.map(i => i.text), todo.id);
   console.log('items after adding Milk, Eggs:', afterAdd);
   if (JSON.stringify(afterAdd) !== JSON.stringify(['Milk', 'Eggs'])) throw new Error(`Expected ["Milk","Eggs"], got ${JSON.stringify(afterAdd)}`);
@@ -59,7 +60,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   const milkId = await page.evaluate((id) => STATE.reminders.find(r => r.id === id).items[0].id, todo.id);
   const checkbox = await page.$(`input[onchange="toggleReminderTodoItem('${todo.id}','${milkId}')"]`);
   await checkbox.click();
-  await page.waitForTimeout(100);
+  await settle(page);
   const milkDone = await page.evaluate((args) => STATE.reminders.find(r => r.id === args.id).items.find(i => i.id === args.milkId).done, { id: todo.id, milkId });
   if (!milkDone) throw new Error('Expected clicking the checkbox to mark the item done');
   const doneCountShown = await page.evaluate(() => document.body.textContent.includes('1/2'));
@@ -67,10 +68,10 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // 5. Edit an item's text, delete another
   await page.evaluate((args) => updateReminderTodoItemText(args.id, args.milkId, 'Oat milk'), { id: todo.id, milkId });
-  await page.waitForTimeout(100);
+  await settle(page);
   const eggsId = await page.evaluate((id) => STATE.reminders.find(r => r.id === id).items.find(i => i.text === 'Eggs').id, todo.id);
   await page.evaluate((args) => deleteReminderTodoItem(args.id, args.eggsId), { id: todo.id, eggsId });
-  await page.waitForTimeout(100);
+  await settle(page);
   const afterEditDelete = await page.evaluate((id) => STATE.reminders.find(r => r.id === id).items, todo.id);
   console.log('items after editing + deleting:', afterEditDelete);
   if (afterEditDelete.length !== 1 || afterEditDelete[0].text !== 'Oat milk') throw new Error(`Expected just [{text:"Oat milk"}] left, got ${JSON.stringify(afterEditDelete)}`);
@@ -82,7 +83,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     saveState(); render();
     return id;
   });
-  await page.waitForTimeout(100);
+  await settle(page);
   const plainRendersNotes = await page.evaluate((id) => {
     // Title lives in an <input value>, not text content — find the card by its title input's value.
     const titleInput = [...document.querySelectorAll('.entry-card input[type="text"]')].find(i => i.value === 'Old Plain Reminder');
@@ -93,7 +94,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // 7. Persistence across reload
   await page.reload();
-  await page.waitForTimeout(300);
+  await settle(page);
   const persistedTodo = await page.evaluate((id) => STATE.reminders.find(r => r.id === id), todo.id);
   console.log('todo after reload:', persistedTodo);
   if (!persistedTodo || persistedTodo.items.length !== 1 || persistedTodo.items[0].text !== 'Oat milk') {

@@ -2,6 +2,7 @@
 // monthly-equivalent conversion math, the active/inactive toggle excluding it from totals,
 // and persistence across a reload.
 const { chromium } = require('playwright');
+const { settle } = require('./helpers');
 const path = require('path');
 
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
@@ -18,12 +19,12 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   });
 
   await page.goto(APP_PATH);
-  await page.waitForTimeout(300);
+  await settle(page);
 
   // 1. Go to Budget -> Recurring subtab where the income form lives
   await page.evaluate(() => switchTab('budget'));
   await page.evaluate(() => setBudgetSubtab('recurring'));
-  await page.waitForTimeout(150);
+  await settle(page);
 
   const before = await page.evaluate(() => recurringIncomeMonthlyTotal());
   console.log('recurringIncomeMonthlyTotal before adding anything:', before);
@@ -33,7 +34,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   await page.fill('#incAmount', '500');
   await page.selectOption('#incFrequency', 'weekly');
   await page.evaluate(() => addRecurringIncome());
-  await page.waitForTimeout(150);
+  await settle(page);
 
   const entries = await page.evaluate(() => STATE.budget.recurringIncome);
   const added = entries.find(e => e.name === 'Test Weekly Job');
@@ -71,7 +72,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     saveState();
   }, added.id);
   await page.reload();
-  await page.waitForTimeout(300);
+  await settle(page);
   const persistedEntry = await page.evaluate((id) => STATE.budget.recurringIncome.find(x => x.id === id), added.id);
   console.log('entry after reload:', persistedEntry);
   if (!persistedEntry || persistedEntry.active !== true) throw new Error('Expected the reactivated income entry to persist across reload');

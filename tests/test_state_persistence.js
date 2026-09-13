@@ -5,6 +5,7 @@
 // missing. This asserts (1) a stored save loads back intact and (2) an old save missing newer
 // fields gains the current defaults without losing its existing data.
 const { chromium } = require('playwright');
+const { settle } = require('./helpers');
 const path = require('path');
 
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
@@ -24,7 +25,7 @@ async function boot(seedState) {
     try { localStorage.setItem(k, JSON.stringify(s)); } catch (e) {}
   }, [STORAGE_KEY, seedState]);
   await page.goto(APP_PATH);
-  await page.waitForTimeout(300);
+  await settle(page);
   return { browser, page, errors };
 }
 

@@ -4,6 +4,7 @@
 // entry, no TODAY button remains in the bottom bar, and the per-schedule color-coded anchor icon shows
 // up on Month/Week/Year calendar cells for days a schedule actually covers.
 const { chromium } = require('playwright');
+const { settle } = require('./helpers');
 const path = require('path');
 
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
@@ -20,11 +21,11 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   });
 
   await page.goto(APP_PATH);
-  await page.waitForTimeout(300);
+  await settle(page);
 
   // 1. Entering Schedule lands on Calendar's Day zoom, today — no separate TODAY button anymore.
   await page.evaluate(() => switchTab('schedule'));
-  await page.waitForTimeout(150);
+  await settle(page);
   const bottomBarLabels = await page.evaluate(() => [...document.querySelectorAll('.tabbar button')].map(b => b.textContent.trim()));
   console.log('bottom bar while inside Schedule:', bottomBarLabels);
   if (bottomBarLabels.some(l => l.includes('TODAY'))) throw new Error(`Expected no TODAY button in the bottom bar, got ${JSON.stringify(bottomBarLabels)}`);
@@ -61,7 +62,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     render();
     return { dateStr, scheduleId: s.id };
   });
-  await page.waitForTimeout(150);
+  await settle(page);
   const dayPanelText = await page.evaluate(() => document.body.textContent);
   console.log('future date:', future.dateStr, '| schedule name visible on Day panel:', dayPanelText.includes('Future Test Schedule'));
   if (!dayPanelText.includes('Future Test Schedule')) throw new Error('Expected the future date\'s own assigned schedule name to render in Day zoom');
@@ -70,7 +71,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   const firstAnchorId = await page.evaluate(() => STATE.life.anchors[0].id);
   const beforeFuture = await page.evaluate((id) => !!lifeLogForDate(CAL_SELECTED_DATE)[id], firstAnchorId);
   await page.evaluate((id) => toggleDailyAnchor(id, CAL_SELECTED_DATE), firstAnchorId);
-  await page.waitForTimeout(100);
+  await settle(page);
   const afterFuture = await page.evaluate((id) => !!lifeLogForDate(CAL_SELECTED_DATE)[id], firstAnchorId);
   const todayUnaffected = await page.evaluate((id) => !todayLifeLog()[id], firstAnchorId);
   console.log('future date anchor toggled before/after:', beforeFuture, '/', afterFuture, '| today log unaffected:', todayUnaffected);
@@ -79,7 +80,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // 4. The per-schedule color-coded anchor icon shows on the Month grid for a day that schedule covers
   await page.evaluate(() => { CAL_ZOOM = 'month'; render(); });
-  await page.waitForTimeout(150);
+  await settle(page);
   const iconCount = await page.evaluate(() => document.querySelectorAll('.cal-anchor-icon').length);
   console.log('.cal-anchor-icon count in Month zoom (weekly-recurring schedule, so several days match):', iconCount);
   if (iconCount === 0) throw new Error('Expected at least one .cal-anchor-icon to render for days the new schedule covers');
@@ -95,7 +96,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // 7. Persistence across reload: the future date's anchor completion and the new schedule both stick
   await page.reload();
-  await page.waitForTimeout(300);
+  await settle(page);
   const persisted = await page.evaluate((args) => {
     const [dateStr, anchorId] = args;
     return { anchorDone: !!lifeLogForDate(dateStr)[anchorId], scheduleExists: STATE.life.schedules.some(s => s.name === 'Future Test Schedule') };

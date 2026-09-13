@@ -7,6 +7,7 @@
 // differently-shaped day, and leaves the untimed band alone. Dated one-off events are never
 // suppressed by either: a dentist appointment booked for a holiday is still a real appointment.
 const { chromium } = require('playwright');
+const { settle } = require('./helpers');
 const path = require('path');
 
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
@@ -23,7 +24,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   });
 
   await page.goto(APP_PATH);
-  await page.waitForTimeout(300);
+  await settle(page);
 
   const snapshot = await page.evaluate(() => ({
     anchors: JSON.parse(JSON.stringify(STATE.life.anchors)),
@@ -136,14 +137,14 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // ---- 5. Creating one through the real Day view form, including a range ----
   await page.evaluate(() => { switchTab('schedule'); calSetZoom('day'); calSelectDay('2026-10-06'); });
-  await page.waitForTimeout(150);
+  await settle(page);
   await page.evaluate(() => toggleExceptionForm());
-  await page.waitForTimeout(100);
+  await settle(page);
   await page.fill('#excEnd', '2026-10-09');
   await page.fill('#excLabel', 'Away');
   await page.check('#excSkipAnchors');
   await page.evaluate(() => saveExceptionFromDayView());
-  await page.waitForTimeout(200);
+  await settle(page);
   const created = await page.evaluate(() => STATE.life.scheduleExceptions);
   console.log('created via the form:', created);
   if (created.length !== 1) throw new Error(`Expected exactly 1 exception, got ${created.length}`);
@@ -183,7 +184,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     saveState();
   });
   await page.reload();
-  await page.waitForTimeout(300);
+  await settle(page);
   const afterReload = await page.evaluate(() => ({
     count: STATE.life.scheduleExceptions.length,
     stillApplies: scheduleForDate(new Date('2026-12-25T00:00:00')) === null,
@@ -207,7 +208,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     localStorage.setItem(STORAGE_KEY, JSON.stringify(raw));
   });
   await page.reload();
-  await page.waitForTimeout(300);
+  await settle(page);
   const backfilled = await page.evaluate(() => Array.isArray(STATE.life.scheduleExceptions) && STATE.life.scheduleExceptions.length === 0);
   console.log('pre-feature save backfilled to an empty array:', backfilled);
   if (!backfilled) throw new Error('A save predating this feature must gain an empty scheduleExceptions array');

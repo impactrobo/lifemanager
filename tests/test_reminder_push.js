@@ -19,6 +19,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { chromium } = require('playwright');
+const { settle } = require('./helpers');
 
 const ROOT = path.resolve(__dirname, '..');
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
@@ -49,7 +50,7 @@ const server = http.createServer((req, res) => {
   page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
 
   await page.goto(origin + '/', { waitUntil: 'networkidle' });
-  await page.waitForTimeout(300);
+  await settle(page);
 
   // 1. Off by default on a fresh install
   const defaultEnabled = await page.evaluate(() => STATE.settings.reminderPush.enabled);
@@ -82,9 +83,9 @@ const server = http.createServer((req, res) => {
   if (!backendUrlSet) throw new Error('Expected REMINDER_BACKEND_URL to be a real https:// URL now that reminder-worker is deployed');
 
   await page.evaluate(() => { switchTab('home'); openSetup('home'); });
-  await page.waitForTimeout(150);
+  await settle(page);
   await page.evaluate(() => enableReminderPush());
-  await page.waitForTimeout(300);
+  await settle(page);
   const deniedToast = await page.evaluate(() => document.getElementById('toast').textContent);
   console.log('toast on a denied permission prompt:', deniedToast);
   if (!deniedToast.includes('blocked') && !deniedToast.includes('dismissed')) throw new Error(`Expected the denied/dismissed-permission toast, got "${deniedToast}"`);

@@ -5,6 +5,7 @@
 // removes exactly that auto-added entry, not a manual one), a charge being claimable by only one
 // goal at a time, cleanup when a linked charge is deleted, and completion state.
 const { chromium } = require('playwright');
+const { settle } = require('./helpers');
 const path = require('path');
 
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
@@ -21,29 +22,29 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   });
 
   await page.goto(APP_PATH);
-  await page.waitForTimeout(300);
+  await settle(page);
 
   // 1. Add a goal via the real form
   await page.evaluate(() => { switchTab('budget'); setBudgetSubtab('goals'); });
-  await page.waitForTimeout(150);
+  await settle(page);
   await page.fill('#goalName', 'PS5');
   await page.fill('#goalTarget', '500');
   await page.evaluate(() => addSavingsGoal());
-  await page.waitForTimeout(100);
+  await settle(page);
   const goal = await page.evaluate(() => STATE.budget.goals.find(g => g.name === 'PS5'));
   console.log('added goal:', goal);
   if (!goal || goal.targetAmount !== 500 || goal.resetsAnnually !== false) throw new Error(`Unexpected goal shape: ${JSON.stringify(goal)}`);
 
   // 2. Log manual contributions via the real form, confirm progress math
   await page.evaluate((id) => toggleGoalExpanded(id), goal.id);
-  await page.waitForTimeout(100);
+  await settle(page);
   await page.fill(`#goalContribAmount_${goal.id}`, '150');
   await page.fill(`#goalContribNote_${goal.id}`, 'Birthday money');
   await page.evaluate((id) => addGoalContribution(id), goal.id);
-  await page.waitForTimeout(100);
+  await settle(page);
   await page.fill(`#goalContribAmount_${goal.id}`, '50');
   await page.evaluate((id) => addGoalContribution(id), goal.id);
-  await page.waitForTimeout(100);
+  await settle(page);
   const progress = await page.evaluate((id) => goalProgress(STATE.budget.goals.find(g => g.id === id)), goal.id);
   console.log('progress after 2 manual contributions (150+50):', progress);
   if (progress !== 200) throw new Error(`Expected progress 200, got ${progress}`);
@@ -55,7 +56,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // 3. Complete it — progress hits/exceeds target
   await page.fill(`#goalContribAmount_${goal.id}`, '300');
   await page.evaluate((id) => addGoalContribution(id), goal.id);
-  await page.waitForTimeout(100);
+  await settle(page);
   const isComplete = await page.evaluate((id) => goalIsComplete(STATE.budget.goals.find(g => g.id === id)), goal.id);
   console.log('complete after reaching target:', isComplete);
   if (!isComplete) throw new Error('Expected the goal to be complete once progress >= target');
@@ -80,21 +81,21 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   const chargeSetup = await page.evaluate(() => {
     switchTab('budget'); setBudgetSubtab('recurring');
   });
-  await page.waitForTimeout(150);
+  await settle(page);
   await page.fill('#recName', 'Roth IRA Auto-Invest');
   await page.fill('#recAmount', '500');
   await page.check('#recIsSavings');
   await page.evaluate(() => addRecurringCharge());
-  await page.waitForTimeout(100);
+  await settle(page);
   const chargeId = await page.evaluate(() => STATE.budget.recurring.find(r => r.name === 'Roth IRA Auto-Invest').id);
   await page.evaluate((args) => updateGoalField(args.goalId, 'recurringChargeId', args.chargeId), { goalId: rothGoal, chargeId });
-  await page.waitForTimeout(100);
+  await settle(page);
   const linked = await page.evaluate((id) => STATE.budget.goals.find(g => g.id === id).recurringChargeId, rothGoal);
   if (linked !== chargeId) throw new Error('Expected updateGoalField to link the recurring charge');
 
   const monthKey = await page.evaluate(() => budgetMonthKey());
   await page.evaluate((args) => toggleSavingsCompletion(args.monthKey, args.chargeId, true), { monthKey, chargeId });
-  await page.waitForTimeout(100);
+  await settle(page);
   const afterAutoLink = await page.evaluate((id) => {
     const g = STATE.budget.goals.find(x => x.id === id);
     return { progress: goalProgress(g), autoEntries: g.contributions.filter(c => c.source === 'recurring').length };
@@ -111,7 +112,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // Unchecking removes exactly that auto entry, not the manual "this year" one
   await page.evaluate((args) => toggleSavingsCompletion(args.monthKey, args.chargeId, false), { monthKey, chargeId });
-  await page.waitForTimeout(100);
+  await settle(page);
   const afterUncheck = await page.evaluate((id) => {
     const g = STATE.budget.goals.find(x => x.id === id);
     return { progress: goalProgress(g), total: g.contributions.length };
@@ -135,10 +136,10 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // 7. Deleting the linked recurring charge clears the goal's dangling reference, keeps history
   await page.evaluate(() => { switchTab('budget'); setBudgetSubtab('recurring'); });
-  await page.waitForTimeout(100);
+  await settle(page);
   await page.evaluate((id) => deleteRecurringCharge(id), chargeId);
   await page.evaluate(() => confirmYes());
-  await page.waitForTimeout(100);
+  await settle(page);
   const afterChargeDelete = await page.evaluate((id) => {
     const g = STATE.budget.goals.find(x => x.id === id);
     return { recurringChargeId: g.recurringChargeId, progress: goalProgress(g) };
@@ -149,7 +150,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // 8. Persistence across reload
   await page.reload();
-  await page.waitForTimeout(300);
+  await settle(page);
   const persisted = await page.evaluate(() => STATE.budget.goals.find(g => g.name === 'PS5'));
   console.log('PS5 goal after reload:', persisted);
   if (!persisted || persisted.contributions.length !== 3) throw new Error('Expected the PS5 goal and its 3 contributions to persist across reload');

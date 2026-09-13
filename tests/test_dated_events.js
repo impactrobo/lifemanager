@@ -5,6 +5,7 @@
 // Also covers the Day timeline's own math: blockDurationMinutes() across midnight, and
 // dayBookedMinutes()'s interval *union* (overlapping blocks must not double-count).
 const { chromium } = require('playwright');
+const { settle } = require('./helpers');
 const path = require('path');
 
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
@@ -21,7 +22,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   });
 
   await page.goto(APP_PATH);
-  await page.waitForTimeout(300);
+  await settle(page);
 
   const snapshot = await page.evaluate(() => ({
     reminders: JSON.parse(JSON.stringify(STATE.reminders)),
@@ -63,25 +64,25 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     saveState();
     switchTab('schedule'); calSetZoom('day'); calSelectDay('2026-10-03');
   });
-  await page.waitForTimeout(150);
+  await settle(page);
   await page.evaluate(() => toggleReminderForm());
-  await page.waitForTimeout(100);
+  await settle(page);
   await page.fill('#remTitle', 'Dentist');
   await page.fill('#remTime', '14:00');
   await page.fill('#remEndTime', '15:00');
   await page.evaluate(() => saveReminder());
-  await page.waitForTimeout(150);
+  await settle(page);
   const saved = await page.evaluate(() => STATE.reminders[STATE.reminders.length - 1]);
   console.log('saved event:', saved);
   if (saved.time !== '14:00' || saved.endTime !== '15:00') throw new Error(`Expected 14:00-15:00, got ${JSON.stringify(saved)}`);
 
   // An end time with no start has nothing to measure from — it must be dropped, not half-saved.
   await page.evaluate(() => toggleReminderForm());
-  await page.waitForTimeout(100);
+  await settle(page);
   await page.fill('#remTitle', 'Endless');
   await page.fill('#remEndTime', '15:00');
   await page.evaluate(() => saveReminder());
-  await page.waitForTimeout(150);
+  await settle(page);
   const orphan = await page.evaluate(() => STATE.reminders.find(r => r.title === 'Endless'));
   if (orphan.endTime !== null) throw new Error(`Expected a lone end time to be dropped, got ${orphan.endTime}`);
 
@@ -134,7 +135,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // ...and the Day timeline marks it NOW rather than leaving it looking like any other block.
   await page.evaluate(() => { switchTab('schedule'); calSetZoom('day'); calSelectDay(todayStr()); });
-  await page.waitForTimeout(200);
+  await settle(page);
   const dayHtml = await page.evaluate(() => document.querySelector('#app').innerHTML);
   if (!dayHtml.includes('day-chip-now')) throw new Error('Expected a NOW chip on the live event in the Day timeline');
   if (!dayHtml.includes('EVENT')) throw new Error('Expected the EVENT badge on a dated event block');
@@ -179,7 +180,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     saveState();
   });
   await page.reload();
-  await page.waitForTimeout(300);
+  await settle(page);
   const afterReload = await page.evaluate(() => {
     const r = STATE.reminders.find(x => x.id === 'persist1');
     return { endTime: r && r.endTime, blocks: scheduleBlocksForDate(new Date('2026-10-03T00:00:00')).blocks.filter(b => b.kind === 'event').length };

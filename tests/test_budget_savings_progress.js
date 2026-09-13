@@ -4,6 +4,7 @@
 // Covers: helper math (budgetRecurringSavingsCompletedTotal), the checkbox actually toggling
 // STATE.budget.savingsCompletions, the DOM fill bar reflecting it, and persistence across reload.
 const { chromium } = require('playwright');
+const { settle } = require('./helpers');
 const path = require('path');
 
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
@@ -20,25 +21,25 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   });
 
   await page.goto(APP_PATH);
-  await page.waitForTimeout(300);
+  await settle(page);
 
   await page.evaluate(() => switchTab('budget'));
   await page.evaluate(() => setBudgetSubtab('recurring'));
-  await page.waitForTimeout(150);
+  await settle(page);
 
   // 1. Give the month a real income figure so percentages aren't all zero
   await page.fill('#incName', 'Savings Progress Test Income');
   await page.fill('#incAmount', '4000');
   await page.selectOption('#incFrequency', 'monthly');
   await page.evaluate(() => addRecurringIncome());
-  await page.waitForTimeout(100);
+  await settle(page);
 
   // 2. Add a recurring charge flagged isSavings via the real form
   await page.fill('#recName', 'Test Index Fund');
   await page.fill('#recAmount', '400');
   await page.check('#recIsSavings');
   await page.evaluate(() => addRecurringCharge());
-  await page.waitForTimeout(100);
+  await settle(page);
 
   const charge = await page.evaluate(() => STATE.budget.recurring.find(r => r.name === 'Test Index Fund'));
   console.log('added savings charge:', charge);
@@ -55,7 +56,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // 4. Go to the home/overview subtab where the SAVINGS PROGRESS panel + bar live
   await page.evaluate(() => setBudgetSubtab('overview'));
-  await page.waitForTimeout(150);
+  await settle(page);
 
   const beforeFillCount = await page.evaluate(() => document.querySelectorAll('.budget-bar-savings-fill').length);
   console.log('.budget-bar-savings-fill elements before checkoff:', beforeFillCount);
@@ -68,7 +69,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   const found = await page.evaluate(el => !!el, checkbox);
   if (!found) throw new Error('Expected to find the SAVINGS PROGRESS checkbox for the new charge in the DOM');
   await checkbox.asElement().click();
-  await page.waitForTimeout(150);
+  await settle(page);
 
   // 6. STATE reflects the completion, the helper total updates, and a fill bar now renders
   const completions = await page.evaluate((k) => STATE.budget.savingsCompletions[k], key);
@@ -91,9 +92,9 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // 7. Persists across reload
   await page.reload();
-  await page.waitForTimeout(300);
+  await settle(page);
   await page.evaluate(() => switchTab('budget'));
-  await page.waitForTimeout(150);
+  await settle(page);
   const persisted = await page.evaluate((k) => (STATE.budget.savingsCompletions[k] || []), key);
   console.log('savingsCompletions after reload:', persisted);
   if (!persisted.length) throw new Error('Expected savingsCompletions to persist across reload');
@@ -103,7 +104,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     return [...document.querySelectorAll('input[type="checkbox"]')].find(el => el.getAttribute('onchange') && el.getAttribute('onchange').includes(id));
   }, charge.id);
   await checkbox2.asElement().click();
-  await page.waitForTimeout(150);
+  await settle(page);
   const afterUncheck = await page.evaluate((k) => (STATE.budget.savingsCompletions[k] || []).length, key);
   const fillCountAfterUncheck = await page.evaluate(() => document.querySelectorAll('.budget-bar-savings-fill').length);
   console.log('completions after unchecking:', afterUncheck, '| fill elements:', fillCountAfterUncheck);

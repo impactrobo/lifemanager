@@ -2,6 +2,7 @@
 // as a pure function, plus confirming updateSet() actually applies that sanitization when
 // logging a real set on a workout, and that a still-blank set stays '' rather than becoming 0.
 const { chromium } = require('playwright');
+const { settle } = require('./helpers');
 const path = require('path');
 
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
@@ -18,7 +19,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   });
 
   await page.goto(APP_PATH);
-  await page.waitForTimeout(300);
+  await settle(page);
 
   // 1. Pure-function edge cases
   const cases = [

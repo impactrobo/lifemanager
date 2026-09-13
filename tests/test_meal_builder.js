@@ -2,6 +2,7 @@
 // the metric<->imperial unit conversion math, saving it into STATE.diet.meals, and re-opening
 // a saved meal for editing.
 const { chromium } = require('playwright');
+const { settle } = require('./helpers');
 const path = require('path');
 
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
@@ -18,7 +19,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   });
 
   await page.goto(APP_PATH);
-  await page.waitForTimeout(300);
+  await settle(page);
   const mealsBefore = await page.evaluate(() => STATE.diet.meals.length);
 
   // 1. Start a new meal draft
@@ -59,7 +60,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // 5. Save the meal, confirm it landed in STATE.diet.meals and the draft cleared
   await page.evaluate(() => saveMealDraft());
-  await page.waitForTimeout(150);
+  await settle(page);
   const mealsAfter = await page.evaluate(() => STATE.diet.meals.length);
   const draftAfterSave = await page.evaluate(() => MEAL_BUILDER_DRAFT);
   console.log('meals before/after save:', mealsBefore, '/', mealsAfter, '| draft after save:', draftAfterSave);

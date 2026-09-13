@@ -8,6 +8,7 @@
 // guards, and UI rendering. Sign-in (Google popup + email link) and actual Firestore
 // push/pull need to be verified on a real deployed instance with real network access.
 const { chromium } = require('playwright');
+const { settle } = require('./helpers');
 const path = require('path');
 
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
@@ -26,7 +27,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   });
 
   await page.goto(APP_PATH);
-  await page.waitForTimeout(300);
+  await settle(page);
 
   // 1. Cloud Sync is off by default for a fresh install
   const defaultEnabled = await page.evaluate(() => STATE.settings.cloudSync.enabled);
@@ -47,7 +48,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // 3. saveState()'s queueCloudPush() must be a safe no-op when sync is disabled — confirm
   //    normal local saves still work perfectly fine with Cloud Sync untouched.
   await page.evaluate(() => { STATE.notes.push({ id: 'sync-test-note', date: '2026-01-01', createdAt: 1, title: 'x', bodyHtml: 'x', tag: 'general', photos: [] }); saveState(); });
-  await page.waitForTimeout(200);
+  await settle(page);
   const noteSaved = await page.evaluate(() => STATE.notes.some(n => n.id === 'sync-test-note'));
   console.log('normal local save still works with cloudSync disabled:', noteSaved);
   if (!noteSaved) throw new Error('Expected a normal saveState() to still work fine with Cloud Sync disabled/unavailable');
@@ -55,7 +56,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // 4. Settings panel: signed-out state shows the "Enable" button, not sync controls
   await page.evaluate(() => { switchTab('home'); openSetup('home'); });
-  await page.waitForTimeout(150);
+  await settle(page);
   const signedOutHtml = await page.evaluate(() => renderCloudSyncPanel());
   console.log('signed-out panel mentions ENABLE CLOUD SYNC:', signedOutHtml.includes('ENABLE CLOUD SYNC'));
   if (!signedOutHtml.includes('ENABLE CLOUD SYNC')) throw new Error('Expected the signed-out panel to show an "ENABLE CLOUD SYNC" button');
@@ -115,9 +116,9 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   //     previously anchored as a bottom sheet, which put its own button under where a keyboard
   //     would sit. It's now anchored near the top instead.
   await page.evaluate(() => openCloudSyncModal());
-  await page.waitForTimeout(100);
+  await settle(page);
   await page.setViewportSize({ width: 390, height: 420 }); // roughly half-height, like a keyboard-covered screen
-  await page.waitForTimeout(100);
+  await settle(page);
   const sendBtn = await page.$('button:has-text("SEND SIGN-IN LINK")');
   const btnBox = sendBtn ? await sendBtn.boundingBox() : null;
   const vp = page.viewportSize();

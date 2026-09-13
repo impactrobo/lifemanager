@@ -3,6 +3,7 @@
 // rest auto-start — a paired T1+T3-style superset should only trigger rest once EVERY member of
 // the pairing has logged that round, not the instant the first one is entered.
 const { chromium } = require('playwright');
+const { settle } = require('./helpers');
 const path = require('path');
 
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
@@ -19,7 +20,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   });
 
   await page.goto(APP_PATH);
-  await page.waitForTimeout(300);
+  await settle(page);
 
   // 1. nextRepeatableSetIndex() pure-function edge cases
   const cases = [

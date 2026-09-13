@@ -6,6 +6,7 @@
 // "NOW - 30m LEFT" chip on the same block), and a to-do with every box ticked is finished whatever
 // the clock says.
 const { chromium } = require('playwright');
+const { settle } = require('./helpers');
 const path = require('path');
 
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
@@ -22,7 +23,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   });
 
   await page.goto(APP_PATH);
-  await page.waitForTimeout(300);
+  await settle(page);
 
   const snapshot = await page.evaluate(() => ({
     reminders: JSON.parse(JSON.stringify(STATE.reminders)),
@@ -103,7 +104,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     saveState();
     switchTab('schedule'); calSetZoom('day'); calSelectDay(today);
   });
-  await page.waitForTimeout(200);
+  await settle(page);
 
   const cardMarks = await page.evaluate(() => {
     const cards = [...document.querySelectorAll('.entry-card')];
@@ -156,7 +157,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   });
   if (swapped) {
     await page.evaluate(() => render());
-    await page.waitForTimeout(100);
+    await settle(page);
     const after = await readMark();
     console.log(`after switching to aesthetic "${swapped}":`, { color: after.color, warn: after.warn });
     if (after.color !== after.warn) throw new Error(`The mark must follow --warn across aesthetics; on "${swapped}" got ${after.color} vs --warn ${after.warn}`);
@@ -168,7 +169,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // ---- Home's TODAY'S REMINDERS list gets the same treatment ----
   await page.evaluate(() => switchTab('home'));
-  await page.waitForTimeout(200);
+  await settle(page);
   const homeMarks = await page.evaluate(() => {
     const html = document.querySelector('#app').innerHTML;
     return {

@@ -3,6 +3,7 @@
 // clickable), hide/show a section, and the layout choice survives a reload (persisted via
 // STATE.settings.homeLayout).
 const { chromium } = require('playwright');
+const { settle } = require('./helpers');
 const path = require('path');
 
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
@@ -19,7 +20,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   });
 
   await page.goto(APP_PATH);
-  await page.waitForTimeout(300);
+  await settle(page);
 
   // RIGHT NOW's fallback "FREE TIME" card (see 2c/2e below) only shows when currentScheduleBlock()
   // finds nothing active — with the real default anchors in place, that depends on the wall-clock
@@ -41,7 +42,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // 2. Edit mode toggles and shows per-tile hide ("x") buttons
   await page.click('#homeEditBtn');
-  await page.waitForTimeout(150);
+  await settle(page);
   const editMode = await page.evaluate(() => HOME_EDIT_MODE === true);
   console.log('HOME_EDIT_MODE after toggle:', editMode);
   if (!editMode) throw new Error('Expected HOME_EDIT_MODE to be true after clicking #homeEditBtn');
@@ -55,21 +56,30 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // be attached while a same-specificity, later-in-file rule (.icon-btn) silently overrides its
   // styling, which is exactly the bug this once shipped as (see styles.css's
   // .icon-btn.home-edit-toggle-active comment). A plain classList check would never have caught it.
-  const editBtnStyle = await page.evaluate(() => {
-    const el = document.getElementById('homeEditBtn');
-    const probe = document.createElement('span');
-    probe.style.color = 'var(--warn)';
-    document.body.appendChild(probe);
-    const warn = getComputedStyle(probe).color;
-    probe.remove();
-    const cs = getComputedStyle(el);
-    return { hasClass: el.classList.contains('home-edit-toggle-active'), borderColor: cs.borderColor, warn };
-  });
-  console.log('#homeEditBtn while active:', editBtnStyle);
-  if (!editBtnStyle.hasClass) throw new Error('Expected #homeEditBtn to carry .home-edit-toggle-active while HOME_EDIT_MODE is true');
-  if (editBtnStyle.borderColor !== editBtnStyle.warn) {
-    throw new Error(`Expected #homeEditBtn's border to actually resolve to --warn (${editBtnStyle.warn}) while active, got ${editBtnStyle.borderColor}`);
+  const hasClass = await page.evaluate(() => document.getElementById('homeEditBtn').classList.contains('home-edit-toggle-active'));
+  if (!hasClass) throw new Error('Expected #homeEditBtn to carry .home-edit-toggle-active while HOME_EDIT_MODE is true');
+  // The border ANIMATES: styles.css gives .icon-btn a 150ms border-color transition (for hover), so
+  // an immediate computed-style read lands mid-transition and reports an in-between colour. This
+  // used to pass only because the old waitForTimeout(150) happened to equal the transition -- a
+  // real-timer wait disguised as a render wait. Wait for the actual condition instead of a sleep
+  // that matches a duration: if the cascade bug ever returns, this times out with a clear message
+  // rather than passing vacuously.
+  const borderVsWarn = () => {
+    const probe = document.createElement('span'); probe.style.color = 'var(--warn)'; document.body.appendChild(probe);
+    const warn = getComputedStyle(probe).color; probe.remove();
+    return { border: getComputedStyle(document.getElementById('homeEditBtn')).borderColor, warn };
+  };
+  try {
+    await page.waitForFunction(() => {
+      const probe = document.createElement('span'); probe.style.color = 'var(--warn)'; document.body.appendChild(probe);
+      const warn = getComputedStyle(probe).color; probe.remove();
+      return getComputedStyle(document.getElementById('homeEditBtn')).borderColor === warn;
+    }, null, { timeout: 2000 });
+  } catch (e) {
+    const got = await page.evaluate(borderVsWarn);
+    throw new Error(`Expected #homeEditBtn's border to resolve to --warn (${got.warn}) while active -- waited 2s for the 150ms transition and it never did, got ${got.border}`);
   }
+  console.log('#homeEditBtn while active: class present, border settled to --warn');
 
   // 2c. Tapping into a box's own content (e.g. RIGHT NOW's "FREE TIME, tap to view" panel, which
   // normally calls goHomeSection('schedule')) must NOT navigate away while in edit mode — it's
@@ -78,7 +88,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   const rightNowPanel = await page.$('.home-edit-box .panel[onclick*="goHomeSection"]');
   if (!rightNowPanel) throw new Error("Expected to find the RIGHT NOW box's clickable panel (fresh state has no schedule assigned, so it should show the FREE TIME/tap-to-view card)");
   await rightNowPanel.click();
-  await page.waitForTimeout(150);
+  await settle(page);
   const tabAfterEditClick = await page.evaluate(() => CURRENT_TAB);
   console.log("CURRENT_TAB after tapping RIGHT NOW's panel while in edit mode:", tabAfterEditClick);
   if (tabAfterEditClick !== 'home') throw new Error(`Expected tapping a box in edit mode to stay on Home, but CURRENT_TAB became "${tabAfterEditClick}"`);
@@ -89,7 +99,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   const boxHideBtn = await page.$('.home-edit-box .home-edit-x');
   if (!boxHideBtn) throw new Error('Expected at least one box to have a visible hide (X) button');
   await boxHideBtn.click();
-  await page.waitForTimeout(150);
+  await settle(page);
   const boxIdsAfter = await page.evaluate(() => STATE.settings.homeLayout.boxOrder);
   console.log('box hide (X) click actually hid one:', boxIdsAfter.length === boxIdsBefore.length - 1);
   if (boxIdsAfter.length !== boxIdsBefore.length - 1) throw new Error(`Expected clicking a box's (X) to remove exactly one box, went ${boxIdsBefore.length} -> ${boxIdsAfter.length}`);
@@ -98,13 +108,13 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // 2e. Leaving edit mode restores normal tap-to-navigate behavior on the same panel
   await page.click('#homeEditBtn'); // toggle edit mode back off
-  await page.waitForTimeout(150);
+  await settle(page);
   const editModeOff = await page.evaluate(() => HOME_EDIT_MODE === false);
   if (!editModeOff) throw new Error('Expected HOME_EDIT_MODE to be false after toggling #homeEditBtn a second time');
   const rightNowPanelAgain = await page.$('.panel[onclick*="goHomeSection"]');
   if (!rightNowPanelAgain) throw new Error("Expected RIGHT NOW's panel to still be present outside edit mode");
   await rightNowPanelAgain.click();
-  await page.waitForTimeout(150);
+  await settle(page);
   const tabAfterNormalClick = await page.evaluate(() => CURRENT_TAB);
   console.log('CURRENT_TAB after tapping the same panel outside edit mode:', tabAfterNormalClick);
   if (tabAfterNormalClick !== 'schedule') throw new Error(`Expected normal (non-edit-mode) tap to navigate to Schedule, got CURRENT_TAB="${tabAfterNormalClick}"`);
@@ -114,7 +124,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   const beforeIds = await page.evaluate(() => STATE.settings.homeLayout.sectionOrder.slice());
   const targetId = beforeIds[0];
   await page.evaluate((id) => hideHomeSection(id), targetId);
-  await page.waitForTimeout(150);
+  await settle(page);
 
   const afterOrder = await page.evaluate(() => STATE.settings.homeLayout.sectionOrder);
   const afterHidden = await page.evaluate(() => STATE.settings.homeLayout.sectionHidden);
@@ -124,14 +134,14 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // 4. Reload the page (simulating app relaunch) and confirm the hide persisted via localStorage
   await page.reload();
-  await page.waitForTimeout(300);
+  await settle(page);
   const persistedHidden = await page.evaluate(() => STATE.settings.homeLayout.sectionHidden);
   console.log('sectionHidden after reload:', persistedHidden);
   if (!persistedHidden.includes(targetId)) throw new Error('Expected hidden section to survive a reload (persisted to localStorage)');
 
   // 5. Show it back (cleanup) and confirm it returns
   await page.evaluate((id) => showHomeSection(id), targetId);
-  await page.waitForTimeout(150);
+  await settle(page);
   const restoredOrder = await page.evaluate(() => STATE.settings.homeLayout.sectionOrder);
   if (!restoredOrder.includes(targetId)) throw new Error(`Expected '${targetId}' restored to sectionOrder after showHomeSection`);
 
@@ -140,7 +150,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // (unnormalized), since the color is embedded inside a radial-gradient() string rather than
   // being its own recognized CSS property browsers would normalize on read-back.
   await page.evaluate(() => { switchTab('home'); });
-  await page.waitForTimeout(150);
+  await settle(page);
   const tileColors = await page.evaluate(() => {
     const ids = STATE.settings.homeLayout.sectionOrder;
     return ids.map(id => {
@@ -159,7 +169,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // the front and confirm its vignette is still its own, not whatever "schedule" (the old first
   // tile) used to have.
   await page.evaluate(() => reorderHomeList('sections', 'budget', 'schedule')); // move budget to sit before schedule
-  await page.waitForTimeout(150);
+  await settle(page);
   const budgetStyleAfter = await page.evaluate(() => {
     const tile = [...document.querySelectorAll('.home-tile')].find(t => t.textContent.includes(HOME_SECTION_META.budget.label));
     return tile ? tile.getAttribute('style') : null;

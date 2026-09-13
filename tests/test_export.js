@@ -2,6 +2,7 @@
 // captured Playwright download event) and importData()'s file-based restore + malformed-file
 // handling.
 const { chromium } = require('playwright');
+const { settle } = require('./helpers');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -20,7 +21,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   });
 
   await page.goto(APP_PATH);
-  await page.waitForTimeout(300);
+  await settle(page);
 
   // 1. exportData() with no window.claude and no Web Share API (typical desktop-browser
   //    situation on plain hosting like GitHub Pages): should fall through to the Blob + <a
@@ -58,9 +59,9 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   fs.writeFileSync(tmpFile, JSON.stringify(sampleState));
 
   await page.evaluate(() => { switchTab('home'); openSetup('home'); });
-  await page.waitForTimeout(150);
+  await settle(page);
   await page.setInputFiles('#importFile', tmpFile);
-  await page.waitForTimeout(300);
+  await settle(page);
 
   const marker = await page.evaluate(() => STATE._importTestMarker);
   const importedNote = await page.evaluate(() => (STATE.notes || []).find(n => n.id === 'import-test-note'));
@@ -80,7 +81,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   const badFile = path.join(os.tmpdir(), 'test-import-bad.json');
   fs.writeFileSync(badFile, '{ this is not valid json');
   await page.setInputFiles('#importFile', badFile);
-  await page.waitForTimeout(300);
+  await settle(page);
   const afterBadImport = await page.evaluate(() => STATE._importTestMarker);
   const badToast = await page.evaluate(() => document.getElementById('toast').textContent);
   console.log('toast after malformed-JSON import:', badToast);

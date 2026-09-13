@@ -7,6 +7,7 @@
 // drafts with their own lifecycle are NOT wiped, and the reset happens at navigation time rather
 // than render time -- so `switchTab(); openSomething()` in one tick still arrives with it open.
 const { chromium } = require('playwright');
+const { settle } = require('./helpers');
 const path = require('path');
 
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
@@ -36,7 +37,7 @@ const FLAGS = [
     return route.abort();
   });
   await page.goto(APP_PATH);
-  await page.waitForTimeout(300);
+  await settle(page);
 
   const probe = (flags, route) => page.evaluate(({ flags, route }) => {
     const get = f => new Function('return ' + f)();
@@ -93,7 +94,7 @@ const FLAGS = [
   // switchTab(); toggleReminderForm() in ONE tick must arrive with the form open. A render-time
   // reset (in _doRender) would close it, since render() is rAF-deferred past both calls.
   await page.evaluate(() => { switchTab('schedule'); calSetZoom('day'); toggleReminderForm(); });
-  await page.waitForTimeout(150);
+  await settle(page);
   const arrivedOpen = await page.evaluate(() => ({ flag: new Function('return REMINDER_FORM_OPEN')(), inDom: !!document.getElementById('remTitle') }));
   console.log('navigate-then-open in one tick:', arrivedOpen);
   if (!arrivedOpen.flag || !arrivedOpen.inDom) throw new Error('Opening a form right after navigating must not be undone by the reset');

@@ -6,6 +6,7 @@
 // viewed* (workout logs carry their own `date`), not by STATE.currentCycle — the Day view can show
 // any date, and the current cycle says nothing about whether a workout was done on that day.
 const { chromium } = require('playwright');
+const { settle } = require('./helpers');
 const path = require('path');
 
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
@@ -22,7 +23,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   });
 
   await page.goto(APP_PATH);
-  await page.waitForTimeout(300);
+  await settle(page);
 
   const snapshot = await page.evaluate(() => ({
     workouts: JSON.parse(JSON.stringify(STATE.workouts)),
@@ -71,7 +72,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     switchTab('schedule'); calSetZoom('day'); calSelectDay(today);
     return { today, weekday, w1: w1.id, w2: w2.id };
   });
-  await page.waitForTimeout(200);
+  await settle(page);
 
   const rows = await page.evaluate(() => [...document.querySelectorAll('.day-extra-row')].map(r => ({
     name: r.querySelector('.day-extra-name').textContent.trim(),
@@ -108,12 +109,12 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     calSelectDay(dateStr);
     return dateStr;
   });
-  await page.waitForTimeout(200);
+  await settle(page);
   await page.evaluate(() => {
     const row = [...document.querySelectorAll('.day-extra-row')].find(r => r.querySelector('.day-extra-name').textContent.trim() === 'Read 20 min');
     row.querySelectorAll('button')[0].click(); // the KEPT button
   });
-  await page.waitForTimeout(150);
+  await settle(page);
   const pastMark = await page.evaluate((d) => habitStatusOn('h2', d), past);
   console.log(`habit status on ${past} after clicking KEPT there:`, pastMark);
   if (pastMark !== 'kept') throw new Error(`Expected marking a habit on a past day to write to that day, got ${pastMark}`);

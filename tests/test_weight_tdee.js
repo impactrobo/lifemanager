@@ -6,6 +6,7 @@
 // Jeor calculator, and cardioAdjustedTdeeBreakdown()'s decomposition of that same estimate into a
 // non-exercise portion and an average-cardio portion using real cardio workout logs.
 const { chromium } = require('playwright');
+const { settle } = require('./helpers');
 const path = require('path');
 
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
@@ -22,7 +23,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   });
 
   await page.goto(APP_PATH);
-  await page.waitForTimeout(300);
+  await settle(page);
 
   // Snapshot everything this test touches so it can restore it exactly at the end, regardless of
   // whatever real/other-test data already exists in STATE.
@@ -35,13 +36,13 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // 1. Add a weight entry via the real form, including the new optional fields
   await page.evaluate(() => { STATE.weightLog = []; saveState(); });
   await page.evaluate(() => { switchTab('health'); setHealthSubtab('specs'); });
-  await page.waitForTimeout(150);
+  await settle(page);
   await page.evaluate(() => toggleWeightForm());
   await page.fill('#wWeight', '180');
   await page.fill('#wBodyFat', '17.5');
   await page.fill('#wBodyWater', '55.2');
   await page.evaluate(() => saveWeightEntry());
-  await page.waitForTimeout(100);
+  await settle(page);
   const added = await page.evaluate(() => STATE.weightLog[STATE.weightLog.length - 1]);
   console.log('added weight entry:', added);
   if (added.bodyFatPct !== 17.5 || added.bodyWaterPct !== 55.2) {
@@ -59,7 +60,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // 3. Body Weight chart's metric selector: Body Fat % has < 2 points (only 1 entry so far) -> empty state
   await page.evaluate(() => { switchTab('train'); setTrainTopSubtab('progress'); setProgressSubtab('bodyweight'); setWeightMetric('bodyFatPct'); });
-  await page.waitForTimeout(150);
+  await settle(page);
   const bfEmptyState = await page.evaluate(() => !!document.querySelector('.empty-state'));
   if (!bfEmptyState) throw new Error('Expected an empty-state with only 1 Body Fat % entry logged');
 
@@ -68,7 +69,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     STATE.weightLog.push({ id: uid(), date: '2020-01-01', weightLb: 179, bodyFatPct: 17.0, bodyWaterPct: 55.5, calories: null, cardioCalories: null });
     saveState(); render();
   });
-  await page.waitForTimeout(150);
+  await settle(page);
   const bfChartExists = await page.evaluate(() => !!document.getElementById('weightChart'));
   if (!bfChartExists) throw new Error('Expected a #weightChart canvas once Body Fat % has 2 logged entries');
   await page.evaluate(() => setWeightMetric('weight')); // reset for later steps
@@ -76,7 +77,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // 3b. Persistence across reload — checked here, before the TDEE fixtures below replace
   // STATE.weightLog wholesale.
   await page.reload();
-  await page.waitForTimeout(300);
+  await settle(page);
   const persistedEntry = await page.evaluate(() => STATE.weightLog.find(e => e.bodyFatPct === 17.5));
   console.log('entry after reload:', persistedEntry);
   if (!persistedEntry || persistedEntry.bodyWaterPct !== 55.2) throw new Error('Expected bodyFatPct/bodyWaterPct to persist across reload');
@@ -167,7 +168,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // The panel actually renders the breakdown line
   await page.evaluate(() => { switchTab('health'); setHealthSubtab('diet'); });
-  await page.waitForTimeout(150);
+  await settle(page);
   const breakdownShown = await page.evaluate(() => document.body.textContent.includes('non-exercise'));
   if (!breakdownShown) throw new Error('Expected the ROLLING TDEE panel to render the cardio breakdown line');
 
@@ -198,14 +199,14 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     saveState();
     switchTab('health'); setHealthSubtab('diet');
   });
-  await page.waitForTimeout(150);
+  await settle(page);
   const panelText = await page.evaluate(() => document.body.textContent);
   if (!panelText.includes('ROLLING TDEE')) throw new Error('Expected the ROLLING TDEE panel to render on Diet -> Setup');
   const useThisBtn = await page.evaluateHandle(() => [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'USE THIS' && b.getAttribute('onclick') && b.getAttribute('onclick').includes('applyTDEEResult')));
   const btnExists = await page.evaluate(el => !!el, useThisBtn);
   if (!btnExists) throw new Error('Expected a "USE THIS" button for the rolling TDEE estimate');
   await useThisBtn.asElement().click();
-  await page.waitForTimeout(100);
+  await settle(page);
   const appliedTdee = await page.evaluate(() => STATE.diet.tdee);
   console.log('STATE.diet.tdee after clicking USE THIS on the rolling estimate:', appliedTdee);
   if (!appliedTdee) throw new Error('Expected clicking USE THIS to set STATE.diet.tdee');

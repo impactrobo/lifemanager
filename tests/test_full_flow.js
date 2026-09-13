@@ -3,6 +3,7 @@
 // survives a reload. This is the "did I break something basic" catch-all, not a deep per-feature
 // test — those live in their own test_*.js files.
 const { chromium } = require('playwright');
+const { settle } = require('./helpers');
 const path = require('path');
 
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
@@ -24,7 +25,7 @@ const SECTIONS = ['schedule', 'train', 'hobbies', 'health', 'notes', 'budget'];
   await page.goto(APP_PATH);
   await page.evaluate(() => localStorage.clear());
   await page.reload();
-  await page.waitForTimeout(300);
+  await settle(page);
 
   const title = await page.title();
   console.log('title:', title);
@@ -37,18 +38,18 @@ const SECTIONS = ['schedule', 'train', 'hobbies', 'health', 'notes', 'budget'];
   // Walk every Home section tile — each must switch tabs cleanly with no thrown errors.
   for (const id of SECTIONS) {
     await page.evaluate((sectionId) => goHomeSection(sectionId), id);
-    await page.waitForTimeout(150);
+    await settle(page);
     const current = await page.evaluate(() => CURRENT_TAB);
     console.log(`navigated to "${id}" -> CURRENT_TAB is "${current}"`);
     if (current !== id) throw new Error(`Expected CURRENT_TAB "${id}" after goHomeSection, got "${current}"`);
     // back to Home between each for a clean baseline
     await page.evaluate(() => switchTab('home'));
-    await page.waitForTimeout(100);
+    await settle(page);
   }
 
   // A real user action: log today's weight from the Home wake-up box, then confirm it persists.
   await page.evaluate(() => switchTab('home'));
-  await page.waitForTimeout(150);
+  await settle(page);
   const weightInputExists = await page.$('input#homeWeightInput, .home-box input[type="number"]');
   if (weightInputExists) {
     console.log('found a weight-style input on Home, exercising it');
@@ -65,7 +66,7 @@ const SECTIONS = ['schedule', 'train', 'hobbies', 'health', 'notes', 'budget'];
   });
   const marker = await page.evaluate(() => STATE.health._fullFlowTestMarker);
   await page.reload();
-  await page.waitForTimeout(300);
+  await settle(page);
   const markerAfterReload = await page.evaluate(() => STATE.health._fullFlowTestMarker);
   console.log('persistence marker before/after reload:', marker, '/', markerAfterReload);
   if (marker !== markerAfterReload) throw new Error('Expected a STATE change + saveState() to survive a reload via localStorage');

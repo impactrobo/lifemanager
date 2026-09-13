@@ -4,6 +4,7 @@
 // in the category picker/search with a "(yours)" tag, being usable in a meal, editing reversing
 // the per-serving math correctly, a "count"-type food, and deleting).
 const { chromium } = require('playwright');
+const { settle } = require('./helpers');
 const path = require('path');
 
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
@@ -21,7 +22,7 @@ const NUTRIENT_KEYS = ['cal', 'protein', 'carb', 'fat', 'fiber', 'sodium', 'pota
   });
 
   await page.goto(APP_PATH);
-  await page.waitForTimeout(300);
+  await settle(page);
 
   // 1. FOOD_DB: every food has every micronutrient field, the new "sauces" category exists, and
   //    the total count grew as expected (83 original + 39 new = 122).
@@ -51,7 +52,7 @@ const NUTRIENT_KEYS = ['cal', 'protein', 'carb', 'fat', 'fiber', 'sodium', 'pota
   // 3. Custom food: add via the inline Meal Builder form (weight-type, per-serving entry)
   const customBefore = await page.evaluate(() => STATE.diet.customFoods.length);
   await page.evaluate(() => { switchTab('health'); setHealthSubtab('setup'); setHealthSetupSubtab('builder'); startNewMeal(); toggleCustomFoodForm(); });
-  await page.waitForTimeout(150);
+  await settle(page);
   await page.fill('#cfName', "Test Lasagna");
   await page.selectOption('#cfCategory', 'meat');
   await page.selectOption('#cfServingType', 'weight');
@@ -59,7 +60,7 @@ const NUTRIENT_KEYS = ['cal', 'protein', 'carb', 'fat', 'fiber', 'sodium', 'pota
   await page.fill('#' + await page.evaluate(() => nutrientInputId('cal')), '450'); // 450 cal per 250g serving
   await page.fill('#' + await page.evaluate(() => nutrientInputId('protein')), '25');
   await page.evaluate(() => saveCustomFood());
-  await page.waitForTimeout(150);
+  await settle(page);
 
   const customAfter = await page.evaluate(() => STATE.diet.customFoods.length);
   console.log('customFoods before/after adding:', customBefore, '/', customAfter);
@@ -97,7 +98,7 @@ const NUTRIENT_KEYS = ['cal', 'protein', 'carb', 'fat', 'fiber', 'sodium', 'pota
   const lasagnaId = lasagna.id;
   await page.evaluate(() => setHealthSetupSubtab('myfoods'));
   await page.evaluate((id) => editCustomFood(id), lasagnaId);
-  await page.waitForTimeout(100);
+  await settle(page);
   const editPrefill = await page.evaluate(() => ({
     name: document.getElementById('cfName').value,
     cal: document.getElementById(nutrientInputId('cal')).value,
@@ -119,18 +120,18 @@ const NUTRIENT_KEYS = ['cal', 'protein', 'carb', 'fat', 'fiber', 'sodium', 'pota
   // 6. A "count"-type custom food: itemAmount is fixed at 100, so the entered per-serving value
   //    becomes per100 directly with no scaling.
   await page.evaluate(() => toggleCustomFoodForm());
-  await page.waitForTimeout(100);
+  await settle(page);
   await page.fill('#cfName', 'Protein Bar');
   await page.selectOption('#cfCategory', 'supplements');
   await page.selectOption('#cfServingType', 'count');
   await page.fill('#cfItemLabel', 'bar');
   await page.fill('#' + await page.evaluate(() => nutrientInputId('cal')), '200');
   await page.evaluate(() => toggleCustomFoodMicroVisibility()); // also set a micronutrient to confirm that path works too
-  await page.waitForTimeout(100);
+  await settle(page);
   await page.fill('#' + await page.evaluate(() => nutrientInputId('sodium')), '150');
-  await page.waitForTimeout(100);
+  await settle(page);
   await page.evaluate(() => saveCustomFood());
-  await page.waitForTimeout(100);
+  await settle(page);
   const bar = await page.evaluate(() => STATE.diet.customFoods[STATE.diet.customFoods.length - 1]);
   console.log('saved custom food (count-type):', { unit: bar.unit, itemAmount: bar.itemAmount, itemLabel: bar.itemLabel, cal: bar.per100.cal, sodium: bar.per100.sodium });
   if (bar.unit !== 'count' || bar.itemAmount !== 100 || bar.itemLabel !== 'bar') throw new Error(`Unexpected count-type shape: ${JSON.stringify(bar)}`);
@@ -139,7 +140,7 @@ const NUTRIENT_KEYS = ['cal', 'protein', 'carb', 'fat', 'fiber', 'sodium', 'pota
 
   // 7. MY FOODS tab in Health Setup lists both custom foods and lets you delete one
   await page.evaluate(() => setHealthSetupSubtab('myfoods'));
-  await page.waitForTimeout(100);
+  await settle(page);
   const myFoodsHtml = await page.evaluate(() => renderMyFoodsTab());
   console.log('MY FOODS tab lists both custom foods:', myFoodsHtml.includes('Test Lasagna (updated)') || myFoodsHtml.includes("Test Lasagna (updated)"), myFoodsHtml.includes('Protein Bar'));
   if (!myFoodsHtml.includes('Protein Bar')) throw new Error('Expected MY FOODS to list the Protein Bar custom food');

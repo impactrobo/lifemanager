@@ -5,6 +5,7 @@
 // multi-habit "success calendar" (shapes/colors/legend), and that an existing save missing the
 // new 'habits' Home box gets it backfilled automatically.
 const { chromium } = require('playwright');
+const { settle } = require('./helpers');
 const path = require('path');
 
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
@@ -21,7 +22,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   });
 
   await page.goto(APP_PATH);
-  await page.waitForTimeout(300);
+  await settle(page);
 
   const snapshot = await page.evaluate(() => ({
     habits: JSON.parse(JSON.stringify(STATE.life.habits)),
@@ -31,10 +32,10 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // 1. Add a habit via the real form
   await page.evaluate(() => { switchTab('schedule'); setScheduleSubtab('setup'); setScheduleSetupSubtab('habits'); });
-  await page.waitForTimeout(150);
+  await settle(page);
   await page.fill('#habitName', 'No Drinking');
   await page.evaluate(() => addHabit());
-  await page.waitForTimeout(100);
+  await settle(page);
   const habit = await page.evaluate(() => STATE.life.habits.find(h => h.name === 'No Drinking'));
   console.log('added habit:', habit);
   if (!habit || habit.startDate !== (await page.evaluate(() => todayStr())) || habit.endDate !== null) {
@@ -47,18 +48,18 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // 3. Toggle kept/broken via the real Home box buttons
   await page.evaluate(() => switchTab('home'));
-  await page.waitForTimeout(150);
+  await settle(page);
   const keptBtn = await page.$(`button[onclick="toggleHabitToday('${habit.id}','kept')"]`);
   if (!keptBtn) throw new Error('Expected a KEPT button for the habit on the Home box');
   await keptBtn.click();
-  await page.waitForTimeout(100);
+  await settle(page);
   const afterKept = await page.evaluate((id) => habitStatusOn(id, todayStr()), habit.id);
   if (afterKept !== 'kept') throw new Error(`Expected 'kept' after clicking the KEPT button, got '${afterKept}'`);
 
   // Tapping the already-active state again clears it back to unmarked
   const keptBtn2 = await page.$(`button[onclick="toggleHabitToday('${habit.id}','kept')"]`);
   await keptBtn2.click();
-  await page.waitForTimeout(100);
+  await settle(page);
   const afterUntoggle = await page.evaluate((id) => habitStatusOn(id, todayStr()), habit.id);
   if (afterUntoggle !== 'unmarked') throw new Error(`Expected tapping the active state again to clear it, got '${afterUntoggle}'`);
 
@@ -66,10 +67,10 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // toggle re-renders and detaches the previous element handles from the DOM.
   const keptBtn3 = await page.$(`button[onclick="toggleHabitToday('${habit.id}','kept')"]`);
   await keptBtn3.click(); // back to kept
-  await page.waitForTimeout(100);
+  await settle(page);
   const brokeBtn = await page.$(`button[onclick="toggleHabitToday('${habit.id}','broken')"]`);
   await brokeBtn.click();
-  await page.waitForTimeout(100);
+  await settle(page);
   const afterBroke = await page.evaluate((id) => habitStatusOn(id, todayStr()), habit.id);
   if (afterBroke !== 'broken') throw new Error(`Expected 'broken' after clicking BROKE, got '${afterBroke}'`);
   await page.evaluate((id) => setHabitStatus(id, todayStr(), null), habit.id); // reset for the rest of the test
@@ -140,9 +141,9 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // 6. END NOW sets endDate to today — the end date is inclusive (you can still log the day you
   // actually end it), so it stays active *today* and only actually stops being active tomorrow.
   await page.evaluate(() => { switchTab('schedule'); setScheduleSubtab('setup'); setScheduleSetupSubtab('habits'); });
-  await page.waitForTimeout(150);
+  await settle(page);
   await page.evaluate((id) => endHabitNow(id), habit.id);
-  await page.waitForTimeout(100);
+  await settle(page);
   const endedHabit = await page.evaluate((id) => STATE.life.habits.find(h => h.id === id), habit.id);
   if (endedHabit.endDate !== (await page.evaluate(() => todayStr()))) throw new Error(`Expected endHabitNow() to set endDate to today, got ${endedHabit.endDate}`);
   const activeOnEndDateItself = await page.evaluate((id) => habitIsActiveOn(STATE.life.habits.find(h => h.id === id), todayStr()), habit.id);
@@ -158,7 +159,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     updateHabitField(id, 'endDate', `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`);
   }, habit.id);
   await page.evaluate(() => switchTab('home'));
-  await page.waitForTimeout(150);
+  await settle(page);
   const habitsBoxGoneAfterEnd = await page.evaluate(() => ![...document.querySelectorAll('.subtle-label')].some(e => e.textContent === 'HABITS'));
   if (!habitsBoxGoneAfterEnd) throw new Error('Expected the HABITS box to disappear once the only habit ended before today');
 
@@ -168,10 +169,10 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // 8. Multi-habit success calendar: a second habit with its own shape gets its own dot, and the
   // legend lists both by name.
   await page.evaluate(() => { switchTab('schedule'); setScheduleSubtab('setup'); setScheduleSetupSubtab('habits'); });
-  await page.waitForTimeout(150);
+  await settle(page);
   await page.fill('#habitName', 'Morning Pages');
   await page.evaluate(() => addHabit());
-  await page.waitForTimeout(100);
+  await settle(page);
   const habit2 = await page.evaluate(() => STATE.life.habits.find(h => h.name === 'Morning Pages'));
   const shape1 = await page.evaluate((id) => habitShapeFor(id), habit.id);
   const shape2 = await page.evaluate((id) => habitShapeFor(id), habit2.id);
@@ -192,13 +193,13 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // 9. Deleting a habit removes it and its log
   await page.evaluate((id) => deleteHabit(id), habit2.id);
   await page.evaluate(() => confirmYes());
-  await page.waitForTimeout(100);
+  await settle(page);
   const stillThere = await page.evaluate((id) => STATE.life.habits.some(h => h.id === id), habit2.id);
   if (stillThere) throw new Error('Expected deleteHabit() to remove the habit after confirming');
 
   // 10. Persistence across reload
   await page.reload();
-  await page.waitForTimeout(300);
+  await settle(page);
   const persistedById = await page.evaluate((id) => STATE.life.habits.find(h => h.id === id), habit.id);
   if (!persistedById) throw new Error('Expected the remaining habit to persist across reload');
 
@@ -212,7 +213,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     saveState();
   });
   await page.reload();
-  await page.waitForTimeout(300);
+  await settle(page);
   const migrated = await page.evaluate(() => STATE.settings.homeLayout.boxOrder.includes('habits'));
   console.log('boxOrder backfilled "habits" after reload:', migrated);
   if (!migrated) throw new Error('Expected a real app reload to backfill "habits" into an existing save\'s boxOrder');

@@ -1,6 +1,7 @@
 // test_resttimer.js — starting, ticking down, pausing/resuming, adjusting, cancelling the rest
 // timer, and that a timer which runs to completion remembers its length (lastUsedSeconds).
 const { chromium } = require('playwright');
+const { settle } = require('./helpers');
 const path = require('path');
 
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
@@ -17,11 +18,11 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   });
 
   await page.goto(APP_PATH);
-  await page.waitForTimeout(300);
+  await settle(page);
 
   // 1. Starting sets up REST_TIMER with the requested duration and running=true
   await page.evaluate(() => startRestTimer(5));
-  await page.waitForTimeout(100);
+  await settle(page);
   let t = await page.evaluate(() => ({ total: REST_TIMER.total, remaining: REST_TIMER.remaining, running: REST_TIMER.running }));
   console.log('after start(5):', t);
   if (t.total !== 5 || t.remaining !== 5 || !t.running) throw new Error(`Expected {total:5, remaining:5, running:true}, got ${JSON.stringify(t)}`);

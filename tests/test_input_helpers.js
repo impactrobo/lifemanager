@@ -6,6 +6,7 @@
 // throws at runtime -- which is exactly how saveReminder() once crashed when #remEndTime didn't
 // exist yet. The static guard at the end fails the suite if a bare read creeps back in.
 const { chromium } = require('playwright');
+const { settle } = require('./helpers');
 const path = require('path');
 const fs = require('fs');
 
@@ -35,7 +36,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     return route.abort();
   });
   await page.goto(APP_PATH);
-  await page.waitForTimeout(300);
+  await settle(page);
 
   // ---- 2. Helper behaviour: absent element tolerated, present element read faithfully ----
   const behaviour = await page.evaluate(() => {
@@ -65,9 +66,9 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // this threw a TypeError mid-save and left the form stuck; now it saves with endTime null.
   const snapshot = await page.evaluate(() => JSON.parse(JSON.stringify(STATE.reminders)));
   await page.evaluate(() => { STATE.reminders = []; saveState(); switchTab('schedule'); calSetZoom('day'); calSelectDay('2026-10-03'); });
-  await page.waitForTimeout(150);
+  await settle(page);
   await page.evaluate(() => toggleReminderForm());
-  await page.waitForTimeout(100);
+  await settle(page);
   await page.fill('#remTitle', 'Survives a missing input');
   await page.fill('#remTime', '09:00');
   const saved = await page.evaluate(() => {

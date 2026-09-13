@@ -4,6 +4,7 @@
 // and the Settings-page picker UI: groups start collapsed on every fresh visit, and the accent/
 // palette picker is inlined directly under whichever card is the active aesthetic.
 const { chromium } = require('playwright');
+const { settle } = require('./helpers');
 const path = require('path');
 
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
@@ -23,7 +24,7 @@ const EXPECTED_AESTHETIC_COUNT = 23;
   });
 
   await page.goto(APP_PATH);
-  await page.waitForTimeout(300);
+  await settle(page);
 
   // 1. Total count + names, so a removed/renamed aesthetic is caught explicitly
   const keys = await page.evaluate(() => Object.keys(AESTHETICS).sort());
@@ -44,7 +45,7 @@ const EXPECTED_AESTHETIC_COUNT = 23;
   // 3. Switching applies the data-aesthetic attribute and changes the resolved --accent value
   const before = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--accent').trim());
   await page.evaluate(() => setAesthetic('editorial'));
-  await page.waitForTimeout(150);
+  await settle(page);
   const domAttr = await page.evaluate(() => document.documentElement.dataset.aesthetic);
   const after = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--accent').trim());
   console.log('data-aesthetic after switch:', domAttr, '| --accent before/after:', before, '/', after);
@@ -53,14 +54,14 @@ const EXPECTED_AESTHETIC_COUNT = 23;
 
   // 4. Persists across reload
   await page.reload();
-  await page.waitForTimeout(300);
+  await settle(page);
   const persisted = await page.evaluate(() => STATE.settings.aesthetic);
   if (persisted !== 'editorial') throw new Error(`Expected aesthetic to persist as "editorial" after reload, got "${persisted}"`);
 
   // 5. Retired/unknown key falls back to default (cyberpunk) instead of breaking
   await page.evaluate(() => { STATE.settings.aesthetic = 'some_retired_key_that_no_longer_exists'; saveState(); });
   await page.reload();
-  await page.waitForTimeout(300);
+  await settle(page);
   const fallback = await page.evaluate(() => currentAesthetic());
   console.log('fallback aesthetic for a retired key:', fallback);
   if (fallback !== 'cyberpunk') throw new Error(`Expected fallback to "cyberpunk" for a retired key, got "${fallback}"`);
@@ -69,7 +70,7 @@ const EXPECTED_AESTHETIC_COUNT = 23;
 
   // 6. Settings picker UI: every fresh visit lands with all aesthetic groups collapsed
   await page.evaluate(() => openSetup('home'));
-  await page.waitForTimeout(150);
+  await settle(page);
   const openGroupsOnEntry = await page.evaluate(() => [...AESTHETIC_GROUPS_OPEN]);
   console.log('AESTHETIC_GROUPS_OPEN right after opening Settings:', openGroupsOnEntry);
   if (openGroupsOnEntry.length !== 0) throw new Error(`Expected Settings to open with zero groups expanded, got ${JSON.stringify(openGroupsOnEntry)}`);
@@ -91,7 +92,7 @@ const EXPECTED_AESTHETIC_COUNT = 23;
   // fixed section elsewhere on the page — expand cyberpunk's group (the current default) and
   // confirm the picker sits immediately next to its card, and nowhere else on the page.
   await page.evaluate((g) => toggleAestheticGroup(g), cyberpunkGroup);
-  await page.waitForTimeout(100);
+  await settle(page);
   const pickerPlacement = await page.evaluate(() => {
     const pickers = document.querySelectorAll('.accent-picker-inline');
     if (pickers.length !== 1) return { count: pickers.length };

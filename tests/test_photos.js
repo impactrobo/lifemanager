@@ -2,6 +2,7 @@
 // compression), the measurement-form photo picker (max-count enforcement, remove-before-save),
 // saving a measurement with attached photos, and the fullscreen lightbox open/close.
 const { chromium } = require('playwright');
+const { settle } = require('./helpers');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -24,7 +25,7 @@ const TEST_PHOTO_B64 = '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAA0JCgsKCA0LCgsODg0PEyAV
   });
 
   await page.goto(APP_PATH);
-  await page.waitForTimeout(300);
+  await settle(page);
 
   const tmpPhoto = path.join(os.tmpdir(), 'test-photo-oversized.jpg');
   fs.writeFileSync(tmpPhoto, Buffer.from(TEST_PHOTO_B64, 'base64'));
@@ -53,9 +54,9 @@ const TEST_PHOTO_B64 = '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAA0JCgsKCA0LCgsODg0PEyAV
   // 2. Real measurement-form flow: open the form, attach that photo via the actual file input
   await page.evaluate(() => { switchTab('health'); setHealthSubtab('specs'); });
   await page.evaluate(() => toggleMeasureForm());
-  await page.waitForTimeout(150);
+  await settle(page);
   await page.setInputFiles('#measurePhotoInput', tmpPhoto);
-  await page.waitForTimeout(300); // resizeImageFile is async (FileReader + Image decode)
+  await settle(page); // resizeImageFile is async (FileReader + Image decode)
 
   const draftPhotos = await page.evaluate(() => MEASURE_DRAFT_PHOTOS.length);
   console.log('MEASURE_DRAFT_PHOTOS after attaching one photo:', draftPhotos);
@@ -81,7 +82,7 @@ const TEST_PHOTO_B64 = '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAA0JCgsKCA0LCgsODg0PEyAV
   const measurementsBefore = await page.evaluate(() => STATE.measurements.length);
   await page.fill('#mDate', '2026-01-15');
   await page.evaluate(() => saveMeasurement());
-  await page.waitForTimeout(150);
+  await settle(page);
   const measurementsAfter = await page.evaluate(() => STATE.measurements.length);
   const saved = await page.evaluate(() => STATE.measurements[STATE.measurements.length - 1]);
   console.log('measurements before/after save:', measurementsBefore, '/', measurementsAfter, '| saved photos count:', saved.photos.length);
@@ -95,7 +96,7 @@ const TEST_PHOTO_B64 = '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAA0JCgsKCA0LCgsODg0PEyAV
 
   // 7. Persistence across reload
   await page.reload();
-  await page.waitForTimeout(300);
+  await settle(page);
   const persistedPhotoCount = await page.evaluate(() => STATE.measurements[STATE.measurements.length - 1].photos.length);
   console.log('photo count after reload:', persistedPhotoCount);
   if (persistedPhotoCount !== 3) throw new Error(`Expected 3 photos to persist across reload, got ${persistedPhotoCount}`);

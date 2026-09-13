@@ -2,6 +2,7 @@
 // copies (doesn't move) the note into a plain Reminder dated to the note's own date, with a title
 // fallback chain (note title -> body snippet -> "Note"), and jumps to that date's Calendar Day view.
 const { chromium } = require('playwright');
+const { settle } = require('./helpers');
 const path = require('path');
 
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
@@ -18,7 +19,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   });
 
   await page.goto(APP_PATH);
-  await page.waitForTimeout(300);
+  await settle(page);
 
   // 1. A note with both a title and a body -> the reminder uses the title, body becomes notes
   const noteWithTitle = await page.evaluate(() => {
@@ -29,7 +30,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   });
   const remindersBefore = await page.evaluate(() => STATE.reminders.length);
   await page.evaluate((id) => convertNoteToReminder(id), noteWithTitle);
-  await page.waitForTimeout(150);
+  await settle(page);
   const remindersAfter = await page.evaluate(() => STATE.reminders.length);
   if (remindersAfter !== remindersBefore + 1) throw new Error('Expected convertNoteToReminder() to add exactly one reminder');
   const created = await page.evaluate(() => STATE.reminders[STATE.reminders.length - 1]);
@@ -58,7 +59,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     return n.id;
   });
   await page.evaluate((id) => convertNoteToReminder(id), noteNoTitle);
-  await page.waitForTimeout(150);
+  await settle(page);
   const untitledResult = await page.evaluate(() => STATE.reminders[STATE.reminders.length - 1]);
   console.log('reminder created from an untitled note:', untitledResult);
   if (!untitledResult.title.startsWith('Remember to email')) throw new Error(`Expected the title to fall back to a body snippet, got "${untitledResult.title}"`);
@@ -71,13 +72,13 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     return n.id;
   });
   await page.evaluate((id) => convertNoteToReminder(id), noteEmpty);
-  await page.waitForTimeout(150);
+  await settle(page);
   const emptyResult = await page.evaluate(() => STATE.reminders[STATE.reminders.length - 1]);
   if (emptyResult.title !== 'Note') throw new Error(`Expected "Note" as the ultimate title fallback, got "${emptyResult.title}"`);
 
   // 6. Persistence across reload
   await page.reload();
-  await page.waitForTimeout(300);
+  await settle(page);
   const persisted = await page.evaluate(() => STATE.reminders.find(r => r.title === 'Great idea'));
   if (!persisted) throw new Error('Expected the converted reminder to persist across reload');
 

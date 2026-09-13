@@ -2,6 +2,7 @@
 // today's assigned schedule (wake/bed/activities), correct chronological sort, currentScheduleBlock()
 // picking the block containing "right now", and toggleDailyAnchor()'s completion tracking.
 const { chromium } = require('playwright');
+const { settle } = require('./helpers');
 const path = require('path');
 
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
@@ -18,7 +19,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   });
 
   await page.goto(APP_PATH);
-  await page.waitForTimeout(300);
+  await settle(page);
 
   // 1. Baseline: anchors alone (no schedule assigned to today) still populate the block list
   const baseline = await page.evaluate(() => {
@@ -110,7 +111,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // 5. Persistence across reload
   await page.reload();
-  await page.waitForTimeout(300);
+  await settle(page);
   const persistedDone = await page.evaluate(() => !!todayLifeLog()['rightnowtest']);
   const persistedSchedule = await page.evaluate(() => scheduleForDate(new Date()) && scheduleForDate(new Date()).name);
   console.log('after reload — anchor done state:', persistedDone, '| schedule still assigned:', persistedSchedule);
@@ -140,7 +141,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // install() has to happen before navigation for the app's own Date calls to see the fake clock.
   await clockPage.clock.install({ time: new Date(2026, 8, 6, 12, 0, 0) });
   await clockPage.goto(APP_PATH);
-  await clockPage.waitForTimeout(300);
+  await settle(clockPage);
   await clockPage.evaluate(() => { STATE.life.schedules = []; STATE.life.assignments = {}; saveState(); });
 
   const OVERLAP = [

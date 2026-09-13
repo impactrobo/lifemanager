@@ -5,6 +5,7 @@
 // per-contribution "in budget / not in budget" indicator on the contribution card, which is what
 // actually lets a person confirm after the fact which of their logged $ counted.
 const { chromium } = require('playwright');
+const { settle } = require('./helpers');
 const path = require('path');
 
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
@@ -21,26 +22,26 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   });
 
   await page.goto(APP_PATH);
-  await page.waitForTimeout(300);
+  await settle(page);
 
   const key = await page.evaluate(() => budgetMonthKey());
   const snapshot = await page.evaluate((k) => JSON.parse(JSON.stringify(STATE.budget.incidentals[k] || [])), key);
 
   // 1. Add a goal, log a contribution WITHOUT the checkbox — no incidental, no budget effect
   await page.evaluate(() => { switchTab('budget'); setBudgetSubtab('goals'); });
-  await page.waitForTimeout(150);
+  await settle(page);
   await page.fill('#goalName', 'Test Console');
   await page.fill('#goalTarget', '500');
   await page.evaluate(() => addSavingsGoal());
-  await page.waitForTimeout(100);
+  await settle(page);
   const goal = await page.evaluate(() => STATE.budget.goals.find(g => g.name === 'Test Console'));
   await page.evaluate((id) => toggleGoalExpanded(id), goal.id);
-  await page.waitForTimeout(100);
+  await settle(page);
 
   const incidentalsBefore = await page.evaluate((k) => (STATE.budget.incidentals[k] || []).length, key);
   await page.fill(`#goalContribAmount_${goal.id}`, '100');
   await page.evaluate((id) => addGoalContribution(id), goal.id);
-  await page.waitForTimeout(100);
+  await settle(page);
   const incidentalsAfterUnchecked = await page.evaluate((k) => (STATE.budget.incidentals[k] || []).length, key);
   console.log('incidentals before/after an UNCHECKED contribution:', incidentalsBefore, '/', incidentalsAfterUnchecked);
   if (incidentalsAfterUnchecked !== incidentalsBefore) throw new Error('Expected an unchecked contribution to add zero incidentals');
@@ -55,7 +56,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   await page.fill(`#goalContribAmount_${goal.id}`, '75');
   await page.check(`#goalContribCountBudget_${goal.id}`);
   await page.evaluate((id) => addGoalContribution(id), goal.id);
-  await page.waitForTimeout(100);
+  await settle(page);
   const afterChecked = await page.evaluate((k) => STATE.budget.incidentals[k] || [], key);
   console.log('incidentals after a CHECKED contribution:', afterChecked);
   const newIncidental = afterChecked.find(e => e.amount === 75 && e.category === 'Savings');

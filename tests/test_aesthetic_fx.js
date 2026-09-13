@@ -12,6 +12,7 @@ const os = require('os');
 const path = require('path');
 const { execFileSync } = require('child_process');
 const { chromium } = require('playwright');
+const { settle } = require('./helpers');
 
 const ROOT = path.resolve(__dirname, '..');
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css',
@@ -115,7 +116,7 @@ async function waitUntilSettled(page, names, timeoutMs = 10000) {
   let prev = await propValues(page, names);
   let stable = 0;
   while (Date.now() - started < timeoutMs) {
-    await page.waitForTimeout(250);
+    await settle(page);
     const now = await propValues(page, names);
     stable = names.every((_, i) => now[i] === prev[i]) ? stable + 1 : 0;
     prev = now;
@@ -151,18 +152,18 @@ async function checkParticleModule(page, key) {
   console.log(`particle module loaded, canvas #${canvasId}`);
 
   await page.evaluate(() => switchTab('budget'));
-  await page.waitForTimeout(250);
+  await settle(page);
 
   // --- 3. A cold control draws nothing; a hot one draws particles. ---
   if (await litPixels(page) !== 0) throw new Error(`${key}: canvas should start empty`);
   await tapCenter(page, COLD_SELECTOR);
-  await page.waitForTimeout(150);
+  await settle(page);
   const afterCold = await litPixels(page);
   console.log('lit pixels after tapping a cold control:', afterCold);
   if (afterCold !== 0) throw new Error(`${key}: particles spawned from a control that should not trigger them`);
 
   await tapCenter(page, HOT_SELECTOR);
-  await page.waitForTimeout(150);
+  await settle(page);
   const afterHot = await litPixels(page);
   console.log('lit pixels after tapping a hot control:', afterHot);
   if (afterHot <= 0) throw new Error(`${key}: no particles spawned from a hot control`);
@@ -175,12 +176,12 @@ async function checkParticleModule(page, key) {
 
   // --- 5. Switching away destroys it: canvas gone AND the listener released. ---
   await page.evaluate(() => setAesthetic('cyberpunk'));
-  await page.waitForTimeout(250);
+  await settle(page);
   if (await page.$(FX_CANVAS)) throw new Error(`${key}: destroy() left the canvas behind`);
   await page.evaluate(() => switchTab('budget'));
-  await page.waitForTimeout(200);
+  await settle(page);
   await tapCenter(page, HOT_SELECTOR); // must be inert now
-  await page.waitForTimeout(150);
+  await settle(page);
   if (await page.$(FX_CANVAS)) {
     throw new Error(`${key}: a tap after destroy() re-created the canvas — the pointerdown listener survived`);
   }
@@ -217,7 +218,7 @@ async function checkContinuousParticleModule(page, key) {
   // --- 5. Honours prefers-reduced-motion: re-selecting under it draws nothing at all. ---
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.evaluate(() => setAesthetic('cyberpunk'));
-  await page.waitForTimeout(150);
+  await settle(page);
   await page.evaluate(k => setAesthetic(k), key);
   await page.waitForFunction(sel => !!document.querySelector(sel), FX_CANVAS, { timeout: 5000 });
   await page.waitForTimeout(500);
@@ -228,7 +229,7 @@ async function checkContinuousParticleModule(page, key) {
 
   // --- 6. Switching away destroys it completely. ---
   await page.evaluate(() => setAesthetic('cyberpunk'));
-  await page.waitForTimeout(300);
+  await settle(page);
   if (await page.$(FX_CANVAS)) throw new Error(`${key}: destroy() left the canvas behind`);
   console.log('destroy(): canvas removed');
 }
@@ -244,7 +245,7 @@ async function checkAmbientModule(page, key, baseProps) {
   console.log(`ambient module loaded, writing ${own.join(' ')}`);
 
   await page.evaluate(() => switchTab('budget'));
-  await page.waitForTimeout(250);
+  await settle(page);
 
   // --- 3 & 4. Input moves the values, and then the loop stops on its own. ---
   const before = await propValues(page, own);
@@ -260,11 +261,11 @@ async function checkAmbientModule(page, key, baseProps) {
 
   // --- 5. Switching away destroys it: properties cleared AND the listeners released. ---
   await page.evaluate(() => setAesthetic('cyberpunk'));
-  await page.waitForTimeout(250);
+  await settle(page);
   const leftover = await ownProps(page, baseProps);
   if (leftover.length) throw new Error(`${key}: destroy() left ${leftover.join(' ')} on <html>`);
   await nudge(page);
-  await page.waitForTimeout(300);
+  await settle(page);
   const revived = await ownProps(page, baseProps);
   if (revived.length) {
     throw new Error(`${key}: input after destroy() rewrote ${revived.join(' ')} — a listener survived`);
@@ -314,7 +315,7 @@ async function checkAmbientModule(page, key, baseProps) {
   page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
 
   await page.goto(origin + '/', { waitUntil: 'networkidle' });
-  await page.waitForTimeout(300);
+  await settle(page);
 
   const fxKeys = await page.evaluate(() =>
     Object.entries(AESTHETICS).filter(([, v]) => v.fx).map(([k]) => k));
@@ -323,7 +324,7 @@ async function checkAmbientModule(page, key, baseProps) {
 
   // --- 1. No FX module is installed under a plain aesthetic. ---
   await page.evaluate(() => setAesthetic('cyberpunk'));
-  await page.waitForTimeout(200);
+  await settle(page);
   if (await page.$(FX_CANVAS)) throw new Error('an FX canvas is present under a non-fx aesthetic');
   console.log('non-fx aesthetic: no canvas (good)');
 
@@ -350,7 +351,7 @@ async function checkAmbientModule(page, key, baseProps) {
       // and which particle shape this is (tap-triggered vs. continuous, see
       // checkContinuousParticleModule() below) is told apart by whether it's ALREADY drawing —
       // sampling too early would misread a continuous module as the tap-triggered shape.
-      await page.waitForTimeout(200);
+      await settle(page);
       const startsLit = (await litPixels(page)) > 0;
       if (startsLit) await checkContinuousParticleModule(page, key);
       else await checkParticleModule(page, key);
@@ -363,7 +364,7 @@ async function checkAmbientModule(page, key, baseProps) {
     await page.waitForFunction(fxInstalled, [FX_CANVAS, baseProps], { timeout: 5000 });
     console.log('re-selecting re-installs cleanly');
     await page.evaluate(() => setAesthetic('cyberpunk'));
-    await page.waitForTimeout(200);
+    await settle(page);
   }
 
   if (errors.length) throw new Error('Page errors:\n  ' + errors.join('\n  '));

@@ -8,6 +8,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { chromium } = require('playwright');
+const { settle } = require('./helpers');
 
 const ROOT = path.resolve(__dirname, '..');
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
@@ -53,14 +54,14 @@ const server = http.createServer((req, res) => {
 
   // --- 1. Same stamp -> a check does nothing. ---
   await page.evaluate(() => window._lmCheckForUpdate());
-  await page.waitForTimeout(300);
+  await settle(page);
   if (page.isClosed()) throw new Error('page reloaded/closed on a same-stamp check');
   console.log('same-stamp check: no reload (good)');
 
   // --- 2. Deploy moves on while a field is focused -> reload is DEFERRED. ---
   buildStamp = 'TEST-BUILD-B';
   await page.evaluate(() => switchTab('budget'));
-  await page.waitForTimeout(80);
+  await settle(page);
   const activeTag = await page.evaluate(() => {
     const inp = Array.from(document.querySelectorAll('#app input')).find(el => el.offsetParent !== null);
     if (!inp) throw new Error('no visible input on the Budget screen to focus');

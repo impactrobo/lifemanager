@@ -4,6 +4,7 @@
 // TODAY subtab merged into it — see test_calendar_zoom.js), so this explicitly switches to
 // Month zoom first; that's what the rest of this file has always actually tested.
 const { chromium } = require('playwright');
+const { settle } = require('./helpers');
 const path = require('path');
 
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
@@ -20,13 +21,13 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   });
 
   await page.goto(APP_PATH);
-  await page.waitForTimeout(300);
+  await settle(page);
 
   // 1. Navigate to Schedule -> Calendar -> Month (switchTab() lands on Day zoom by default now)
   await page.evaluate(() => switchTab('schedule'));
   await page.evaluate(() => setScheduleSubtab('calendar'));
   await page.evaluate(() => calSetZoom('month'));
-  await page.waitForTimeout(150);
+  await settle(page);
   const startMonth = await page.evaluate(() => ({ ...CAL_MONTH }));
   console.log('starting CAL_MONTH:', startMonth);
 
@@ -82,7 +83,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   await page.evaluate(() => toggleReminderForm());
   await page.fill('#remTitle', 'Test calendar reminder');
   await page.evaluate(() => saveReminder());
-  await page.waitForTimeout(150);
+  await settle(page);
 
   const remindersAfter = await page.evaluate(() => STATE.reminders.length);
   console.log('reminders before/after add:', remindersBefore, '/', remindersAfter);
@@ -118,14 +119,14 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (afterEmptyEdit !== 'Renamed via inline edit') throw new Error('Expected an empty/whitespace title edit to be silently rejected, kept the old title');
 
   // 6. The month grid should now show a "has reminder" dot for that day
-  await page.waitForTimeout(150);
+  await settle(page);
   const hasDot = await page.evaluate((d) => remindersOn(d).length > 0, testDate);
   console.log('remindersOn(testDate) shows a reminder:', hasDot);
   if (!hasDot) throw new Error('Expected remindersOn() to report the new reminder for the has-reminder dot');
 
   // 7. Persistence across reload
   await page.reload();
-  await page.waitForTimeout(300);
+  await settle(page);
   const persistedCount = await page.evaluate(() => STATE.reminders.length);
   if (persistedCount !== remindersAfter) throw new Error(`Expected ${remindersAfter} reminders to persist after reload, got ${persistedCount}`);
 

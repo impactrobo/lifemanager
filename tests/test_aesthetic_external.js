@@ -5,6 +5,7 @@
 // wired both ways (points at the theme when one is active, cleared when a built-in is), that
 // the external file's tokens actually land, and that it defines the full required token set.
 const { chromium } = require('playwright');
+const { settle } = require('./helpers');
 const path = require('path');
 const fs = require('fs');
 
@@ -38,7 +39,7 @@ const REQUIRED_TOKENS = [
   });
 
   await page.goto(APP_PATH);
-  await page.waitForTimeout(300);
+  await settle(page);
 
   // The slot exists and starts empty (default aesthetic is a built-in one).
   const slotStart = await page.evaluate(() => {
@@ -57,7 +58,7 @@ const REQUIRED_TOKENS = [
 
   for (const key of externals) {
     await page.evaluate(k => setAesthetic(k), key);
-    await page.waitForTimeout(250); // let the stylesheet fetch + apply
+    await settle(page); // let the stylesheet fetch + apply
 
     const href = await page.evaluate(() => document.getElementById('aestheticCss').getAttribute('href'));
     if (href !== `aesthetics/${key}/theme.css`) {
@@ -119,7 +120,7 @@ const REQUIRED_TOKENS = [
 
   // Switching back to a built-in clears the slot again (no stale theme bleeding through).
   await page.evaluate(() => setAesthetic('cyberpunk'));
-  await page.waitForTimeout(150);
+  await settle(page);
   const slotEnd = await page.evaluate(() => document.getElementById('aestheticCss').getAttribute('href'));
   console.log('#aestheticCss after switching back to a built-in:', slotEnd);
   if (slotEnd) throw new Error(`expected href cleared for built-in aesthetic, got '${slotEnd}'`);
@@ -134,9 +135,9 @@ const REQUIRED_TOKENS = [
 
   // The choice survives a reload (external CSS re-loads on boot, not just on click).
   await page.evaluate(() => setAesthetic('frutigeraero'));
-  await page.waitForTimeout(150);
+  await settle(page);
   await page.reload();
-  await page.waitForTimeout(350);
+  await settle(page);
   const afterReload = await page.evaluate(() => ({
     href: document.getElementById('aestheticCss').getAttribute('href'),
     aesthetic: document.documentElement.dataset.aesthetic,

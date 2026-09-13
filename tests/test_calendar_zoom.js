@@ -5,6 +5,7 @@
 // own tap-to-zoom-out breadcrumb behavior. Also covers Day zoom defaulting to today (the old
 // dedicated TODAY subtab merged into it) and rendering the merged daily-schedule panel.
 const { chromium } = require('playwright');
+const { settle } = require('./helpers');
 const path = require('path');
 
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
@@ -21,11 +22,11 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   });
 
   await page.goto(APP_PATH);
-  await page.waitForTimeout(300);
+  await settle(page);
 
   await page.evaluate(() => switchTab('schedule'));
   await page.evaluate(() => setScheduleSubtab('calendar'));
-  await page.waitForTimeout(150);
+  await settle(page);
 
   // 1. Defaults to Day zoom, on today — this is the old dedicated TODAY subtab's replacement, so
   // a fresh visit to Schedule has to land here unconditionally, same as TODAY always did.
@@ -38,13 +39,13 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // 1b. Switch to Month explicitly — that's what the rest of this file (and test_calendar.js) tests.
   await page.evaluate(() => calSetZoom('month'));
-  await page.waitForTimeout(100);
+  await settle(page);
   const monthGridVisible = await page.evaluate(() => document.querySelectorAll('.cal-grid .cal-cell:not(.cal-cell-blank)').length > 25);
   if (!monthGridVisible) throw new Error('Expected a full month grid to render in Month zoom');
 
   // 2. Toggle to YEAR: renders 12 mini-months, no big cal-grid
   await page.evaluate(() => calSetZoom('year'));
-  await page.waitForTimeout(100);
+  await settle(page);
   const yearInfo = await page.evaluate(() => ({
     zoom: CAL_ZOOM,
     miniMonths: document.querySelectorAll('.cal-mini-month').length,
@@ -58,7 +59,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // 3. Year -> tapping a day in a mini-month jumps straight to Day zoom for that date
   const targetDate = await page.evaluate(() => { const { year } = CAL_MONTH; return dateKey(year, 5, 10); }); // June 10
   await page.evaluate((d) => calSelectDayAndZoom(d, 'day'), targetDate);
-  await page.waitForTimeout(100);
+  await settle(page);
   const afterMiniTap = await page.evaluate(() => ({ zoom: CAL_ZOOM, selected: CAL_SELECTED_DATE, month: { ...CAL_MONTH } }));
   console.log('after tapping a mini-month day:', afterMiniTap);
   if (afterMiniTap.zoom !== 'day') throw new Error(`Expected zoom "day" after calSelectDayAndZoom, got "${afterMiniTap.zoom}"`);
@@ -71,7 +72,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (dayInfo.grid !== 0) throw new Error('Expected no .cal-grid in Day zoom');
   if (!dayInfo.hasReminderPanel) throw new Error('Expected the reminders panel to still render in Day zoom');
   await page.evaluate(() => document.querySelector('.cycle-label').click());
-  await page.waitForTimeout(100);
+  await settle(page);
   const afterDayHeaderTap = await page.evaluate(() => CAL_ZOOM);
   console.log('zoom after tapping Day header:', afterDayHeaderTap);
   if (afterDayHeaderTap !== 'week') throw new Error(`Expected tapping the Day header to zoom out to "week", got "${afterDayHeaderTap}"`);
@@ -81,14 +82,14 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   console.log('week zoom cell count:', weekInfo);
   if (weekInfo !== 7) throw new Error(`Expected exactly 7 cells in Week zoom, found ${weekInfo}`);
   await page.evaluate(() => document.querySelector('.cycle-label').click());
-  await page.waitForTimeout(100);
+  await settle(page);
   const afterWeekHeaderTap = await page.evaluate(() => CAL_ZOOM);
   if (afterWeekHeaderTap !== 'month') throw new Error(`Expected tapping the Week header to zoom out to "month", got "${afterWeekHeaderTap}"`);
 
   // 6. Week navigation crosses a month boundary and keeps CAL_MONTH in sync
   await page.evaluate(() => calSelectDay(dateKey(CAL_MONTH.year, CAL_MONTH.month, 1))); // land near a month start
   await page.evaluate(() => calSetZoom('week'));
-  await page.waitForTimeout(100);
+  await settle(page);
   const beforeWeekNav = await page.evaluate(() => ({ date: CAL_SELECTED_DATE, month: { ...CAL_MONTH } }));
   await page.evaluate(() => calGoToWeek(-1));
   const afterWeekNav = await page.evaluate(() => ({ date: CAL_SELECTED_DATE, month: { ...CAL_MONTH } }));
@@ -103,9 +104,9 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // 7. Year -> tapping a mini-month's label zooms to Month for that month
   await page.evaluate(() => calSetZoom('year'));
-  await page.waitForTimeout(100);
+  await settle(page);
   await page.evaluate(() => { const { year } = CAL_MONTH; calZoomToMonth(year, 2); }); // March
-  await page.waitForTimeout(100);
+  await settle(page);
   const afterLabelTap = await page.evaluate(() => ({ zoom: CAL_ZOOM, month: CAL_MONTH.month }));
   console.log('after tapping a mini-month label:', afterLabelTap);
   if (afterLabelTap.zoom !== 'month' || afterLabelTap.month !== 2) throw new Error(`Expected zoom "month" at month index 2, got ${JSON.stringify(afterLabelTap)}`);
@@ -114,7 +115,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // date, regardless of whatever zoom was last active — not just the default day (today).
   await page.evaluate(() => calSetZoom('year'));
   await page.evaluate((d) => jumpToReminderDay(d), targetDate);
-  await page.waitForTimeout(100);
+  await settle(page);
   const afterJump = await page.evaluate(() => ({ zoom: CAL_ZOOM, selected: CAL_SELECTED_DATE, subtab: SCHEDULE_SUBTAB }));
   console.log('after jumpToReminderDay:', afterJump);
   if (afterJump.zoom !== 'day') throw new Error(`Expected jumpToReminderDay() to land on "day" zoom, got "${afterJump.zoom}"`);

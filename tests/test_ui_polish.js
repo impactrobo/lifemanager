@@ -4,6 +4,7 @@
 // (Meal Builder's food list) and staying pinned in view as it scrolls, and the sub-nav
 // horizontal scroll affordances (end chevrons + the thin bar) on an overflowing sub-nav.
 const { chromium } = require('playwright');
+const { settle } = require('./helpers');
 const path = require('path');
 
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
@@ -20,7 +21,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   });
 
   await page.goto(APP_PATH);
-  await page.waitForTimeout(300);
+  await settle(page);
 
   // 1. Toast shows immediately, then auto-hides on its own after ~1.8s
   await page.evaluate(() => showToast('Test toast message'));
@@ -39,13 +40,13 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // 2. Tabbar is hidden entirely on Home, shown inside any section
   await page.evaluate(() => switchTab('home'));
-  await page.waitForTimeout(100);
+  await settle(page);
   const hiddenOnHome = await page.evaluate(() => document.getElementById('tabbar').classList.contains('hidden'));
   console.log('tabbar hidden on Home:', hiddenOnHome);
   if (!hiddenOnHome) throw new Error('Expected #tabbar to carry the "hidden" class while on Home');
 
   await page.evaluate(() => switchTab('notes'));
-  await page.waitForTimeout(100);
+  await settle(page);
   const shownInSection = await page.evaluate(() => document.getElementById('tabbar').classList.contains('hidden'));
   console.log('tabbar hidden while inside Notes:', shownInSection);
   if (shownInSection) throw new Error('Expected #tabbar to NOT carry the "hidden" class once inside a section');
@@ -67,7 +68,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     document.body.appendChild(spacer);
   });
   await page.evaluate(() => window.scrollTo(0, 200));
-  await page.waitForTimeout(50);
+  await settle(page);
   const visibleAfterScroll = await page.evaluate(() => document.getElementById('pageScrollIndicator').classList.contains('visible'));
   console.log('page scroll indicator visible right after a real scroll on tall content:', visibleAfterScroll);
   if (!visibleAfterScroll) throw new Error('Expected the page scroll indicator to become visible after scrolling scrollable content');
@@ -81,12 +82,12 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // 4. attachScrollIndicators() actually wires up a real .scroll-box — Meal Builder's food list
   await page.evaluate(() => { switchTab('health'); setHealthSubtab('setup'); });
-  await page.waitForTimeout(100);
+  await settle(page);
   await page.evaluate(() => startNewMeal());
-  await page.waitForTimeout(150);
+  await settle(page);
   const categoryId = await page.evaluate(() => MEAL_CATEGORIES[0].id);
   await page.evaluate((catId) => toggleMealCategory(catId), categoryId);
-  await page.waitForTimeout(100);
+  await settle(page);
   const scrollBoxCount = await page.evaluate(() => document.querySelectorAll('#app .scroll-box').length);
   console.log('.scroll-box elements found in Meal Builder:', scrollBoxCount);
   if (scrollBoxCount === 0) throw new Error('Expected at least one .scroll-box in the Meal Builder food picker');
@@ -121,7 +122,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // 5. Sub-nav scroll affordances. Exercise Setup has 6 sub-tabs — it overflows a 390px phone.
   await page.evaluate(() => { switchTab('train'); TRAIN_TOP_SUBTAB = 'setup'; render(); });
-  await page.waitForTimeout(150);
+  await settle(page);
   const subnavFresh = await page.evaluate(() => {
     const w = document.querySelector('#app .subnav-wrap');
     if (!w) return { ok: false, why: 'no .subnav-wrap — subNav() not used?' };
@@ -163,7 +164,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     const btn = [...document.querySelectorAll('#app .subnav button')].find(b => b.textContent.trim() === 'GENERAL');
     btn.click(); // a real click through the real onclick="setSetupSubtab('general')", not calling the handler directly
   });
-  await page.waitForTimeout(150);
+  await settle(page);
   const afterTap = await page.evaluate(() => ({
     scrollLeft: document.querySelector('#app .subnav-wrap > .subnav').scrollLeft,
     generalActive: [...document.querySelectorAll('#app .subnav button')].find(b => b.textContent.trim() === 'GENERAL').classList.contains('active'),
@@ -179,7 +180,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // a totally unrelated sub-nav that happens to land in the same structural slot from restoring a
   // stale, likely out-of-range position on first render.
   await page.evaluate(() => { switchTab('train'); setTrainTopSubtab('progress'); });
-  await page.waitForTimeout(150);
+  await settle(page);
   const otherSubnav = await page.evaluate(() => document.querySelector('#app .subnav-wrap > .subnav').scrollLeft);
   console.log("a different sub-nav (Progress) on first render:", otherSubnav);
   if (otherSubnav !== 0) throw new Error(`Expected an unrelated sub-nav to start at 0, not inherit Exercise Setup's scroll offset — got ${otherSubnav}`);

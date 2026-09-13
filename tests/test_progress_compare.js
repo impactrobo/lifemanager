@@ -4,6 +4,7 @@
 // cycles, the metric picker (toggle, cap at COMPARE_MAX_METRICS), and the chart canvases actually
 // rendering for selected metrics with enough data.
 const { chromium } = require('playwright');
+const { settle } = require('./helpers');
 const path = require('path');
 
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
@@ -20,7 +21,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   });
 
   await page.goto(APP_PATH);
-  await page.waitForTimeout(300);
+  await settle(page);
 
   // 1. Build a real "weights" workout with a T1 slot on the Squat category, and log 3 sessions
   // across different cycles/dates with completed sets (some with an incomplete trailing set that
@@ -65,14 +66,14 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // 4. COMPARE view: navigate there, select the Squat T1 metric alongside default Body Weight
   await page.evaluate(() => { switchTab('train'); setTrainTopSubtab('progress'); setProgressSubtab('compare'); });
-  await page.waitForTimeout(150);
+  await settle(page);
   const defaultSelected = await page.evaluate(() => [...COMPARE_SELECTED]);
   console.log('default COMPARE_SELECTED:', defaultSelected);
   if (!defaultSelected.includes('bodyweight')) throw new Error('Expected Body Weight to be selected by default');
 
   const squatId = await page.evaluate(() => compareMetricId('squat', 't1'));
   await page.evaluate((id) => toggleCompareMetric(id), squatId);
-  await page.waitForTimeout(150);
+  await settle(page);
   const afterToggle = await page.evaluate(() => [...COMPARE_SELECTED]);
   console.log('after selecting Squat T1:', afterToggle);
   if (!afterToggle.includes(squatId)) throw new Error('Expected toggleCompareMetric() to add the Squat T1 metric');
@@ -91,20 +92,20 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // 7. Cap at COMPARE_MAX_METRICS — deselect everything, then try to select more than the cap
   await page.evaluate(() => { COMPARE_SELECTED = []; render(); });
-  await page.waitForTimeout(100);
+  await settle(page);
   const max = await page.evaluate(() => COMPARE_MAX_METRICS);
   const ids = ['bodyweight', squatId, 'lift:bench:t1', 'lift:deadlift:t1', 'lift:ohp:t1']; // more than max, most non-existent lifts are fine — toggling just adds the id
   for (const id of ids) await page.evaluate((i) => toggleCompareMetric(i), id);
-  await page.waitForTimeout(100);
+  await settle(page);
   const capped = await page.evaluate(() => [...COMPARE_SELECTED]);
   console.log('selection after trying to exceed the cap:', capped, '(max', max + ')');
   if (capped.length !== max) throw new Error(`Expected selection to stop growing at COMPARE_MAX_METRICS (${max}), got ${capped.length}: ${JSON.stringify(capped)}`);
 
   // 8. Deselecting removes it and its chart
   await page.evaluate(() => { COMPARE_SELECTED = ['bodyweight']; render(); });
-  await page.waitForTimeout(100);
+  await settle(page);
   await page.evaluate((id) => toggleCompareMetric(id), 'bodyweight');
-  await page.waitForTimeout(100);
+  await settle(page);
   const afterDeselect = await page.evaluate(() => [...COMPARE_SELECTED]);
   if (afterDeselect.includes('bodyweight')) throw new Error('Expected toggleCompareMetric() to remove an already-selected metric');
 

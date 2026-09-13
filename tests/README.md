@@ -33,6 +33,22 @@ new feature area ships, so the suite stays complete instead of drifting back tow
 it started in (it previously only ever existed inside temporary chat sandboxes and was lost
 between sessions).
 
+## Waiting for a render: use `settle(page)`, not a fixed sleep
+`helpers.js` exports `settle(page)`. After anything that triggers `render()` — a `switchTab`,
+a click on an `onclick=` handler, `page.reload()` — write `await settle(page)`. It resolves
+after two `requestAnimationFrame`s, which is exactly when the app's rAF-deferred `_doRender()`
+has painted.
+
+Don't reach for `page.waitForTimeout(150)` for this. The suite used to have ~280 of those and
+they raced the rAF under load, producing the "one random file fails, passes on rerun" flakiness
+(tests run sequentially, so it was never parallelism — purely timing). `settle()` waits for the
+actual condition instead of guessing at it.
+
+A fixed sleep is still right for things driven by a **real timer** — the toast auto-hide, the
+scroll indicators fading, the rest timer, an FX animation. Those are the only `waitForTimeout`
+calls left, and every one of them is ≥ 500ms, so a sub-500 sleep appearing in a new test is a
+reliable sign it should have been `settle()`.
+
 ## One-time setup on a new machine
 ```
 npm install -D playwright

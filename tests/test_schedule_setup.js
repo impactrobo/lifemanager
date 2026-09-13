@@ -3,6 +3,7 @@
 // confirming a day-assigned schedule is actually the one scheduleForDate() picks up for that
 // weekday (i.e. the builder's data really drives what Today/Calendar show).
 const { chromium } = require('playwright');
+const { settle } = require('./helpers');
 const path = require('path');
 
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
@@ -19,13 +20,13 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   });
 
   await page.goto(APP_PATH);
-  await page.waitForTimeout(300);
+  await settle(page);
   const schedulesBefore = await page.evaluate(() => STATE.life.schedules.length);
 
   // 1. Create a new schedule — should immediately drop into edit mode for it
   await page.evaluate(() => { switchTab('schedule'); setScheduleSubtab('setup'); setScheduleSetupSubtab('builder'); });
   await page.evaluate(() => createSchedule());
-  await page.waitForTimeout(150);
+  await settle(page);
   const schedulesAfterCreate = await page.evaluate(() => STATE.life.schedules.length);
   const editingId = await page.evaluate(() => SCHEDULE_BUILDER_EDITING);
   console.log('schedules before/after create:', schedulesBefore, '/', schedulesAfterCreate, '| now editing:', editingId);
@@ -96,7 +97,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // 7. Persistence across reload
   await page.reload();
-  await page.waitForTimeout(300);
+  await settle(page);
   const persisted = await page.evaluate((id) => STATE.life.schedules.find(s => s.id === id), editingId);
   console.log('schedule after reload:', persisted);
   if (!persisted || persisted.name !== 'Test Work Schedule' || !persisted.days.includes(2)) {

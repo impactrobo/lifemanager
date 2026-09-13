@@ -4,6 +4,7 @@
 // a gap, two schedules covering the same day flagged as a conflict, and a schedule's own editable
 // shortLabel overriding the default 5-letter auto-truncated abbreviation (scheduleAbbrev()).
 const { chromium } = require('playwright');
+const { settle } = require('./helpers');
 const path = require('path');
 
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
@@ -20,14 +21,14 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   });
 
   await page.goto(APP_PATH);
-  await page.waitForTimeout(300);
+  await settle(page);
 
   const snapshot = await page.evaluate(() => JSON.parse(JSON.stringify(STATE.life.schedules)));
   await page.evaluate(() => { STATE.life.schedules = []; saveState(); });
 
   // 1. No schedules yet -> the strip doesn't render at all (nothing to show)
   await page.evaluate(() => { switchTab('schedule'); setScheduleSubtab('setup'); setScheduleSetupSubtab('builder'); });
-  await page.waitForTimeout(150);
+  await settle(page);
   const stripAbsent = await page.evaluate(() => !document.querySelector('.week-overview-strip'));
   if (!stripAbsent) throw new Error('Expected no week-overview strip with zero schedules');
 
@@ -40,7 +41,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     render();
     return { weekday: weekday.id, weekend: weekend.id };
   });
-  await page.waitForTimeout(150);
+  await settle(page);
 
   const badges = await page.evaluate(() => [...document.querySelectorAll('.week-overview-day')].map(d => ({
     label: d.querySelector('.week-overview-label').textContent,
@@ -66,19 +67,19 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // 3b. A schedule's own editable shortLabel overrides the auto-truncated abbreviation — set via
   // the real Schedule Builder form field, same convention as everything else there.
   await page.evaluate((id) => { openScheduleEdit(id); }, ids.weekday);
-  await page.waitForTimeout(100);
+  await settle(page);
   const abbrevInput = await page.evaluateHandle(() => [...document.querySelectorAll('input')].find(i => i.getAttribute('onchange') && i.getAttribute('onchange').includes('shortLabel')));
   await abbrevInput.asElement().fill('WEEK');
   await page.evaluate(el => el.dispatchEvent(new Event('change')), abbrevInput);
-  await page.waitForTimeout(100);
+  await settle(page);
   await page.evaluate((id) => { closeScheduleEdit(); openScheduleEdit(id); }, ids.weekend);
-  await page.waitForTimeout(100);
+  await settle(page);
   const abbrevInput2 = await page.evaluateHandle(() => [...document.querySelectorAll('input')].find(i => i.getAttribute('onchange') && i.getAttribute('onchange').includes('shortLabel')));
   await abbrevInput2.asElement().fill('WKND');
   await page.evaluate(el => el.dispatchEvent(new Event('change')), abbrevInput2);
-  await page.waitForTimeout(100);
+  await settle(page);
   await page.evaluate(() => closeScheduleEdit());
-  await page.waitForTimeout(150);
+  await settle(page);
   const customBadges = await page.evaluate(() => [...document.querySelectorAll('.week-overview-day .week-overview-badge')].map(b => b.textContent));
   console.log('badges after setting shortLabel WEEK/WKND:', customBadges);
   if (customBadges[0] !== 'WKND') throw new Error(`Expected Sunday's badge to show the custom shortLabel "WKND", got "${customBadges[0]}"`);
@@ -86,7 +87,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // 4. Remove Friday from Weekday -> a real gap appears, with a note about it
   await page.evaluate((id) => { toggleScheduleDay(id, 5); }, ids.weekday); // day 5 = Friday
-  await page.waitForTimeout(150);
+  await settle(page);
   const afterGap = await page.evaluate(() => [...document.querySelectorAll('.week-overview-day')].map(d => !!d.querySelector('.week-overview-empty')));
   console.log('gap state after removing Friday from Weekday:', afterGap);
   if (!afterGap[5]) throw new Error('Expected Friday to show as a gap once no schedule covers it');
@@ -97,7 +98,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // (a real conflict), correctly excluding the still-single-covered Monday-Thursday.
   await page.evaluate((id) => { toggleScheduleDay(id, 5); }, ids.weekday); // Friday back on Weekday
   await page.evaluate((id) => { toggleScheduleDay(id, 5); }, ids.weekend); // Friday also on Weekend
-  await page.waitForTimeout(150);
+  await settle(page);
   const afterConflict = await page.evaluate(() => [...document.querySelectorAll('.week-overview-day')].map(d => !!d.querySelector('.week-overview-conflict')));
   console.log('conflict state after double-booking Friday:', afterConflict);
   if (!afterConflict[5]) throw new Error('Expected Friday to be flagged as a conflict once two schedules cover it');

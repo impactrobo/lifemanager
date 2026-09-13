@@ -6,6 +6,7 @@
 // dentist appointment that's actually news — so the recurring baseline is summarised as a single
 // schedule-name + booked-hours line, and the Day view stays the place to see a day in full.
 const { chromium } = require('playwright');
+const { settle } = require('./helpers');
 const path = require('path');
 
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
@@ -22,7 +23,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   });
 
   await page.goto(APP_PATH);
-  await page.waitForTimeout(300);
+  await settle(page);
 
   const snapshot = await page.evaluate(() => ({
     anchors: JSON.parse(JSON.stringify(STATE.life.anchors)),
@@ -62,7 +63,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     switchTab('schedule'); setScheduleSubtab('agenda');
     return { dayOffStart: plus(5) };
   });
-  await page.waitForTimeout(250);
+  await settle(page);
 
   // ---- 1. Exactly 7 day cards, today first ----
   const cards = await page.evaluate(() => [...document.querySelectorAll('.agenda-day')].map(c => c.textContent.replace(/\s+/g, ' ').trim()));
@@ -109,7 +110,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // ---- 6. Tapping a day opens it in the Calendar's Day view (not just silently set state) ----
   await page.evaluate(() => { [...document.querySelectorAll('.agenda-day')][1].click(); });
-  await page.waitForTimeout(250);
+  await settle(page);
   const landed = await page.evaluate(() => ({ subtab: SCHEDULE_SUBTAB, zoom: CAL_ZOOM, selected: CAL_SELECTED_DATE, showsDay: !!document.querySelector('#app .day-row') }));
   console.log('after tapping tomorrow:', landed);
   if (landed.subtab !== 'calendar') throw new Error('Tapping an agenda day must switch to the Calendar subtab, or the tap appears to do nothing');

@@ -2,6 +2,7 @@
 // plan and pasting it into another (including the overwrite-confirm path when the target day
 // already has entries), and that computeMealTotals() sums correctly for an assigned day.
 const { chromium } = require('playwright');
+const { settle } = require('./helpers');
 const path = require('path');
 
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
@@ -18,7 +19,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   });
 
   await page.goto(APP_PATH);
-  await page.waitForTimeout(300);
+  await settle(page);
 
   // Set up: a real saved meal to assign (bypassing the UI form since test_meal_builder.js
   // already covers that path in depth — here we just need a meal to exist).
@@ -103,7 +104,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // 8. Persistence across reload
   await page.reload();
-  await page.waitForTimeout(300);
+  await settle(page);
   const persistedTuesday = await page.evaluate(() => STATE.diet.mealPlan[2]);
   console.log('Tuesday plan after reload:', persistedTuesday);
   if (!persistedTuesday || persistedTuesday.length !== 1 || persistedTuesday[0].mealId !== mealId) {

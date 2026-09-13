@@ -8,6 +8,7 @@
 // drifting down to 28 after the first short month) — and the whole system is idempotent, since
 // ensureRecurringReminderOccurrences() runs on every app load in addition to right after creation.
 const { chromium } = require('playwright');
+const { settle } = require('./helpers');
 const path = require('path');
 
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
@@ -24,7 +25,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   });
 
   await page.goto(APP_PATH);
-  await page.waitForTimeout(300);
+  await settle(page);
 
   const snapshot = await page.evaluate(() => JSON.parse(JSON.stringify(STATE.reminders)));
 
@@ -47,16 +48,16 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // ---- 2. Creating a recurring reminder through the real form materializes the series immediately ----
   await page.evaluate(() => { STATE.reminders = []; saveState(); switchTab('schedule'); calSetZoom('day'); calSelectDay('2026-01-31'); });
-  await page.waitForTimeout(150);
+  await settle(page);
   await page.evaluate(() => toggleReminderForm());
-  await page.waitForTimeout(100);
+  await settle(page);
   // Recurrence must be chosen BEFORE typing, since setReminderFormRecurrence() re-renders the form
   // -- this is exactly the draft-preservation behavior case 3 below verifies directly.
   await page.evaluate(() => setReminderFormRecurrence('monthly'));
-  await page.waitForTimeout(100);
+  await settle(page);
   await page.fill('#remTitle', "Mom's Birthday");
   await page.evaluate(() => saveReminder());
-  await page.waitForTimeout(150);
+  await settle(page);
 
   const afterCreate = await page.evaluate(() => STATE.reminders.map(r => ({ id: r.id, date: r.date, recurrence: r.recurrence, recurrenceId: r.recurrenceId, anchorDate: r.anchorDate, title: r.title })).sort((a,b) => a.date.localeCompare(b.date)));
   console.log('materialized on creation:', afterCreate);
@@ -69,17 +70,17 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // ---- 3. Draft preservation: switching REPEATS after typing must not wipe the title ----
   await page.evaluate(() => { STATE.reminders = []; saveState(); calSelectDay('2026-03-01'); });
-  await page.waitForTimeout(150);
+  await settle(page);
   await page.evaluate(() => toggleReminderForm());
-  await page.waitForTimeout(100);
+  await settle(page);
   await page.fill('#remTitle', 'Quarterly Review');
   await page.evaluate(() => setReminderFormRecurrence('annual')); // re-renders the form
-  await page.waitForTimeout(100);
+  await settle(page);
   const titleAfterToggle = await page.evaluate(() => document.getElementById('remTitle').value);
   console.log('title after toggling REPEATS mid-typing:', titleAfterToggle);
   if (titleAfterToggle !== 'Quarterly Review') throw new Error(`Expected the typed title to survive the REPEATS toggle, got "${titleAfterToggle}"`);
   await page.evaluate(() => saveReminder());
-  await page.waitForTimeout(150);
+  await settle(page);
   const savedTitle = await page.evaluate(() => STATE.reminders.find(r => r.date === '2026-03-01').title);
   if (savedTitle !== 'Quarterly Review') throw new Error(`Expected the preserved title to actually be saved, got "${savedTitle}"`);
 
@@ -109,14 +110,14 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // ---- 7. A to-do reminder never gets a recurrence, even if the toggle was touched first ----
   await page.evaluate(() => { STATE.reminders = []; saveState(); calSelectDay('2026-04-01'); toggleReminderForm(); });
-  await page.waitForTimeout(100);
+  await settle(page);
   await page.evaluate(() => setReminderFormRecurrence('monthly')); // set while still type 'reminder'
-  await page.waitForTimeout(50);
+  await settle(page);
   await page.evaluate(() => setReminderFormType('todo')); // switch to a to-do afterward
-  await page.waitForTimeout(100);
+  await settle(page);
   await page.fill('#remTitle', 'Groceries');
   await page.evaluate(() => saveReminder());
-  await page.waitForTimeout(150);
+  await settle(page);
   const todoRows = await page.evaluate(() => STATE.reminders);
   console.log('to-do save result:', todoRows);
   if (todoRows.length !== 1) throw new Error(`Expected saving a to-do to create exactly 1 row regardless of a prior REPEATS selection, got ${todoRows.length}`);
@@ -131,7 +132,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     saveState();
     calSelectDay('2026-04-01');
   });
-  await page.waitForTimeout(150);
+  await settle(page);
   const cardsHtml = await page.evaluate(() => [...document.querySelectorAll('.entry-card')].map(c => c.innerHTML));
   const plainCard = cardsHtml.find(h => h.includes('value="Plain"'));
   const recCard = cardsHtml.find(h => h.includes('value="Recurring"'));

@@ -4,6 +4,7 @@
 // getCardioLog() only seeds a log the very first time it's created (undefined -> seeded); once a
 // user has explicitly blanked the field back to null, reopening the same log must not re-seed it.
 const { chromium } = require('playwright');
+const { settle } = require('./helpers');
 const path = require('path');
 
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
@@ -20,7 +21,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   });
 
   await page.goto(APP_PATH);
-  await page.waitForTimeout(300);
+  await settle(page);
 
   const snapshot = await page.evaluate(() => ({
     workouts: JSON.parse(JSON.stringify(STATE.workouts)),
@@ -40,7 +41,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // 2. Opening the log for the first time (via the real render path) should seed actualCalories
   // from that target, with no manual entry.
   await page.evaluate((id) => { switchTab('train'); openCardioLog(id); }, workoutId);
-  await page.waitForTimeout(150);
+  await settle(page);
   const seeded = await page.evaluate((id) => getCardioLog(STATE.currentCycle, id).actualCalories, workoutId);
   console.log('actualCalories on brand-new log:', seeded);
   if (seeded !== 400) throw new Error(`Expected auto-filled actualCalories 400, got ${seeded}`);
@@ -63,7 +64,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // 5. Persists across a real reload.
   await page.reload();
-  await page.waitForTimeout(300);
+  await settle(page);
   const afterReload = await page.evaluate((id) => STATE.logs[logKey(STATE.currentCycle, id)].actualCalories, workoutId);
   if (afterReload !== 350) throw new Error(`Expected override 350 to survive reload, got ${afterReload}`);
 
