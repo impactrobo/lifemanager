@@ -1,4 +1,4 @@
-// app-train-log.js -- Training: the plan grid and every kind of workout logging (weights, cardio, MESO1), supersets, rest auto-start, quick-add.
+// app-train-log.js -- Training: the plan grid and every kind of workout logging (weights, cardio, RP-style), supersets, rest auto-start, quick-add.
 //
 // One part of the former single app.js (see docs/ARCHITECTURE.md > "Source layout"). These are
 // plain classic <script>s loaded in a fixed order by index.html -- NOT modules. Top-level
@@ -10,10 +10,10 @@
 // ================= PLAN =================
 // Program Style (weights) and cardio's own style are now per-workout choices made in Workout
 // Builder, not a single Plan-tab setting — see DATA_MODEL.md / createWorkout(). Plan just holds
-// what's genuinely global: Units/Rounding and the meso cycle length everything else follows.
+// what's genuinely global: Units/Rounding and the program cycle length everything else follows.
 function renderPlan() {
-  const c25kTooShort = programWorkouts('C25K').length > 0 && STATE.meso.cycles < C25K_TOTAL_WEEKS;
-  const c2triTooShort = programWorkouts('C2Triathlon').length > 0 && STATE.meso.cycles < C2TRI_TOTAL_WEEKS;
+  const c25kTooShort = programWorkouts('C25K').length > 0 && STATE.program.cycles < C25K_TOTAL_WEEKS;
+  const c2triTooShort = programWorkouts('C2Triathlon').length > 0 && STATE.program.cycles < C2TRI_TOTAL_WEEKS;
   return `
     <div class="subtle-label" style="margin-bottom:10px;">UNITS &amp; ROUNDING</div>
     <div class="panel">
@@ -30,15 +30,15 @@ function renderPlan() {
       </label>
       <div style="font-size:11px;color:var(--text-faint);">Target weights round to the nearest increment — e.g. 2.5 lb or 1 kg plates.</div>
     </div>
-    <div class="subtle-label" style="margin-bottom:10px;">MESO STRUCTURE</div>
+    <div class="subtle-label" style="margin-bottom:10px;">PROGRAM STRUCTURE</div>
     <div class="panel">
       <label class="field">
         <span class="lbl">Cycles (weeks)</span>
-        <input type="number" min="1" step="1" value="${STATE.meso.cycles}" onchange="updateMeso('cycles', this.value)">
+        <input type="number" min="1" step="1" value="${STATE.program.cycles}" onchange="updateRp('cycles', this.value)">
       </label>
-      <div style="font-size:11px; color:var(--text-faint); margin-top:2px;">Length of the meso cycle — the Train tab's week selector and Set Volume both follow this. Whole numbers only, minimum 1.</div>
-      ${c25kTooShort ? `<div style="font-size:11px; color:var(--accent); font-weight:600; margin-top:6px;">Your meso is only ${STATE.meso.cycles} week${STATE.meso.cycles===1?'':'s'} — your C25K workouts need ${C25K_TOTAL_WEEKS} weeks to complete. Increase Cycles above to run the full program, or it'll hold at Week ${STATE.meso.cycles}'s pace once your meso ends.</div>` : ''}
-      ${c2triTooShort ? `<div style="font-size:11px; color:var(--accent); font-weight:600; margin-top:6px;">Your meso is only ${STATE.meso.cycles} week${STATE.meso.cycles===1?'':'s'} — your C2Triathlon workouts need ${C2TRI_TOTAL_WEEKS} weeks to complete. Increase Cycles above to run the full program, or it'll hold at Week ${STATE.meso.cycles}'s pace once your meso ends.</div>` : ''}
+      <div style="font-size:11px; color:var(--text-faint); margin-top:2px;">Length of the program cycle — the Train tab's week selector and Set Volume both follow this. Whole numbers only, minimum 1.</div>
+      ${c25kTooShort ? `<div style="font-size:11px; color:var(--accent); font-weight:600; margin-top:6px;">Your program is only ${STATE.program.cycles} week${STATE.program.cycles===1?'':'s'} — your C25K workouts need ${C25K_TOTAL_WEEKS} weeks to complete. Increase Cycles above to run the full program, or it'll hold at Week ${STATE.program.cycles}'s pace once your program ends.</div>` : ''}
+      ${c2triTooShort ? `<div style="font-size:11px; color:var(--accent); font-weight:600; margin-top:6px;">Your program is only ${STATE.program.cycles} week${STATE.program.cycles===1?'':'s'} — your C2Triathlon workouts need ${C2TRI_TOTAL_WEEKS} weeks to complete. Increase Cycles above to run the full program, or it'll hold at Week ${STATE.program.cycles}'s pace once your program ends.</div>` : ''}
     </div>
     <div class="empty-state" style="padding:14px 10px;"><div style="font-size:12px;">Weights/Cardio/Mobility/Warmup workouts, and each one's own style, are built under <b style="color:var(--text)">Setup &rarr; Workout Builder</b> — there's no per-cycle slot count anymore, just add what you use.</div></div>`;
 }
@@ -67,7 +67,7 @@ function enabledTierKeys(workout) {
 }
 // ---- exercises[]-shaped workouts (Hypertrophy/Free Entry/Mobility/Warmup) equivalents of
 // workoutCompletion/enabledTierKeys/workoutIcon above ----
-function mesoWorkoutCompletion(cycle, workout) {
+function rpWorkoutCompletion(cycle, workout) {
   const log = STATE.logs[logKey(cycle, workout.id)];
   if (!log || workout.exercises.length === 0) return 'empty';
   const filled = workout.exercises.filter(ex => log.entries[ex.id] && log.entries[ex.id].sets && log.entries[ex.id].sets.some(s => s.reps !== undefined && s.reps !== ''));
@@ -75,7 +75,7 @@ function mesoWorkoutCompletion(cycle, workout) {
   if (filled.length === workout.exercises.length) return 'done';
   return 'partial';
 }
-function mesoWorkoutIcon(workout) {
+function rpWorkoutIcon(workout) {
   const withMuscle = workout.exercises.find(ex => ex.muscle);
   return withMuscle ? muscleIcon(withMuscle.muscle) : '';
 }
@@ -106,17 +106,17 @@ function renderTrainSection(type, list, cycle, openFn) {
   // weights / mobility / warmup — all exercises[]-shaped except GZCL-style weights (has t1)
   const cells = list.map((w, i) => {
     const isGzcl = !!w.t1;
-    const status = isGzcl ? workoutCompletion(cycle, w) : mesoWorkoutCompletion(cycle, w);
+    const status = isGzcl ? workoutCompletion(cycle, w) : rpWorkoutCompletion(cycle, w);
     const hasContent = isGzcl ? enabledTierKeys(w).length > 0 : w.exercises.length > 0;
     const flair = (status === 'empty' && hasContent) ? 'unfinished-weight' : '';
-    const ic = isGzcl ? workoutIcon(w) : mesoWorkoutIcon(w);
+    const ic = isGzcl ? workoutIcon(w) : rpWorkoutIcon(w);
     return `<div class="workout-cell ${status} ${flair} ${!hasContent ? 'empty-slot' : ''}" onclick="${openFn}('${w.id}')">
       <div class="wnum">${i + 1}</div>
       <div class="wname">${escapeHtml(w.name)}</div>
       ${ic ? `<div class="cell-icon">${ic}</div>` : ''}
     </div>`;
   }).join('');
-  const doneCount = list.filter(w => (w.t1 ? workoutCompletion(cycle, w) : mesoWorkoutCompletion(cycle, w)) === 'done').length;
+  const doneCount = list.filter(w => (w.t1 ? workoutCompletion(cycle, w) : rpWorkoutCompletion(cycle, w)) === 'done').length;
   const withContentCount = list.filter(w => w.t1 ? enabledTierKeys(w).length > 0 : w.exercises.length > 0).length;
   return `<div class="workout-grid">${cells}</div>
     <div class="panel" style="margin-top:10px;">
@@ -156,12 +156,12 @@ function renderTrainGrid() {
       <div class="section-title">Exercise</div>
       <div class="week-selector">
         <div>
-          <div class="subtle-label">MESO CYCLE</div>
-          <div class="cycle-label">WEEK ${cycle} <span style="color:var(--text-faint); font-size:16px;">/ ${STATE.meso.cycles}</span></div>
+          <div class="subtle-label">PROGRAM CYCLE</div>
+          <div class="cycle-label">WEEK ${cycle} <span style="color:var(--text-faint); font-size:16px;">/ ${STATE.program.cycles}</span></div>
         </div>
         <div class="cycle-btns">
           <button onclick="changeCycle(-1)" ${cycle <= 1 ? 'disabled style="opacity:.3"' : ''}>&#8249;</button>
-          <button onclick="changeCycle(1)" ${cycle >= STATE.meso.cycles ? 'disabled style="opacity:.3"' : ''}>&#8250;</button>
+          <button onclick="changeCycle(1)" ${cycle >= STATE.program.cycles ? 'disabled style="opacity:.3"' : ''}>&#8250;</button>
         </div>
       </div>
       ${section('weights', weights, 'openWorkoutLog')}
@@ -178,7 +178,7 @@ function setTrainTopSubtab(t) {
 
 function changeCycle(delta) {
   const next = STATE.currentCycle + delta;
-  if (next < 1 || next > STATE.meso.cycles) return;
+  if (next < 1 || next > STATE.program.cycles) return;
   STATE.currentCycle = next;
   saveState();
   render();
@@ -187,7 +187,7 @@ function changeCycle(delta) {
 // mobility, and warmup workouts alike.
 function openWorkoutLog(workoutId) {
   const w = getWorkout(workoutId);
-  NAV.trainView = { mode: (w && w.t1) ? 'log' : 'mesoLog', workoutId };
+  NAV.trainView = { mode: (w && w.t1) ? 'log' : 'rpLog', workoutId };
   render();
   window.scrollTo(0, 0);
 }
@@ -196,8 +196,8 @@ function openCardioLog(cardioId) {
   render();
   window.scrollTo(0, 0);
 }
-function openMesoWorkoutLog(workoutId) {
-  NAV.trainView = { mode: 'mesoLog', workoutId };
+function openRpWorkoutLog(workoutId) {
+  NAV.trainView = { mode: 'rpLog', workoutId };
   render();
   window.scrollTo(0, 0);
 }
@@ -223,13 +223,13 @@ function renderCardioLog(cardioId) {
   if (c25kText) {
     prescriptionHtml = `
       <div class="panel" style="border-color:var(--accent-dim); background:var(--accent-soft); margin-bottom:14px;">
-        <div class="subtle-label" style="margin-bottom:4px;">C25K WEEK ${c25kWeek}${cycle > C25K_TOTAL_WEEKS ? ' (holding at final week — meso ran past 9 weeks)' : ''}</div>
+        <div class="subtle-label" style="margin-bottom:4px;">C25K WEEK ${c25kWeek}${cycle > C25K_TOTAL_WEEKS ? ' (holding at final week — program ran past 9 weeks)' : ''}</div>
         <div style="font-size:14px; line-height:1.5;">${escapeHtml(c25kText)}</div>
       </div>`;
   } else if (c2triText) {
     prescriptionHtml = `
       <div class="panel" style="border-color:var(--accent-dim); background:var(--accent-soft); margin-bottom:14px;">
-        <div class="subtle-label" style="margin-bottom:4px;">C2TRIATHLON WEEK ${c2triWeek}${cycle > C2TRI_TOTAL_WEEKS ? ' (holding at final week — meso ran past 16 weeks)' : ''}</div>
+        <div class="subtle-label" style="margin-bottom:4px;">C2TRIATHLON WEEK ${c2triWeek}${cycle > C2TRI_TOTAL_WEEKS ? ' (holding at final week — program ran past 16 weeks)' : ''}</div>
         <div style="font-size:14px; line-height:1.5;">${escapeHtml(c2triText)}</div>
       </div>`;
   }
@@ -286,12 +286,12 @@ function updateCardioLogNotes(cardioId, val) {
   saveState();
 }
 
-// ================= TRAIN: MESO1 WORKOUT LOG =================
-// MESO1 exercises carry no training max — like GZCL's T3 accessories, weight is
+// ================= TRAIN: RP-STYLE WORKOUT LOG =================
+// RP-style exercises carry no training max — like GZCL's T3 accessories, weight is
 // whatever was last logged for that exercise, carried forward with any queued
 // adjustments. Progression is driven by RIR (how many reps were left in the tank)
 // against the exercise's target RIR, rather than an AMRAP-set rep count.
-function mesoExHistoryBaseWeightLb(workoutId, exId, targetCycle) {
+function rpExHistoryBaseWeightLb(workoutId, exId, targetCycle) {
   for (let c = targetCycle - 1; c >= 1; c--) {
     const log = STATE.logs[logKey(c, workoutId)];
     const entry = log && log.entries[exId];
@@ -301,15 +301,15 @@ function mesoExHistoryBaseWeightLb(workoutId, exId, targetCycle) {
   }
   return null;
 }
-function mesoExEffectiveWeightLb(workoutId, ex, cycle) {
-  const base = mesoExHistoryBaseWeightLb(workoutId, ex.id, cycle);
+function rpExEffectiveWeightLb(workoutId, ex, cycle) {
+  const base = rpExHistoryBaseWeightLb(workoutId, ex.id, cycle);
   if (base === null) return null;
   const adjustments = Array.isArray(ex.adjustments) ? ex.adjustments : [];
   let total = base;
   adjustments.forEach(a => { if (a.fromCycle <= cycle) total += a.deltaLb; });
   return total;
 }
-function computeMesoSuggestion(entry, ex) {
+function computeRpSuggestion(entry, ex) {
   const logged = entry.sets.filter(s => s.reps !== '' && s.reps !== undefined);
   if (logged.length === 0) return { eligible: false, missed: false, note: 'Log your sets (reps + RIR) to get a suggestion.' };
   const withRir = logged.filter(s => s.rir !== '' && s.rir !== undefined && s.rir !== null);
@@ -326,14 +326,14 @@ function computeMesoSuggestion(entry, ex) {
   }
   return { eligible: false, missed: false, avgRIR, note: `Averaged ${avgRIRStr} RIR vs a target of ${target} — right on track. Hold this weight and rep range.` };
 }
-function renderMesoExerciseBlock(workout, cycle, log, ex) {
+function renderRpExerciseBlock(workout, cycle, log, ex) {
   const entryKey = ex.id;
   if (!log.entries[entryKey]) log.entries[entryKey] = { sets: [], applied: false, appliedDeltaLb: null, appliedAdjustmentId: null };
   const entry = log.entries[entryKey];
   if (entry.applied === undefined) entry.applied = false;
   while (entry.sets.length < ex.sets) entry.sets.push({ weight: '', reps: '', rir: '' });
 
-  const effectiveLb = mesoExEffectiveWeightLb(workout.id, ex, cycle);
+  const effectiveLb = rpExEffectiveWeightLb(workout.id, ex, cycle);
   const needsSeed = effectiveLb === null;
   if (needsSeed) {
     const anchorW = entry.sets[0] ? entry.sets[0].weight : '';
@@ -341,7 +341,7 @@ function renderMesoExerciseBlock(workout, cycle, log, ex) {
   }
 
   const mColor = muscleColor(ex.muscle);
-  const setTypeInfo = MESO_SET_TYPES[ex.setType] || MESO_SET_TYPES.straight;
+  const setTypeInfo = RP_SET_TYPES[ex.setType] || RP_SET_TYPES.straight;
   const isBand = ex.resType === 'band';
   const isBW = ex.resType === 'bodyweight';
 
@@ -363,26 +363,26 @@ function renderMesoExerciseBlock(workout, cycle, log, ex) {
     const rirVal = s.rir !== '' && s.rir !== undefined && s.rir !== null ? s.rir : '';
     return `<div>
       ${isSeedAnchor ? setLabelRow('SEED', 'var(--reset-text)', 2) : ''}
-      <div class="set-row-meso">
+      <div class="set-row-rp">
         <div class="setnum">${i+1}</div>
         ${isBand
-          ? `<input type="text" placeholder="band" value="${escapeHtml(String(wDisplay))}" onchange="updateMesoSet('${workout.id}','${entryKey}',${i},'weight',this.value)">`
+          ? `<input type="text" placeholder="band" value="${escapeHtml(String(wDisplay))}" onchange="updateRpSet('${workout.id}','${entryKey}',${i},'weight',this.value)">`
           : isBW
-          ? `<input type="text" placeholder="+/- wt" value="${escapeHtml(String(wDisplay))}" onchange="updateMesoSet('${workout.id}','${entryKey}',${i},'weight',this.value)">`
+          ? `<input type="text" placeholder="+/- wt" value="${escapeHtml(String(wDisplay))}" onchange="updateRpSet('${workout.id}','${entryKey}',${i},'weight',this.value)">`
           : `<input type="number" inputmode="decimal" step="0.5" placeholder="wt" value="${wDisplay}"
               ${isSeedAnchor ? 'style="border-color:var(--reset-border); background:var(--reset-bg); font-weight:700;"' : ''}
               ${isSeedMirror ? 'readonly style="opacity:.65;"' : ''}
-              onchange="updateMesoSet('${workout.id}','${entryKey}',${i},'weight',this.value)">`}
+              onchange="updateRpSet('${workout.id}','${entryKey}',${i},'weight',this.value)">`}
         <input type="number" inputmode="numeric" min="0" step="1" placeholder="reps" value="${repsVal}"
-          onchange="updateMesoSet('${workout.id}','${entryKey}',${i},'reps',this.value)">
+          onchange="updateRpSet('${workout.id}','${entryKey}',${i},'reps',this.value)">
         <input type="number" inputmode="decimal" step="0.5" min="0" max="5" placeholder="RIR" value="${rirVal}"
-          onchange="updateMesoSet('${workout.id}','${entryKey}',${i},'rir',this.value)">
+          onchange="updateRpSet('${workout.id}','${entryKey}',${i},'rir',this.value)">
         <div></div>
       </div>
     </div>`;
   }).join('');
 
-  const sugg = computeMesoSuggestion(entry, ex);
+  const sugg = computeRpSuggestion(entry, ex);
   const displayedDelta = entry.applied ? entry.appliedDeltaLb : null;
 
   return `
@@ -397,14 +397,14 @@ function renderMesoExerciseBlock(workout, cycle, log, ex) {
         ${needsSeed && !isBand && !isBW
           ? `<div class="target-line" style="color:var(--reset-text); font-weight:600;">First time logging this — enter your working weight for Set 1; the rest will match it.</div>`
           : `<div class="target-line">Target: <span class="tv">${ex.sets}&times;${ex.repMin}-${ex.repMax}</span> @ RIR ${fmt(ex.targetRIR,1)}</div>`}
-        <div class="set-row-meso" style="margin-bottom:8px; opacity:.6;">
+        <div class="set-row-rp" style="margin-bottom:8px; opacity:.6;">
           <div></div><div style="font-size:10px;color:var(--text-faint); font-weight:700;">WEIGHT</div><div style="font-size:10px;color:var(--text-faint); font-weight:700;">REPS</div><div style="font-size:10px;color:var(--text-faint); font-weight:700;">RIR</div><div></div>
         </div>
         ${setsHtml}
         <div style="display:flex; gap:8px; flex-wrap:wrap; margin:8px 0 0;">
-          <button class="btn btn-ghost btn-sm" onclick="addMesoSet('${workout.id}','${entryKey}')">+ ADD SET</button>
-          ${entry.sets.length > 1 ? `<button class="btn btn-ghost btn-sm" style="color:var(--bad)" onclick="removeMesoSet('${workout.id}','${entryKey}',${entry.sets.length - 1})">&minus; REMOVE LAST SET</button>` : ''}
-          ${nextRepeatableSetIndex(entry) >= 0 ? `<button class="btn btn-ghost btn-sm" onclick="repeatLastMesoSet('${workout.id}','${entryKey}')">${icon('repeat')} REPEAT LAST SET</button>` : ''}
+          <button class="btn btn-ghost btn-sm" onclick="addRpSet('${workout.id}','${entryKey}')">+ ADD SET</button>
+          ${entry.sets.length > 1 ? `<button class="btn btn-ghost btn-sm" style="color:var(--bad)" onclick="removeRpSet('${workout.id}','${entryKey}',${entry.sets.length - 1})">&minus; REMOVE LAST SET</button>` : ''}
+          ${nextRepeatableSetIndex(entry) >= 0 ? `<button class="btn btn-ghost btn-sm" onclick="repeatLastRpSet('${workout.id}','${entryKey}')">${icon('repeat')} REPEAT LAST SET</button>` : ''}
         </div>
         ${entry.applied ? `
         <div class="suggestion-box applied">
@@ -412,25 +412,25 @@ function renderMesoExerciseBlock(workout, cycle, log, ex) {
             <div class="sugtext">Weight change queued for next workout</div>
             <div class="sugval">${displayedDelta >= 0 ? '+' : ''}${fmt(lbToDisplay(displayedDelta),1)} ${weightUnitLabel()}</div>
           </div>
-          <button class="btn btn-sm" style="background:var(--good); color:#0c1b12; border-color:var(--good);" onclick="undoMesoSuggestion('${workout.id}','${entryKey}')" title="Tap to undo">SET! (tap to undo)</button>
+          <button class="btn btn-sm" style="background:var(--good); color:#0c1b12; border-color:var(--good);" onclick="undoRpSuggestion('${workout.id}','${entryKey}')" title="Tap to undo">SET! (tap to undo)</button>
         </div>
         <div style="font-size:11px; color:var(--text-faint); margin-top:6px;">Locked in for next time — tap SET! to undo if you made a mistake.</div>`
         : sugg.eligible && !isBand && !isBW ? `
         <div class="suggestion-box">
           <div><div class="sugtext">${sugg.note}</div></div>
           <div style="display:flex; align-items:center; gap:8px;">
-            <input type="number" step="0.5" placeholder="lb" value="" id="mesosugg_${workout.id}_${entryKey}" style="width:64px;">
-            <button class="btn btn-good btn-sm" onclick="applyMesoSuggestion('${workout.id}','${entryKey}')">APPLY</button>
+            <input type="number" step="0.5" placeholder="lb" value="" id="rpsugg_${workout.id}_${entryKey}" style="width:64px;">
+            <button class="btn btn-good btn-sm" onclick="applyRpSuggestion('${workout.id}','${entryKey}')">APPLY</button>
           </div>
         </div>`
         : `<div style="font-size:11px; ${sugg.missed ? 'color:var(--bad); font-weight:600;' : 'color:var(--text-faint);'} margin-top:6px;">${sugg.note}</div>`}
       </div>
     </div>`;
 }
-function renderMesoWorkoutLog(workoutId) {
-  const workout = getMesoWorkout(workoutId);
+function renderRpWorkoutLog(workoutId) {
+  const workout = getRpWorkout(workoutId);
   const cycle = STATE.currentCycle;
-  const log = getMesoLog(cycle, workoutId);
+  const log = getRpLog(cycle, workoutId);
 
   const setVol = computeVolumeForCycle(cycle);
   const bumpedMuscles = new Set(workout.exercises.map(e => e.muscle).filter(Boolean));
@@ -447,7 +447,7 @@ function renderMesoWorkoutLog(workoutId) {
       </div>
     </div>` : '';
 
-  let blocks = workout.exercises.map(ex => renderMesoExerciseBlock(workout, cycle, log, ex)).join('');
+  let blocks = workout.exercises.map(ex => renderRpExerciseBlock(workout, cycle, log, ex)).join('');
   if (!blocks) {
     blocks = `<div class="empty-state"><div class="big">${icon('lock')}</div>No exercises assigned to this slot yet.<br>Go to Setup &rarr; Workout Builder to configure it.</div>`;
   }
@@ -456,13 +456,13 @@ function renderMesoWorkoutLog(workoutId) {
     <div class="screen">
       <div class="row" style="margin-bottom:6px;">
         <button class="btn btn-ghost btn-sm" onclick="backToGrid()">&#8249; BACK</button>
-        <button class="btn btn-ghost btn-sm" onclick="clearMesoWorkoutLog('${workoutId}')" style="color:var(--bad)">CLEAR</button>
+        <button class="btn btn-ghost btn-sm" onclick="clearRpWorkoutLog('${workoutId}')" style="color:var(--bad)">CLEAR</button>
       </div>
       <div class="section-title" style="margin-top:6px;">${escapeHtml(workout.name)}</div>
       <div class="subtle-label">WEEK ${cycle} &middot; ${log.date || 'not dated'}</div>
       <label class="field" style="margin-top:10px;">
         <span class="lbl">Date</span>
-        <input type="date" value="${log.date || todayStr()}" onchange="updateMesoLogDate('${workoutId}', this.value)">
+        <input type="date" value="${log.date || todayStr()}" onchange="updateRpLogDate('${workoutId}', this.value)">
       </label>
       <div class="divider"></div>
       ${volLine}
@@ -470,16 +470,16 @@ function renderMesoWorkoutLog(workoutId) {
       <div class="divider"></div>
       <label class="field">
         <span class="lbl">Notes</span>
-        <textarea placeholder="How did it feel? Anything to remember for next time..." onchange="updateMesoLogNotes('${workoutId}', this.value)">${escapeHtml(log.notes || '')}</textarea>
+        <textarea placeholder="How did it feel? Anything to remember for next time..." onchange="updateRpLogNotes('${workoutId}', this.value)">${escapeHtml(log.notes || '')}</textarea>
       </label>
     </div>`;
 }
-function updateMesoSet(workoutId, exId, idx, field, value) {
-  const log = getMesoLog(STATE.currentCycle, workoutId);
+function updateRpSet(workoutId, exId, idx, field, value) {
+  const log = getRpLog(STATE.currentCycle, workoutId);
   const entry = log.entries[exId];
   if (!entry.sets[idx]) entry.sets[idx] = { weight: '', reps: '', rir: '' };
-  const workout = getMesoWorkout(workoutId);
-  const ex = getMesoExercise(workout, exId);
+  const workout = getRpWorkout(workoutId);
+  const ex = getRpExercise(workout, exId);
   const isNumericWeight = ex && ex.resType !== 'band' && ex.resType !== 'bodyweight';
   let justFilledReps = false;
   if (field === 'weight') entry.sets[idx].weight = value === '' ? '' : (isNumericWeight ? displayToLb(value) : value);
@@ -490,13 +490,13 @@ function updateMesoSet(workoutId, exId, idx, field, value) {
   }
   else entry.sets[idx].rir = value === '' ? '' : Number(value);
   saveState();
-  // MESO exercises don't have superset pairings (that's a GZCL-only concept), so it's always
+  // RP-style exercises don't have superset pairings (that's a GZCL-only concept), so it's always
   // just this one exercise's own round that needs to be filled in.
   if (justFilledReps && restTimerSettings().autoStart) startRestTimer();
   render();
 }
-function repeatLastMesoSet(workoutId, exId) {
-  const log = getMesoLog(STATE.currentCycle, workoutId);
+function repeatLastRpSet(workoutId, exId) {
+  const log = getRpLog(STATE.currentCycle, workoutId);
   const entry = log.entries[exId];
   const nextIdx = nextRepeatableSetIndex(entry);
   if (nextIdx === -1) return;
@@ -508,24 +508,24 @@ function repeatLastMesoSet(workoutId, exId) {
   if (restTimerSettings().autoStart) startRestTimer();
   render();
 }
-function addMesoSet(workoutId, exId) {
-  const log = getMesoLog(STATE.currentCycle, workoutId);
+function addRpSet(workoutId, exId) {
+  const log = getRpLog(STATE.currentCycle, workoutId);
   log.entries[exId].sets.push({ weight: '', reps: '', rir: '' });
   saveState(); render();
 }
-function removeMesoSet(workoutId, exId, idx) {
-  const log = getMesoLog(STATE.currentCycle, workoutId);
+function removeRpSet(workoutId, exId, idx) {
+  const log = getRpLog(STATE.currentCycle, workoutId);
   log.entries[exId].sets.splice(idx, 1);
   saveState(); render();
 }
-function applyMesoSuggestion(workoutId, exId) {
-  const log = getMesoLog(STATE.currentCycle, workoutId);
+function applyRpSuggestion(workoutId, exId) {
+  const log = getRpLog(STATE.currentCycle, workoutId);
   const entry = log.entries[exId];
   if (entry.applied) return;
-  const input = document.getElementById(`mesosugg_${workoutId}_${exId}`);
+  const input = document.getElementById(`rpsugg_${workoutId}_${exId}`);
   const deltaLb = displayToLb(input.value || 0);
-  const workout = getMesoWorkout(workoutId);
-  const ex = getMesoExercise(workout, exId);
+  const workout = getRpWorkout(workoutId);
+  const ex = getRpExercise(workout, exId);
   if (!Array.isArray(ex.adjustments)) ex.adjustments = [];
   const adjId = uid();
   ex.adjustments.push({ id: adjId, fromCycle: STATE.currentCycle + 1, deltaLb });
@@ -536,12 +536,12 @@ function applyMesoSuggestion(workoutId, exId) {
   showToast(`Queued: ${ex.name} +${fmt(lbToDisplay(deltaLb),1)} ${weightUnitLabel()} starting next workout`);
   render();
 }
-function undoMesoSuggestion(workoutId, exId) {
-  const log = getMesoLog(STATE.currentCycle, workoutId);
+function undoRpSuggestion(workoutId, exId) {
+  const log = getRpLog(STATE.currentCycle, workoutId);
   const entry = log.entries[exId];
   if (!entry.applied) return;
-  const workout = getMesoWorkout(workoutId);
-  const ex = getMesoExercise(workout, exId);
+  const workout = getRpWorkout(workoutId);
+  const ex = getRpExercise(workout, exId);
   if (Array.isArray(ex.adjustments) && entry.appliedAdjustmentId) {
     ex.adjustments = ex.adjustments.filter(a => a.id !== entry.appliedAdjustmentId);
   }
@@ -552,17 +552,17 @@ function undoMesoSuggestion(workoutId, exId) {
   showToast('Undone — back to suggestion');
   render();
 }
-function updateMesoLogDate(workoutId, val) {
-  const log = getMesoLog(STATE.currentCycle, workoutId);
+function updateRpLogDate(workoutId, val) {
+  const log = getRpLog(STATE.currentCycle, workoutId);
   log.date = val;
   saveState();
 }
-function updateMesoLogNotes(workoutId, val) {
-  const log = getMesoLog(STATE.currentCycle, workoutId);
+function updateRpLogNotes(workoutId, val) {
+  const log = getRpLog(STATE.currentCycle, workoutId);
   log.notes = val;
   saveState();
 }
-function clearMesoWorkoutLog(workoutId) {
+function clearRpWorkoutLog(workoutId) {
   showConfirm('Clear all logged data for this workout this week?', () => {
     delete STATE.logs[logKey(STATE.currentCycle, workoutId)];
     saveState();
@@ -1022,7 +1022,7 @@ function supersetRoundComplete(workout, log, entryKey, idx) {
   });
 }
 
-// ---- Quick-add: repeat the last logged set's weight+reps (and RIR, for MESO1) into the next
+// ---- Quick-add: repeat the last logged set's weight+reps (and RIR, for RP-style) into the next
 // blank set, so identical straight sets don't need retyping every time.
 function nextRepeatableSetIndex(entry) {
   if (!entry || !entry.sets || entry.sets.length < 2) return -1;

@@ -398,7 +398,7 @@ function trackedLiftSlots() {
 // The actual weight put on the bar for (categoryId, tierKey), one point per logged session,
 // across every cycle and every workout that has ever used that category+tier slot (cycle numbers
 // only ever increase — see logKey() — so STATE.logs is a person's whole training history, not
-// just the current mesocycle). "Top set" = the heaviest set that day with both weight and reps
+// just the current cycle). "Top set" = the heaviest set that day with both weight and reps
 // actually filled in, i.e. a completed set, not just a placeholder row.
 function liftHistorySeries(categoryId, tierKey) {
   const workoutIds = workoutsByType('weights')
@@ -527,7 +527,7 @@ function drawCompareCharts() {
 function renderVolume() {
   if (NAV.volumeCycle === null) NAV.volumeCycle = STATE.currentCycle;
   if (NAV.volumeCycle < 1) NAV.volumeCycle = 1;
-  if (NAV.volumeCycle > STATE.meso.cycles) NAV.volumeCycle = STATE.meso.cycles;
+  if (NAV.volumeCycle > STATE.program.cycles) NAV.volumeCycle = STATE.program.cycles;
 
   const data = computeVolumeForCycle(NAV.volumeCycle);
   const maxSets = Math.max(1, ...data.map(d => d.sets));
@@ -570,11 +570,11 @@ function renderVolume() {
     <div class="week-selector">
       <div>
         <div class="subtle-label">SETS PER MUSCLE GROUP</div>
-        <div class="cycle-label">WEEK ${NAV.volumeCycle} <span style="color:var(--text-faint); font-size:16px;">/ ${STATE.meso.cycles}</span></div>
+        <div class="cycle-label">WEEK ${NAV.volumeCycle} <span style="color:var(--text-faint); font-size:16px;">/ ${STATE.program.cycles}</span></div>
       </div>
       <div class="cycle-btns">
         <button onclick="changeVolumeCycle(-1)" ${NAV.volumeCycle <= 1 ? 'disabled style="opacity:.3"' : ''}>&#8249;</button>
-        <button onclick="changeVolumeCycle(1)" ${NAV.volumeCycle >= STATE.meso.cycles ? 'disabled style="opacity:.3"' : ''}>&#8250;</button>
+        <button onclick="changeVolumeCycle(1)" ${NAV.volumeCycle >= STATE.program.cycles ? 'disabled style="opacity:.3"' : ''}>&#8250;</button>
       </div>
     </div>
     ${!anyTagged ? `<div class="panel" style="border-color:var(--accent-dim); background:var(--accent-soft);"><div style="font-size:12px;">No exercises are tagged with a muscle group yet. Add one under <b>Setup &rarr; Training Max</b> (per category) or <b>Setup &rarr; Workout Builder</b> (per exercise/accessory) to start seeing volume here.</div></div>` : ''}
@@ -586,7 +586,7 @@ function renderVolume() {
 }
 function changeVolumeCycle(delta) {
   const next = NAV.volumeCycle + delta;
-  if (next < 1 || next > STATE.meso.cycles) return;
+  if (next < 1 || next > STATE.program.cycles) return;
   NAV.volumeCycle = next;
   render();
 }

@@ -31,7 +31,9 @@ function loadState() {
       logs: parsed.logs || {},
       measurements: parsed.measurements || [],
       weightLog: parsed.weightLog || [],
-      meso: parsed.meso || base.meso,
+      // `meso` is what this was called before it was renamed to `program` -- an existing save
+      // still has the old key, so read either. Nothing else reads `parsed.meso`.
+      program: parsed.program || parsed.meso || base.program,
       cardioWorkouts: parsed.cardioWorkouts || [],
       cardioLogs: parsed.cardioLogs || {},
       notes: parsed.notes || [],
@@ -83,7 +85,7 @@ function restTimerSettings() {
 // The FAB/widget only make sense while a specific workout log is open — resting between sets
 // of a workout that isn't currently on screen doesn't mean anything.
 function isInWorkoutLogScreen() {
-  return NAV.currentTab === 'train' && NAV.trainTopSubtab === 'workouts' && (NAV.trainView.mode === 'log' || NAV.trainView.mode === 'mesoLog');
+  return NAV.currentTab === 'train' && NAV.trainTopSubtab === 'workouts' && (NAV.trainView.mode === 'log' || NAV.trainView.mode === 'rpLog');
 }
 function getAudioCtx() {
   if (!AUDIO_CTX) {
@@ -342,7 +344,7 @@ function recomputeTMs() {
   });
 }
 // One-time save migrations: backfills every field added since a save was written, folds legacy
-// shapes (MESO1 slots, cardioWorkouts, the old built-in note tags) into their current homes, and
+// shapes (RP-style slots, cardioWorkouts, the old built-in note tags) into their current homes, and
 // finishes by deriving the training maxes.
 //
 // Was updateAllTMs(), which undersold it — the name described the last few lines and hid the fact
@@ -370,6 +372,10 @@ function migrateState() {
   // Water was shipped counting GLASSES for a few hours before moving to millilitres. The field
   // is renamed rather than reinterpreted: a stored `8` is unreadable otherwise -- eight glasses or
   // eight millilitres? -- and guessing from magnitude would be a coin flip on small values.
+  // `meso` was renamed to `program`; loadState() reads either, so by here the value is already
+  // carried over. Dropping the old key stops a save dump showing both and leaving the next reader
+  // wondering which one is live.
+  delete STATE.meso;
   if (STATE.settings.waterTargetMl == null) {
     STATE.settings.waterTargetMl = STATE.settings.waterTarget != null
       ? Math.round(Number(STATE.settings.waterTarget) * 250) : 2000;
@@ -439,7 +445,7 @@ function migrateState() {
   }
 
   // ---- Unified workout model migration (one-time) ----
-  // Folds the old GZCL-only STATE.workouts (fixed w1..w12 slots), STATE.mesoWorkouts (MESO1's
+  // Folds the old GZCL-only STATE.workouts (fixed w1..w12 slots), STATE.mesoWorkouts (the RP-style
   // parallel array) and STATE.cardioWorkouts into one free-form STATE.workouts pool where every
   // entry carries its own `type` and, for weights/cardio, its own `style` — Workout Style is now
   // a per-workout choice made in Workout Builder, not a single Plan-tab setting. Logs fold the
@@ -456,7 +462,7 @@ function migrateState() {
     (STATE.mesoWorkouts || []).filter(w => w.exercises && w.exercises.length > 0).forEach(w => {
       STATE.workouts.push(Object.assign(w, { type: 'weights', style: 'Hypertrophy (RP Strength)', programTag: null, programSlotIdx: null }));
     });
-    const legacyCardioStyle = STATE.meso.cardioProgramStyle;
+    const legacyCardioStyle = STATE.program.cardioProgramStyle;
     const taggedProgram = (legacyCardioStyle === 'C25K' || legacyCardioStyle === 'C2Triathlon') ? legacyCardioStyle : null;
     (STATE.cardioWorkouts || []).forEach((c, i) => {
       STATE.workouts.push(Object.assign(c, {
@@ -555,7 +561,7 @@ function migrateState() {
   if (!Array.isArray(STATE.life.scheduleExceptions)) STATE.life.scheduleExceptions = [];
   if (!Array.isArray(STATE.life.schedules)) STATE.life.schedules = [];
 
-  // ---- MESO1 normalization ----
+  // ---- RP-style normalization ----
   if (!Array.isArray(STATE.mesoWorkouts)) STATE.mesoWorkouts = [];
   if (!STATE.mesoLogs) STATE.mesoLogs = {};
   if (!STATE.muscleLandmarks) STATE.muscleLandmarks = defaultMuscleLandmarks();
@@ -629,7 +635,7 @@ function getWorkout(id) { return STATE.workouts.find(w => w.id === id); }
 // picks the section; `style` (weights: P-Zero (GZCL) / Hypertrophy (RP Strength) / Free Entry;
 // cardio: Time/Dist/Cal / Interval) is chosen per-workout at creation and fixes its shape:
 //  - P-Zero (GZCL): t1/t2a/t2b/t2c/t3 tiers (see blankGzclShape()) -- unchanged from before
-//  - Hypertrophy / Free Entry / Mobility / Warmup: a flat `exercises[]` list (blankMesoExercise())
+//  - Hypertrophy / Free Entry / Mobility / Warmup: a flat `exercises[]` list (blankRpExercise())
 //  - Cardio Time/Dist/Cal: targetMinutes/targetDistance/targetDistanceUnit/targetCalories
 //  - Cardio Interval: rounds/workSeconds/restSeconds
 // `programTag`/`programSlotIdx` (cardio only) mark a workout as one auto-generated C25K/
@@ -653,7 +659,7 @@ function blankGzclShape() {
     exerciseOrder: null, // lazily built by reconcileExerciseOrder() -- [[key], [key,key], ...]
   };
 }
-function blankMesoExercise() {
+function blankRpExercise() {
   return { id: uid(), name: '', muscle: null, setType: 'straight', resType: 'weight', sets: 3, repMin: 8, repMax: 12, targetRIR: 2, adjustments: [] };
 }
 // Creates and appends a new saved workout of the given type (+ style, for weights/cardio),
@@ -683,15 +689,15 @@ function deleteWorkout(id) {
     render();
   });
 }
-// getMesoWorkout/getCardioWorkout/mesoLogKey/cardioLogKey/getMesoLog/getCardioLog are aliases,
+// getRpWorkout/getCardioWorkout/rpLogKey/cardioLogKey/getRpLog/getCardioLog are aliases,
 // kept so the exercises[]-shaped and cardio render/logging code below (unchanged since before
 // the unified model) still reads the same -- STATE.mesoWorkouts/cardioWorkouts and STATE.mesoLogs/
 // cardioLogs folded into STATE.workouts/STATE.logs once, on migration (see migrateState()).
-function getMesoWorkout(id) { return getWorkout(id); }
+function getRpWorkout(id) { return getWorkout(id); }
 function getCardioWorkout(id) { return getWorkout(id); }
-function mesoLogKey(cycle, workoutId) { return logKey(cycle, workoutId); }
+function rpLogKey(cycle, workoutId) { return logKey(cycle, workoutId); }
 function cardioLogKey(cycle, cardioId) { return logKey(cycle, cardioId); }
-function getMesoLog(cycle, workoutId) { return getLog(cycle, workoutId); }
+function getRpLog(cycle, workoutId) { return getLog(cycle, workoutId); }
 // Cardio logs get one extra behavior generic getLog() doesn't have: a brand-new log seeds
 // actualCalories from the workout's own targetCalories, so the calorie figure that feeds
 // cardio-adjusted TDEE (see cardioCaloriesInRanges()) doesn't require retyping the same number
@@ -710,7 +716,7 @@ function getCardioLog(cycle, cardioId) {
   }
   return clog;
 }
-function getMesoExercise(workout, exId) { return workout.exercises.find(e => e.id === exId); }
+function getRpExercise(workout, exId) { return workout.exercises.find(e => e.id === exId); }
 
 // ---- Cardio workout slots — same pattern as weights, intentionally minimal for now ----
 // ---- C25K: known program structure, pulled from the master_plan_combined C25K data ----

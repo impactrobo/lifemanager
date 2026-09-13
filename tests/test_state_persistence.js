@@ -75,5 +75,29 @@ async function boot(seedState) {
     await browser.close();
   }
 
+  // ---- STATE.meso -> STATE.program ----
+  // `meso` held general program config (cycle count, the weights AND cardio program styles) and
+  // applied to P-Zero just as much as to RP -- so it was a misnomer, renamed when "MESO1" went.
+  // It's persisted, so an existing save still carries the old key and must not quietly lose its
+  // cycle count: a dropped `cycles` would silently reset the Train tab's whole week selector.
+  {
+    const { browser, page, errors } = await boot({
+      meso: { cycles: 12, weightsProgramStyle: 'P-Zero (GZCL)' },
+      weightLog: [],
+      settings: { aesthetic: 'cyberpunk' },
+    });
+    const r = await page.evaluate(() => ({
+      cycles: STATE.program && STATE.program.cycles,
+      style: STATE.program && STATE.program.weightsProgramStyle,
+      noStaleKey: STATE.meso === undefined,
+    }));
+    console.log('after migrating a save that still says `meso`:', r);
+    if (r.cycles !== 12) throw new Error(`program.cycles should carry over from the old meso key, got ${r.cycles}`);
+    if (r.style !== 'P-Zero (GZCL)') throw new Error('the rest of the old meso config should carry over too');
+    if (!r.noStaleKey) throw new Error('the old `meso` key should be dropped once read, so a save never shows both');
+    if (errors.length) throw new Error('Page errors:\n  ' + errors.join('\n  '));
+    await browser.close();
+  }
+
   console.log('test_state_persistence.js: PASS');
 })().catch(e => { console.error(e); process.exit(1); });

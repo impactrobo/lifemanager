@@ -198,6 +198,26 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Architecture & infrastructure
 
+- **"MESO1" retired in favour of RP-Style; `STATE.meso` becomes `STATE.program` (2026-09-13).**
+  Groundwork for the goals/phases feature, which needs the word "mesocycle" back — and a cleanup
+  worth doing on its own.
+  - **The user-facing rename was already done.** The live style string has been
+    `'Hypertrophy (RP Strength)'` for some time; all 14 remaining `MESO1` mentions were comments.
+    What had gone stale was the **type**: `WeightsProgramStyle` still declared `'MESO1'`, a value
+    that has never existed in `WEIGHTS_STYLES`. That's now corrected.
+  - **`STATE.meso` → `STATE.program`.** It holds cycle count and *both* the weights and cardio
+    program styles, so it applies to P-Zero exactly as much as to RP — "meso" was a misnomer for it
+    from the start. It's persisted, so `loadState()` reads either key and `migrateState()` drops the
+    old one once read, which keeps a save from showing both.
+  - ~34 identifiers renamed (`getMesoLog` → `getRpLog`, `MESO_SET_TYPES` → `RP_SET_TYPES`,
+    `blankMesoExercise` → `blankRpExercise`, `MesoConfig` → `ProgramConfig`, the `'mesoLog'` NAV
+    mode, the `.set-row-meso` CSS class), plus user-facing copy that still said "meso": the
+    **PROGRAM STRUCTURE** and **PROGRAM CYCLE** labels and the C25K/C2Triathlon length warnings.
+  - **`mesoWorkouts` / `mesoLogs` deliberately keep their names.** They're legacy keys read straight
+    out of saved JSON (`parsed.mesoWorkouts`) and folded into the unified model by
+    `migrateState()` — they name *historical data*, not current code. Renaming them would either
+    break migration for a pre-migration save or force reading the old key anyway.
+
 - **`app.js` split into 18 ordered `src/app-*.js` scripts (2026-09-13).** Purely structural: no
   feature change, no user-visible change. 12.5k lines in one file became 18 averaging ~700, each
   with a header saying what it holds and what load order does and doesn't constrain.

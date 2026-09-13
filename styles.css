@@ -337,8 +337,8 @@ select { -webkit-appearance: none; appearance: none; background-image: linear-gr
 .target-line .tv { color: var(--text); font-weight: 700; font-family: var(--font-mono); }
 
 .set-row { display: grid; grid-template-columns: 28px 1fr 1fr 34px; gap: 8px; align-items: center; margin-bottom: 6px; }
-.set-row-meso { display: grid; grid-template-columns: 24px 1fr 1fr 0.7fr 30px; gap: 6px; align-items: center; margin-bottom: 6px; }
-.set-row-meso input { text-align: center; }
+.set-row-rp { display: grid; grid-template-columns: 24px 1fr 1fr 0.7fr 30px; gap: 6px; align-items: center; margin-bottom: 6px; }
+.set-row-rp input { text-align: center; }
 .set-row .setnum { font-family: var(--font-mono); font-size: 12px; color: var(--text-faint); text-align: center; }
 .set-row input { text-align: center; }
 .set-row .amrap-tag { font-size: 9px; color: var(--accent); font-weight: 700; text-align: center; }

@@ -59,9 +59,9 @@ const MUSCLE_COLORS = {
 };
 function muscleColor(m) { return MUSCLE_COLORS[m] || null; }
 
-// ---- MESO1 (RP-style hypertrophy) volume landmarks — sets/week per muscle group,
-// defaulted from the source MESO1 workbook's MV/MEV/MAV/MRV/Freq table. User-editable
-// under Setup -> Volume Landmarks once the MESO1 Program Style is selected.
+// ---- Hypertrophy (RP Strength) volume landmarks — sets/week per muscle group,
+// defaulted from the source Renaissance Periodization workbook's MV/MEV/MAV/MRV/Freq table. User-editable
+// under Setup -> Volume Landmarks once the Hypertrophy (RP Strength) program style is selected.
 function defaultMuscleLandmarks() {
   return {
     'Chest':    { mv: 8, mev: 10, mavLo: 12, mavHi: 20, mrv: 22, freq: 2 },
@@ -81,13 +81,13 @@ function defaultMuscleLandmarks() {
     'Neck':     { mv: 0, mev: 4,  mavLo: 8,  mavHi: 18, mrv: 22, freq: 3 },
   };
 }
-const MESO_SET_TYPES = {
+const RP_SET_TYPES = {
   straight: { label: 'Straight', short: 'STR' },
   myorep:   { label: 'Myorep',   short: 'MYO' },
   drop:     { label: 'Drop Set', short: 'DRP' },
 };
-const MESO_RES_TYPES = { weight: 'Weight', band: 'Band', bodyweight: 'Bodyweight' };
-const MAX_MESO_EXERCISES = 8;
+const RP_RES_TYPES = { weight: 'Weight', band: 'Band', bodyweight: 'Bodyweight' };
+const MAX_RP_EXERCISES = 8;
 
 // ================= LIFE TAB: reference data =================
 // Fixed daily anchors — same every day, user-editable now (Schedule -> Setup -> Set Anchors).
@@ -760,14 +760,14 @@ function defaultState() {
       // pushed to the backend.
       reminderPush: { enabled: false },
     },
-    meso: { cycles: 8 },
+    program: { cycles: 8 },
     categories: defaultCategories(),
     // Free-form pool: every saved workout (any type) lives here now — no more fixed slot count.
     // Each entry carries its own `type` ('weights'|'cardio'|'mobility'|'warmup') and, for
     // weights/cardio, its own `style` — Workout Style is a per-workout choice made in Workout
     // Builder, not a single Plan-tab setting. See createWorkout()/DATA_MODEL.md.
     workouts: [],
-    mesoWorkouts: [],   // legacy MESO1 slots — only ever populated pre-migration, see migrateState()
+    mesoWorkouts: [],   // legacy RP-style slots — only ever populated pre-migration, see migrateState()
     mesoLogs: {},        // legacy — folded into `logs` on migration
     muscleLandmarks: defaultMuscleLandmarks(),
     life: defaultLifeState(),

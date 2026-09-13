@@ -1160,12 +1160,12 @@ function updateRounding(val) {
   STATE.rounding = displayToLb(val);
   saveState(); render();
 }
-function updateMeso(field, val) {
+function updateRp(field, val) {
   let n = parseFloat(val);
   // Cycles: whole numbers only, minimum 1 — never 0, negative, or a decimal.
   if (isNaN(n) || n < 1) n = 1;
   else n = Math.floor(n);
-  STATE.meso[field] = n;
+  STATE.program[field] = n;
   saveState(); render();
 }
 async function exportData() {

@@ -556,7 +556,7 @@ function _doRender() {
       app.innerHTML = renderExerciseSetup();
     } else if (NAV.trainView.mode === 'grid') app.innerHTML = renderTrainGrid();
     else if (NAV.trainView.mode === 'cardioLog') app.innerHTML = renderCardioLog(NAV.trainView.cardioId);
-    else if (NAV.trainView.mode === 'mesoLog') app.innerHTML = renderMesoWorkoutLog(NAV.trainView.workoutId);
+    else if (NAV.trainView.mode === 'rpLog') app.innerHTML = renderRpWorkoutLog(NAV.trainView.workoutId);
     else { app.innerHTML = renderWorkoutLog(NAV.trainView.workoutId); attachWorkoutLogHandlers(NAV.trainView.workoutId); }
   } else if (NAV.currentTab === 'hobbies') {
     app.innerHTML = renderHobbies();

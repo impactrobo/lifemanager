@@ -1,4 +1,4 @@
-// app-train-setup.js -- Exercise Setup: training maxes, MESO1 volume landmarks, the workout builders, the planner, exercise order/supersets and their drag handling.
+// app-train-setup.js -- Exercise Setup: training maxes, RP-style volume landmarks, the workout builders, the planner, exercise order/supersets and their drag handling.
 //
 // One part of the former single app.js (see docs/ARCHITECTURE.md > "Source layout"). These are
 // plain classic <script>s loaded in a fixed order by index.html -- NOT modules. Top-level
@@ -8,7 +8,7 @@
 // only reach what earlier files have already defined. src/app-boot.js runs the startup sequence
 // and must stay last.
 // ---------------- TRAINING MAX ----------------
-// ---------------- MESO1: VOLUME LANDMARKS ----------------
+// ---------------- RP-STYLE: VOLUME LANDMARKS ----------------
 function renderVolumeLandmarksSetup() {
   const rows = MUSCLE_GROUPS.map(m => {
     const lm = STATE.muscleLandmarks[m];
@@ -250,7 +250,7 @@ function renderWorkoutBuilder() {
   let editor;
   if (w.t1) editor = renderWeightWorkoutEditor(w);
   else if (w.type === 'cardio') editor = renderCardioWorkoutEditor(w);
-  else editor = renderMesoWorkoutEditor(w); // Hypertrophy / Free Entry / Mobility / Warmup — all exercises[]-shaped
+  else editor = renderRpWorkoutEditor(w); // Hypertrophy / Free Entry / Mobility / Warmup — all exercises[]-shaped
 
   return header + editor;
 }
@@ -623,86 +623,86 @@ function renderWeightWorkoutEditor(w) {
     ${renderSupersetsSection(w)}`;
 }
 
-// ---------------- MESO1 WORKOUT BUILDER ----------------
-function renderMesoWorkoutEditor(w) {
+// ---------------- RP-STYLE WORKOUT BUILDER ----------------
+function renderRpWorkoutEditor(w) {
   const exRows = w.exercises.map((ex, i) => `
     <div class="panel" style="${i>0?'':''}">
       <div class="row" style="margin-bottom:8px;">
         <input type="text" placeholder="e.g. Bench Press" value="${escapeHtml(ex.name)}" style="flex:1; font-weight:600;"
-          onchange="updateMesoExField('${w.id}','${ex.id}','name',this.value)">
+          onchange="updateRpExField('${w.id}','${ex.id}','name',this.value)">
         <div style="display:flex; gap:4px; margin-left:6px;">
-          <button class="icon-btn" ${i===0?'disabled style="opacity:.3"':''} onclick="moveMesoEx('${w.id}','${ex.id}',-1)">${icon('up')}</button>
-          <button class="icon-btn" ${i===w.exercises.length-1?'disabled style="opacity:.3"':''} onclick="moveMesoEx('${w.id}','${ex.id}',1)">${icon('down')}</button>
-          <button class="icon-btn" style="color:var(--bad)" onclick="removeMesoEx('${w.id}','${ex.id}')">${icon('close')}</button>
+          <button class="icon-btn" ${i===0?'disabled style="opacity:.3"':''} onclick="moveRpEx('${w.id}','${ex.id}',-1)">${icon('up')}</button>
+          <button class="icon-btn" ${i===w.exercises.length-1?'disabled style="opacity:.3"':''} onclick="moveRpEx('${w.id}','${ex.id}',1)">${icon('down')}</button>
+          <button class="icon-btn" style="color:var(--bad)" onclick="removeRpEx('${w.id}','${ex.id}')">${icon('close')}</button>
         </div>
       </div>
       <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px; margin-bottom:6px;">
         <div>
           <div style="font-size:9px; color:var(--text-faint); margin-bottom:3px;">MUSCLE</div>
-          <select onchange="updateMesoExField('${w.id}','${ex.id}','muscle',this.value || null)">
+          <select onchange="updateRpExField('${w.id}','${ex.id}','muscle',this.value || null)">
             <option value="" ${!ex.muscle?'selected':''}>&mdash; none &mdash;</option>
             ${MUSCLE_GROUPS.map(m => `<option value="${m}" ${ex.muscle===m?'selected':''}>${m}</option>`).join('')}
           </select>
         </div>
         <div>
           <div style="font-size:9px; color:var(--text-faint); margin-bottom:3px;">SET TYPE</div>
-          <select onchange="updateMesoExField('${w.id}','${ex.id}','setType',this.value)">
-            ${Object.keys(MESO_SET_TYPES).map(k => `<option value="${k}" ${ex.setType===k?'selected':''}>${MESO_SET_TYPES[k].label}</option>`).join('')}
+          <select onchange="updateRpExField('${w.id}','${ex.id}','setType',this.value)">
+            ${Object.keys(RP_SET_TYPES).map(k => `<option value="${k}" ${ex.setType===k?'selected':''}>${RP_SET_TYPES[k].label}</option>`).join('')}
           </select>
         </div>
       </div>
       <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:6px;">
         <div>
           <div style="font-size:9px; color:var(--text-faint); margin-bottom:3px;">RES TYPE</div>
-          <select onchange="updateMesoExField('${w.id}','${ex.id}','resType',this.value)">
-            ${Object.keys(MESO_RES_TYPES).map(k => `<option value="${k}" ${ex.resType===k?'selected':''}>${MESO_RES_TYPES[k]}</option>`).join('')}
+          <select onchange="updateRpExField('${w.id}','${ex.id}','resType',this.value)">
+            ${Object.keys(RP_RES_TYPES).map(k => `<option value="${k}" ${ex.resType===k?'selected':''}>${RP_RES_TYPES[k]}</option>`).join('')}
           </select>
         </div>
         <div>
           <div style="font-size:9px; color:var(--text-faint); margin-bottom:3px;">SETS</div>
-          <input type="number" min="1" max="8" step="1" value="${ex.sets}" onchange="updateMesoExField('${w.id}','${ex.id}','sets',this.value)">
+          <input type="number" min="1" max="8" step="1" value="${ex.sets}" onchange="updateRpExField('${w.id}','${ex.id}','sets',this.value)">
         </div>
         <div>
           <div style="font-size:9px; color:var(--text-faint); margin-bottom:3px;">REP MIN</div>
-          <input type="number" min="1" step="1" value="${ex.repMin}" onchange="updateMesoExField('${w.id}','${ex.id}','repMin',this.value)">
+          <input type="number" min="1" step="1" value="${ex.repMin}" onchange="updateRpExField('${w.id}','${ex.id}','repMin',this.value)">
         </div>
         <div>
           <div style="font-size:9px; color:var(--text-faint); margin-bottom:3px;">REP MAX</div>
-          <input type="number" min="1" step="1" value="${ex.repMax}" onchange="updateMesoExField('${w.id}','${ex.id}','repMax',this.value)">
+          <input type="number" min="1" step="1" value="${ex.repMax}" onchange="updateRpExField('${w.id}','${ex.id}','repMax',this.value)">
         </div>
       </div>
       <div style="margin-top:6px; max-width:50%;">
         <div style="font-size:9px; color:var(--text-faint); margin-bottom:3px;">TARGET RIR</div>
-        <input type="number" min="0" max="5" step="0.5" value="${ex.targetRIR}" onchange="updateMesoExField('${w.id}','${ex.id}','targetRIR',this.value)">
+        <input type="number" min="0" max="5" step="0.5" value="${ex.targetRIR}" onchange="updateRpExField('${w.id}','${ex.id}','targetRIR',this.value)">
       </div>
     </div>`).join('');
 
   return `
     <input type="text" value="${escapeHtml(w.name)}" style="font-family:var(--font-head); font-size:18px; font-weight:700; border:none; background:none; padding:0; margin-bottom:12px; width:100%;"
-      onchange="updateMesoWorkoutField('${w.id}','name',this.value)">
+      onchange="updateRpWorkoutField('${w.id}','name',this.value)">
     ${exRows}
     <div style="display:flex; gap:8px;">
-      ${w.exercises.length < MAX_MESO_EXERCISES ? `<button class="btn btn-ghost btn-sm" onclick="addMesoEx('${w.id}')">+ ADD EXERCISE</button>` : ''}
+      ${w.exercises.length < MAX_RP_EXERCISES ? `<button class="btn btn-ghost btn-sm" onclick="addRpEx('${w.id}')">+ ADD EXERCISE</button>` : ''}
     </div>
     ${w.exercises.length === 0 ? `<div class="empty-state" style="padding:20px 10px;"><div style="font-size:12px;">No exercises yet — add one above.</div></div>` : ''}`;
 }
-function updateMesoWorkoutField(id, field, val) {
-  getMesoWorkout(id)[field] = val;
+function updateRpWorkoutField(id, field, val) {
+  getRpWorkout(id)[field] = val;
   saveState(); render();
 }
-function addMesoEx(workoutId) {
-  const w = getMesoWorkout(workoutId);
-  if (w.exercises.length >= MAX_MESO_EXERCISES) return;
-  w.exercises.push(blankMesoExercise());
+function addRpEx(workoutId) {
+  const w = getRpWorkout(workoutId);
+  if (w.exercises.length >= MAX_RP_EXERCISES) return;
+  w.exercises.push(blankRpExercise());
   saveState(); render();
 }
-function removeMesoEx(workoutId, exId) {
-  const w = getMesoWorkout(workoutId);
+function removeRpEx(workoutId, exId) {
+  const w = getRpWorkout(workoutId);
   w.exercises = w.exercises.filter(e => e.id !== exId);
   saveState(); render();
 }
-function moveMesoEx(workoutId, exId, dir) {
-  const w = getMesoWorkout(workoutId);
+function moveRpEx(workoutId, exId, dir) {
+  const w = getRpWorkout(workoutId);
   const idx = w.exercises.findIndex(e => e.id === exId);
   const swapIdx = idx + dir;
   if (idx < 0 || swapIdx < 0 || swapIdx >= w.exercises.length) return;
@@ -711,8 +711,8 @@ function moveMesoEx(workoutId, exId, dir) {
   w.exercises[swapIdx] = tmp;
   saveState(); render();
 }
-function updateMesoExField(workoutId, exId, field, val) {
-  const ex = getMesoExercise(getMesoWorkout(workoutId), exId);
+function updateRpExField(workoutId, exId, field, val) {
+  const ex = getRpExercise(getRpWorkout(workoutId), exId);
   if (['sets','repMin','repMax'].includes(field)) ex[field] = Math.max(1, Math.round(Number(val) || 1));
   else if (field === 'targetRIR') ex[field] = Math.max(0, Number(val) || 0);
   else ex[field] = val;

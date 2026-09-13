@@ -45,7 +45,7 @@ interface HTMLElement {
 /* ============================ STATE ============================ */
 
 type WorkoutType = 'weights' | 'cardio' | 'mobility' | 'warmup';
-type WeightsProgramStyle = 'P-Zero (GZCL)' | 'MESO1' | 'Free Entry';
+type WeightsProgramStyle = 'P-Zero (GZCL)' | 'Hypertrophy (RP Strength)' | 'Free Entry';
 type CardioProgramStyle = 'C25K' | 'C2Triathlon';
 type IncomeFrequency = 'weekly' | 'biweekly' | 'monthly';
 type NoteTag = 'idea' | 'todo' | 'win' | 'issue' | 'reflect' | 'general';
@@ -89,7 +89,7 @@ interface AppSettings {
   [k: string]: unknown;
 }
 
-interface MesoConfig {
+interface ProgramConfig {
   cycles: number;
   weightsProgramStyle?: WeightsProgramStyle | null;
   cardioProgramStyle?: CardioProgramStyle | null;
@@ -427,7 +427,7 @@ interface AppState {
   rounding: number;
   updatedAt: number | null;
   settings: AppSettings;
-  meso: MesoConfig;
+  program: ProgramConfig;
   categories: Category[];
   workouts: Array<Record<string, any> & { id: string; name: string; type?: WorkoutType }>;
   mesoWorkouts: Array<Record<string, any>>;
