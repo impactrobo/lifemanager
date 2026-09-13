@@ -184,17 +184,23 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   console.log("a different sub-nav (Progress) on first render:", otherSubnav);
   if (otherSubnav !== 0) throw new Error(`Expected an unrelated sub-nav to start at 0, not inherit Exercise Setup's scroll offset — got ${otherSubnav}`);
 
-  // A sub-nav that fits (Schedule Setup, 2 tabs) shows no affordances.
+  // A sub-nav that fits shows no affordances. Built from subNav() directly with two short buttons
+  // rather than pointing at some real screen's sub-nav: this previously used Schedule Setup as
+  // "the short one" and silently started failing the day a fourth tab was added there, which tests
+  // the tab count rather than the behaviour under test.
   const subnavShort = await page.evaluate(() => {
-    document.getElementById('app').innerHTML = renderScheduleSetup();
+    document.getElementById('app').innerHTML = `<div class="screen">${subNav('<button class="active">A</button><button>B</button>')}</div>`;
     attachScrollIndicators();
     const w = document.querySelector('#app .subnav-wrap');
+    const nav = w.querySelector(':scope > .subnav');
     return {
+      overflows: nav.scrollWidth - nav.clientWidth > 4,
       anyVisible: ['.subnav-more-l', '.subnav-more-r', '.subnav-scrollbar']
         .some((s) => w.querySelector(s).classList.contains('visible')),
     };
   });
   console.log('short sub-nav (fits, no scroll):', subnavShort);
+  if (subnavShort.overflows) throw new Error('the two-button fixture should not overflow — the rest of this check is meaningless if it does');
   if (subnavShort.anyVisible) throw new Error('a non-overflowing sub-nav should show no chevrons or bar');
 
   await browser.close();
