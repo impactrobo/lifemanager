@@ -4321,11 +4321,15 @@ function setHabitStatus(habitId, dateStr, status) {
   saveState(); render();
 }
 // Tapping the already-active state clears it back to unmarked, so a mis-tap is one tap to undo.
-function toggleHabitToday(habitId, status) {
-  const today = todayStr();
-  const current = habitStatusOn(habitId, today);
-  setHabitStatus(habitId, today, current === status ? null : status);
+// dateStr is optional and defaults to today — Home's habits box always means today, while the
+// Calendar's Day view passes the date actually being viewed, so a habit can be marked on a day
+// you forgot to log. Exactly the same arrangement toggleDailyAnchor() already uses for anchors.
+function toggleHabitOn(habitId, status, dateStr) {
+  const d = dateStr || todayStr();
+  const current = habitStatusOn(habitId, d);
+  setHabitStatus(habitId, d, current === status ? null : status);
 }
+function toggleHabitToday(habitId, status) { toggleHabitOn(habitId, status); }
 // Walk backward from today (or the habit's own end date, if it's already passed) counting 'kept'
 // days; 'unmarked' days are skipped over (neither counted nor breaking the streak — the whole
 // point of treating them as neutral), and the first 'broken' day (or the habit's start date) ends
@@ -9269,6 +9273,7 @@ function renderCalDay() {
       </div>
     </div>
     ${renderDailySchedule(CAL_SELECTED_DATE)}
+    ${renderDayUntimedItems(CAL_SELECTED_DATE)}
     <div class="divider"></div>
     ${renderSelectedDayReminders()}`;
 }
@@ -10273,6 +10278,84 @@ function renderDailySchedule(dateStr) {
     </div>
     <div class="panel" style="padding:2px 14px;">${rows}</div>
   `;
+}
+
+// ---- Calendar Day: the untimed half of a day ----
+// The timeline above can only show things that occupy a span of clock time. Three of this app's
+// day-level concepts carry no times at all — planned workouts (`exercisePlan[weekday]` entries are
+// just {id, workoutId}), planned meals (`diet.mealPlan[weekday]`, {id, mealId}) and habit marks
+// (a per-date kept/broke flag) — so they'd never appear on the Calendar at all, even though each
+// is unambiguously part of "what's going on this day". They render here as a day-level band
+// instead of being given invented times, which is the honest representation.
+//
+// Deliberately NOT included: recurring budget charges. Unlike the three above, a RecurringCharge
+// carries no due-date field to surface — putting those on the calendar means adding one plus the
+// UI to set it, which is its own small feature rather than part of surfacing existing data.
+
+// Which workouts were actually logged on a specific date. Workout logs are keyed by
+// `${cycle}_${workoutId}` and carry their own `date`, so completion is looked up by the date being
+// viewed rather than by STATE.currentCycle — the Day view can show any date, and the current cycle
+// says nothing about whether the workout was done on *that* particular day.
+function workoutIdsLoggedOn(dateStr) {
+  const ids = new Set();
+  Object.keys(STATE.logs).forEach(k => {
+    const log = STATE.logs[k];
+    if (!log || log.date !== dateStr) return;
+    const sep = k.indexOf('_');
+    if (sep > -1) ids.add(k.slice(sep + 1));
+  });
+  return ids;
+}
+function renderDayUntimedItems(dateStr) {
+  const weekday = new Date(dateStr + 'T00:00:00').getDay();
+  const isToday = dateStr === todayStr();
+
+  const planned = (STATE.exercisePlan[weekday] || []).filter(e => e.workoutId).map(e => getWorkout(e.workoutId)).filter(Boolean);
+  const meals = (STATE.diet.mealPlan[weekday] || []).filter(e => e.mealId)
+    .map(e => STATE.diet.meals.find(m => m.id === e.mealId)).filter(Boolean);
+  const habits = (STATE.life.habits || []).filter(h => habitIsActiveOn(h, dateStr));
+  if (!planned.length && !meals.length && !habits.length) return '';
+
+  const loggedIds = workoutIdsLoggedOn(dateStr);
+  const group = (label, color, body) => `
+    <div class="day-extra-group">
+      <div class="day-extra-label"><i class="day-extra-swatch" style="background:${color};"></i>${label}</div>
+      ${body}
+    </div>`;
+
+  const workoutsHtml = !planned.length ? '' : group('PLANNED WORKOUTS', '#FF9191', planned.map(w => {
+    const done = loggedIds.has(w.id);
+    return `<div class="day-extra-row" onclick="openTodayWorkout('${w.id}')" style="cursor:pointer;">
+      <span class="day-extra-name">${escapeHtml(w.name)}</span>
+      <span class="day-extra-meta">${escapeHtml(WORKOUT_TYPE_LABELS[w.type] || 'Workout')}${done ? ' &middot; logged' : ''}</span>
+      ${done ? `<span class="hit-mark hit" style="flex-shrink:0;">${icon('check')}</span>` : ''}
+    </div>`;
+  }).join(''));
+
+  const mealsHtml = !meals.length ? '' : group('PLANNED MEALS', '#92FECD', meals.map(m => {
+    const cal = Math.round(computeMealTotals(m.items).cal || 0);
+    return `<div class="day-extra-row">
+      <span class="day-extra-name">${escapeHtml(m.name || 'Untitled meal')}</span>
+      ${cal ? `<span class="day-extra-meta mono">${cal} cal</span>` : ''}
+    </div>`;
+  }).join(''));
+
+  // Marking is allowed on any date, not just today — same as the timeline's own anchors, and the
+  // whole point of being able to look back at a day you forgot to log.
+  const habitsHtml = !habits.length ? '' : group('HABITS', '#CAAFFF', habits.map(h => {
+    const status = habitStatusOn(h.id, dateStr);
+    return `<div class="day-extra-row">
+      <span class="day-extra-name">${escapeHtml(h.name)}</span>
+      <span style="display:flex; gap:6px; flex-shrink:0;">
+        <button class="btn btn-sm ${status==='kept'?'btn-good':''}" onclick="toggleHabitOn('${h.id}','kept','${dateStr}')" title="Kept">${icon('check')}</button>
+        <button class="btn btn-sm ${status==='broken'?'btn-danger':''}" onclick="toggleHabitOn('${h.id}','broken','${dateStr}')" title="Broke">${icon('close')}</button>
+      </span>
+    </div>`;
+  }).join(''));
+
+  return `
+    <div class="subtle-label" style="margin:16px 0 8px;">ALSO ${isToday ? 'TODAY' : 'THIS DAY'}</div>
+    <div class="panel">${workoutsHtml}${mealsHtml}${habitsHtml}</div>`;
 }
 function renderPeriodicRow(a) {
   const last = STATE.life.periodicLog[a.id];

@@ -658,6 +658,16 @@ select { -webkit-appearance: none; appearance: none; background-image: linear-gr
 .day-chip { display: inline-block; font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 3px; margin-left: 5px; vertical-align: middle; letter-spacing: 0.04em; }
 .day-chip-now { background: var(--bad); color: #fff; }
 
+/* Calendar Day: the untimed day-level band (renderDayUntimedItems()) — planned workouts, planned
+   meals and habits, none of which carry clock times and so can't live in the timeline above. */
+.day-extra-group + .day-extra-group { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border-soft); }
+.day-extra-label { display: flex; align-items: center; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; color: var(--text-dim); margin-bottom: 8px; }
+.day-extra-swatch { width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; flex-shrink: 0; }
+.day-extra-row { display: flex; align-items: center; gap: 8px; padding: 7px 0; }
+.day-extra-row + .day-extra-row { border-top: 1px solid var(--border-soft); }
+.day-extra-name { flex: 1; min-width: 0; font-size: 13px; font-weight: 600; }
+.day-extra-meta { font-size: 11px; color: var(--text-faint); flex-shrink: 0; }
+
 /* Past-due reminder mark (pastDueMark()). Takes the active aesthetic's own --warn so it belongs to
    whatever theme is on, rather than one fixed hue sitting outside the palette. The glow is built
    from currentColor for the same reason — it tracks --warn automatically with no per-theme rule. */
