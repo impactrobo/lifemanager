@@ -219,6 +219,23 @@ interface SavingsGoal {
 
 interface ScheduleAnchor { id: string; start: string; end: string; label: string; detail?: string }
 interface PeriodicAnchor { id: string; label: string; cadenceDays: number; cadenceLabel: string }
+/** A date-range override of the weekday schedule templates — a holiday, a vacation week, a sick
+ *  day. Stored as an explicit range so a week off is one row rather than seven. Overlapping
+ *  ranges resolve first-match-wins, the same convention scheduleForDate() already uses for two
+ *  schedules claiming the same weekday. See scheduleExceptionForDate(). */
+interface ScheduleException {
+  id: string;
+  startDate: string;
+  endDate: string;
+  /** null = a day off (no schedule at all, and renderDayUntimedItems() pauses planned workouts,
+   *  meals and habits too). A schedule id = use that schedule for these dates instead. */
+  scheduleId: string | null;
+  /** Anchors survive an exception by default — they're the permanent baseline, and a holiday
+   *  still has a morning routine. This is the opt-in for a genuinely blank day. */
+  skipAnchors: boolean;
+  label: string;
+  createdAt: number;
+}
 interface ScheduleBlock {
   id: string;
   name: string;
@@ -250,6 +267,7 @@ interface LifeState {
   /** habit id -> {'YYYY-MM-DD': true (kept) | false (broke)} — a date absent from the map means
    *  unmarked, not broken. See habitStatusOn(). */
   habitLog: Record<string, Record<string, boolean>>;
+  scheduleExceptions: ScheduleException[];
 }
 interface Habit {
   id: string;

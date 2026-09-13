@@ -1175,6 +1175,10 @@ function defaultLifeState() {
     // ongoing), where the streak/history itself is the point. See habitCurrentStreak() etc.
     habits: [], // [{id, name, startDate, endDate, createdAt}] — Schedule -> Setup -> Habits
     habitLog: {}, // habitId -> { 'YYYY-MM-DD': true|false } — true=kept, false=broke, absent=unmarked (neutral, doesn't break a streak)
+    // Date-range overrides of the weekday schedule templates — a holiday, a vacation week, a sick
+    // day. See scheduleExceptionForDate() / scheduleForDate(). Stored as explicit start/end ranges
+    // rather than one entry per date so a week off is one row, not seven.
+    scheduleExceptions: [], // [{id, startDate, endDate, scheduleId|null, skipAnchors, label, createdAt}]
   };
 }
 // ---- Budgeting ----
@@ -1973,6 +1977,7 @@ function updateAllTMs() {
   if (!Array.isArray(STATE.life.periodic)) STATE.life.periodic = DEFAULT_PERIODIC_ANCHORS.map(a => Object.assign({}, a));
   if (!Array.isArray(STATE.life.habits)) STATE.life.habits = [];
   if (!STATE.life.habitLog || typeof STATE.life.habitLog !== 'object') STATE.life.habitLog = {};
+  if (!Array.isArray(STATE.life.scheduleExceptions)) STATE.life.scheduleExceptions = [];
   if (!Array.isArray(STATE.life.schedules)) STATE.life.schedules = [];
 
   // ---- MESO1 normalization ----
@@ -4192,9 +4197,57 @@ function renderScheduleSetup() {
       <button class="${SCHEDULE_SETUP_SUBTAB==='anchors'?'active':''}" onclick="setScheduleSetupSubtab('anchors')">SET ANCHORS</button>
       <button class="${SCHEDULE_SETUP_SUBTAB==='builder'?'active':''}" onclick="setScheduleSetupSubtab('builder')">SCHEDULE BUILDER</button>
       <button class="${SCHEDULE_SETUP_SUBTAB==='habits'?'active':''}" onclick="setScheduleSetupSubtab('habits')">HABITS</button>
+      <button class="${SCHEDULE_SETUP_SUBTAB==='exceptions'?'active':''}" onclick="setScheduleSetupSubtab('exceptions')">EXCEPTIONS</button>
     `)}
-    ${SCHEDULE_SETUP_SUBTAB === 'builder' ? renderScheduleBuilder() : SCHEDULE_SETUP_SUBTAB === 'habits' ? renderHabitsSetup() : renderSetAnchors()}
+    ${SCHEDULE_SETUP_SUBTAB === 'builder' ? renderScheduleBuilder()
+      : SCHEDULE_SETUP_SUBTAB === 'habits' ? renderHabitsSetup()
+      : SCHEDULE_SETUP_SUBTAB === 'exceptions' ? renderExceptionsSetup()
+      : renderSetAnchors()}
   </div>`;
+}
+
+// ---- Exceptions: review/edit the date-range schedule overrides created from the Calendar ----
+// Creation lives on the Calendar's Day view (renderDayExceptionControl()) — that's where you're
+// standing when you decide a day is different. This is the other half: the one place to see every
+// exception at once and clear out stale ones, which a per-day control can't offer.
+function renderExceptionsSetup() {
+  const list = (STATE.life.scheduleExceptions || []).slice().sort((a, b) => a.startDate.localeCompare(b.startDate));
+  const today = todayStr();
+  const scheds = STATE.life.schedules;
+  return `
+    <div class="panel" style="margin:18px 0 14px;">
+      <div style="font-size:13px; line-height:1.5;">An <b>exception</b> overrides your weekday schedules for a specific date or range — a holiday, a vacation week, a sick day. Create one from <b style="color:var(--text)">Calendar &rarr; Day</b> on the day itself; this is where you review and clear them.</div>
+    </div>
+    <div class="subtle-label" style="margin-bottom:8px;">ALL EXCEPTIONS</div>
+    <div class="stack">
+      ${list.length ? list.map(ex => {
+        const past = ex.endDate < today;
+        return `<div class="panel" ${past ? 'style="opacity:.55;"' : ''}>
+          <div class="row" style="align-items:flex-start; margin-bottom:8px;">
+            <div style="min-width:0;">
+              <div style="font-size:14px; font-weight:700;">${ex.label ? escapeHtml(ex.label) : 'Marked different'}${past ? ' <span style="font-size:10px; color:var(--text-faint); font-weight:500;">PAST</span>' : ''}</div>
+              <div style="font-size:11px; color:var(--text-dim); margin-top:3px;">${scheduleExceptionEffect(ex)}</div>
+            </div>
+            <button class="icon-btn" style="color:var(--bad); flex-shrink:0;" onclick="deleteScheduleException('${ex.id}')" title="Delete exception">${icon('close')}</button>
+          </div>
+          <div class="field-row">
+            <label class="field"><span class="lbl">From</span><input type="date" value="${ex.startDate}" onchange="updateScheduleExceptionField('${ex.id}','startDate',this.value)"></label>
+            <label class="field"><span class="lbl">To</span><input type="date" value="${ex.endDate}" onchange="updateScheduleExceptionField('${ex.id}','endDate',this.value)"></label>
+          </div>
+          <label class="field"><span class="lbl">Instead of the usual schedule</span>
+            <select onchange="updateScheduleExceptionField('${ex.id}','scheduleId',this.value)">
+              <option value="" ${!ex.scheduleId?'selected':''}>Nothing — day off</option>
+              ${scheds.map(s => `<option value="${s.id}" ${ex.scheduleId===s.id?'selected':''}>Use ${escapeHtml(s.name || 'Untitled schedule')}</option>`).join('')}
+            </select>
+          </label>
+          <label style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+            <input type="checkbox" ${ex.skipAnchors?'checked':''} onchange="updateScheduleExceptionField('${ex.id}','skipAnchors',this.checked)">
+            <span style="font-size:13px;">Skip my daily anchors too</span>
+          </label>
+          <label class="field" style="margin-bottom:0;"><span class="lbl">Label</span><input type="text" value="${escapeHtml(ex.label || '')}" placeholder="e.g. Vacation" onchange="updateScheduleExceptionField('${ex.id}','label',this.value)"></label>
+        </div>`;
+      }).join('') : emptyState('No exceptions yet — mark a day different from the Calendar\'s Day view.')}
+    </div>`;
 }
 
 // ---- Set Anchors: the fixed daily habits (edit/add/remove) + weekly/periodic check-ins ----
@@ -8545,9 +8598,133 @@ const BLOCK_KIND_META = {
   event:    { color: '#FF9ED8', badge: 'EVENT' },
 };
 function blockKindMeta(kind) { return BLOCK_KIND_META[kind] || BLOCK_KIND_META.activity; }
-// Which built schedule (Schedule -> Setup -> Schedule Builder) is toggled on for a given date's
-// weekday, if any. If more than one somehow overlaps the same day, the first match wins.
+// ---- Single-day (and multi-day) schedule exceptions ----
+// Schedules are weekday templates — the same every Tuesday — with no way to say "this particular
+// Tuesday is different". An exception covers a date *range* (one row for a whole week off rather
+// than seven) and either skips the schedule entirely or swaps a different one in for those dates.
+//
+// The semantic, worth stating once: anchors are your permanent baseline, everything else is "the
+// plan". A day off (scheduleId === null) cancels the plan — no schedule, and no planned workouts,
+// meals or habit prompts either (see renderDayUntimedItems()) — while anchors keep running unless
+// the exception also sets skipAnchors. Dated one-off events are deliberately NOT suppressed: a
+// dentist appointment booked for a holiday is still a real appointment on that day.
+function scheduleExceptionForDate(dateStr) {
+  // First match wins when ranges overlap — same convention scheduleForDate() already uses for two
+  // schedules claiming the same weekday.
+  return (STATE.life.scheduleExceptions || []).find(e => dateStr >= e.startDate && dateStr <= e.endDate) || null;
+}
+function exceptionCoversDateObj(dateObj) {
+  return scheduleExceptionForDate(dateKey(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate()));
+}
+// One line describing what an exception actually does, reused by the Day view banner and the
+// Setup list so the two can't drift apart in wording.
+function scheduleExceptionEffect(ex) {
+  const swapped = ex.scheduleId ? STATE.life.schedules.find(s => s.id === ex.scheduleId) : null;
+  const base = ex.scheduleId
+    ? (swapped ? `Uses ${escapeHtml(swapped.name || 'another schedule')} instead` : 'Swapped schedule no longer exists — treated as a day off')
+    : 'Day off — no schedule, and planned workouts/meals/habits paused';
+  return base + (ex.skipAnchors ? ' &middot; anchors skipped too' : '');
+}
+function fmtExceptionRange(ex) {
+  const f = d => new Date(d + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  return ex.startDate === ex.endDate ? f(ex.startDate) : `${f(ex.startDate)} – ${f(ex.endDate)}`;
+}
+function addScheduleException(startDate, endDate, scheduleId, skipAnchors, label) {
+  // Tolerate a backwards range rather than silently storing one that can never match a date.
+  const s = startDate <= endDate ? startDate : endDate;
+  const e = startDate <= endDate ? endDate : startDate;
+  STATE.life.scheduleExceptions.push({
+    id: uid(), startDate: s, endDate: e,
+    scheduleId: scheduleId || null, skipAnchors: !!skipAnchors,
+    label: (label || '').trim(), createdAt: Date.now(),
+  });
+  saveState(); render();
+}
+function deleteScheduleException(id) {
+  STATE.life.scheduleExceptions = STATE.life.scheduleExceptions.filter(e => e.id !== id);
+  saveState(); render();
+}
+function updateScheduleExceptionField(id, field, value) {
+  const ex = STATE.life.scheduleExceptions.find(x => x.id === id);
+  if (!ex) return;
+  if (field === 'skipAnchors') ex.skipAnchors = !!value;
+  else if (field === 'scheduleId') ex.scheduleId = value || null;
+  else if (field === 'label') ex.label = (value || '').trim();
+  else if (field === 'startDate' || field === 'endDate') {
+    if (!value) return;
+    ex[field] = value;
+    if (ex.startDate > ex.endDate) { // keep the range coherent however it was edited into shape
+      if (field === 'startDate') ex.endDate = value; else ex.startDate = value;
+    }
+  }
+  saveState(); render();
+}
+
+// ---- The Day view's own exception control ----
+let EXCEPTION_FORM_OPEN = false;
+function toggleExceptionForm() { EXCEPTION_FORM_OPEN = !EXCEPTION_FORM_OPEN; render(); }
+function saveExceptionFromDayView() {
+  const start = document.getElementById('excStart').value || CAL_SELECTED_DATE;
+  const end = document.getElementById('excEnd').value || start;
+  const scheduleId = document.getElementById('excSchedule').value || null;
+  const skipAnchors = document.getElementById('excSkipAnchors').checked;
+  const label = document.getElementById('excLabel').value;
+  EXCEPTION_FORM_OPEN = false;
+  addScheduleException(start, end, scheduleId, skipAnchors, label);
+  showToast('Day marked');
+}
+function renderDayExceptionControl(dateStr) {
+  const ex = scheduleExceptionForDate(dateStr);
+  if (ex) {
+    return `<div class="panel" style="margin-bottom:14px; border-color:var(--warn);">
+      <div class="row" style="align-items:flex-start;">
+        <div style="min-width:0;">
+          <div style="font-size:13px; font-weight:700; color:var(--warn);">${ex.label ? escapeHtml(ex.label) : 'Marked different'}</div>
+          <div style="font-size:11px; color:var(--text-dim); margin-top:3px;">${scheduleExceptionEffect(ex)}</div>
+          <div style="font-size:11px; color:var(--text-faint); margin-top:2px;">${fmtExceptionRange(ex)}</div>
+        </div>
+        <button class="btn btn-sm" style="flex-shrink:0;" onclick="deleteScheduleException('${ex.id}')">REMOVE</button>
+      </div>
+    </div>`;
+  }
+  if (!EXCEPTION_FORM_OPEN) {
+    return `<div style="margin-bottom:14px;">
+      <button class="btn btn-sm btn-block" onclick="toggleExceptionForm()">MARK THIS DAY DIFFERENT</button>
+    </div>`;
+  }
+  const scheds = STATE.life.schedules;
+  return `<div class="panel" style="margin-bottom:14px;">
+    <div class="subtle-label" style="margin-bottom:8px;">MARK THESE DAYS DIFFERENT</div>
+    <div class="field-row">
+      <label class="field"><span class="lbl">From</span><input type="date" id="excStart" value="${dateStr}"></label>
+      <label class="field"><span class="lbl">To</span><input type="date" id="excEnd" value="${dateStr}"></label>
+    </div>
+    <div style="font-size:11px; color:var(--text-faint); margin:-4px 0 10px;">Leave both the same for a single day, or set a range for a whole week off.</div>
+    <label class="field"><span class="lbl">Instead of the usual schedule</span>
+      <select id="excSchedule">
+        <option value="">Nothing — day off</option>
+        ${scheds.map(s => `<option value="${s.id}">Use ${escapeHtml(s.name || 'Untitled schedule')}</option>`).join('')}
+      </select>
+    </label>
+    <label style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+      <input type="checkbox" id="excSkipAnchors">
+      <span style="font-size:13px;">Skip my daily anchors too</span>
+    </label>
+    <label class="field"><span class="lbl">Label (optional)</span><input type="text" id="excLabel" placeholder="e.g. Vacation, Sick day"></label>
+    <button class="btn btn-primary btn-block" onclick="saveExceptionFromDayView()">SAVE</button>
+    <button class="btn btn-block" style="margin-top:8px;" onclick="toggleExceptionForm()">CANCEL</button>
+  </div>`;
+}
+// Which built schedule (Schedule -> Setup -> Schedule Builder) applies on a given date — an
+// exception covering that date overrides the weekday lookup entirely. If more than one schedule
+// somehow claims the same weekday, the first match wins.
 function scheduleForDate(dateObj) {
+  const ex = exceptionCoversDateObj(dateObj);
+  if (ex) {
+    // A swap pointing at a schedule that's since been deleted degrades to a plain skip rather
+    // than silently falling back to the weekday template it was meant to override.
+    return ex.scheduleId ? (STATE.life.schedules.find(s => s.id === ex.scheduleId) || null) : null;
+  }
   const weekday = dateObj.getDay(); // 0=Sun..6=Sat, matches Date#getDay()
   return STATE.life.schedules.find(s => Array.isArray(s.days) && s.days.includes(weekday)) || null;
 }
@@ -8558,7 +8735,10 @@ function scheduleForDate(dateObj) {
 // like before Schedule Builder existed.
 function scheduleBlocksForDate(dateObj) {
   const sched = scheduleForDate(dateObj);
-  const blocks = STATE.life.anchors.map(a => ({ id: 'anchor:' + a.id, start: a.start, end: a.end, label: a.label, detail: a.detail, kind: 'anchor', anchorId: a.id }));
+  const ex = exceptionCoversDateObj(dateObj);
+  // Anchors survive an exception by default — they're the permanent baseline, and a holiday still
+  // has a morning routine. skipAnchors is the opt-in for a genuinely blank day.
+  const blocks = (ex && ex.skipAnchors) ? [] : STATE.life.anchors.map(a => ({ id: 'anchor:' + a.id, start: a.start, end: a.end, label: a.label, detail: a.detail, kind: 'anchor', anchorId: a.id }));
   if (sched) {
     if (sched.wakeStart && sched.wakeEnd) blocks.push({ id: 'wake:' + sched.id, start: sched.wakeStart, end: sched.wakeEnd, label: 'Wake-Up', detail: '', kind: 'wake' });
     if (sched.bedStart && sched.bedEnd) blocks.push({ id: 'bed:' + sched.id, start: sched.bedStart, end: sched.bedEnd, label: 'Bed Time', detail: '', kind: 'bed' });
@@ -9094,11 +9274,13 @@ function calShiftSelectedDate(deltaDays) {
   d.setDate(d.getDate() + deltaDays);
   CAL_SELECTED_DATE = dateKey(d.getFullYear(), d.getMonth(), d.getDate());
   CAL_MONTH = { year: d.getFullYear(), month: d.getMonth() };
+  EXCEPTION_FORM_OPEN = false; // a half-filled form shouldn't follow you onto another day
   render();
 }
 function calSelectDay(dateStr) {
   CAL_SELECTED_DATE = dateStr;
   REMINDER_FORM_OPEN = false;
+  EXCEPTION_FORM_OPEN = false;
   render();
 }
 // Used from Year view, where a day cell has no reminders panel of its own to drop down into —
@@ -9272,6 +9454,7 @@ function renderCalDay() {
         <button onclick="calGoToDay(1)">&#8250;</button>
       </div>
     </div>
+    ${renderDayExceptionControl(CAL_SELECTED_DATE)}
     ${renderDailySchedule(CAL_SELECTED_DATE)}
     ${renderDayUntimedItems(CAL_SELECTED_DATE)}
     <div class="divider"></div>
@@ -10424,6 +10607,17 @@ function renderDayUntimedItems(dateStr) {
   const meals = (STATE.diet.mealPlan[weekday] || []).filter(e => e.mealId)
     .map(e => STATE.diet.meals.find(m => m.id === e.mealId)).filter(Boolean);
   const habits = (STATE.life.habits || []).filter(h => habitIsActiveOn(h, dateStr));
+  // A day off cancels the whole plan, not just the schedule — planned workouts, planned meals and
+  // habit prompts all come from weekday templates too. Says so explicitly rather than just
+  // rendering nothing, so an empty day never reads as a bug. A *swap* exception isn't a day off:
+  // it's a differently-shaped day, and leaves all of this alone.
+  const ex = scheduleExceptionForDate(dateStr);
+  if (ex && !ex.scheduleId && (planned.length || meals.length || habits.length)) {
+    return `<div class="panel" style="margin-top:14px;">
+      <div style="font-size:12px; color:var(--text-dim);">Planned workouts, meals and habits are paused for this day${ex.label ? ` (${escapeHtml(ex.label)})` : ''}.</div>
+    </div>`;
+  }
+  if (ex && !ex.scheduleId) return '';
   if (!planned.length && !meals.length && !habits.length) return '';
 
   const loggedIds = workoutIdsLoggedOn(dateStr);
