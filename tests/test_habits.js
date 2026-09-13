@@ -37,8 +37,9 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   await page.evaluate(() => addHabit());
   await settle(page);
   const habit = await page.evaluate(() => STATE.life.habits.find(h => h.name === 'No Drinking'));
+  const today = await page.evaluate(() => todayStr());
   console.log('added habit:', habit);
-  if (!habit || habit.startDate !== (await page.evaluate(() => todayStr())) || habit.endDate !== null) {
+  if (!habit || habit.startDate !== today || habit.endDate !== null) {
     throw new Error(`Expected a habit defaulting to today's start date and no end date, got ${JSON.stringify(habit)}`);
   }
 
@@ -46,10 +47,12 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   const initialStatus = await page.evaluate((id) => habitStatusOn(id, todayStr()), habit.id);
   if (initialStatus !== 'unmarked') throw new Error(`Expected 'unmarked' by default, got '${initialStatus}'`);
 
-  // 3. Toggle kept/broken via the real Home box buttons
+  // 3. Toggle kept/broken via the real Home buttons. Home's dedicated HABITS box folded into the
+  // day box, whose habit rows are the Day view's own -- so these are now date-carrying
+  // toggleHabitOn() buttons rather than the today-only wrapper that used to exist.
   await page.evaluate(() => switchTab('home'));
   await settle(page);
-  const keptBtn = await page.$(`button[onclick="toggleHabitToday('${habit.id}','kept')"]`);
+  const keptBtn = await page.$(`button[onclick="toggleHabitOn('${habit.id}','kept','${today}')"]`);
   if (!keptBtn) throw new Error('Expected a KEPT button for the habit on the Home box');
   await keptBtn.click();
   await settle(page);
@@ -57,7 +60,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (afterKept !== 'kept') throw new Error(`Expected 'kept' after clicking the KEPT button, got '${afterKept}'`);
 
   // Tapping the already-active state again clears it back to unmarked
-  const keptBtn2 = await page.$(`button[onclick="toggleHabitToday('${habit.id}','kept')"]`);
+  const keptBtn2 = await page.$(`button[onclick="toggleHabitOn('${habit.id}','kept','${today}')"]`);
   await keptBtn2.click();
   await settle(page);
   const afterUntoggle = await page.evaluate((id) => habitStatusOn(id, todayStr()), habit.id);
@@ -65,10 +68,10 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // Switching to BROKE overrides a KEPT — re-query both buttons fresh each time, since each
   // toggle re-renders and detaches the previous element handles from the DOM.
-  const keptBtn3 = await page.$(`button[onclick="toggleHabitToday('${habit.id}','kept')"]`);
+  const keptBtn3 = await page.$(`button[onclick="toggleHabitOn('${habit.id}','kept','${today}')"]`);
   await keptBtn3.click(); // back to kept
   await settle(page);
-  const brokeBtn = await page.$(`button[onclick="toggleHabitToday('${habit.id}','broken')"]`);
+  const brokeBtn = await page.$(`button[onclick="toggleHabitOn('${habit.id}','broken','${today}')"]`);
   await brokeBtn.click();
   await settle(page);
   const afterBroke = await page.evaluate((id) => habitStatusOn(id, todayStr()), habit.id);
@@ -203,20 +206,21 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   const persistedById = await page.evaluate((id) => STATE.life.habits.find(h => h.id === id), habit.id);
   if (!persistedById) throw new Error('Expected the remaining habit to persist across reload');
 
-  // 11. An existing save missing the 'habits' box (pre-this-feature) gets it backfilled into
-  // boxOrder automatically by the existing "newly-added box" migration (in updateAllTMs(), run on
-  // every real app load) — same mechanism any other new box relies on, exercised here via an
-  // actual reload rather than calling an internal function directly.
+  // 11. An existing save missing a box gets it backfilled into boxOrder automatically by the
+  // "newly-added box" migration (run on every real app load) — exercised via an actual reload
+  // rather than by calling an internal function. This used to probe the dedicated 'habits' box;
+  // that box folded into 'day', which is where habits render on Home now, so the same mechanism
+  // is checked through the box that actually exists.
   await page.evaluate(() => {
-    STATE.settings.homeLayout.boxOrder = STATE.settings.homeLayout.boxOrder.filter(x => x !== 'habits');
-    STATE.settings.homeLayout.boxHidden = STATE.settings.homeLayout.boxHidden.filter(x => x !== 'habits');
+    STATE.settings.homeLayout.boxOrder = STATE.settings.homeLayout.boxOrder.filter(x => x !== 'day');
+    STATE.settings.homeLayout.boxHidden = STATE.settings.homeLayout.boxHidden.filter(x => x !== 'day');
     saveState();
   });
   await page.reload();
   await settle(page);
-  const migrated = await page.evaluate(() => STATE.settings.homeLayout.boxOrder.includes('habits'));
-  console.log('boxOrder backfilled "habits" after reload:', migrated);
-  if (!migrated) throw new Error('Expected a real app reload to backfill "habits" into an existing save\'s boxOrder');
+  const migrated = await page.evaluate(() => STATE.settings.homeLayout.boxOrder.includes('day'));
+  console.log('boxOrder backfilled the day box after reload:', migrated);
+  if (!migrated) throw new Error('Expected a real app reload to backfill the day box into an existing save boxOrder');
 
   // cleanup
   await page.evaluate((snap) => {

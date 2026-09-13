@@ -1420,7 +1420,7 @@ function defaultHomeLayout() {
   return {
     sectionOrder: ['schedule', 'train', 'hobbies', 'health', 'notes', 'budget'],
     sectionHidden: [],
-    boxOrder: ['reminders', 'rightnow', 'workouts', 'wakeup', 'calories', 'habits'],
+    boxOrder: ['reminders', 'day', 'wakeup', 'calories'],
     boxHidden: [],
   };
 }
@@ -1440,12 +1440,13 @@ const HOME_SECTION_META = {
 };
 const HOME_BOX_META = {
   reminders: { label: "TODAY'S REMINDERS" },
-  rightnow: { label: 'RIGHT NOW' },
-  workouts: { label: "TODAY'S WORKOUTS" },
+  day: { label: 'YOUR DAY' },
   wakeup: { label: 'WAKE-UP' },
   calories: { label: 'CALORIES' },
-  habits: { label: 'HABITS' },
 };
+// The boxes that folded into `day`, kept so loadState() can migrate a saved layout that still
+// names them. Order matters: `day` takes the position the first of these held.
+const HOME_BOXES_MERGED_INTO_DAY = ['rightnow', 'workouts', 'habits'];
 /** @returns {AppState} */
 function defaultState() {
   return {
@@ -1885,10 +1886,28 @@ function migrateState() {
     if (!Array.isArray(L.sectionHidden)) L.sectionHidden = [];
     if (!Array.isArray(L.boxOrder)) L.boxOrder = D.boxOrder;
     if (!Array.isArray(L.boxHidden)) L.boxHidden = [];
+    // RIGHT NOW / TODAY'S WORKOUTS / HABITS merged into one `day` box. A saved layout still names
+    // the old three, so fold them down. `day` is only visible if at least one of them was --
+    // somebody who hid all three wanted their Home without the day on it, and that intent survives.
+    // The slot it inherits is the earliest of the three in THIS save's own order, not the order the
+    // constant happens to list them in — someone who dragged TODAY'S WORKOUTS to the top of Home
+    // should find the day box at the top, not wherever RIGHT NOW had been left.
+    const at = L.boxOrder.findIndex(id => HOME_BOXES_MERGED_INTO_DAY.includes(id));
+    const mergedAny = at >= 0 || HOME_BOXES_MERGED_INTO_DAY.some(id => L.boxHidden.includes(id));
+    if (mergedAny) {
+      L.boxOrder = L.boxOrder.filter(id => !HOME_BOXES_MERGED_INTO_DAY.includes(id));
+      L.boxHidden = L.boxHidden.filter(id => !HOME_BOXES_MERGED_INTO_DAY.includes(id));
+      if (at >= 0) L.boxOrder.splice(at, 0, 'day');
+      else if (!L.boxHidden.includes('day')) L.boxHidden.push('day');
+    }
     // Any id that's neither ordered nor hidden (e.g. a newly-added box/section from an app
     // update) gets appended as visible, so it isn't silently lost from either list.
     D.sectionOrder.forEach(id => { if (!L.sectionOrder.includes(id) && !L.sectionHidden.includes(id)) L.sectionOrder.push(id); });
     D.boxOrder.forEach(id => { if (!L.boxOrder.includes(id) && !L.boxHidden.includes(id)) L.boxOrder.push(id); });
+    // A stale id from an older build (or a hand-edited save) would otherwise render as an
+    // permanently empty box that Home's edit mode still lets you drag around.
+    L.boxOrder = L.boxOrder.filter(id => HOME_BOX_META[id]);
+    L.boxHidden = L.boxHidden.filter(id => HOME_BOX_META[id]);
   }
 
   // ---- Unified workout model migration (one-time) ----
@@ -4518,7 +4537,6 @@ function toggleHabitOn(habitId, status, dateStr) {
   const current = habitStatusOn(habitId, d);
   setHabitStatus(habitId, d, current === status ? null : status);
 }
-function toggleHabitToday(habitId, status) { toggleHabitOn(habitId, status); }
 // Walk backward from today (or the habit's own end date, if it's already passed) counting 'kept'
 // days; 'unmarked' days are skipped over (neither counted nor breaking the streak — the whole
 // point of treating them as neutral), and the first 'broken' day (or the habit's start date) ends
@@ -9363,34 +9381,6 @@ function dayModel(dateStr) {
 // The day you're actually in. Separate from dayModel(todayStr()) only so the intent reads at the
 // call site -- Home never wants any other day.
 function todayModel() { return dayModel(todayStr()); }
-function renderHomeScheduleCard() {
-  const b = currentScheduleBlock();
-  if (!b) {
-    return `
-    <div class="subtle-label" style="margin:18px 0 8px;">RIGHT NOW</div>
-    <div class="panel" onclick="goHomeSection('schedule')" style="cursor:pointer;">
-      <div style="font-size:14px; font-weight:700;">FREE TIME</div>
-      <div style="font-size:12px; color:var(--text-dim); margin-top:4px;">Nothing scheduled for this moment. Tap to view the full day.</div>
-    </div>
-    `;
-  }
-  const log = todayLifeLog();
-  const isAnchor = b.kind === 'anchor';
-  const done = isAnchor && !!log[b.anchorId];
-  return `
-    <div class="subtle-label" style="margin:18px 0 8px;">RIGHT NOW</div>
-    <div class="panel ${done?'panel-done':''}" ${isAnchor ? `onclick="toggleDailyAnchor('${b.anchorId}')" style="cursor:pointer;"` : ''}>
-      <div class="row" style="align-items:flex-start;">
-        <div>
-          <div style="font-size:14px; font-weight:700;">${escapeHtml(b.label)} <span style="color:var(--text-faint); font-weight:500; font-size:11px;">${fmtBlockTime(b)}</span></div>
-          ${b.detail ? `<div style="font-size:12px; color:var(--text-dim); margin-top:4px;">${escapeHtml(b.detail)}</div>` : ''}
-        </div>
-        ${isAnchor ? `<div class="hit-mark ${done?'hit':''}" style="flex-shrink:0; margin-top:2px;">${done?icon('check'):''}</div>` : ''}
-      </div>
-    </div>
-    <button class="btn btn-ghost btn-block btn-sm" style="margin-top:6px;" onclick="goHomeSection('schedule')">VIEW FULL DAY &#9662;</button>
-  `;
-}
 function getTodayWeightEntry(create) {
   let e = STATE.weightLog.find(x => x.date === todayStr());
   if (!e && create) {
@@ -9435,42 +9425,6 @@ function logHomeCalories() {
   saveState();
   showToast('Calories logged');
   render();
-}
-// Today's weekday-scheduled workouts (STATE.exercisePlan), shown on Home alongside the
-// schedule "RIGHT NOW" card — a lightweight convenience layer on top of the cycle-based Train
-// Grid, not a replacement for it. Tapping a row jumps straight into that workout's log.
-function renderHomeWorkoutsCard() {
-  const day = todayModel();
-  if (!day.workouts.length) {
-    return `
-    <div class="subtle-label" style="margin:18px 0 8px;">TODAY'S WORKOUTS</div>
-    <div class="panel" onclick="goHomeSection('train')" style="cursor:pointer;">
-      <div style="font-size:12px; color:var(--text-dim);">${day.isDayOff
-        ? `Paused &mdash; today is marked off${day.exception.label ? ` (${escapeHtml(day.exception.label)})` : ''}. Tap to view Exercise.`
-        : `Nothing scheduled for today. Tap to view Exercise, or add one under <b style="color:var(--text)">Setup &rarr; Planner</b>.`}</div>
-    </div>`;
-  }
-  const cycle = STATE.currentCycle;
-  const rows = day.workouts.map(w => {
-    const isGzcl = !!w.t1;
-    const status = w.type === 'cardio'
-      ? ((STATE.logs[logKey(cycle, w.id)] && STATE.logs[logKey(cycle, w.id)].date) ? 'done' : 'empty')
-      : (isGzcl ? workoutCompletion(cycle, w) : mesoWorkoutCompletion(cycle, w));
-    const done = status === 'done';
-    return `<div class="panel ${done?'panel-done':''}" onclick="openTodayWorkout('${w.id}')" style="cursor:pointer; margin-bottom:8px;">
-      <div class="row" style="align-items:flex-start;">
-        <div>
-          <div style="font-size:14px; font-weight:700;">${escapeHtml(w.name)}</div>
-          <div style="font-size:11px; color:var(--text-dim); margin-top:2px;">${WORKOUT_TYPE_LABELS[w.type]}</div>
-        </div>
-        <div class="hit-mark ${done?'hit':''}" style="flex-shrink:0; margin-top:2px;">${done?icon('check'):''}</div>
-      </div>
-    </div>`;
-  }).join('');
-  return `
-    <div class="subtle-label" style="margin:18px 0 8px;">TODAY'S WORKOUTS</div>
-    ${rows}
-  `;
 }
 function openTodayWorkout(workoutId) {
   const w = getWorkout(workoutId);
@@ -9636,34 +9590,26 @@ function renderHomeCaloriesBox() {
       </div>
     </div>`;
 }
-// Quick today-only check-off — kept/broke for whichever habits are currently active (see
-// habitIsActiveOn()). The full list, streak history, and the multi-habit calendar all live under
-// Schedule -> Setup -> Habits; this box is deliberately just "mark today," same scope as the
-// Wake-Up/Calories boxes next to it. Conditional (no box at all with zero active habits), same
-// convention as Reminders.
-function renderHomeHabitsBox() {
-  const day = todayModel();
-  const today = day.dateStr;
-  if (!day.habits.length) return '';
-  const rows = day.habits.map(h => {
-    const status = habitStatusOn(h.id, today);
-    const streak = habitCurrentStreak(h);
-    return `<div class="row" style="padding:6px 0; align-items:center;">
-      <div style="flex:1; min-width:0;">
-        <div style="font-size:13px; font-weight:600;">${escapeHtml(h.name)}</div>
-        <div style="font-size:11px; color:var(--text-faint);">${streak} day streak${h.endDate ? ` &middot; ends ${h.endDate}` : ''}</div>
-      </div>
-      <div style="display:flex; gap:6px; flex-shrink:0;">
-        <button class="btn btn-sm ${status==='kept'?'btn-good':''}" onclick="toggleHabitToday('${h.id}','kept')" title="Kept today">${icon('check')}</button>
-        <button class="btn btn-sm ${status==='broken'?'btn-danger':''}" onclick="toggleHabitToday('${h.id}','broken')" title="Broke today">${icon('close')}</button>
-      </div>
-    </div>`;
-  }).join('');
+// Home's view of today: the same timeline and the same untimed band the Calendar Day view
+// renders, not a parallel summary of them. This replaces three separate boxes -- RIGHT NOW,
+// TODAY'S WORKOUTS and HABITS -- which were three renderings of one dayModel() call that could,
+// and did, disagree with the Day view and with each other. The timeline folds itself (see
+// renderDailySchedule), so "one box" doesn't mean "twelve rows on Home".
+function renderHomeDayBox() {
+  const today = todayStr();
+  const timeline = renderDailySchedule(today);
+  const untimed = renderDayUntimedItems(today);
+  // Nothing set up at all yet -- no anchors, no plan, no habits. Returning '' lets the Home box
+  // system treat this like any other empty conditional box rather than showing an empty panel.
+  if (!timeline && !untimed) return '';
   return `
-    <div class="subtle-label" style="margin:18px 0 8px;">HABITS</div>
-    <div class="panel">${rows}</div>`;
+    <div class="subtle-label" style="margin:18px 0 8px;">YOUR DAY</div>
+    ${timeline}
+    ${untimed}
+    <button class="btn btn-ghost btn-block btn-sm" style="margin-top:10px;" onclick="goHomeSection('schedule')">OPEN CALENDAR &rsaquo;</button>
+  `;
 }
-const HOME_BOX_RENDERERS = { reminders: renderTodaysReminders, rightnow: renderHomeScheduleCard, workouts: renderHomeWorkoutsCard, wakeup: renderHomeWakeupBox, calories: renderHomeCaloriesBox, habits: renderHomeHabitsBox };
+const HOME_BOX_RENDERERS = { reminders: renderTodaysReminders, day: renderHomeDayBox, wakeup: renderHomeWakeupBox, calories: renderHomeCaloriesBox };
 function renderHomeBoxesSection() {
   const L = homeLayout();
   const boxesHtml = L.boxOrder.map(id => {

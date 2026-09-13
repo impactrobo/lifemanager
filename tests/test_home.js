@@ -22,18 +22,12 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   await page.goto(APP_PATH);
   await settle(page);
 
-  // RIGHT NOW's fallback "FREE TIME" card (see 2c/2e below) only shows when currentScheduleBlock()
-  // finds nothing active — with the real default anchors in place, that depends on the wall-clock
-  // time the test happens to run at (several anchors span hours of the morning and evening), so
-  // this test's use of RIGHT NOW as a stand-in for "some clickable, non-edit box" would pass or
-  // fail depending on nothing this test is actually about. Clearing anchors up front makes it
-  // deterministic regardless of when it runs.
-  const anchorSnapshot = await page.evaluate(() => {
-    const snap = JSON.parse(JSON.stringify(STATE.life.anchors));
-    STATE.life.anchors = [];
-    saveState();
-    return snap;
-  });
+  // This test needs one clickable, non-edit control inside a Home box (see 2c/2e below) that is
+  // there regardless of when the test runs. It used to clear the anchors so RIGHT NOW would fall
+  // back to its clock-independent "FREE TIME" card. The day box that replaced RIGHT NOW needs the
+  // opposite: it renders nothing at all with no anchors, no plan and no habits, so the default
+  // anchors are left in place — and its OPEN CALENDAR button doesn't depend on the clock the way
+  // the timeline's own contents do.
 
   // 1. Home tiles render on load
   const tileCount = await page.$$eval('.home-tile', els => els.length);
@@ -81,16 +75,17 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   }
   console.log('#homeEditBtn while active: class present, border settled to --warn');
 
-  // 2c. Tapping into a box's own content (e.g. RIGHT NOW's "FREE TIME, tap to view" panel, which
-  // normally calls goHomeSection('schedule')) must NOT navigate away while in edit mode — it's
-  // easy to accidentally tap a box while trying to drag-reorder it. A real click (not calling the
-  // handler directly), since this exercises the capturing listener that intercepts it.
-  const rightNowPanel = await page.$('.home-edit-box .panel[onclick*="goHomeSection"]');
-  if (!rightNowPanel) throw new Error("Expected to find the RIGHT NOW box's clickable panel (fresh state has no schedule assigned, so it should show the FREE TIME/tap-to-view card)");
-  await rightNowPanel.click();
+  // 2c. Tapping into a box's own content must NOT navigate away while in edit mode — it's easy to
+  // accidentally tap a box while trying to drag-reorder it. A real click (not calling the handler
+  // directly), since this exercises the capturing listener that intercepts it. The target used to
+  // be RIGHT NOW's "FREE TIME, tap to view" panel; that box folded into the day box, whose
+  // OPEN CALENDAR button is the equivalent way out of Home.
+  const dayBoxLink = await page.$('.home-edit-box [onclick*="goHomeSection"]');
+  if (!dayBoxLink) throw new Error("Expected the day box to offer a way through to Schedule (fresh state has the 12 default anchors, so the day box renders)");
+  await dayBoxLink.click();
   await settle(page);
   const tabAfterEditClick = await page.evaluate(() => NAV.currentTab);
-  console.log("NAV.currentTab after tapping RIGHT NOW's panel while in edit mode:", tabAfterEditClick);
+  console.log("NAV.currentTab after tapping the day box's link while in edit mode:", tabAfterEditClick);
   if (tabAfterEditClick !== 'home') throw new Error(`Expected tapping a box in edit mode to stay on Home, but NAV.currentTab became "${tabAfterEditClick}"`);
 
   // 2d. ...but the box's own hide (X) button must still work — a real click, not calling
@@ -106,17 +101,17 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   const hiddenBoxId = boxIdsBefore.find(id => !boxIdsAfter.includes(id));
   await page.evaluate((id) => showHomeBox(id), hiddenBoxId); // restore it for the rest of the test
 
-  // 2e. Leaving edit mode restores normal tap-to-navigate behavior on the same panel
+  // 2e. Leaving edit mode restores normal tap-to-navigate behavior on the same control
   await page.click('#homeEditBtn'); // toggle edit mode back off
   await settle(page);
   const editModeOff = await page.evaluate(() => UI.homeEditMode === false);
   if (!editModeOff) throw new Error('Expected UI.homeEditMode to be false after toggling #homeEditBtn a second time');
-  const rightNowPanelAgain = await page.$('.panel[onclick*="goHomeSection"]');
-  if (!rightNowPanelAgain) throw new Error("Expected RIGHT NOW's panel to still be present outside edit mode");
-  await rightNowPanelAgain.click();
+  const dayBoxLinkAgain = await page.$('[onclick*="goHomeSection(\'schedule\')"]');
+  if (!dayBoxLinkAgain) throw new Error("Expected the day box's link through to Schedule to still be present outside edit mode");
+  await dayBoxLinkAgain.click();
   await settle(page);
   const tabAfterNormalClick = await page.evaluate(() => NAV.currentTab);
-  console.log('NAV.currentTab after tapping the same panel outside edit mode:', tabAfterNormalClick);
+  console.log('NAV.currentTab after tapping the same control outside edit mode:', tabAfterNormalClick);
   if (tabAfterNormalClick !== 'schedule') throw new Error(`Expected normal (non-edit-mode) tap to navigate to Schedule, got NAV.currentTab="${tabAfterNormalClick}"`);
   await page.evaluate(() => { switchTab('home'); toggleHomeEditMode(); }); // back to Home, back into edit mode for the rest of the test
 
@@ -210,13 +205,11 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     throw new Error(`Expected the dragged item to sit immediately before the target, got order ${JSON.stringify(orderAfterBefore)}`);
   }
 
-  // cleanup — restore the default section order this test's reordering disturbed, and the real
-  // anchors cleared at the top
-  await page.evaluate((anchors) => {
+  // cleanup — restore the default section order this test's reordering disturbed
+  await page.evaluate(() => {
     STATE.settings.homeLayout = defaultHomeLayout();
-    STATE.life.anchors = anchors;
     saveState();
-  }, anchorSnapshot);
+  });
 
   await browser.close();
 

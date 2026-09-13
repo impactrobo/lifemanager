@@ -44,8 +44,18 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     return blocks.filter(b => b.kind === 'anchor').length > 0;
   });
   if (!dayHasAnchors) throw new Error('Expected default daily anchors to exist for this to be a meaningful test');
-  const anchorRowsVisible = await page.evaluate(() => document.querySelectorAll('.hit-mark').length > 0);
-  if (!anchorRowsVisible) throw new Error('Expected Calendar Day zoom to render anchor rows (the merged daily schedule)');
+  // Today's timeline folds (see test_day_fold.js), so with nothing underway at the moment the test
+  // runs there may legitimately be zero rows on screen — they're behind the "N passed"/"N coming"
+  // bands rather than missing. Open whatever bands are there, then require the rows.
+  const anchorRowsVisible = await page.evaluate(async () => {
+    const open = () => document.querySelectorAll('.hit-mark').length > 0;
+    if (open()) return true;
+    VIEW.dayBandsOpen = { passed: true, coming: true };
+    render();
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    return open();
+  });
+  if (!anchorRowsVisible) throw new Error('Expected Calendar Day zoom to render anchor rows (the merged daily schedule), folded or not');
 
   // 3. Assign a schedule to a future date's weekday, navigate Day view there, confirm anchors +
   // schedule name show for THAT date (not today), and toggling an anchor writes into that date's

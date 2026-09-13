@@ -337,6 +337,41 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Home and Schedule start merging: the day folds, and Home renders it (2026-09-13).** Steps 1
+  and 2 of the "Home Becomes Today" scope — Home stops being a menu you pass through on the way to
+  your day. Steps 3-5 (Home gains a bottom bar, the Schedule tile retires, the quick-logs regroup)
+  are not done.
+  - **The day timeline folds around the moment you're in.** A default day is 12 anchors; rendered
+    in full that's a wall of rows where the one thing you want — what am I doing, what's next — is
+    buried in the middle. `partitionDayBlocks()` splits the day into passed / underway / coming, and
+    the two outer groups collapse to a count you can open. Each band still answers something while
+    closed: how much of what's behind you got done, and what's next.
+  - **The split is by clock span, not by which block won the NOW badge.** Two overlapping blocks can
+    both genuinely be underway, and calling the wider one "passed" because `currentScheduleBlock()`
+    singled out the narrower one would be a lie about the day. Midnight-crossers are active on both
+    sides of the wrap; a zero-length block is never underway.
+  - **A closed band renders no rows at all** rather than hiding them with CSS — a hidden band would
+    still bloat the DOM and still be found by every `querySelector` in the app.
+  - **Folding applies to today only.** Another date has no "now" to fold around, so every block
+    would land in one band: the full day with an extra tap in front of it. Days under
+    `DAY_COLLAPSE_MIN` blocks don't fold either, because there's nothing worth hiding.
+  - **Home's RIGHT NOW, TODAY'S WORKOUTS and HABITS boxes became one `day` box** that calls
+    `renderDailySchedule()` and `renderDayUntimedItems()` — the Calendar Day view's own renderers,
+    not a parallel summary of them. `test_home_day_box.js` asserts substring identity rather than
+    "both mention the workout", which is what makes disagreement impossible rather than unlikely.
+    Three boxes rendering one `dayModel()` call is exactly what caused the Home/Calendar
+    disagreement fixed earlier the same day.
+  - **`boxOrder`/`boxHidden` are saved state, so the merge needed a real migration.** `day` inherits
+    the slot of the earliest of the three *in that save's own order* (someone who dragged TODAY'S
+    WORKOUTS to the top should find the day box at the top, not wherever RIGHT NOW was left), and is
+    only visible if at least one of the three was — hiding all three was a choice to have a Home
+    without the day on it, and that survives. Stale ids are now filtered out, since one would
+    otherwise render as a permanently empty box that edit mode still lets you drag.
+  - `toggleHabitToday()` is gone; Home's habit buttons are the Day view's own date-carrying
+    `toggleHabitOn()`. `test_home.js` no longer clears the anchors — it did that so RIGHT NOW would
+    fall back to its clock-independent "FREE TIME" card, and the day box needs the opposite (with
+    nothing set up at all it renders nothing).
+
 - **One shared day model: every surface now gets the same answer to "what is on this day"
   (2026-09-13).** Home's TODAY'S WORKOUTS box, Home's HABITS box, the Agenda and the Calendar Day
   view each derived this independently, and they disagreed. Measured before building: on a day

@@ -51,8 +51,10 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     const today = todayStr();
     const untimed = renderDayUntimedItems(today);
     return {
-      homeWorkout: /Lower Body/.test(renderHomeWorkoutsCard()),
-      homeHabit: /Stretches/.test(renderHomeHabitsBox()),
+      // Home's separate workouts and habits boxes folded into one day box (which renders the
+      // same timeline + untimed band the Day view does), so both now come from one call.
+      homeWorkout: /Lower Body/.test(renderHomeDayBox()),
+      homeHabit: /Stretches/.test(renderHomeDayBox()),
       agendaWorkout: /Lower Body/.test(renderAgenda()),
       dayWorkout: /Lower Body/.test(untimed),
       dayMeal: /Oats/.test(untimed),
@@ -163,7 +165,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   };
   const raw = [/STATE\.exercisePlan\[/, /STATE\.diet\.mealPlan\[/, /habitIsActiveOn\(/, /scheduleExceptionForDate\(/];
   const offenders = [];
-  for (const fn of ['renderHomeWorkoutsCard', 'renderHomeHabitsBox', 'renderAgenda', 'renderDayUntimedItems', 'renderDailySchedule']) {
+  for (const fn of ['renderHomeDayBox', 'renderAgenda', 'renderDayUntimedItems', 'renderDailySchedule']) {
     const body = bodyOf(fn);
     raw.forEach(re => { if (re.test(body)) offenders.push(`${fn} still reads ${re.source}`); });
   }
