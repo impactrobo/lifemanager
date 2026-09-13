@@ -80,11 +80,17 @@ before starting any of these.
      dates (they're currently a cadence-days due-list that never does) were both considered and
      deliberately left out of the recurring-reminders half — annual + monthly were judged the
      patterns actually worth building now.
-  4. Smaller items surfaced by the same review, not yet scheduled: overlap detection *between
-     activities in a day* (the Week At A Glance strip only catches two schedules claiming the same
-     weekday); a forward-looking agenda ("next 7 days across everything" — there is no such view,
-     you navigate day by day); and a time-budget rollup ("hobbies got 4h this week"),
-     which would fit this app's existing habit of rolling things up (TDEE, budget bars, streaks).
+  4. Smaller items surfaced by the same review:
+     - ~~Overlap detection between the things in a day~~ — **shipped 2026-09-13**, see Recently
+       Shipped.
+     - **Forward-looking agenda — still open.** "Next 7 days across everything" — there is no such
+       view, you navigate day by day. No data gaps; everything it needs already exists.
+     - **Time-budget rollup — still open, and it needs a data-model change first.** "Hobbies got 4h
+       this week" can't be grouped that way today: schedule activities are
+       `{id, start, end, title, description}` with no category, and anchors likewise. Agreed
+       approach when it's built: **add a category field to activities** (and probably anchors),
+       plus UI to set it — chosen over the no-new-data alternatives (grouping by activity name, or
+       by block kind). Same shape of prerequisite as the budget `dueDay` gap.
   Explicitly ruled out as groupware that doesn't apply to a single-user local-first app: invites,
   attendees, free/busy sharing, calendar subscriptions.
 - **Cross-feature linking, other candidates surfaced 2026-09-12** (four of the batch already
@@ -306,6 +312,34 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Overlap detection between the things in a day, with an "open block" escape hatch
+  (2026-09-13).** From step 4 of the scheduling build-out. Nothing caught two things colliding at
+  2pm within a day — the Week At A Glance strip only ever caught two *schedules* claiming the same
+  weekday.
+  - **The design problem, and the person's own answer to it.** Overlapping is normal, not
+    automatically a mistake: a 30-minute Lunch sits inside an 8-hour Work block by design (the
+    Day-view prototype built for step 1 had exactly that). The version offered was a heuristic —
+    flag partial overlaps, stay quiet on full nesting — and the person proposed something better
+    instead: let a block be marked **open**, a declared container other things are *expected* to
+    sit inside, exempting it and anything overlapping it. Explicit intent beats inferring from
+    geometry, and it also fixes cases the heuristic would still have got wrong (a meeting
+    legitimately running a few minutes past Work's end is a partial overlap, not a clash).
+  - `open` is a flag on anchors and on schedule activities, set by a checkbox in Set Anchors and
+    in the Schedule Builder. Two non-open blocks sharing any minute is a genuine collision;
+    `dayOverlapWarnings()` returns block id -> the labels it clashes with, and the Day timeline
+    shows a `var(--warn)` `OVERLAPS <name>` chip naming the other side (named rather than a bare
+    "clash" marker, since there's no hover on a phone to reveal it).
+  - An open container does **not** excuse two real things clashing *inside* it — Call 10:00-11:00
+    and Meeting 10:30-11:30 inside an open Work block are still both flagged. Only overlaps
+    *with* the open block itself are forgiven.
+  - Half-open intervals, so blocks that merely touch (one ending exactly as the next begins) never
+    count as colliding; `blockDaySegments()` splits a midnight-crossing block into two segments so
+    the wrap can't hide or invent a collision.
+  - `tests/test_activity_overlaps.js` covers the segment math including the midnight split,
+    touching-vs-overlapping, the open-block rule in both directions (silencing a deliberate
+    nesting, and still catching a real clash inside an open container), multi-way collisions,
+    zero-length blocks, the flag flowing from stored anchors/activities into the day's blocks, the
+    rendered chips, and both editors persisting the flag.
 - **Schedule exceptions: date-range overrides of the weekday templates — step 3 complete, and with
   it the scheduling build-out's main arc (2026-09-12).** A schedule was a weekday template with no
   way to say "this particular Tuesday is different" — a holiday, a vacation week, a sick day.
