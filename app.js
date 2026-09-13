@@ -4283,6 +4283,10 @@ function renderAnchorEditRow(a) {
       <label class="field"><span class="lbl">Start Time</span><input type="time" value="${a.start}" onchange="updateAnchorField('${a.id}','start',this.value)"></label>
       <label class="field"><span class="lbl">End Time</span><input type="time" value="${a.end}" onchange="updateAnchorField('${a.id}','end',this.value)"></label>
     </div>
+    <label style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+      <input type="checkbox" ${a.open?'checked':''} onchange="updateAnchorField('${a.id}','open',this.checked)">
+      <span style="font-size:13px;">Open block — other things are meant to happen inside this</span>
+    </label>
     <label class="field" style="margin-bottom:0;"><span class="lbl">Detail (optional)</span><textarea onchange="updateAnchorField('${a.id}','detail',this.value)">${escapeHtml(a.detail || '')}</textarea></label>
   </div>`;
 }
@@ -4716,6 +4720,10 @@ function renderScheduleActivityRow(schedId, act) {
       <label class="field"><span class="lbl">Start Time</span><input type="time" value="${act.start||''}" onchange="updateScheduleActivityField('${schedId}','${act.id}','start',this.value)"></label>
       <label class="field"><span class="lbl">End Time</span><input type="time" value="${act.end||''}" onchange="updateScheduleActivityField('${schedId}','${act.id}','end',this.value)"></label>
     </div>
+    <label style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+      <input type="checkbox" ${act.open?'checked':''} onchange="updateScheduleActivityField('${schedId}','${act.id}','open',this.checked)">
+      <span style="font-size:13px;">Open block — other things are meant to happen inside this</span>
+    </label>
     <label class="field" style="margin-bottom:0;"><span class="lbl">Description (optional)</span><textarea onchange="updateScheduleActivityField('${schedId}','${act.id}','description',this.value)">${escapeHtml(act.description||'')}</textarea></label>
   </div>`;
 }
@@ -8598,6 +8606,46 @@ const BLOCK_KIND_META = {
   event:    { color: '#FF9ED8', badge: 'EVENT' },
 };
 function blockKindMeta(kind) { return BLOCK_KIND_META[kind] || BLOCK_KIND_META.activity; }
+
+// ---- Overlap detection between the things in one day ----
+// Blocks overlapping is normal, not automatically a mistake: a 30-minute Lunch sits inside an
+// 8-hour Work block by design. Rather than guess which collisions are real from their geometry
+// (nested vs. partial — which still gets it wrong, e.g. a meeting legitimately running a few
+// minutes past Work's end), an anchor or activity can be marked **open**: a container other things
+// are *expected* to sit inside. Anything overlapping an open block is never flagged, so declaring
+// "Work is a container" once removes that whole class of false alarm. Two non-open blocks sharing
+// any minute is a genuine collision and gets surfaced.
+//
+// The minute ranges a block occupies within this calendar day — two segments when it crosses
+// midnight (a 23:00-06:00 Bed Time), so the wrap can't hide or invent a collision.
+function blockDaySegments(block) {
+  const d = blockDurationMinutes(block);
+  if (d <= 0) return [];
+  const s = anchorMinutes(block.start);
+  const e = s + d;
+  return e <= 1440 ? [[s, e]] : [[s, 1440], [0, e - 1440]];
+}
+function blockSegmentsOverlap(segsA, segsB) {
+  // Half-open intervals, so blocks that merely touch (one ends exactly as the next begins) don't
+  // count as colliding.
+  return segsA.some(([s1, e1]) => segsB.some(([s2, e2]) => s1 < e2 && s2 < e1));
+}
+// blockId -> labels of everything it genuinely collides with.
+function dayOverlapWarnings(blocks) {
+  const warnings = {};
+  const prepared = blocks.map(b => ({ block: b, segs: blockDaySegments(b) }));
+  for (let i = 0; i < prepared.length; i++) {
+    for (let j = i + 1; j < prepared.length; j++) {
+      const A = prepared[i], B = prepared[j];
+      if (A.block.open || B.block.open) continue; // declared container — overlapping it is the point
+      if (!A.segs.length || !B.segs.length) continue; // zero-length/unset blocks can't collide
+      if (!blockSegmentsOverlap(A.segs, B.segs)) continue;
+      (warnings[A.block.id] = warnings[A.block.id] || []).push(B.block.label);
+      (warnings[B.block.id] = warnings[B.block.id] || []).push(A.block.label);
+    }
+  }
+  return warnings;
+}
 // ---- Single-day (and multi-day) schedule exceptions ----
 // Schedules are weekday templates — the same every Tuesday — with no way to say "this particular
 // Tuesday is different". An exception covers a date *range* (one row for a whole week off rather
@@ -8738,13 +8786,13 @@ function scheduleBlocksForDate(dateObj) {
   const ex = exceptionCoversDateObj(dateObj);
   // Anchors survive an exception by default — they're the permanent baseline, and a holiday still
   // has a morning routine. skipAnchors is the opt-in for a genuinely blank day.
-  const blocks = (ex && ex.skipAnchors) ? [] : STATE.life.anchors.map(a => ({ id: 'anchor:' + a.id, start: a.start, end: a.end, label: a.label, detail: a.detail, kind: 'anchor', anchorId: a.id }));
+  const blocks = (ex && ex.skipAnchors) ? [] : STATE.life.anchors.map(a => ({ id: 'anchor:' + a.id, start: a.start, end: a.end, label: a.label, detail: a.detail, kind: 'anchor', anchorId: a.id, open: !!a.open }));
   if (sched) {
     if (sched.wakeStart && sched.wakeEnd) blocks.push({ id: 'wake:' + sched.id, start: sched.wakeStart, end: sched.wakeEnd, label: 'Wake-Up', detail: '', kind: 'wake' });
     if (sched.bedStart && sched.bedEnd) blocks.push({ id: 'bed:' + sched.id, start: sched.bedStart, end: sched.bedEnd, label: 'Bed Time', detail: '', kind: 'bed' });
     (sched.activities || []).forEach(act => {
       if (!act.start) return;
-      blocks.push({ id: 'act:' + act.id, start: act.start, end: act.end || act.start, label: act.title || 'Untitled activity', detail: act.description || '', kind: 'activity' });
+      blocks.push({ id: 'act:' + act.id, start: act.start, end: act.end || act.start, label: act.title || 'Untitled activity', detail: act.description || '', kind: 'activity', open: !!act.open });
     });
   }
   // Dated one-off events. Everything above this line is a weekday *template* — the same every
@@ -10524,6 +10572,7 @@ function renderDailySchedule(dateStr) {
   const booked = dayBookedMinutes(blocks);
   const maxDur = Math.max(...blocks.map(blockDurationMinutes), 1);
   const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+  const overlaps = dayOverlapWarnings(blocks);
 
   let rows = '';
   let coveredTo = -1; // running end of everything placed so far, so an overlap never reads as a gap
@@ -10545,12 +10594,15 @@ function renderDailySchedule(dateStr) {
     let leftMin = anchorMinutes(b.end) - nowMin; if (leftMin < 0) leftMin += 1440;
     const nowBadge = b.id === currentId
       ? `<span class="day-chip day-chip-now">NOW &middot; ${fmtDuration(leftMin)} LEFT</span>` : '';
+    const clash = overlaps[b.id];
+    const clashBadge = clash
+      ? `<span class="day-chip day-chip-clash" title="Overlaps ${escapeHtml(clash.join(', '))}">OVERLAPS ${escapeHtml(clash.length === 1 ? clash[0] : clash.length + ' OTHERS')}</span>` : '';
     const isAnchor = b.kind === 'anchor';
     rows += `
       <div class="day-row ${b.id === currentId ? 'day-row-now' : ''}" ${isAnchor ? `onclick="toggleDailyAnchor('${b.anchorId}','${dateStr}')" style="cursor:pointer;"` : ''}>
         <div class="day-bar-col"><div class="day-bar" style="background:${meta.color}; height:${barH}px;"></div></div>
         <div class="day-body">
-          <div style="font-size:13px; font-weight:600;">${escapeHtml(b.label)}${badge}${nowBadge}
+          <div style="font-size:13px; font-weight:600;">${escapeHtml(b.label)}${badge}${nowBadge}${clashBadge}
             <span style="color:var(--text-faint); font-weight:500; font-size:11px;">${fmtBlockTime(b)}${d ? ` &middot; ${fmtDuration(d)}` : ''}</span></div>
           ${b.detail ? `<div style="font-size:11px; color:var(--text-dim); margin-top:2px;">${escapeHtml(b.detail)}</div>` : ''}
         </div>

@@ -217,7 +217,10 @@ interface SavingsGoal {
   createdAt: number;
 }
 
-interface ScheduleAnchor { id: string; start: string; end: string; label: string; detail?: string }
+/** `open` marks a block as a container others are expected to sit inside (Work, a training block),
+ *  which exempts it and anything overlapping it from dayOverlapWarnings(). Absent = a normal block
+ *  that genuinely shouldn't collide with anything. */
+interface ScheduleAnchor { id: string; start: string; end: string; label: string; detail?: string; open?: boolean }
 interface PeriodicAnchor { id: string; label: string; cadenceDays: number; cadenceLabel: string }
 /** A date-range override of the weekday schedule templates — a holiday, a vacation week, a sick
  *  day. Stored as an explicit range so a week off is one row rather than seven. Overlapping
@@ -241,7 +244,7 @@ interface ScheduleBlock {
   name: string;
   days: number[];
   wakeStart: string; wakeEnd: string; bedStart: string; bedEnd: string;
-  activities: Array<{ id: string; start: string; end: string; title: string; description: string }>;
+  activities: Array<{ id: string; start: string; end: string; title: string; description: string; open?: boolean }>;
   /** Up to 5 uppercase letters shown on the Week At A Glance strip (scheduleAbbrev()) — falls
    *  back to an auto-truncated name when unset. */
   shortLabel?: string;

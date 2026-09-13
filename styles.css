@@ -657,6 +657,9 @@ select { -webkit-appearance: none; appearance: none; background-image: linear-gr
 .day-gap-line { flex: 1; border-top: 1px dashed var(--border-soft); }
 .day-chip { display: inline-block; font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 3px; margin-left: 5px; vertical-align: middle; letter-spacing: 0.04em; }
 .day-chip-now { background: var(--bad); color: #fff; }
+/* A genuine collision between two blocks neither of which is marked "open" (see
+   dayOverlapWarnings()). --warn, matching the app's other "pay attention" signals. */
+.day-chip-clash { background: color-mix(in srgb, var(--warn) 20%, transparent); color: var(--warn); }
 
 /* Calendar Day: the untimed day-level band (renderDayUntimedItems()) — planned workouts, planned
    meals and habits, none of which carry clock times and so can't live in the timeline above. */
