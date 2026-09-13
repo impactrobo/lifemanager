@@ -4288,6 +4288,7 @@ function renderAnchorEditRow(a) {
       <input type="checkbox" ${a.open?'checked':''} onchange="updateAnchorField('${a.id}','open',this.checked)">
       <span style="font-size:13px;">Open block — other things are meant to happen inside this</span>
     </label>
+    ${timeCategorySelect(a.category, `updateAnchorField('${a.id}','category',this.value)`)}
     <label class="field" style="margin-bottom:0;"><span class="lbl">Detail (optional)</span><textarea onchange="updateAnchorField('${a.id}','detail',this.value)">${escapeHtml(a.detail || '')}</textarea></label>
   </div>`;
 }
@@ -4693,6 +4694,7 @@ function renderScheduleBuilderForm(sched) {
         <label class="field"><span class="lbl">Start Time</span><input type="time" value="${sched.wakeStart||''}" onchange="updateScheduleField('${sched.id}','wakeStart',this.value)"></label>
         <label class="field"><span class="lbl">End Time</span><input type="time" value="${sched.wakeEnd||''}" onchange="updateScheduleField('${sched.id}','wakeEnd',this.value)"></label>
       </div>
+      ${timeCategorySelect(sched.wakeCategory, `updateScheduleField('${sched.id}','wakeCategory',this.value)`)}
     </div>
     <div class="panel">
       <div class="subtle-label" style="margin-bottom:8px;">BED TIME</div>
@@ -4700,6 +4702,7 @@ function renderScheduleBuilderForm(sched) {
         <label class="field"><span class="lbl">Start Time</span><input type="time" value="${sched.bedStart||''}" onchange="updateScheduleField('${sched.id}','bedStart',this.value)"></label>
         <label class="field"><span class="lbl">End Time</span><input type="time" value="${sched.bedEnd||''}" onchange="updateScheduleField('${sched.id}','bedEnd',this.value)"></label>
       </div>
+      ${timeCategorySelect(sched.bedCategory, `updateScheduleField('${sched.id}','bedCategory',this.value)`)}
     </div>
 
     <div class="row" style="margin:18px 0 8px;">
@@ -4725,6 +4728,7 @@ function renderScheduleActivityRow(schedId, act) {
       <input type="checkbox" ${act.open?'checked':''} onchange="updateScheduleActivityField('${schedId}','${act.id}','open',this.checked)">
       <span style="font-size:13px;">Open block — other things are meant to happen inside this</span>
     </label>
+    ${timeCategorySelect(act.category, `updateScheduleActivityField('${schedId}','${act.id}','category',this.value)`)}
     <label class="field" style="margin-bottom:0;"><span class="lbl">Description (optional)</span><textarea onchange="updateScheduleActivityField('${schedId}','${act.id}','description',this.value)">${escapeHtml(act.description||'')}</textarea></label>
   </div>`;
 }
@@ -8608,6 +8612,86 @@ const BLOCK_KIND_META = {
 };
 function blockKindMeta(kind) { return BLOCK_KIND_META[kind] || BLOCK_KIND_META.activity; }
 
+// ---- Time categories, for the week's time rollup ----
+// The five non-Schedule Home sections, reusing their own ids, labels and colours straight from
+// HOME_SECTION_META — so the rollup matches the Home tiles automatically and invents no new
+// vocabulary for the life-areas the app already tracks. (Schedule itself is excluded: it's the
+// container everything else sits in, not an area you spend time *on*.)
+//
+// Plus a few things a real day is full of that aren't tracked areas at all. Without these, Work —
+// usually the single biggest block of the day — would have nowhere to go, and sleep would have to
+// masquerade as Health and drown it.
+const EXTRA_TIME_CATEGORIES = [
+  { id: 'work',   label: 'WORK',   color: '#8FD3FF' },
+  { id: 'sleep',  label: 'SLEEP',  color: '#8C93A8' },
+  { id: 'social', label: 'SOCIAL', color: '#FF9ED8' },
+  { id: 'chores', label: 'CHORES', color: '#FFB37D' },
+];
+function timeCategories() {
+  const fromSections = Object.keys(HOME_SECTION_META)
+    .filter(id => id !== 'schedule')
+    .map(id => ({ id, label: HOME_SECTION_META[id].label, color: HOME_SECTION_META[id].color }));
+  return fromSections.concat(EXTRA_TIME_CATEGORIES);
+}
+function timeCategoryMeta(id) { return timeCategories().find(c => c.id === id) || null; }
+// A <select> shared by the anchor and activity editors. Uncategorised is the default and stays a
+// real choice — nothing is auto-assigned, so the rollup only fills in as things get tagged.
+function timeCategorySelect(current, onchange) {
+  return `<label class="field"><span class="lbl">Counts as</span>
+    <select onchange="${onchange}">
+      <option value="" ${!current ? 'selected' : ''}>Uncategorised</option>
+      ${timeCategories().map(c => `<option value="${c.id}" ${current === c.id ? 'selected' : ''}>${escapeHtml(c.label)}</option>`).join('')}
+    </select>
+  </label>`;
+}
+// Minutes per category across a set of dates. Deliberately sums only *categorised* blocks: this
+// answers "did my life areas actually get time this week", not "where did all 168 hours go", so
+// untagged time (and dated events, which carry no category) simply isn't part of the question.
+//
+// Overlapping blocks each count their own duration — a 30-minute Lunch inside an 8-hour Work block
+// contributes to both. The totals therefore don't sum to elapsed time, which is fine here: each
+// category's own figure is what's being asked about, and nothing claims they tile a day.
+function timeRollupForDates(dateStrs) {
+  const totals = {};
+  dateStrs.forEach(dateStr => {
+    const { blocks } = scheduleBlocksForDate(new Date(dateStr + 'T00:00:00'));
+    blocks.forEach(b => {
+      if (!b.category) return;
+      const mins = blockDurationMinutes(b);
+      if (mins <= 0) return;
+      totals[b.category] = (totals[b.category] || 0) + mins;
+    });
+  });
+  return totals;
+}
+function renderWeekTimeRollup(days) {
+  const dateStrs = days.map(d => dateKey(d.getFullYear(), d.getMonth(), d.getDate()));
+  const totals = timeRollupForDates(dateStrs);
+  const rows = timeCategories()
+    .map(c => ({ ...c, mins: totals[c.id] || 0 }))
+    .filter(c => c.mins > 0)
+    .sort((a, b) => b.mins - a.mins);
+  if (!rows.length) {
+    return `
+      <div class="subtle-label" style="margin:18px 0 8px;">WHERE THE WEEK WENT</div>
+      <div class="panel"><div style="font-size:12px; color:var(--text-dim);">Nothing categorised yet. Tag an anchor or a schedule activity with what it counts as (<b style="color:var(--text)">Schedule &rarr; Setup</b>) and its hours show up here.</div></div>`;
+  }
+  const max = rows[0].mins;
+  return `
+    <div class="subtle-label" style="margin:18px 0 8px;">WHERE THE WEEK WENT</div>
+    <div class="panel">
+      ${rows.map(c => `
+        <div class="rollup-row">
+          <div class="rollup-head">
+            <span class="rollup-label"><i class="rollup-swatch" style="background:${c.color};"></i>${escapeHtml(c.label)}</span>
+            <span class="mono rollup-mins">${fmtDuration(c.mins)}</span>
+          </div>
+          <div class="rollup-track"><div class="rollup-fill" style="width:${Math.round((c.mins / max) * 100)}%; background:${c.color};"></div></div>
+        </div>`).join('')}
+      <div style="font-size:10px; color:var(--text-faint); margin-top:10px;">Only categorised time counts — untagged blocks (and one-off events) are left out rather than lumped into an "other" pile.</div>
+    </div>`;
+}
+
 // ---- Overlap detection between the things in one day ----
 // Blocks overlapping is normal, not automatically a mistake: a 30-minute Lunch sits inside an
 // 8-hour Work block by design. Rather than guess which collisions are real from their geometry
@@ -8787,13 +8871,13 @@ function scheduleBlocksForDate(dateObj) {
   const ex = exceptionCoversDateObj(dateObj);
   // Anchors survive an exception by default — they're the permanent baseline, and a holiday still
   // has a morning routine. skipAnchors is the opt-in for a genuinely blank day.
-  const blocks = (ex && ex.skipAnchors) ? [] : STATE.life.anchors.map(a => ({ id: 'anchor:' + a.id, start: a.start, end: a.end, label: a.label, detail: a.detail, kind: 'anchor', anchorId: a.id, open: !!a.open }));
+  const blocks = (ex && ex.skipAnchors) ? [] : STATE.life.anchors.map(a => ({ id: 'anchor:' + a.id, start: a.start, end: a.end, label: a.label, detail: a.detail, kind: 'anchor', anchorId: a.id, open: !!a.open, category: a.category || null }));
   if (sched) {
-    if (sched.wakeStart && sched.wakeEnd) blocks.push({ id: 'wake:' + sched.id, start: sched.wakeStart, end: sched.wakeEnd, label: 'Wake-Up', detail: '', kind: 'wake' });
-    if (sched.bedStart && sched.bedEnd) blocks.push({ id: 'bed:' + sched.id, start: sched.bedStart, end: sched.bedEnd, label: 'Bed Time', detail: '', kind: 'bed' });
+    if (sched.wakeStart && sched.wakeEnd) blocks.push({ id: 'wake:' + sched.id, start: sched.wakeStart, end: sched.wakeEnd, label: 'Wake-Up', detail: '', kind: 'wake', category: sched.wakeCategory || null });
+    if (sched.bedStart && sched.bedEnd) blocks.push({ id: 'bed:' + sched.id, start: sched.bedStart, end: sched.bedEnd, label: 'Bed Time', detail: '', kind: 'bed', category: sched.bedCategory || null });
     (sched.activities || []).forEach(act => {
       if (!act.start) return;
-      blocks.push({ id: 'act:' + act.id, start: act.start, end: act.end || act.start, label: act.title || 'Untitled activity', detail: act.description || '', kind: 'activity', open: !!act.open });
+      blocks.push({ id: 'act:' + act.id, start: act.start, end: act.end || act.start, label: act.title || 'Untitled activity', detail: act.description || '', kind: 'activity', open: !!act.open, category: act.category || null });
     });
   }
   // Dated one-off events. Everything above this line is a weekday *template* — the same every
@@ -9565,6 +9649,7 @@ function renderCalWeek() {
       </div>
     </div>
     <div class="cal-grid">${weekdayHeaders}${cells}</div>
+    ${renderWeekTimeRollup(days)}
     <div class="divider"></div>
     ${renderSelectedDayReminders()}`;
 }

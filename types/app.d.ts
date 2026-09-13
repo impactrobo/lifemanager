@@ -220,7 +220,7 @@ interface SavingsGoal {
 /** `open` marks a block as a container others are expected to sit inside (Work, a training block),
  *  which exempts it and anything overlapping it from dayOverlapWarnings(). Absent = a normal block
  *  that genuinely shouldn't collide with anything. */
-interface ScheduleAnchor { id: string; start: string; end: string; label: string; detail?: string; open?: boolean }
+interface ScheduleAnchor { id: string; start: string; end: string; label: string; detail?: string; open?: boolean; category?: string }
 interface PeriodicAnchor { id: string; label: string; cadenceDays: number; cadenceLabel: string }
 /** A date-range override of the weekday schedule templates — a holiday, a vacation week, a sick
  *  day. Stored as an explicit range so a week off is one row rather than seven. Overlapping
@@ -244,7 +244,14 @@ interface ScheduleBlock {
   name: string;
   days: number[];
   wakeStart: string; wakeEnd: string; bedStart: string; bedEnd: string;
-  activities: Array<{ id: string; start: string; end: string; title: string; description: string; open?: boolean }>;
+  /** Time-rollup categories for the generated Wake-Up / Bed Time blocks. Without these the SLEEP
+   *  category would be unreachable, since Bed Time is a schedule-level field rather than an
+   *  activity. Absent = uncategorised, same as everywhere else. */
+  wakeCategory?: string; bedCategory?: string;
+  /** `category` is a time-rollup bucket id — one of the five non-Schedule Home section ids, or an
+   *  EXTRA_TIME_CATEGORIES id (work/sleep/social/chores). Absent = uncategorised, which is the
+   *  default and means it simply isn't counted. See timeRollupForDates(). */
+  activities: Array<{ id: string; start: string; end: string; title: string; description: string; open?: boolean; category?: string }>;
   /** Up to 5 uppercase letters shown on the Week At A Glance strip (scheduleAbbrev()) — falls
    *  back to an auto-truncated name when unset. */
   shortLabel?: string;

@@ -657,6 +657,15 @@ select { -webkit-appearance: none; appearance: none; background-image: linear-gr
 .day-gap-line { flex: 1; border-top: 1px dashed var(--border-soft); }
 .day-chip { display: inline-block; font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 3px; margin-left: 5px; vertical-align: middle; letter-spacing: 0.04em; }
 .day-chip-now { background: var(--bad); color: #fff; }
+/* ---------- Week zoom: the time rollup (renderWeekTimeRollup()) ---------- */
+.rollup-row + .rollup-row { margin-top: 10px; }
+.rollup-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; }
+.rollup-label { font-size: 12px; font-weight: 700; letter-spacing: 0.03em; }
+.rollup-swatch { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; }
+.rollup-mins { font-size: 12px; color: var(--text-dim); }
+.rollup-track { height: 6px; border-radius: 3px; background: var(--surface2); overflow: hidden; }
+.rollup-fill { height: 100%; border-radius: 3px; }
+
 /* ---------- Agenda: the next 7 days (renderAgenda()) ---------- */
 .agenda-day { cursor: pointer; }
 .agenda-today { border-color: var(--accent); }
