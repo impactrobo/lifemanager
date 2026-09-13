@@ -9143,7 +9143,7 @@ function scheduleExceptionEffect(ex) {
   const swapped = ex.scheduleId ? STATE.life.schedules.find(s => s.id === ex.scheduleId) : null;
   const base = ex.scheduleId
     ? (swapped ? `Uses ${escapeHtml(swapped.name || 'another schedule')} instead` : 'Swapped schedule no longer exists — treated as a day off')
-    : 'Day off — no schedule, and planned workouts/meals/habits paused';
+    : 'Day off — no schedule, and planned workouts/meals paused. Habits carry on';
   return base + (ex.skipAnchors ? ' &middot; anchors skipped too' : '');
 }
 function fmtExceptionRange(ex) {
@@ -9316,6 +9316,49 @@ function currentScheduleBlock() {
   }
   return best;
 }
+// ---- The day model: one answer to "what is on this day" ----
+// Home's TODAY'S WORKOUTS box, Home's HABITS box, the Agenda and the Calendar Day view all used to
+// derive this independently, and they disagreed. Measured before this existed: on a day marked off,
+// Home showed "TODAY'S WORKOUTS: Lower Body" and prompted its habits while the Calendar Day view for
+// that same date said the plan was paused. Nothing made them agree -- each surface just happened to
+// apply (or forget) the exception rule on its own.
+//
+// So the rule lives here once and every surface reads it, the same store-once/compute-nothing-twice
+// shape the link primitive uses. A surface picks what to *show*; it no longer gets a vote on what
+// is true.
+//
+// What a day off pauses, and what it doesn't:
+//   Planned workouts and planned meals come from WEEKDAY TEMPLATES (exercisePlan[weekday],
+//   mealPlan[weekday]) -- they're derived from the schedule you've explicitly said you aren't
+//   following today, so they pause with it.
+//   Habits do NOT. A habit is a standing commitment with its own start/end dates and its own streak;
+//   it was never part of the weekday template. A holiday is a day off from your schedule, not from
+//   stretching -- and silently pausing habits breaks a streak the user never chose to break.
+function dayModel(dateStr) {
+  const dateObj = new Date(dateStr + 'T00:00:00');
+  const weekday = dateObj.getDay();
+  const exception = scheduleExceptionForDate(dateStr);
+  // A *swap* exception (one carrying a scheduleId) is a differently-shaped day, not a day off --
+  // it replaces the template rather than cancelling it, so nothing below pauses.
+  const isDayOff = !!(exception && !exception.scheduleId);
+  const { schedule, blocks } = scheduleBlocksForDate(dateObj);
+  return {
+    dateStr, dateObj, weekday,
+    isToday: dateStr === todayStr(),
+    exception, isDayOff,
+    schedule, blocks,
+    bookedMinutes: dayBookedMinutes(blocks),
+    reminders: remindersOn(dateStr),
+    workouts: isDayOff ? [] : (STATE.exercisePlan[weekday] || [])
+      .filter(e => e.workoutId).map(e => getWorkout(e.workoutId)).filter(Boolean),
+    meals: isDayOff ? [] : (STATE.diet.mealPlan[weekday] || [])
+      .filter(e => e.mealId).map(e => STATE.diet.meals.find(m => m.id === e.mealId)).filter(Boolean),
+    habits: (STATE.life.habits || []).filter(h => habitIsActiveOn(h, dateStr)),
+  };
+}
+// The day you're actually in. Separate from dayModel(todayStr()) only so the intent reads at the
+// call site -- Home never wants any other day.
+function todayModel() { return dayModel(todayStr()); }
 function renderHomeScheduleCard() {
   const b = currentScheduleBlock();
   if (!b) {
@@ -9393,19 +9436,18 @@ function logHomeCalories() {
 // schedule "RIGHT NOW" card — a lightweight convenience layer on top of the cycle-based Train
 // Grid, not a replacement for it. Tapping a row jumps straight into that workout's log.
 function renderHomeWorkoutsCard() {
-  const day = new Date().getDay();
-  const entries = (STATE.exercisePlan[day] || []).filter(e => e.workoutId);
-  if (!entries.length) {
+  const day = todayModel();
+  if (!day.workouts.length) {
     return `
     <div class="subtle-label" style="margin:18px 0 8px;">TODAY'S WORKOUTS</div>
     <div class="panel" onclick="goHomeSection('train')" style="cursor:pointer;">
-      <div style="font-size:12px; color:var(--text-dim);">Nothing scheduled for today. Tap to view Exercise, or add one under <b style="color:var(--text)">Setup &rarr; Planner</b>.</div>
+      <div style="font-size:12px; color:var(--text-dim);">${day.isDayOff
+        ? `Paused &mdash; today is marked off${day.exception.label ? ` (${escapeHtml(day.exception.label)})` : ''}. Tap to view Exercise.`
+        : `Nothing scheduled for today. Tap to view Exercise, or add one under <b style="color:var(--text)">Setup &rarr; Planner</b>.`}</div>
     </div>`;
   }
   const cycle = STATE.currentCycle;
-  const rows = entries.map(e => {
-    const w = getWorkout(e.workoutId);
-    if (!w) return '';
+  const rows = day.workouts.map(w => {
     const isGzcl = !!w.t1;
     const status = w.type === 'cardio'
       ? ((STATE.logs[logKey(cycle, w.id)] && STATE.logs[logKey(cycle, w.id)].date) ? 'done' : 'empty')
@@ -9596,10 +9638,10 @@ function renderHomeCaloriesBox() {
 // Wake-Up/Calories boxes next to it. Conditional (no box at all with zero active habits), same
 // convention as Reminders.
 function renderHomeHabitsBox() {
-  const today = todayStr();
-  const active = STATE.life.habits.filter(h => habitIsActiveOn(h, today));
-  if (!active.length) return '';
-  const rows = active.map(h => {
+  const day = todayModel();
+  const today = day.dateStr;
+  if (!day.habits.length) return '';
+  const rows = day.habits.map(h => {
     const status = habitStatusOn(h.id, today);
     const streak = habitCurrentStreak(h);
     return `<div class="row" style="padding:6px 0; align-items:center;">
@@ -9775,17 +9817,14 @@ function renderAgenda() {
     const d = new Date(start);
     d.setDate(start.getDate() + i);
     const dateStr = dateKey(d.getFullYear(), d.getMonth(), d.getDate());
-    const ex = scheduleExceptionForDate(dateStr);
-    const sched = scheduleForDate(d);
-    const isDayOff = !!(ex && !ex.scheduleId);
-    const { blocks } = scheduleBlocksForDate(d);
-    const booked = dayBookedMinutes(blocks);
-
-    const reminders = remindersOn(dateStr);
-    // Planned workouts come from the weekday template, so a day off pauses them — same rule the
-    // Day view's untimed band already applies.
-    const planned = isDayOff ? [] : (STATE.exercisePlan[d.getDay()] || [])
-      .filter(e => e.workoutId).map(e => getWorkout(e.workoutId)).filter(Boolean);
+    const day = dayModel(dateStr);
+    const ex = day.exception;
+    const sched = day.schedule;
+    const isDayOff = day.isDayOff;
+    const blocks = day.blocks;
+    const booked = day.bookedMinutes;
+    const reminders = day.reminders;
+    const planned = day.workouts;
 
     const items = [
       ...reminders.map(r => ({
@@ -11381,15 +11420,16 @@ function lifeLogForDate(dateStr) {
 // browsing to a past or future day shows that day's anchors/schedule too, not just today's.
 function renderDailySchedule(dateStr) {
   const log = lifeLogForDate(dateStr);
-  const { schedule, blocks } = scheduleBlocksForDate(new Date(dateStr + 'T00:00:00'));
+  const day = dayModel(dateStr);
+  const { schedule, blocks } = day;
   if (!blocks.length) return ''; // no anchors set up at all yet — Setup -> Set Anchors covers this case elsewhere
   const anchorBlocks = blocks.filter(b => b.kind === 'anchor');
   const doneCount = anchorBlocks.filter(b => log[b.anchorId]).length;
-  const isToday = dateStr === todayStr();
+  const isToday = day.isToday;
   // Reuses currentScheduleBlock() rather than re-deriving "what's on now", so the Day view and
   // Home's RIGHT NOW card can never disagree about which block you're actually in.
   const currentId = isToday ? ((currentScheduleBlock() || {}).id || null) : null;
-  const booked = dayBookedMinutes(blocks);
+  const booked = day.bookedMinutes;
   const maxDur = Math.max(...blocks.map(blockDurationMinutes), 1);
   const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
   const overlaps = dayOverlapWarnings(blocks);
@@ -11472,25 +11512,20 @@ function workoutIdsLoggedOn(dateStr) {
   return ids;
 }
 function renderDayUntimedItems(dateStr) {
-  const weekday = new Date(dateStr + 'T00:00:00').getDay();
-  const isToday = dateStr === todayStr();
-
-  const planned = (STATE.exercisePlan[weekday] || []).filter(e => e.workoutId).map(e => getWorkout(e.workoutId)).filter(Boolean);
-  const meals = (STATE.diet.mealPlan[weekday] || []).filter(e => e.mealId)
-    .map(e => STATE.diet.meals.find(m => m.id === e.mealId)).filter(Boolean);
-  const habits = (STATE.life.habits || []).filter(h => habitIsActiveOn(h, dateStr));
-  // A day off cancels the whole plan, not just the schedule — planned workouts, planned meals and
-  // habit prompts all come from weekday templates too. Says so explicitly rather than just
-  // rendering nothing, so an empty day never reads as a bug. A *swap* exception isn't a day off:
-  // it's a differently-shaped day, and leaves all of this alone.
-  const ex = scheduleExceptionForDate(dateStr);
-  if (ex && !ex.scheduleId && (planned.length || meals.length || habits.length)) {
-    return `<div class="panel" style="margin-top:14px;">
-      <div style="font-size:12px; color:var(--text-dim);">Planned workouts, meals and habits are paused for this day${ex.label ? ` (${escapeHtml(ex.label)})` : ''}.</div>
-    </div>`;
-  }
-  if (ex && !ex.scheduleId) return '';
-  if (!planned.length && !meals.length && !habits.length) return '';
+  const day = dayModel(dateStr);
+  const isToday = day.isToday;
+  const planned = day.workouts;   // already empty on a day off — see dayModel()
+  const meals = day.meals;
+  const habits = day.habits;      // habits are NOT paused by a day off
+  // Says the pause out loud rather than just rendering nothing, so an emptied plan never reads as
+  // a bug. Habits still render underneath it, which is the point: the day is off, the streak isn't.
+  const ex = day.exception;
+  const pausedNotice = day.isDayOff && hasWeekdayPlan(day.weekday)
+    ? `<div class="panel" style="margin-top:14px;">
+        <div style="font-size:12px; color:var(--text-dim);">Planned workouts and meals are paused for this day${ex.label ? ` (${escapeHtml(ex.label)})` : ''}. Habits carry on.</div>
+      </div>`
+    : '';
+  if (!planned.length && !meals.length && !habits.length) return pausedNotice;
 
   const loggedIds = workoutIdsLoggedOn(dateStr);
   const group = (label, color, body) => `
@@ -11529,9 +11564,16 @@ function renderDayUntimedItems(dateStr) {
     </div>`;
   }).join(''));
 
-  return `
+  return `${pausedNotice}
     <div class="subtle-label" style="margin:16px 0 8px;">ALSO ${isToday ? 'TODAY' : 'THIS DAY'}</div>
     <div class="panel">${workoutsHtml}${mealsHtml}${habitsHtml}</div>`;
+}
+// Is there anything for a day off to actually pause? dayModel() has already emptied the lists by
+// the time a caller sees them, so the notice has to ask the template directly -- otherwise a day
+// off with nothing planned anyway would announce a pause that cancelled nothing.
+function hasWeekdayPlan(weekday) {
+  return !!((STATE.exercisePlan[weekday] || []).some(e => e.workoutId)
+         || (STATE.diet.mealPlan[weekday] || []).some(e => e.mealId));
 }
 function renderPeriodicRow(a) {
   const last = STATE.life.periodicLog[a.id];

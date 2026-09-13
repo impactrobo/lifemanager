@@ -56,6 +56,16 @@ These are **not** requested features — they're natural extensions given the cu
 app, logged here so they're not lost, not so they get built unprompted. Confirm with the person
 before starting any of these.
 
+- **Home becomes the calendar's own Day view (raised 2026-09-13, needs scoping).** Raised while
+  deciding whether Home should gain a planned-meals box to match Calendar Day. The better question
+  underneath it: Home and the Calendar Day view are now two renderings of the *same* `dayModel()`
+  data, differing mainly in which parts they show and how much you can act on inline. Unifying them
+  would remove that duplication entirely rather than keep adding one box at a time to close the gap.
+  Deliberately **not** scoped yet — it touches Home's whole box/layout system (`homeLayout()`,
+  `HOME_BOX_RENDERERS`, the drag-to-reorder edit mode), which is the most customisable surface in
+  the app, so the real question is what happens to that customisation. The day model landing first
+  is what makes it tractable at all.
+
 - **Codebase survey findings not acted on (2026-09-13)** — from the same investigation whose
   three fixes are under Recently Shipped. Ranked; all confirmed, none urgent:
   - ~~~82 module-level mutable globals holding all UI state~~ — **done 2026-09-13**, see Recently
@@ -93,7 +103,8 @@ before starting any of these.
      - ~~Schedule exceptions (date-range overrides)~~ — **shipped 2026-09-12**, see Recently
        Shipped. Built fuller than the original minimal scoping: date *ranges* rather than single
        days, creation on the Day view **and** a review list in Setup, a per-exception anchors
-       choice, and a day off pausing planned workouts/meals/habits too.
+       choice, and a day off pausing planned workouts/meals/habits too. (Habits were carved back
+       out of that pause on 2026-09-13 when the day model landed — see Recently Shipped.)
      Every-other-week/every-N-days recurrence and `periodic` anchors landing on actual calendar
      dates (they're currently a cadence-days due-list that never does) were both considered and
      deliberately left out of the recurring-reminders half — annual + monthly were judged the
@@ -325,6 +336,38 @@ on an architecture split + a large wave of Maximalist aesthetics.
   pattern.
 
 ### Feature changes
+
+- **One shared day model: every surface now gets the same answer to "what is on this day"
+  (2026-09-13).** Home's TODAY'S WORKOUTS box, Home's HABITS box, the Agenda and the Calendar Day
+  view each derived this independently, and they disagreed. Measured before building: on a day
+  marked off, Home showed the planned workout and prompted its habits while Calendar Day for that
+  **same date** said the plan was paused. Nothing made them agree — each surface just happened to
+  apply, or forget, the exception rule on its own. `dayModel(dateStr)` now states the rule once
+  (plus `todayModel()`, which is only `dayModel(todayStr())` named so the intent reads at Home's
+  call sites) and returns the day's schedule, blocks, booked minutes, reminders, planned workouts,
+  planned meals and active habits. A surface chooses what to *show*; it no longer gets a vote on
+  what is true. Same store-once/compute-nothing-twice shape as the link primitive.
+  - **A day off no longer pauses habits — this is a deliberate behaviour change.** Planned workouts
+    and meals come from weekday *templates* (`exercisePlan[weekday]`, `mealPlan[weekday]`), derived
+    from the schedule you have explicitly said you are not following, so they pause with it. A habit
+    is a standing commitment with its own start/end dates and its own streak and was never part of
+    that template: a holiday is a day off from your schedule, not from stretching, and silently
+    pausing habits breaks a streak the user never chose to break. Calendar Day used to pause all
+    three; it now pauses two, and Home (which paused none) matches it.
+  - **A swap exception still cancels nothing.** An exception carrying a `scheduleId` reshapes the
+    day rather than cancelling it. Both kinds are rows in the same array separated only by whether
+    `scheduleId` is null, which is the distinction most likely to get lost in a future edit, so the
+    test covers it directly.
+  - **`hasWeekdayPlan(weekday)` exists because the model empties the lists before any surface sees
+    them** — the "paused" notice has to consult the template directly, or a day off with nothing
+    planned anyway would announce a pause that cancelled nothing.
+  - Two stale copy strings said the old rule out loud (the Day view banner and the Setup
+    exception list, both via `scheduleExceptionEffect()`); both now say "Habits carry on", and
+    Home's empty workouts box explains a day off instead of saying "nothing scheduled".
+  - `test_day_model.js` ends with a structural guard: it reads `app.js` and asserts none of the five
+    surfaces still reach for `STATE.exercisePlan[`, `STATE.diet.mealPlan[`, `habitIsActiveOn(` or
+    `scheduleExceptionForDate(` themselves. Agreement holds only while they read the model, so the
+    test protects the mechanism rather than just the current output.
 
 - **`navigateToEntity(type, id)`: one way to open any entity, from anywhere (2026-09-13).** The
   link primitive already had this logic inline; pulling it out as its own function made a latent
