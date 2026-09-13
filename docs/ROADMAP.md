@@ -58,13 +58,9 @@ before starting any of these.
 
 - **Codebase survey findings not acted on (2026-09-13)** — from the same investigation whose
   three fixes are under Recently Shipped. Ranked; all confirmed, none urgent:
-  - **~82 module-level mutable globals hold all UI state** (1,405 references across 454 of 706
-    functions). The reset-on-navigate fix above treats the *symptom*; consolidating these into one
-    state object is what would make that class of bug impossible rather than fixed, and it is the
-    natural first slice of the `app.js` split already on the roadmap (82 bare `let`s in one script
-    scope can't be divided across files; one object can). Sized honestly: a purely mechanical
-    refactor — same functions, same behaviour, same file — but it must land one state-group at a
-    time with the suite green after each slice. A session or two of boring, not a rewrite.
+  - ~~~82 module-level mutable globals holding all UI state~~ — **done 2026-09-13**, see Recently
+    Shipped. 82 bare `let`s became 21, of which three are the new state objects; the 18 that
+    remain are deliberate.
   - ~~`updateAllTMs()` running on every render of the Training Maxes screen~~ — **fixed
     2026-09-13**, and it was hiding a real data-loss bug; see Recently Shipped.
   - ~~Rot-prone literal-count test assertions~~ — **addressed 2026-09-13**, and the original
@@ -328,6 +324,37 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Survey item 6: the UI-state globals, consolidated onto three objects (2026-09-13).** The last
+  and largest finding of the codebase survey — 82 module-level `let`s holding all UI state, 1,405
+  references across 454 of 706 functions. Landed in three slices, each mechanical (same functions,
+  same behaviour, same file) with the full suite green before the next began. **82 bare globals →
+  21**, three of which are the new objects.
+  - **`UI` — transient state (19 fields).** Everything meaning "a panel/form/picker is open" or "a
+    mode is engaged". Built by `defaultTransientUi()`, which makes `resetTransientUi()` a single
+    `Object.assign(UI, defaultTransientUi())`. That is the whole point: the defaults literal *is*
+    the reset list, so the two can never drift — and two lists drifting is precisely how all 19
+    came to leak across navigation in the first place.
+  - **`NAV` — navigation position (20 fields).** Which tab, which subtab, which date each dated
+    view is parked on. Separate from `UI` because it must *survive* a navigation, which is exactly
+    why it can't live in the object a navigation resets. This also collapsed
+    `navSnapshot()`/`applyNavSnapshot()`, which hand-mapped eleven globals to snapshot keys and
+    eleven keys back with a renaming in between; one declared `NAV_SNAPSHOT_KEYS` array now drives
+    both directions.
+  - **`VIEW` — per-screen view state (26 fields).** Selections, filters, drafts, expanded/collapsed
+    maps, clipboards. Session-only, and deliberately *not* reset on navigation: a half-built meal,
+    draft photos or a notes filter should still be there when you return to that screen. Which
+    object a field lives on now states that boundary explicitly instead of leaving it implicit.
+  - **The 18 bare globals left are deliberate, not leftovers**: `STATE` (app data, not UI state),
+    `REST_TIMER`/`AUDIO_CTX` (system resources holding live handles), `ACTIVE_FX`/`FX_LOAD_SEQ` (FX
+    module runtime), `NAV_HISTORY`/`NAV_FORWARD` (the stacks themselves, not a position),
+    `CLOUD_*` and `REMINDER_PUSH_*` (subsystem status), `MEAL_UNIT_SYSTEM` (a cache of a persisted
+    setting) and `CHIP_DRAG`/`HOME_DRAG` (live objects that exist only mid-gesture).
+  - `test_ui_state_reset.js` was rewritten to match: rather than a hand-kept table of flags, it
+    dirties every key of `defaultTransientUi()` and asserts the object comes back deep-equal, and
+    fails if `UI` carries a field the defaults don't — such a field would never be reset and would
+    be invisible to the check. A flag added to the app is covered with no test change.
+  - **This unblocks the `app.js` file split** that was the original motivation: 82 bare `let`s in
+    one script scope cannot be divided across files, whereas three shared objects can.
 - **Survey items 4, 5 and 7 — and a data-loss bug the refactor uncovered (2026-09-13).**
   - **`updateAllTMs()` split into `migrateState()` + `recomputeTMs()`.** The old name described
     its last few lines and hid the fact that ~200 lines of save migration ran on every visit to

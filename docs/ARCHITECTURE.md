@@ -121,10 +121,12 @@ the same `z-index`. When a theme uses both backdrop layers, give them distinct v
 - `CURRENT_TAB` is the active top-level section (`'home' | 'train' | 'hobbies' | 'health' |
   'setup' | 'notes' | 'schedule' | 'budget'`), plus a handful of per-section subtab variables
   (`TRAIN_TOP_SUBTAB`, `HEALTH_SUBTAB`, `NOTES_SUBTAB`, `SCHEDULE_SUBTAB`, `BUDGET_SUBTAB`,
-  `GUITAR_SUBTAB`, etc.) and view-state variables (`TRAIN_VIEW.mode`, and the transient
-  panel/mode flags, which now live together on one `UI` object -- `UI.measureFormOpen` and the
-  rest -- so `resetTransientUi()` can clear them all without keeping a list; see
-  `defaultTransientUi()` in app.js).
+  UI state lives on three module-level objects, grouped by lifetime:
+  `UI` is transient ("a form is open right now") and is cleared wholesale by `resetTransientUi()`
+  on every navigation; `NAV` is position (`NAV.currentTab`, `NAV.scheduleSubtab`,
+  `NAV.calSelectedDate`) and survives one; `VIEW` is per-screen selections, filters and drafts
+  (`VIEW.notesFilterTag`, `VIEW.mealBuilderDraft`) which persist so returning to a screen resumes
+  it. Which object a field lives on states its lifetime -- see `defaultTransientUi()` in app.js.
 - `render()` schedules `_doRender()` on the next animation frame (deliberately deferred so a
   change/blur event on an element about to be replaced never races the browser's own dispatch).
 - `_doRender()` does one big `switch`-like dispatch on `CURRENT_TAB` to pick a top-level
