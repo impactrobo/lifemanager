@@ -49,6 +49,14 @@ const ICONS = {
 };
 ICONS.settings = ICONS.setup; // app-appearance settings reuses the same gear glyph as the Setup tab
 function icon(name) { return ICONS[name] || ''; }
+// Reads an input's value/checked by id, tolerating the element not being in the current render.
+// The typecheck can't catch a wrong or not-yet-rendered id here — types/app.d.ts widens
+// HTMLElement with `value: any` (its own comment calls this a known blind spot) — so a bare
+// `.value` on null compiles clean and throws mid-save, which is exactly how saveReminder() once
+// crashed when #remEndTime didn't exist yet. Every literal-id read goes through these; a test
+// (test_input_helpers.js) fails the suite if a bare one creeps back in.
+function inputVal(id) { const el = document.getElementById(id); return el ? el.value : ''; }
+function inputChecked(id) { const el = document.getElementById(id); return !!(el && el.checked); }
 
 // Per-aesthetic accent palettes for the Settings picker. Every aesthetic ignores the device's
 // light/dark setting and ships one fixed backdrop, so its palette entries carry a single `value`
@@ -1716,8 +1724,8 @@ function startPresetRestTimer(seconds) {
   closeRestPicker();
 }
 function startCustomRestTimer() {
-  const minRaw = document.getElementById('restCustomMinutes').value;
-  const secRaw = document.getElementById('restCustomSeconds').value;
+  const minRaw = inputVal('restCustomMinutes');
+  const secRaw = inputVal('restCustomSeconds');
   const mins = minRaw === '' ? 0 : Math.max(0, Math.trunc(Number(minRaw)) || 0);
   const secs = secRaw === '' ? 0 : Math.max(0, Math.trunc(Number(secRaw)) || 0);
   const total = mins * 60 + secs;
@@ -5098,15 +5106,15 @@ function renderCustomFoodForm() {
   </div>`;
 }
 function saveCustomFood() {
-  const name = (document.getElementById('cfName').value || '').trim();
+  const name = (inputVal('cfName') || '').trim();
   if (!name) { showToast('Give it a name'); return; }
-  const category = document.getElementById('cfCategory').value;
-  const servingType = document.getElementById('cfServingType').value; // 'weight' | 'volume' | 'count'
-  const itemLabelRaw = (document.getElementById('cfItemLabel').value || '').trim();
+  const category = inputVal('cfCategory');
+  const servingType = inputVal('cfServingType'); // 'weight' | 'volume' | 'count'
+  const itemLabelRaw = (inputVal('cfItemLabel') || '').trim();
   if (servingType === 'count' && !itemLabelRaw) { showToast('Give the item a label, e.g. "egg"'); return; }
   const cal = Number(document.getElementById(nutrientInputId('cal')).value) || 0;
   if (!cal) { showToast('Enter at least the calories for one serving'); return; }
-  const servingAmount = Math.max(1, Number(document.getElementById('cfServingAmount').value) || 100);
+  const servingAmount = Math.max(1, Number(inputVal('cfServingAmount')) || 100);
   // count-type: itemAmount fixed at 100, so per-serving values entered ARE per100 already (no
   // conversion needed) — see the block comment above this section for why.
   const divisor = servingType === 'count' ? 1 : (servingAmount / 100);
@@ -6174,13 +6182,13 @@ function renderCloudSyncModal() {
   const body = CLOUD_SYNC_EMAIL_LINK_SENT ? `
         <div style="font-size:12px; color:var(--text-dim); margin-bottom:12px;">Check your email for the sign-in link. Tapping it works, but opens in Safari instead of this app — for the smoothest experience, long-press the link in Mail, tap <b>Copy Link</b>, then paste it below.</div>
         <label class="field" style="margin-bottom:8px;"><span class="lbl">Paste the link here</span><textarea id="cloudSyncPastedLink" rows="3" placeholder="https://..."></textarea></label>
-        <button class="btn btn-primary btn-block" onclick="completeEmailSignInFromPastedLink(document.getElementById('cloudSyncPastedLink').value)">COMPLETE SIGN-IN</button>
+        <button class="btn btn-primary btn-block" onclick="completeEmailSignInFromPastedLink(inputVal('cloudSyncPastedLink'))">COMPLETE SIGN-IN</button>
         <button class="btn btn-ghost btn-block btn-sm" style="margin-top:8px;" onclick="CLOUD_SYNC_EMAIL_LINK_SENT=false; render();">&#8249; Send to a different email</button>
       ` : `
         <button class="btn btn-primary btn-block" onclick="signInWithGoogle()">CONTINUE WITH GOOGLE</button>
         <div class="divider" style="margin:14px 0;"></div>
         <label class="field" style="margin-bottom:8px;"><span class="lbl">Email</span><input type="email" id="cloudSyncEmailInput" placeholder="you@example.com"></label>
-        <button class="btn btn-block" onclick="sendEmailSignInLink(document.getElementById('cloudSyncEmailInput').value.trim())">SEND SIGN-IN LINK</button>
+        <button class="btn btn-block" onclick="sendEmailSignInLink(inputVal('cloudSyncEmailInput').trim())">SEND SIGN-IN LINK</button>
       `;
   return `
     <div class="home-popup-backdrop" style="align-items:flex-start; padding-top:48px; overflow-y:auto;" onclick="closeCloudSyncModal()">
@@ -7570,7 +7578,7 @@ function renderMeasurePhotoRow() {
     </div>`).join('');
 }
 function saveMeasurement() {
-  const date = document.getElementById('mDate').value || todayStr();
+  const date = inputVal('mDate') || todayStr();
   const fields = {};
   MEASURE_FIELDS.forEach(f => {
     const el = document.getElementById('mf_' + f.key);
@@ -7684,12 +7692,12 @@ function renderWeightForm() {
     </div>`;
 }
 function saveWeightEntry() {
-  const date = document.getElementById('wDate').value || todayStr();
-  const w = document.getElementById('wWeight').value;
-  const bodyFat = document.getElementById('wBodyFat').value;
-  const bodyWater = document.getElementById('wBodyWater').value;
-  const cal = document.getElementById('wCal').value;
-  const cardioCal = document.getElementById('wCardioCal').value;
+  const date = inputVal('wDate') || todayStr();
+  const w = inputVal('wWeight');
+  const bodyFat = inputVal('wBodyFat');
+  const bodyWater = inputVal('wBodyWater');
+  const cal = inputVal('wCal');
+  const cardioCal = inputVal('wCardioCal');
   if (w === '') { showToast('Enter a weight'); return; }
   STATE.weightLog.push({
     id: uid(), date, weightLb: displayToLb(w),
@@ -8822,11 +8830,11 @@ function updateScheduleExceptionField(id, field, value) {
 let EXCEPTION_FORM_OPEN = false;
 function toggleExceptionForm() { EXCEPTION_FORM_OPEN = !EXCEPTION_FORM_OPEN; render(); }
 function saveExceptionFromDayView() {
-  const start = document.getElementById('excStart').value || CAL_SELECTED_DATE;
-  const end = document.getElementById('excEnd').value || start;
-  const scheduleId = document.getElementById('excSchedule').value || null;
-  const skipAnchors = document.getElementById('excSkipAnchors').checked;
-  const label = document.getElementById('excLabel').value;
+  const start = inputVal('excStart') || CAL_SELECTED_DATE;
+  const end = inputVal('excEnd') || start;
+  const scheduleId = inputVal('excSchedule') || null;
+  const skipAnchors = inputChecked('excSkipAnchors');
+  const label = inputVal('excLabel');
   EXCEPTION_FORM_OPEN = false;
   addScheduleException(start, end, scheduleId, skipAnchors, label);
   showToast('Day marked');
@@ -8991,7 +8999,7 @@ function getTodayWeightEntry(create) {
   return e;
 }
 function logHomeWeight() {
-  const val = document.getElementById('homeWeight').value;
+  const val = inputVal('homeWeight');
   if (val === '') { showToast('Enter a weight first'); return; }
   const e = getTodayWeightEntry(true);
   e.weightLb = displayToLb(val);
@@ -9001,7 +9009,7 @@ function logHomeWeight() {
   drawWeightChart();
 }
 function logHomeSleepLength() {
-  const val = document.getElementById('homeSleepLen').value;
+  const val = inputVal('homeSleepLen');
   if (val === '') { showToast('Enter sleep length first'); return; }
   const log = todayLifeLog();
   log.sleepHours = Number(val);
@@ -9010,7 +9018,7 @@ function logHomeSleepLength() {
   render();
 }
 function logHomeSleepQuality() {
-  const val = document.getElementById('homeSleepQual').value;
+  const val = inputVal('homeSleepQual');
   if (!val) { showToast('Select a sleep quality first'); return; }
   const log = todayLifeLog();
   log.sleepQuality = Number(val);
@@ -9019,7 +9027,7 @@ function logHomeSleepQuality() {
   render();
 }
 function logHomeCalories() {
-  const val = document.getElementById('homeCalories').value;
+  const val = inputVal('homeCalories');
   if (val === '') { showToast('Enter calories first'); return; }
   const e = getTodayWeightEntry(true);
   e.calories = Number(val);
@@ -9874,7 +9882,7 @@ function saveReminder() {
   const titleEl = document.getElementById('remTitle');
   const title = titleEl ? titleEl.value.trim() : '';
   if (!title) { showToast(REMINDER_FORM_TYPE === 'todo' ? 'Give the to-do list a title' : 'Give the reminder a title'); return; }
-  const time = document.getElementById('remTime').value || null;
+  const time = inputVal('remTime') || null;
   const endEl = document.getElementById('remEndTime');
   // An end time only means anything alongside a start — on its own there's nothing to measure it
   // from, so it's dropped rather than saved as a half-specified block.
@@ -10156,7 +10164,7 @@ function addSavingsGoal() {
   const amount = Number(amountEl.value);
   if (!name) { showToast('Give it a name'); return; }
   if (!amount || amount <= 0) { showToast('Enter a target amount'); return; }
-  const resetsAnnually = document.getElementById('goalResetsAnnually').checked;
+  const resetsAnnually = inputChecked('goalResetsAnnually');
   STATE.budget.goals.push({ id: uid(), name, targetAmount: amount, resetsAnnually, recurringChargeId: null, contributions: [], archived: false, createdAt: Date.now() });
   saveState();
   nameEl.value = ''; amountEl.value = ''; document.getElementById('goalResetsAnnually').checked = false;
@@ -10334,7 +10342,7 @@ function addRecurringIncome() {
   const amount = Number(amountEl.value);
   if (!name) { showToast('Give it a name'); return; }
   if (!amount || amount <= 0) { showToast('Enter an amount first'); return; }
-  const frequency = document.getElementById('incFrequency').value || 'monthly';
+  const frequency = inputVal('incFrequency') || 'monthly';
   STATE.budget.recurringIncome.push({ id: uid(), name, amount, frequency, active: true });
   saveState();
   nameEl.value = ''; amountEl.value = '';
@@ -10462,7 +10470,7 @@ function addBudgetIncidental() {
   const amtEl = document.getElementById('budgetIncAmount');
   const amt = Number(amtEl.value);
   if (!amt || amt <= 0) { showToast('Enter an amount first'); return; }
-  const category = document.getElementById('budgetIncCategory').value || 'Other';
+  const category = inputVal('budgetIncCategory') || 'Other';
   const noteEl = document.getElementById('budgetIncNote');
   const note = noteEl.value.trim();
   const key = budgetMonthKey();
@@ -10497,8 +10505,8 @@ function addRecurringCharge() {
   const amount = Number(amountEl.value);
   if (!name) { showToast('Give it a name'); return; }
   if (!amount || amount <= 0) { showToast('Enter an amount first'); return; }
-  const category = document.getElementById('recCategory').value || 'Other';
-  const isSavings = document.getElementById('recIsSavings').checked;
+  const category = inputVal('recCategory') || 'Other';
+  const isSavings = inputChecked('recIsSavings');
   STATE.budget.recurring.push({ id: uid(), name, amount, category, active: true, isSavings });
   saveState();
   nameEl.value = ''; amountEl.value = ''; document.getElementById('recIsSavings').checked = false;
@@ -11107,9 +11115,9 @@ function renderGuitarLogForm() {
     </div>`;
 }
 function saveGuitarLog() {
-  const date = document.getElementById('gDate').value || todayStr();
-  const minutes = document.getElementById('gMinutes').value;
-  const notes = document.getElementById('gNotes').value;
+  const date = inputVal('gDate') || todayStr();
+  const minutes = inputVal('gMinutes');
+  const notes = inputVal('gNotes');
   if (!minutes) { showToast('Enter minutes practiced'); return; }
   STATE.life.guitar.practiceLog.push({ id: uid(), date, minutes: Number(minutes), notes });
   GUITAR_LOG_FORM_OPEN = false;
@@ -11193,7 +11201,7 @@ function toggleSupplement(name) {
   saveState(); render();
 }
 function setSkinCycleStart() {
-  const val = document.getElementById('skinStart').value || todayStr();
+  const val = inputVal('skinStart') || todayStr();
   STATE.life.skinCycleStart = val;
   saveState(); render();
 }
