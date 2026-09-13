@@ -9575,16 +9575,64 @@ function setWaterColor(v) {
 }
 // "Lasts until changed" only reads as useful if you can tell how old it is -- a marker from three
 // days ago says nothing about right now.
-function waterColorAge() {
+function waterColorAgeMinutes() {
   const at = STATE.life.waterColor && STATE.life.waterColor.at;
-  if (!at) return '';
-  const mins = Math.floor((Date.now() - new Date(at).getTime()) / 60000);
+  return at ? Math.floor((Date.now() - new Date(at).getTime()) / 60000) : null;
+}
+function waterColorAge() {
+  const mins = waterColorAgeMinutes();
+  if (mins == null) return '';
   if (mins < 1) return 'just now';
   if (mins < 60) return mins + 'm ago';
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return hrs + 'h ago';
   const days = Math.floor(hrs / 24);
   return days + 'd ago';
+}
+// Past this, the marker is describing a body you no longer have. It stays on screen -- clearing it
+// automatically would throw away the only reading you've got -- but it stops presenting itself as
+// current. Twelve hours because hydration turns over across a night, not across an afternoon.
+const WATER_COLOR_STALE_MIN = 12 * 60;
+function waterColorIsStale() {
+  const mins = waterColorAgeMinutes();
+  return mins != null && mins >= WATER_COLOR_STALE_MIN;
+}
+// The most recent readings, oldest-first, for the trend strip.
+function waterColorTrend(n) {
+  const log = STATE.life.waterColorLog || [];
+  return log.slice(Math.max(0, log.length - (n || 10)));
+}
+// Average colour on days you hit your water target vs days you didn't.
+//
+// Deliberately descriptive, never causal or diagnostic: it reports two averages and the number of
+// days behind each, and says nothing about what they mean. Same-day pairing, which is the honest
+// simple choice -- a morning reading partly reflects yesterday's drinking, so this is a rough
+// association and the copy says "on days", not "because".
+//
+// Returns null until there are enough days on BOTH sides to be worth printing. Two averages drawn
+// from one day each would be noise wearing the clothes of a finding.
+const WATER_INSIGHT_MIN_DAYS = 3;
+function waterColorInsight() {
+  const log = STATE.life.waterColorLog || [];
+  if (!log.length) return null;
+  // Several readings on one day average into a single figure for that day, so a day you happened
+  // to check four times doesn't outvote three other days.
+  const byDate = {};
+  log.forEach(r => {
+    const d = dateKeyOf(new Date(r.at));
+    (byDate[d] = byDate[d] || []).push(r.value);
+  });
+  const target = waterTargetMl();
+  const hit = [], missed = [];
+  Object.keys(byDate).forEach(d => {
+    const dayLog = STATE.life.dailyLog[d];
+    if (!dayLog || dayLog.waterMl == null) return;   // no water logged that day -- nothing to compare
+    const avg = byDate[d].reduce((a, b) => a + b, 0) / byDate[d].length;
+    (Number(dayLog.waterMl) >= target ? hit : missed).push(avg);
+  });
+  if (hit.length < WATER_INSIGHT_MIN_DAYS || missed.length < WATER_INSIGHT_MIN_DAYS) return null;
+  const mean = a => a.reduce((x, y) => x + y, 0) / a.length;
+  return { hit: mean(hit), missed: mean(missed), hitDays: hit.length, missedDays: missed.length };
 }
 function logChip(field) {
   const logged = field === 'water' ? (logFieldValue('water') || 0) > 0 : logFieldValue(field) != null;
@@ -9599,7 +9647,7 @@ function logChip(field) {
     ? `${LOG_FIELDS[field].label} <i class="log-chip-unit">&middot; ${waterUnitLabel()}</i>`
     : LOG_FIELDS[field].label;
   const dot = colorVal
-    ? `<i class="log-chip-dot" style="background:${waterColorHex(colorVal)};" title="Colour ${colorVal} &middot; ${waterColorAge()}"></i>` : '';
+    ? `<i class="log-chip-dot ${waterColorIsStale() ? 'log-chip-dot-stale' : ''}" style="background:${waterColorHex(colorVal)};" title="Colour ${colorVal} &middot; ${waterColorAge()}"></i>` : '';
   return `<button class="log-chip ${logged ? 'log-chip-set' : ''} ${field === 'water' ? 'log-chip-wide' : ''}" onclick="${onclick}">
     <span class="log-chip-label">${label}</span>
     <span class="log-chip-value">${logFieldDisplay(field)}${field === 'water' ? '<i class="log-chip-plus">+</i>' : ''}${dot}</span>
@@ -9659,6 +9707,35 @@ function setOrClear(obj, key, raw) {
   if (raw === '' || raw == null) delete obj[key];
   else obj[key] = Number(raw);
 }
+// The last ten readings, oldest to newest. Answers "which way is this going" at a glance, which
+// a single current swatch cannot -- one dark reading is a moment, four in a row is a direction.
+function renderWaterColorTrend() {
+  const trend = waterColorTrend(10);
+  if (trend.length < 2) return '';   // a single dot is not a trend, it's the marker again
+  const dots = trend.map(r => {
+    const when = new Date(r.at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    return `<i class="log-trend-dot" style="background:${waterColorHex(r.value)};" title="${r.value} of 8 &middot; ${when}"></i>`;
+  }).join('');
+  return `
+    <div class="log-trend">
+      <span class="log-trend-cap">older</span>
+      <span class="log-trend-dots">${dots}</span>
+      <span class="log-trend-cap">now</span>
+    </div>`;
+}
+// Two averages and the days behind them. No verdict, no advice -- urine colour carries real medical
+// signal beyond hydration, and anything phrased as a finding or a warning would be overreaching
+// what a self-reported swatch can support.
+function renderWaterColorInsight() {
+  const i = waterColorInsight();
+  if (!i) return '';
+  return `
+    <div class="log-insight">
+      On days you hit <b>${fmtWater(waterTargetMl())} ${waterUnitLabel()}</b> your colour averaged
+      <b>${fmt(i.hit, 1)}</b> <span class="log-insight-n">(${i.hitDays} days)</span>; on days you didn't,
+      <b>${fmt(i.missed, 1)}</b> <span class="log-insight-n">(${i.missedDays} days)</span>.
+    </div>`;
+}
 function renderLogPopup() {
   if (!UI.logPopup) return '';
   const { group } = UI.logPopup;
@@ -9696,9 +9773,11 @@ function renderLogPopup() {
             ${WATER_COLORS.map((hex, i) => `<button class="log-color-sw ${cur === i + 1 ? 'log-color-sw-on' : ''}" style="background:${hex};" onclick="setWaterColor(${i + 1})" title="${i + 1}" aria-label="Color ${i + 1}"></button>`).join('')}
           </div>
         </div>
+        ${renderWaterColorTrend()}
         <div class="log-color-note">${cur
-          ? `Showing <b>${cur}</b> of 8 &middot; set ${waterColorAge()}. Stays until you change it.`
-          : 'Lighter is more hydrated. Tap a shade to set your marker &mdash; it stays until you change it.'}</div>`;
+          ? `Showing <b>${cur}</b> of 8 &middot; set ${waterColorAge()}.${waterColorIsStale() ? ' <b class="log-color-stale">Worth a fresh look.</b>' : ' Stays until you change it.'}`
+          : 'Lighter is more hydrated. Tap a shade to set your marker &mdash; it stays until you change it.'}</div>
+        ${renderWaterColorInsight()}`;
     }
     if (f === 'sleepQual') {
       const opts = [1, 2, 3, 4, 5].map(n => {
@@ -10038,7 +10117,7 @@ function renderAgenda() {
       ...planned.map(w => ({
         sort: '~', // after timed items — a planned workout has no time of its own
         html: `<div class="agenda-item">
-          <span class="agenda-time mono" style="color:${BLOCK_KIND_META.anchor.color};">workout</span>
+          <span class="agenda-time mono" style="color:${entityColor('workout')};">workout</span>
           <span class="agenda-label">${escapeHtml(w.name)}</span>
         </div>`,
       })),
@@ -10729,9 +10808,19 @@ function entityOf(type, id) {
   const meta = LINKABLE_TYPES[type];
   return meta ? meta.all().find(x => x.id === id) : null;
 }
-function linkColor(section) {
+function sectionColor(section) {
   return (HOME_SECTION_META[section] && HOME_SECTION_META[section].color) || 'var(--text-dim)';
 }
+// The colour an entity carries wherever it surfaces. Derived from LINKABLE_TYPES rather than named
+// at each call site, which is the whole point: the registry already records which section every
+// entity belongs to, so a chip and a day-view row can't drift apart. They had -- habits rendered in
+// the Hobbies purple on the Day view while their link chips were Schedule blue, because the two
+// were written months apart from the same mental list of "nice colours".
+function entityColor(type) {
+  return sectionColor(LINKABLE_TYPES[type] && LINKABLE_TYPES[type].section);
+}
+// Kept as the name the link chips read by, since that's what they're asking for.
+function linkColor(section) { return sectionColor(section); }
 
 // Outbound: what this entity itself points at.
 function outboundLinks(type, id) {
@@ -11806,7 +11895,7 @@ function renderDayUntimedItems(dateStr) {
       ${body}
     </div>`;
 
-  const workoutsHtml = !planned.length ? '' : group('PLANNED WORKOUTS', '#FF9191', planned.map(w => {
+  const workoutsHtml = !planned.length ? '' : group('PLANNED WORKOUTS', entityColor('workout'), planned.map(w => {
     const done = loggedIds.has(w.id);
     return `<div class="day-extra-row" onclick="openTodayWorkout('${w.id}')" style="cursor:pointer;">
       <span class="day-extra-name">${escapeHtml(w.name)}</span>
@@ -11815,7 +11904,7 @@ function renderDayUntimedItems(dateStr) {
     </div>`;
   }).join(''));
 
-  const mealsHtml = !meals.length ? '' : group('PLANNED MEALS', '#92FECD', meals.map(m => {
+  const mealsHtml = !meals.length ? '' : group('PLANNED MEALS', entityColor('meal'), meals.map(m => {
     const cal = Math.round(computeMealTotals(m.items).cal || 0);
     return `<div class="day-extra-row">
       <span class="day-extra-name">${escapeHtml(m.name || 'Untitled meal')}</span>
@@ -11825,7 +11914,7 @@ function renderDayUntimedItems(dateStr) {
 
   // Marking is allowed on any date, not just today — same as the timeline's own anchors, and the
   // whole point of being able to look back at a day you forgot to log.
-  const habitsHtml = !habits.length ? '' : group('HABITS', '#CAAFFF', habits.map(h => {
+  const habitsHtml = !habits.length ? '' : group('HABITS', entityColor('habit'), habits.map(h => {
     const status = habitStatusOn(h.id, dateStr);
     return `<div class="day-extra-row">
       <span class="day-extra-name">${escapeHtml(h.name)}</span>

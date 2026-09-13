@@ -804,6 +804,28 @@ select { -webkit-appearance: none; appearance: none; background-image: linear-gr
 .log-color-sw-on { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent); }
 .log-color-sw:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .log-color-note { font-size: 10px; color: var(--text-faint); margin: -2px 0 8px; line-height: 1.45; }
+/* A marker older than half a day is describing a body you no longer have. It stays visible -- it's
+   the only reading you've got -- but stops presenting itself as current. */
+.log-color-stale { color: var(--warn); font-weight: 700; }
+.log-chip-dot-stale { opacity: 0.4; border-style: dashed; }
+
+/* Ten readings, oldest to newest. One dark reading is a moment; four in a row is a direction, and
+   that's what a single current swatch can never show. */
+.log-trend { display: flex; align-items: center; gap: 8px; margin: 2px 0 6px; }
+.log-trend-cap { font-size: 9px; color: var(--text-faint); letter-spacing: 0.06em; text-transform: uppercase; flex: 0 0 auto; }
+.log-trend-dots { flex: 1; display: flex; align-items: center; gap: 4px; }
+/* Fixed swatch hex again, same reason as the scale itself: a physical reference must not follow
+   the aesthetic's palette. */
+.log-trend-dot {
+  flex: 1; height: 10px; border-radius: 2px; border: 1px solid rgba(0, 0, 0, 0.3);
+}
+
+.log-insight {
+  font-size: 10px; line-height: 1.5; color: var(--text-dim);
+  border-left: 2px solid var(--border); padding: 4px 0 4px 8px; margin: 0 0 10px;
+}
+.log-insight b { color: var(--text); }
+.log-insight-n { color: var(--text-faint); }
 .log-color-note b { color: var(--text-dim); }
 
 /* The sheet itself reuses .home-popup / .home-popup-backdrop (the bottom-sheet pattern Home's

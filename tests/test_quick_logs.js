@@ -273,12 +273,105 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   });
   if (!nav) throw new Error('The sheet should close on navigation, like every other transient panel');
 
+  // ---- 8d. Staleness: the marker stays, but stops claiming to be current ----
+  // Clearing it automatically would throw away the only reading there is; dimming it says "this is
+  // old" without destroying anything. Twelve hours because hydration turns over across a night.
+  const stale = await page.evaluate(() => {
+    const hoursAgo = h => new Date(Date.now() - h * 3600 * 1000).toISOString();
+    STATE.life.waterColor = { value: 5, at: hoursAgo(3) };
+    const fresh = { stale: waterColorIsStale(), dimmed: /log-chip-dot-stale/.test(logChip('water')), note: /Worth a fresh look/.test(renderLogPopup()) };
+    STATE.life.waterColor = { value: 5, at: hoursAgo(13) };
+    UI.logPopup = { group: 'pm', focus: 'calories' };
+    const old = { stale: waterColorIsStale(), dimmed: /log-chip-dot-stale/.test(logChip('water')), note: /Worth a fresh look/.test(renderLogPopup()), value: waterColorValue() };
+    UI.logPopup = null;
+    return { fresh, old };
+  });
+  console.log('staleness:', stale);
+  if (stale.fresh.stale || stale.fresh.dimmed) throw new Error('A 3-hour-old marker is still current');
+  if (!stale.old.stale || !stale.old.dimmed) throw new Error('A 13-hour-old marker should read as stale');
+  if (!stale.old.note) throw new Error('The sheet should say a stale marker is worth refreshing');
+  if (stale.old.value !== 5) throw new Error('Going stale must not clear the marker — it is the only reading there is');
+
+  // ---- 8e. The trend strip ----
+  const trend = await page.evaluate(() => {
+    const dayAgo = d => new Date(Date.now() - d * 86400000).toISOString();
+    STATE.life.waterColorLog = [{ value: 6, at: dayAgo(1) }];
+    const one = /class="log-trend-dot"/.test(renderWaterColorTrend());
+    STATE.life.waterColorLog = [6, 5, 4, 3, 2].map((v, i) => ({ value: v, at: dayAgo(5 - i) }));
+    const html = renderWaterColorTrend();
+    // Oldest first: the strip reads left-to-right as time, so a reversed list would show the
+    // trend backwards while looking perfectly fine.
+    const order = (html.match(/title="(\d) of 8/g) || []).map(m => m.match(/(\d)/)[1]);
+    // 14 readings, only the last 10 kept on screen.
+    STATE.life.waterColorLog = Array.from({ length: 14 }, (_, i) => ({ value: (i % 8) + 1, at: dayAgo(14 - i) }));
+    // Exact class match: the container is `log-trend-dots`, which contains `log-trend-dot` as a
+    // substring and would inflate the count by one.
+    const capped = (renderWaterColorTrend().match(/class="log-trend-dot"/g) || []).length;
+    return { one, order, capped, kept: STATE.life.waterColorLog.length };
+  });
+  console.log('trend strip:', trend);
+  if (trend.one) throw new Error('A single reading is not a trend — it is the marker again');
+  if (trend.order.join('') !== '65432') throw new Error(`The strip should read oldest-to-newest, got ${trend.order.join('')}`);
+  if (trend.capped !== 10) throw new Error(`The strip shows the last 10, got ${trend.capped}`);
+  if (trend.kept !== 14) throw new Error('Showing 10 must not delete the rest of the log');
+
+  // ---- 8f. The water/colour association ----
+  // Descriptive only: two averages and the day counts behind them. It must refuse to print until
+  // there are enough days on BOTH sides — two averages from one day each would be noise dressed up
+  // as a finding.
+  const insight = await page.evaluate(() => {
+    const dayAgo = d => new Date(Date.now() - d * 86400000).toISOString();
+    const build = (rows) => {
+      STATE.life.waterColorLog = [];
+      STATE.life.dailyLog = {};
+      rows.forEach((r, i) => {
+        const d = new Date(Date.now() - (rows.length - i) * 86400000);
+        STATE.life.dailyLog[dateKeyOf(d)] = { waterMl: r.ml };
+        r.colors.forEach(c => STATE.life.waterColorLog.push({ value: c, at: d.toISOString() }));
+      });
+    };
+    setWaterTarget(2000);
+    // Two days each side — under the floor, so nothing prints.
+    build([{ ml: 2400, colors: [2] }, { ml: 2200, colors: [3] }, { ml: 1000, colors: [6] }, { ml: 1200, colors: [5] }]);
+    const thin = waterColorInsight();
+    // Three each side, and one day checked four times — it must average into ONE day's figure, not
+    // outvote the other days.
+    build([
+      { ml: 2400, colors: [2] }, { ml: 2200, colors: [3] }, { ml: 2600, colors: [1] },
+      { ml: 1000, colors: [6, 6, 6, 6] }, { ml: 1200, colors: [5] }, { ml: 900, colors: [7] },
+    ]);
+    const full = waterColorInsight();
+    // A day with colour readings but no water logged has nothing to compare against. Same six
+    // days as above so the counts are directly comparable — only the extra unlogged day differs.
+    build([
+      { ml: 2400, colors: [2] }, { ml: 2200, colors: [3] }, { ml: 2600, colors: [1] },
+      { ml: 1000, colors: [6] }, { ml: 1200, colors: [5] }, { ml: 900, colors: [7] },
+    ]);
+    const d = new Date(Date.now() - 99 * 86400000);
+    STATE.life.waterColorLog.push({ value: 8, at: d.toISOString() });   // no dailyLog entry for it
+    const ignoresUnlogged = waterColorInsight();
+    return { thin, full, ignoresUnlogged };
+  });
+  console.log('insight:', insight);
+  if (insight.thin !== null) throw new Error('With 2 days a side it should refuse to print rather than report noise');
+  if (!insight.full) throw new Error('With 3 days a side it should report');
+  if (insight.full.hitDays !== 3 || insight.full.missedDays !== 3) throw new Error(`Expected 3 days each side, got ${insight.full.hitDays}/${insight.full.missedDays}`);
+  if (Math.abs(insight.full.hit - 2) > 0.001) throw new Error(`Hit-target days averaged (2+3+1)/3 = 2, got ${insight.full.hit}`);
+  // 6,6,6,6 averages to 6 for that ONE day, then (6+5+7)/3 = 6.
+  if (Math.abs(insight.full.missed - 6) > 0.001) throw new Error(`Four readings on one day must average into one day's figure; expected 6, got ${insight.full.missed}`);
+  if (!insight.ignoresUnlogged) throw new Error('The six logged days should still report');
+  if (insight.ignoresUnlogged.hitDays !== 3 || insight.ignoresUnlogged.missedDays !== 3) {
+    throw new Error(`A colour reading on a day with no water logged has nothing to compare against and must be skipped, got ${insight.ignoresUnlogged.hitDays}/${insight.ignoresUnlogged.missedDays}`);
+  }
+
   // ---- 10. Everything survives a reload ----
   await page.evaluate(() => {
     switchTab('home');
     setWaterTarget(2000);
     setWaterServing(250);
+    STATE.life.dailyLog = {};
     STATE.life.dailyLog[todayStr()] = { sleepHours: 8, waterMl: 750 };
+    STATE.life.waterColor = { value: 4, at: new Date().toISOString() };
     saveState();
   });
   await page.reload();

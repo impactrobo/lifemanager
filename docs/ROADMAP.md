@@ -337,6 +337,34 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Hydration colour: trend strip, water association, staleness — and section colours derived
+  rather than copied (2026-09-13).**
+  - **Trend strip**: the last ten readings, oldest to newest, under the swatches. One dark reading
+    is a moment; four in a row is a direction, which a single current swatch can never show. Fewer
+    than two readings renders nothing — one dot is just the marker again. Built entirely on
+    `waterColorLog`, which had been recording changes unused since the marker shipped.
+  - **Water association**: average colour on days you hit your water target versus days you didn't,
+    with the day counts behind each. Deliberately descriptive, never causal or diagnostic — urine
+    colour carries real medical signal beyond hydration, and anything phrased as a finding would
+    overreach what a self-reported swatch supports. Several readings on one day average into a
+    single figure for that day, so a day you happened to check four times can't outvote three other
+    days. Refuses to print below `WATER_INSIGHT_MIN_DAYS` (3) on **both** sides: two averages drawn
+    from one day each would be noise wearing the clothes of a finding.
+  - **Staleness**: past 12 hours the chip's dot dims and dashes and the sheet says "worth a fresh
+    look". It is never cleared automatically — that would throw away the only reading there is.
+    Twelve hours because hydration turns over across a night, not across an afternoon.
+  - **Section colours are now derived, not hand-copied — and that surfaced a real drift.**
+    `entityColor(type)` reads `LINKABLE_TYPES[type].section` and looks the colour up in
+    `HOME_SECTION_META`. The Day view's untimed band and the Agenda had been carrying hex literals
+    copied by hand, and one had already gone wrong: **habits rendered in the Hobbies purple
+    (`#CAAFFF`) while their link chips were Schedule blue (`#819FFF`)**, because the two were
+    written months apart from the same mental list of nice colours. The Agenda's planned-workout
+    marker separately wore the generic anchor blue, which said "schedule block" about something
+    that is not one.
+  - `test_section_colors.js` protects the **derivation**, not the current hex values — asserting
+    "habits are #819FFF" would just be the same hand-copied literal in a second place. It ends by
+    reading `app.js` and failing if any entity surface contains a section hex at all.
+
 - **Water in millilitres, a hydration colour marker, and "upcoming" (2026-09-13).**
   - **Water is stored in millilitres and displayed in whichever unit is set** — the same
     store-canonical/convert-at-the-edge shape weight already uses (`weightLb` + `lbToDisplay`).
