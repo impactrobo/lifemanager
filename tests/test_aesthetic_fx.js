@@ -102,26 +102,30 @@ async function propValues(page, names) {
 /** Polls until the properties stop changing, and returns their final values — or null if they
  *  never stop.
  *
- *  This replaced a fixed `waitForTimeout(2200)` followed by an exact-equality check. The
- *  contract these modules owe is that the loop STOPS, not that it stops inside some arbitrary
- *  sleep, and how long converging takes is a property of each module: Runic eases 34px at 0.075
- *  where Metalheart eases 22px at 0.08, and the fixed budget — tuned on Metalheart — expired
- *  with Runic 0.02px from its snap and reported a phantom runaway loop. A fixed sleep just
- *  encodes one module's timing as the rule for all of them.
+ *  Budgeted in FRAMES, not milliseconds, because that's the unit these modules actually work in:
+ *  they ease a fixed fraction per rAF tick (liminal EASE 0.075, stop at EPSILON 0.05) and stop
+ *  after a fixed frame count — ~100 from a full-width nudge — no matter how fast those frames
+ *  arrive. A wall-clock budget silently encodes an assumed frame rate instead, and that's what
+ *  bit: 10s was ample at 60fps and far too little when the browser throttled to ~10fps under
+ *  full-suite load, reporting a phantom runaway loop for a module that was converging normally.
+ *  (Same mistake as a fixed sleep that happens to match a CSS transition — measure the thing in
+ *  its own units.) The wall-clock ceiling is only a backstop so a genuinely endless loop can't
+ *  hang the suite; the frame budget is the real limit, and the message says which one was hit.
  *
  *  Three consecutive identical samples, not two: a slow enough tail could produce two matching
  *  reads while still creeping, since the modules round to 2dp when they write. */
-async function waitUntilSettled(page, names, timeoutMs = 10000) {
+async function waitUntilSettled(page, names, maxFrames = 600, ceilingMs = 60000) {
   const started = Date.now();
   let prev = await propValues(page, names);
-  let stable = 0;
-  while (Date.now() - started < timeoutMs) {
-    await settle(page);
+  let stable = 0, frames = 0;
+  while (frames < maxFrames && Date.now() - started < ceilingMs) {
+    await settle(page); frames += 2; // settle() awaits two requestAnimationFrames
     const now = await propValues(page, names);
     stable = names.every((_, i) => now[i] === prev[i]) ? stable + 1 : 0;
     prev = now;
     if (stable >= 2) return now;
   }
+  console.log(`  (gave up after ${frames} frames / ${Date.now() - started}ms — ${frames >= maxFrames ? 'frame budget' : 'wall-clock ceiling'})`);
   return null;
 }
 
