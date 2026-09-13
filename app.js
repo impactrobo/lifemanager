@@ -2514,6 +2514,7 @@ function navSnapshot() {
   return { tab: CURRENT_TAB, trainSubtab: TRAIN_TOP_SUBTAB, guitarSubtab: GUITAR_SUBTAB, healthSubtab: HEALTH_SUBTAB, setupSubtab: SETUP_SUBTAB, setupContext: SETUP_CONTEXT, notesSubtab: NOTES_SUBTAB, scheduleSubtab: SCHEDULE_SUBTAB, budgetSubtab: BUDGET_SUBTAB, scheduleSetupSubtab: SCHEDULE_SETUP_SUBTAB, healthSetupSubtab: HEALTH_SETUP_SUBTAB };
 }
 function applyNavSnapshot(prev) {
+  resetTransientUi(); // Back/Forward is navigation too
   CURRENT_TAB = prev.tab;
   TRAIN_TOP_SUBTAB = prev.trainSubtab;
   GUITAR_SUBTAB = prev.guitarSubtab;
@@ -2532,8 +2533,31 @@ function pushNavHistory() {
   if (NAV_HISTORY.length > 50) NAV_HISTORY.shift();
   NAV_FORWARD = []; // any new navigation branches away from whatever redo path existed
 }
+// ---- Transient UI state: everything that's "open" or "mid-mode" right now ----
+// Each of these is a module-level flag meaning a panel/form/picker is open or a mode is engaged on
+// some screen. None was reset when you left that screen, so a half-open reminder form abandoned on
+// the Calendar was still open when you came back a day later — verified true for all 15 before
+// this existed. This is the one place they close. It runs at *navigation time* (switchTab(),
+// applyNavSnapshot() for Back/Forward, and the direct CURRENT_TAB assignment in
+// openTodayWorkout()), NOT inside _doRender(): render() is rAF-deferred, so a render-time reset
+// would close a form that `switchTab(); toggleReminderForm()` had just opened in the same tick.
+//
+// Deliberately NOT reset: content-bearing drafts with their own lifecycle (MEAL_BUILDER_DRAFT,
+// MEASURE_DRAFT_PHOTOS) — leaving mid-build and returning should resume, not discard. Notes' edit
+// state keeps its own existing guard in switchTab().
+function resetTransientUi() {
+  REMINDER_FORM_OPEN = false; REMINDER_FORM_TYPE = 'reminder'; REMINDER_FORM_RECURRENCE = 'none'; REMINDER_FORM_DRAFT = {};
+  EXCEPTION_FORM_OPEN = false;
+  HOME_EDIT_MODE = false; HOME_ADD_POPUP = null;
+  CUSTOM_FOOD_FORM_OPEN = false; CUSTOM_FOOD_EDIT_ID = null;
+  SHOPPING_LIST_FORM_OPEN = false; TDEE_CALC_OPEN = false; MACRO_CALC_OPEN = false;
+  MEASURE_FORM_OPEN = false; WEIGHTLOG_FORM_OPEN = false; GUITAR_LOG_FORM_OPEN = false;
+  BUILDER_STYLE_PICKER_OPEN = false; AUTOFILL_PICKER_OPEN = false;
+  NOTE_TAG_PALETTE_OPEN = null; CLOUD_SYNC_MODAL_OPEN = false;
+}
 function switchTab(tab) {
   pushNavHistory();
+  resetTransientUi();
   CURRENT_TAB = tab;
   if (tab === 'train') { TRAIN_VIEW = { mode: 'grid', workoutId: null }; TRAIN_TOP_SUBTAB = 'workouts'; }
   if (tab === 'notes') {
@@ -2567,6 +2591,7 @@ function goHomeSection(tab) {
 function openSetup(context) {
   pushNavHistory();
   SETUP_CONTEXT = context;
+  resetTransientUi(); // sets the tab directly, bypassing switchTab()
   CURRENT_TAB = 'setup';
   AESTHETIC_GROUPS_OPEN.clear(); // every fresh visit to Settings starts with all groups collapsed — see the AESTHETIC_GROUPS_OPEN declaration
   render();
@@ -9043,6 +9068,7 @@ function openTodayWorkout(workoutId) {
   const w = getWorkout(workoutId);
   if (!w) return;
   pushNavHistory();
+  resetTransientUi(); // leaves Home directly, bypassing switchTab()
   CURRENT_TAB = 'train';
   TRAIN_TOP_SUBTAB = 'workouts';
   if (w.type === 'cardio') openCardioLog(w.id);
