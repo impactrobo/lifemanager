@@ -1444,8 +1444,10 @@ const HOME_SECTION_META = {
 const HOME_BOX_META = {
   reminders: { label: "TODAY'S REMINDERS" },
   day: { label: 'YOUR DAY' },
-  wakeup: { label: 'WAKE-UP' },
-  calories: { label: 'CALORIES' },
+  // Ids kept as 'wakeup'/'calories' on purpose: the boxes changed shape, not identity, so no saved
+  // layout needs migrating. Only the labels moved to the AM/PM framing.
+  wakeup: { label: 'LOG \u00b7 AM' },
+  calories: { label: 'LOG \u00b7 PM' },
 };
 // The boxes that folded into `day`, kept so loadState() can migrate a saved layout that still
 // names them. Order matters: `day` takes the position the first of these held.
@@ -1461,7 +1463,7 @@ function defaultState() {
     updatedAt: null,
     settings: {
       accentByAesthetic: {}, noteTagNames: {}, customNoteTags: [], noteTagsMigrated: false, aesthetic: 'cyberpunk',
-      restTimer: defaultRestTimerSettings(), mealUnitSystem: 'metric', defaultPage: 'home',
+      restTimer: defaultRestTimerSettings(), mealUnitSystem: 'metric', defaultPage: 'home', waterTarget: 8,
       homeLayout: defaultHomeLayout(),
       // Purely a user preference flag ("did I opt into this"). The actual signed-in/out truth
       // comes from Firebase Auth itself at runtime (see CLOUD SYNC section) — this just decides
@@ -1882,6 +1884,7 @@ function migrateState() {
   if (!STATE.settings.mealUnitSystem) STATE.settings.mealUnitSystem = 'metric';
   MEAL_UNIT_SYSTEM = STATE.settings.mealUnitSystem;
   if (!STATE.settings.defaultPage) STATE.settings.defaultPage = 'home';
+  if (STATE.settings.waterTarget == null) STATE.settings.waterTarget = 8;
   // 'schedule' was a valid landing page while it was its own tile. Home shows the day now, so that
   // choice means Home -- and a save still holding it would otherwise boot to a tab with no way
   // back to Home in its bar's first slot.
@@ -2552,6 +2555,9 @@ function defaultTransientUi() {
     exceptionFormOpen: false,
     homeEditMode: false,
     homeAddPopup: null,                // 'sections' | 'boxes' | null
+    // The AM/PM quick-log sheet: { group: 'am'|'pm', focus: <field id> } or null. Lives in UI so
+    // navigating away closes it, same as every other transient panel.
+    logPopup: null,
     customFoodFormOpen: false,
     customFoodEditId: null,
     shoppingListFormOpen: false,
@@ -3051,7 +3057,13 @@ function _doRender() {
     else app.innerHTML = renderBudgetHome();
   }
   // The link picker is an overlay, appended after the screen's own markup so it sits above it.
-  app.innerHTML += renderLinkPicker() + renderRecipeCustomFoodOverlay();
+  app.innerHTML += renderLinkPicker() + renderRecipeCustomFoodOverlay() + renderLogPopup();
+  // The sheet opens focused on whichever chip was tapped, which can only happen after the markup
+  // above is in the DOM.
+  if (UI.logPopup && UI.logPopup.focus) {
+    const f = document.getElementById('log_' + UI.logPopup.focus);
+    if (f) f.focus();
+  }
   const tabbarEl = document.getElementById('tabbar');
   tabbarEl.innerHTML = renderTabbar();
   // index.html ships the bar as .hidden so an empty one never flashes before the first render.
@@ -9435,43 +9447,6 @@ function getTodayWeightEntry(create) {
   }
   return e;
 }
-function logHomeWeight() {
-  const val = inputVal('homeWeight');
-  if (val === '') { showToast('Enter a weight first'); return; }
-  const e = getTodayWeightEntry(true);
-  e.weightLb = displayToLb(val);
-  saveState();
-  showToast('Weight logged');
-  render();
-  drawWeightChart();
-}
-function logHomeSleepLength() {
-  const val = inputVal('homeSleepLen');
-  if (val === '') { showToast('Enter sleep length first'); return; }
-  const log = todayLifeLog();
-  log.sleepHours = Number(val);
-  saveState();
-  showToast('Sleep length logged');
-  render();
-}
-function logHomeSleepQuality() {
-  const val = inputVal('homeSleepQual');
-  if (!val) { showToast('Select a sleep quality first'); return; }
-  const log = todayLifeLog();
-  log.sleepQuality = Number(val);
-  saveState();
-  showToast('Sleep quality logged');
-  render();
-}
-function logHomeCalories() {
-  const val = inputVal('homeCalories');
-  if (val === '') { showToast('Enter calories first'); return; }
-  const e = getTodayWeightEntry(true);
-  e.calories = Number(val);
-  saveState();
-  showToast('Calories logged');
-  render();
-}
 function openTodayWorkout(workoutId) {
   const w = getWorkout(workoutId);
   if (!w) return;
@@ -9481,6 +9456,169 @@ function openTodayWorkout(workoutId) {
   NAV.trainTopSubtab = 'workouts';
   if (w.type === 'cardio') openCardioLog(w.id);
   else openWorkoutLog(w.id); // auto-detects GZCL vs exercises[] shape
+}
+// ---- Quick logs: two compact strips, one sheet each ----
+// These were two full panels of always-visible number inputs -- about 360px of Home, the single
+// biggest block on the screen, for four fields that sit empty most of the day and show you nothing
+// about what you've already logged. They're chip strips now: each chip shows today's actual value
+// (or a dash), and tapping one opens a sheet with that group's fields, focused on the one you hit.
+//
+// Split AM/PM because that's when you actually log them -- weight and sleep on waking, calories and
+// steps at the end of the day. They stay two independently hideable boxes (ids 'wakeup'/'calories',
+// unchanged, so no saved layout needs migrating); sharing the "LOG ·" prefix is what makes them
+// read as one section, since Home's box system gives every box its own heading.
+const LOG_FIELDS = {
+  weight:    { group: 'am', label: 'Weight',   unit: () => weightUnitLabel(), step: '0.1' },
+  sleepLen:  { group: 'am', label: 'Sleep',    unit: () => 'hrs', step: '0.1' },
+  sleepQual: { group: 'am', label: 'Quality',  unit: () => '1-5' },
+  calories:  { group: 'pm', label: 'Calories', unit: () => 'kcal', step: '1' },
+  water:     { group: 'pm', label: 'Water',    unit: () => 'glasses' },
+  steps:     { group: 'pm', label: 'Steps',    unit: () => 'steps', step: '1' },
+};
+// Today's value for a field, or null when it hasn't been logged. One reader for the chips, the
+// sheet and the tests, so a chip can never disagree with the sheet it opens.
+function logFieldValue(field) {
+  const w = getTodayWeightEntry(false);
+  const log = lifeLogForDate(todayStr());
+  switch (field) {
+    case 'weight':    return w && w.weightLb != null ? lbToDisplay(w.weightLb) : null;
+    case 'calories':  return w && w.calories != null ? w.calories : null;
+    case 'sleepLen':  return log.sleepHours != null ? log.sleepHours : null;
+    case 'sleepQual': return log.sleepQuality != null ? log.sleepQuality : null;
+    case 'water':     return log.water != null ? log.water : null;
+    case 'steps':     return log.steps != null ? log.steps : null;
+    default:          return null;
+  }
+}
+// What the chip reads. Water is the exception: it shows progress against the target even at zero,
+// because "0/8" is the number that makes you drink something and a dash is not.
+function logFieldDisplay(field) {
+  const v = logFieldValue(field);
+  if (field === 'water') return `${v || 0}/${waterTarget()}`;
+  if (v == null) return '&mdash;';
+  if (field === 'weight') return fmt(v, 1);
+  if (field === 'sleepLen') return fmt(v, 1) + 'h';
+  if (field === 'sleepQual') return v + '/5';
+  if (field === 'steps') return Number(v).toLocaleString();
+  return Number(v).toLocaleString();
+}
+function waterTarget() { return Number(STATE.settings.waterTarget) || 8; }
+function logChip(field) {
+  const logged = field === 'water' ? (logFieldValue('water') || 0) > 0 : logFieldValue(field) != null;
+  // Water's chip logs instead of opening the sheet -- a glass of water is the one of these you hit
+  // several times a day, and making that a sheet-open-type-save round trip would be absurd.
+  const onclick = field === 'water' ? `addWater(1)` : `openLogPopup('${LOG_FIELDS[field].group}','${field}')`;
+  return `<button class="log-chip ${logged ? 'log-chip-set' : ''}" onclick="${onclick}">
+    <span class="log-chip-label">${LOG_FIELDS[field].label}</span>
+    <span class="log-chip-value">${logFieldDisplay(field)}${field === 'water' ? '<i class="log-chip-plus">+</i>' : ''}</span>
+  </button>`;
+}
+function renderLogStrip(group, fields) {
+  return `
+    <div class="subtle-label" style="margin:18px 0 8px;">LOG &middot; ${group.toUpperCase()}</div>
+    <div class="log-strip">${fields.map(logChip).join('')}</div>`;
+}
+function renderHomeAmLogBox() { return renderLogStrip('am', ['weight', 'sleepLen', 'sleepQual']); }
+function renderHomePmLogBox() { return renderLogStrip('pm', ['calories', 'water', 'steps']); }
+
+function openLogPopup(group, focus) { UI.logPopup = { group, focus }; render(); }
+function closeLogPopup() { UI.logPopup = null; render(); }
+// Water increments straight off the chip. Clamped at zero so tapping past the bottom in the sheet
+// can't drive it negative; there's deliberately no upper clamp -- the target is a target, not a cap.
+function addWater(delta) {
+  const log = todayLifeLog();
+  log.water = Math.max(0, (log.water || 0) + delta);
+  saveState();
+  render();
+}
+function setWaterTarget(val) {
+  const n = Math.round(Number(val));
+  STATE.settings.waterTarget = n > 0 ? n : 8;
+  saveState();
+  render();
+}
+// Writes every field in the open sheet at once. A blank field CLEARS that value rather than being
+// skipped: the inputs open pre-filled with what's already logged, so blank is a deliberate act, and
+// without this there'd be no way to undo a typo'd weight from Home at all.
+function saveLogPopup() {
+  if (!UI.logPopup) return;
+  const group = UI.logPopup.group;
+  const fields = Object.keys(LOG_FIELDS).filter(f => LOG_FIELDS[f].group === group && f !== 'water');
+  const vals = {};
+  fields.forEach(f => { vals[f] = inputVal('log_' + f); });
+  const log = todayLifeLog();
+  if (fields.includes('sleepLen')) setOrClear(log, 'sleepHours', vals.sleepLen);
+  if (fields.includes('sleepQual')) setOrClear(log, 'sleepQuality', vals.sleepQual);
+  if (fields.includes('steps')) setOrClear(log, 'steps', vals.steps);
+  // The weight entry is only created if there's something to put in it -- browsing the sheet and
+  // closing it must not leave an empty row in weightLog that the TDEE window then counts.
+  const wantsEntry = (vals.weight !== undefined && vals.weight !== '') || (vals.calories !== undefined && vals.calories !== '');
+  const e = getTodayWeightEntry(wantsEntry) || getTodayWeightEntry(false);
+  if (e) {
+    if (fields.includes('weight')) e.weightLb = vals.weight === '' ? null : displayToLb(vals.weight);
+    if (fields.includes('calories')) e.calories = vals.calories === '' ? null : Number(vals.calories);
+  }
+  UI.logPopup = null;
+  saveState();
+  showToast(group === 'am' ? 'Morning log saved' : 'Evening log saved');
+  render();
+}
+function setOrClear(obj, key, raw) {
+  if (raw === '' || raw == null) delete obj[key];
+  else obj[key] = Number(raw);
+}
+function renderLogPopup() {
+  if (!UI.logPopup) return '';
+  const { group } = UI.logPopup;
+  const fields = Object.keys(LOG_FIELDS).filter(f => LOG_FIELDS[f].group === group);
+  const rows = fields.map(f => {
+    const v = logFieldValue(f);
+    if (f === 'water') {
+      // Water is a counter, not a text field -- it gets the same +/- it has on the chip plus the
+      // target, which is set here because this is the only place the number is ever looked at.
+      return `
+        <div class="log-sheet-row">
+          <span class="log-sheet-label">Water</span>
+          <div class="log-water-ctl">
+            <button class="btn btn-sm" onclick="addWater(-1)">&minus;</button>
+            <span class="log-water-count mono">${v || 0}</span>
+            <button class="btn btn-sm" onclick="addWater(1)">+</button>
+            <span class="log-sheet-unit">of</span>
+            <input type="number" class="log-water-target" min="1" step="1" value="${waterTarget()}" onchange="setWaterTarget(this.value)">
+          </div>
+        </div>`;
+    }
+    if (f === 'sleepQual') {
+      const opts = [1, 2, 3, 4, 5].map(n => {
+        const labels = { 1: 'Poor', 2: 'Fair', 3: 'OK', 4: 'Good', 5: 'Great' };
+        return `<option value="${n}" ${String(v) === String(n) ? 'selected' : ''}>${n} - ${labels[n]}</option>`;
+      }).join('');
+      return `
+        <div class="log-sheet-row">
+          <span class="log-sheet-label">Quality</span>
+          <select id="log_sleepQual"><option value="">--</option>${opts}</select>
+        </div>`;
+    }
+    const shown = v == null ? '' : (f === 'weight' || f === 'sleepLen' ? fmt(v, 1) : v);
+    return `
+      <div class="log-sheet-row">
+        <span class="log-sheet-label">${LOG_FIELDS[f].label}</span>
+        <input type="number" id="log_${f}" step="${LOG_FIELDS[f].step || '1'}" value="${shown}" inputmode="decimal">
+        <span class="log-sheet-unit">${LOG_FIELDS[f].unit()}</span>
+      </div>`;
+  }).join('');
+  return `
+    <div class="home-popup-backdrop" onclick="closeLogPopup()">
+      <div class="panel home-popup" onclick="event.stopPropagation()">
+        <div class="row" style="margin-bottom:8px;">
+          <div class="subtle-label" style="margin-bottom:0;">LOG &middot; ${group.toUpperCase()}</div>
+          <button class="icon-btn" onclick="closeLogPopup()">${icon('close')}</button>
+        </div>
+        ${rows}
+        <div style="font-size:10px; color:var(--text-faint); margin:8px 0 10px;">Log only what you have &mdash; clearing a field removes it from tracking.</div>
+        <button class="btn btn-primary btn-block" onclick="saveLogPopup()">SAVE</button>
+      </div>
+    </div>`;
 }
 function toggleHomeEditMode() {
   UI.homeEditMode = !UI.homeEditMode;
@@ -9591,51 +9729,6 @@ function renderHomeSectionsGrid() {
       ${UI.homeEditMode ? `<button class="home-add-btn" onclick="openHomeAddPopup('sections')" title="Add back a hidden section">+</button>` : ''}
     </div>`;
 }
-function renderHomeWakeupBox() {
-  const todayW = getTodayWeightEntry(false);
-  const todayLog = todayLifeLog();
-  const weightVal = todayW && todayW.weightLb != null ? fmt(lbToDisplay(todayW.weightLb), 1) : '';
-  const sleepLenVal = todayLog.sleepHours != null ? todayLog.sleepHours : '';
-  const sleepQualVal = todayLog.sleepQuality != null ? todayLog.sleepQuality : '';
-  const sleepQualOptions = [1,2,3,4,5].map(n => {
-    const labels = {1:'Poor',2:'Fair',3:'OK',4:'Good',5:'Great'};
-    return `<option value="${n}" ${String(sleepQualVal)===String(n)?'selected':''}>${n} - ${labels[n]}</option>`;
-  }).join('');
-  return `
-    <div class="subtle-label" style="margin:18px 0 8px;">WAKE-UP</div>
-    <div class="panel">
-      <div class="field-row">
-        <label class="field"><span class="lbl">Weight (${weightUnitLabel()})</span><input type="number" step="0.1" id="homeWeight" value="${weightVal}"></label>
-        <button class="btn btn-sm ${weightVal !== '' ? 'btn-good' : ''}" style="align-self:flex-end; margin-bottom:10px;" onclick="logHomeWeight()">${weightVal !== '' ? icon('check') : 'LOG'}</button>
-      </div>
-      <div class="field-row">
-        <label class="field"><span class="lbl">Sleep Length (hrs)</span><input type="number" step="0.1" id="homeSleepLen" value="${sleepLenVal}"></label>
-        <button class="btn btn-sm ${sleepLenVal !== '' ? 'btn-good' : ''}" style="align-self:flex-end; margin-bottom:10px;" onclick="logHomeSleepLength()">${sleepLenVal !== '' ? icon('check') : 'LOG'}</button>
-      </div>
-      <div class="field-row">
-        <label class="field"><span class="lbl">Sleep Quality</span>
-          <select id="homeSleepQual">
-            <option value="">--</option>
-            ${sleepQualOptions}
-          </select>
-        </label>
-        <button class="btn btn-sm ${sleepQualVal !== '' ? 'btn-good' : ''}" style="align-self:flex-end; margin-bottom:10px;" onclick="logHomeSleepQuality()">${sleepQualVal !== '' ? icon('check') : 'LOG'}</button>
-      </div>
-      <div style="font-size:10px; color:var(--text-faint); margin-top:-4px;">Log only what you have — anything left blank is simply skipped in tracking.</div>
-    </div>`;
-}
-function renderHomeCaloriesBox() {
-  const todayW = getTodayWeightEntry(false);
-  const calVal = todayW && todayW.calories != null ? todayW.calories : '';
-  return `
-    <div class="subtle-label" style="margin:18px 0 8px;">CALORIES</div>
-    <div class="panel">
-      <div class="field-row">
-        <label class="field"><span class="lbl">Calories</span><input type="number" id="homeCalories" value="${calVal}"></label>
-        <button class="btn btn-sm" style="align-self:flex-end; margin-bottom:10px;" onclick="logHomeCalories()">LOG</button>
-      </div>
-    </div>`;
-}
 // Home's view of today: the same timeline and the same untimed band the Calendar Day view
 // renders, not a parallel summary of them. This replaces three separate boxes -- RIGHT NOW,
 // TODAY'S WORKOUTS and HABITS -- which were three renderings of one dayModel() call that could,
@@ -9655,7 +9748,7 @@ function renderHomeDayBox() {
     <button class="btn btn-ghost btn-block btn-sm" style="margin-top:10px;" onclick="goSchedule('calendar')">OPEN CALENDAR &rsaquo;</button>
   `;
 }
-const HOME_BOX_RENDERERS = { reminders: renderTodaysReminders, day: renderHomeDayBox, wakeup: renderHomeWakeupBox, calories: renderHomeCaloriesBox };
+const HOME_BOX_RENDERERS = { reminders: renderTodaysReminders, day: renderHomeDayBox, wakeup: renderHomeAmLogBox, calories: renderHomePmLogBox };
 function renderHomeBoxesSection() {
   const L = homeLayout();
   const boxesHtml = L.boxOrder.map(id => {

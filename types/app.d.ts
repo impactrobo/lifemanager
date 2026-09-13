@@ -71,6 +71,9 @@ interface AppSettings {
   restTimer: RestTimerSettings;
   mealUnitSystem: 'metric' | 'imperial';
   defaultPage: string;
+  /** Glasses/day the LOG · PM water chip counts towards. A target, not a cap — the counter
+   *  is free to go past it. */
+  waterTarget: number;
   homeLayout: unknown;
   cloudSync: { enabled: boolean };
   reminderPush: { enabled: boolean };
@@ -269,7 +272,10 @@ interface GuitarState {
   songLearnedDate: Record<string, string>;
 }
 interface LifeState {
-  dailyLog: Record<string, Record<string, boolean>>;
+  /** date -> that day's log. Mixed value types on purpose: `true` for each completed anchor id,
+   *  plus the day's own numbers (sleepHours, sleepQuality, water, steps). One object per date
+   *  rather than four parallel date-keyed maps. */
+  dailyLog: Record<string, Record<string, boolean | number>>;
   periodicLog: Record<string, string>;
   anchors: ScheduleAnchor[];
   periodic: PeriodicAnchor[];

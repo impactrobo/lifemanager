@@ -47,15 +47,25 @@ const SECTIONS = ['schedule', 'train', 'hobbies', 'health', 'notes', 'budget'];
     await settle(page);
   }
 
-  // A real user action: log today's weight from the Home wake-up box, then confirm it persists.
+  // A real user action: log today's weight from Home's AM quick-log, then confirm it persists.
+  // This used to look for `input#homeWeightInput` and shrug when it found nothing — an id that has
+  // never existed in the app (the old one was `homeWeight`), so the check logged "skipping" on
+  // every run since it was written and tested nothing at all.
   await page.evaluate(() => switchTab('home'));
   await settle(page);
-  const weightInputExists = await page.$('input#homeWeightInput, .home-box input[type="number"]');
-  if (weightInputExists) {
-    console.log('found a weight-style input on Home, exercising it');
-  } else {
-    console.log('no direct weight input matched by selector — skipping that sub-check (UI may have changed; not fatal on its own)');
-  }
+  const amChip = await page.$('.log-chip');
+  if (!amChip) throw new Error("Expected Home's LOG · AM strip to render a chip");
+  await amChip.click();
+  await settle(page);
+  await page.fill('#log_weight', '181.2');
+  await page.evaluate(() => saveLogPopup());
+  await settle(page);
+  const loggedWeight = await page.evaluate(() => {
+    const e = STATE.weightLog.find(x => x.date === todayStr());
+    return e ? fmt(lbToDisplay(e.weightLb), 1) : null;
+  });
+  console.log('weight logged from Home via the AM sheet:', loggedWeight);
+  if (loggedWeight !== '181.2') throw new Error(`Expected 181.2 to persist from the Home quick-log, got ${loggedWeight}`);
 
   // Whether or not the input above matched, exercise persistence generically via STATE + saveState,
   // which is what every real log action in the app funnels through.

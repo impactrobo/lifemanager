@@ -337,6 +337,41 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Quick logs become two chip strips and a sheet; water and steps added (2026-09-13).** Step 5,
+  the last of the "Home Becomes Today" scope. WAKE-UP and CALORIES were two panels of
+  always-visible number inputs — about 360px of Home, the single biggest block on the screen, for
+  fields that sit empty most of the day and tell you nothing about what you already logged. They're
+  now two strips of chips carrying today's actual values (~160px), with the inputs moved into a
+  bottom sheet you open by tapping one.
+  - **Split AM/PM because that's when you log them** — weight and sleep on waking, calories and
+    steps at the end of the day. They stay two independently hideable boxes, and critically the ids
+    stay `wakeup`/`calories`: the boxes changed shape, not identity, so **no saved layout needed
+    migrating**. A third `boxOrder` migration in one day would have been a third chance to lose
+    somebody's Home arrangement.
+  - **"LOG ·" prefixes both labels** rather than one shared heading. Home's box system gives every
+    box its own heading, so two independently hideable boxes can't literally sit under one — the
+    shared prefix is what makes them read as one section anyway.
+  - **The water chip logs directly instead of opening the sheet.** It's the one of these you hit
+    several times a day, and a sheet-open-type-save round trip for a glass of water would be absurd.
+    It also shows `0/8` rather than a dash when unlogged, because that's the number that makes you
+    drink something. Clamped at zero, deliberately **not** clamped at the target — a target is not
+    a cap.
+  - **A blank field clears rather than being skipped.** The sheet opens pre-filled with what's
+    already logged, so a blank is a deliberate act; the old per-field LOG buttons refused empty
+    input, which meant there was no way to undo a typo'd weight from Home at all.
+  - **An empty `weightLog` row is never created by browsing.** Those rows feed the TDEE rolling
+    window, so a row created just by opening and closing the sheet — or by saving only sleep, which
+    lives on the life log — would quietly skew the estimate. Covered directly in the test.
+  - **New state:** `water` and `steps` on `life.dailyLog[date]` (the daily *behaviour* log, where
+    `sleepHours`/`sleepQuality` already live — not `WeightLogEntry`, which holds body composition
+    and the calorie figure feeding TDEE), plus `settings.waterTarget` (default 8, set from inside
+    the PM sheet since that's the only place the number is ever looked at). `dailyLog`'s type was
+    declared `Record<string, boolean>` and had been holding numbers since sleep logging shipped;
+    now declared honestly.
+  - `test_full_flow.js`'s Home weight check was looking for `input#homeWeightInput` — an id that has
+    never existed in this app — and shrugging when it found nothing, so it logged "skipping" on
+    every run since it was written and tested nothing. It now drives the real AM sheet.
+
 - **Home becomes the schedule: it carries the day's bottom bar, and the SCHEDULE tile retires
   (2026-09-13).** Steps 3 and 4 of the "Home Becomes Today" scope, on top of the fold and the day
   box shipped earlier the same day. Only step 5 (regrouping the WAKE-UP and CALORIES quick-logs into
