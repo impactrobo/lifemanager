@@ -1470,7 +1470,7 @@ function defaultState() {
     settings: {
       accentByAesthetic: {}, noteTagNames: {}, customNoteTags: [], noteTagsMigrated: false, aesthetic: 'cyberpunk',
       restTimer: defaultRestTimerSettings(), mealUnitSystem: 'metric', defaultPage: 'home',
-      waterTargetMl: 2000, waterServingMl: 250, waterUnit: 'ml',
+      waterTargetMl: 2000, waterServingMl: 250, waterUnit: 'ml', defaultReminderTime: '09:00',
       homeLayout: defaultHomeLayout(),
       // Purely a user preference flag ("did I opt into this"). The actual signed-in/out truth
       // comes from Firebase Auth itself at runtime (see CLOUD SYNC section) — this just decides
@@ -1891,6 +1891,7 @@ function migrateState() {
   if (!STATE.settings.mealUnitSystem) STATE.settings.mealUnitSystem = 'metric';
   MEAL_UNIT_SYSTEM = STATE.settings.mealUnitSystem;
   if (!STATE.settings.defaultPage) STATE.settings.defaultPage = 'home';
+  if (!STATE.settings.defaultReminderTime) STATE.settings.defaultReminderTime = '09:00';
   // Water was shipped counting GLASSES for a few hours before moving to millilitres. The field
   // is renamed rather than reinterpreted: a stored `8` is unreadable otherwise -- eight glasses or
   // eight millilitres? -- and guessing from magnitude would be a coin flip on small values.
@@ -1910,6 +1911,13 @@ function migrateState() {
   });
   if (!STATE.life.waterColor || typeof STATE.life.waterColor !== 'object') STATE.life.waterColor = { value: null, at: null };
   if (!Array.isArray(STATE.life.waterColorLog)) STATE.life.waterColorLog = [];
+  // dueDay/reminderRecurrenceId are new fields on an existing array -- nothing to backfill beyond
+  // making sure they're not `undefined` (harmless either way, but keeps the shape consistent with
+  // what addRecurringCharge() now writes on every new charge).
+  (STATE.budget.recurring || []).forEach(r => {
+    if (r.dueDay === undefined) r.dueDay = null;
+    if (r.reminderRecurrenceId === undefined) r.reminderRecurrenceId = null;
+  });
   // 'schedule' was a valid landing page while it was its own tile. Home shows the day now, so that
   // choice means Home -- and a save still holding it would otherwise boot to a tab with no way
   // back to Home in its bar's first slot.
@@ -2509,6 +2517,14 @@ function uid() { return Math.random().toString(36).slice(2, 10); }
 // to match Date#getMonth(); this is the Date-shaped wrapper. There were three copies of this same
 // concatenation before — todayStr(), dateKeyOf() and dateKey() — now all one.
 function dateKeyOf(d) { return dateKey(d.getFullYear(), d.getMonth(), d.getDate()); }
+// Plain calendar-day arithmetic (positive or negative), letting the native Date object handle
+// month/year rollover -- unlike addMonthsClamped()/addYearsClamped(), which clamp to a
+// calendar-month or -year boundary, this is exactly "N days from this date" with no clamping.
+function shiftDate(dateStr, days) {
+  const d = new Date(dateStr + 'T00:00:00');
+  d.setDate(d.getDate() + days);
+  return dateKeyOf(d);
+}
 function todayStr() { return dateKeyOf(new Date()); }
 
 // ================= PHOTO ATTACHMENTS (shared by Notes + Health & Diet Measurements) =================
@@ -4375,6 +4391,13 @@ function updateDefaultPage(val) {
   saveState();
   showToast('Default page updated');
 }
+// Only affects reminders created from this point forward -- like the charge name/amount case, an
+// already-created reminder is independently editable and isn't silently rewritten by a later
+// settings change.
+function updateDefaultReminderTime(val) {
+  STATE.settings.defaultReminderTime = val || '09:00';
+  saveState();
+}
 // Notes' own Setup: the tag list (General plus any created ones) and nothing else -- nothing
 // else in Notes is configurable. Every row but General gets a delete (X) button and its own
 // palette color picker; General stays rename-only, matching its role as the fixed, undeletable
@@ -4488,6 +4511,13 @@ function renderSetAnchors() {
   return `
     <div class="panel" style="margin:18px 0 14px;">
       <div style="font-size:13px; line-height:1.5;">An <b>anchor</b> is a fixed daily habit tied to roughly the same clock time every day — waking up, training, meals, wind-down. Anchors apply on every day of the week and layer automatically into whatever schedule you build below, so you only ever have to set them up once here.</div>
+    </div>
+    <div class="panel" style="margin-bottom:14px;">
+      <label class="field" style="margin-bottom:0;">
+        <span class="lbl">Default reminder time</span>
+        <input type="time" value="${STATE.settings.defaultReminderTime || '09:00'}" onchange="updateDefaultReminderTime(this.value)">
+      </label>
+      <div style="font-size:11px; color:var(--text-faint); margin-top:6px;">Used only when a reminder is auto-created and needs SOME time to push a notification &mdash; like a budget charge's "remind me" toggle. Doesn't change the blank-by-default time on a reminder you add yourself.</div>
     </div>
     <div class="row" style="margin-bottom:8px;">
       <div class="subtle-label" style="margin-bottom:0;">DAILY ANCHORS</div>
@@ -6516,6 +6546,17 @@ let _reminderPushSyncDebounceTimer = null;
 // Called whenever STATE.reminders changes (see saveReminder()/deleteReminder()). No-op unless
 // the feature is actually on — mirrors queueCloudPush()'s debounce so rapid edits (e.g. deleting
 // several reminders in a row) don't fire a network call per edit.
+// What actually gets sent to the push backend. A lead-time reminder's stored title is left exactly
+// as typed (STATE.reminders is never touched here) — only the payload gets a "due <date>" suffix,
+// because a notification that arrives before the thing it's about needs to say so, or it just
+// reads as wrong rather than early. Pulled out as its own function so this is testable directly,
+// without mocking the network call it would otherwise be buried inside.
+function reminderPushPayload() {
+  return STATE.reminders.map(r => {
+    const ctx = reminderDueContext(r);
+    return ctx ? Object.assign({}, r, { title: `${r.title} — due ${fmtDueDate(ctx.dueDate)}` }) : r;
+  });
+}
 function queueReminderPushSync() {
   if (!STATE.settings.reminderPush.enabled || !backendConfigured()) return;
   clearTimeout(_reminderPushSyncDebounceTimer);
@@ -6524,7 +6565,7 @@ function queueReminderPushSync() {
       const reg = await navigator.serviceWorker.ready;
       const sub = await reg.pushManager.getSubscription();
       if (!sub) return; // subscription got lost somehow — ENABLE will re-create it next time it's pressed
-      await postToReminderBackend('/reminders', { endpoint: sub.endpoint, reminders: STATE.reminders, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone });
+      await postToReminderBackend('/reminders', { endpoint: sub.endpoint, reminders: reminderPushPayload(), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone });
     } catch (e) { console.warn('Reminder sync to backend failed (will retry on next edit):', e.message); }
   }, 1500);
 }
@@ -9439,6 +9480,20 @@ function currentScheduleBlock() {
 //   Habits do NOT. A habit is a standing commitment with its own start/end dates and its own streak;
 //   it was never part of the weekday template. A holiday is a day off from your schedule, not from
 //   stretching -- and silently pausing habits breaks a streak the user never chose to break.
+// Whether `charge` is due on `dateObj` -- 31 falls back to a shorter month's last day, the same
+// clamping recurring reminders already use for "monthly on the 31st".
+function daysInMonthOf(dateObj) { return new Date(dateObj.getFullYear(), dateObj.getMonth() + 1, 0).getDate(); }
+function chargeFallsOnDate(charge, dateObj) {
+  return !!charge.dueDay && dateObj.getDate() === Math.min(charge.dueDay, daysInMonthOf(dateObj));
+}
+// Active recurring charges due on this date. Deliberately NOT gated by isDayOff -- a due date has
+// nothing to do with which daily schedule you're following, the same reasoning that keeps habits
+// running on a day off. Savings charges are included: a scheduled transfer to savings is exactly
+// as "due" as a bill.
+function chargesDueOn(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  return (STATE.budget.recurring || []).filter(c => c.active && chargeFallsOnDate(c, d));
+}
 function dayModel(dateStr) {
   const dateObj = new Date(dateStr + 'T00:00:00');
   const weekday = dateObj.getDay();
@@ -9459,6 +9514,7 @@ function dayModel(dateStr) {
     meals: isDayOff ? [] : (STATE.diet.mealPlan[weekday] || [])
       .filter(e => e.mealId).map(e => STATE.diet.meals.find(m => m.id === e.mealId)).filter(Boolean),
     habits: (STATE.life.habits || []).filter(h => habitIsActiveOn(h, dateStr)),
+    charges: chargesDueOn(dateStr),
   };
 }
 // The day you're actually in. Separate from dayModel(todayStr()) only so the intent reads at the
@@ -10121,6 +10177,13 @@ function renderAgenda() {
           <span class="agenda-label">${escapeHtml(w.name)}</span>
         </div>`,
       })),
+      ...day.charges.map(c => ({
+        sort: '~',
+        html: `<div class="agenda-item">
+          <span class="agenda-time mono" style="color:${entityColor('charge')};">due</span>
+          <span class="agenda-label">${escapeHtml(c.name)} <span class="mono" style="color:var(--text-faint);">${fmtMoney(c.amount)}</span></span>
+        </div>`,
+      })),
     ].sort((a, b) => a.sort.localeCompare(b.sort));
 
     const label = i === 0 ? 'TODAY' : (i === 1 ? 'TOMORROW' : d.toLocaleDateString(undefined, { weekday: 'long' }).toUpperCase());
@@ -10249,6 +10312,33 @@ function reminderIsPastDue(r) {
 function pastDueMark(r) {
   return reminderIsPastDue(r) ? `<span class="past-due-mark" title="Past due">!</span>` : '';
 }
+// Turns a due date + a lead time into the pair every reminder actually needs: `date` (when it
+// fires) and `dueDate` (what it's about). The one place this arithmetic happens, used both when a
+// reminder is first created and when ensureRecurringReminderOccurrences() materializes later
+// occurrences of a series, so the two can never compute it differently.
+function computeLeadDates(dueDate, leadDays) {
+  const n = Number(leadDays) || 0;
+  return { date: n > 0 ? shiftDate(dueDate, -n) : dueDate, dueDate, leadDays: n };
+}
+function fmtDueDate(dateStr) {
+  return new Date(dateStr + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+// null unless this reminder fires before the date it's actually about -- the ordinary case (no
+// lead time) returns null, so callers can just skip the badge.
+function reminderDueContext(r) {
+  if (!r.dueDate || r.dueDate === r.date) return null;
+  const days = Math.round((new Date(r.dueDate + 'T00:00:00').getTime() - new Date(r.date + 'T00:00:00').getTime()) / 86400000);
+  return { dueDate: r.dueDate, daysAway: days };
+}
+// Shown everywhere a lead-time reminder appears -- the reminder card, the Agenda, and (via
+// reminderPushPayload()) the push notification itself. A reminder that arrives before the thing
+// it's about needs to say so, or it just reads as wrong rather than early.
+function reminderDueBadge(r) {
+  const ctx = reminderDueContext(r);
+  if (!ctx) return '';
+  const rel = ctx.daysAway === 1 ? 'tomorrow' : `in ${ctx.daysAway}d`;
+  return `<span class="day-chip" style="background:var(--accent-soft); color:var(--accent);" title="Due ${fmtDueDate(ctx.dueDate)}">${rel} &middot; due ${fmtDueDate(ctx.dueDate)}</span>`;
+}
 // The 7 Sun-Sat Date objects for the week containing dateStr.
 function calWeekBounds(dateStr) {
   const d = new Date(dateStr + 'T00:00:00');
@@ -10302,8 +10392,13 @@ function renderCalCell(d /* Date */, today) {
   const isSelected = dStr === NAV.calSelectedDate;
   const sched = scheduleForDate(d);
   const schedMark = sched ? `<span class="cal-anchor-icon" style="color:${scheduleColorFor(sched.id)};">${icon('anchorMark')}</span>` : '';
+  // Opposite corner from schedMark on purpose, so a scheduled day that's also a due day shows both
+  // without collision — a colour swatch rather than an icon, matching the day-extra rows' own
+  // pattern for a section identity that isn't tied to a specific glyph.
+  const dueMark = chargesDueOn(dStr).length ? `<span class="cal-charge-mark" style="background:${entityColor('charge')};" title="Due this day"></span>` : '';
   return `<button class="cal-cell ${isToday?'cal-cell-today':''} ${isSelected?'cal-cell-selected':''}" onclick="calSelectDay('${dStr}')">
     ${schedMark}
+    ${dueMark}
     <span class="cal-daynum">${d.getDate()}</span>
     ${has ? '<span class="cal-dot"></span>' : ''}
   </button>`;
@@ -10468,14 +10563,23 @@ function recurrenceOccurrenceDate(anchorDate, recurrence, n) {
 // without waiting for a reload) and on every app load (so a series someone set up a year ago keeps
 // extending forward the whole time the app keeps getting opened).
 function ensureRecurringReminderOccurrences() {
-  const series = new Map(); // recurrenceId -> { anchorDate, recurrence, maxIndex }
+  const series = new Map(); // recurrenceId -> { anchorDate, recurrence, leadDays, maxIndex }
   STATE.reminders.forEach(r => {
     if (!r.recurrence || !r.recurrenceId || !r.anchorDate) return;
     const m = /_r(\d+)$/.exec(r.id);
     const idx = m ? Number(m[1]) : 0;
     const existing = series.get(r.recurrenceId);
-    if (!existing) series.set(r.recurrenceId, { anchorDate: r.anchorDate, recurrence: r.recurrence, maxIndex: idx });
+    if (!existing) series.set(r.recurrenceId, { anchorDate: r.anchorDate, recurrence: r.recurrence, leadDays: r.leadDays || 0, maxIndex: idx });
     else if (idx > existing.maxIndex) existing.maxIndex = idx;
+  });
+  // leadDays for each series comes from its most recently DATED row, a separate pass so it's not
+  // comparing against a moving target while the maxIndex loop above is still running. This is what
+  // makes editing a series' lead time (see updateReminderLeadDays()) take effect on every
+  // occurrence generated after that edit, with no separate regeneration step required.
+  series.forEach((info, recurrenceId) => {
+    const rows = STATE.reminders.filter(r => r.recurrenceId === recurrenceId);
+    const latest = rows.sort((a, b) => b.date.localeCompare(a.date))[0];
+    if (latest) info.leadDays = latest.leadDays || 0;
   });
   let changed = false;
   series.forEach((info, recurrenceId) => {
@@ -10488,8 +10592,15 @@ function ensureRecurringReminderOccurrences() {
       // occurrences should still generate sensible new ones rather than reaching for a stale row.
       const template = STATE.reminders.filter(r => r.recurrenceId === recurrenceId).sort((a, b) => b.date.localeCompare(a.date))[0];
       if (!template) continue;
+      // The due-date cadence marches forward on the ANCHOR (recurrenceOccurrenceDate, unchanged);
+      // the fire date is that due date shifted back by the series' own lead time. A 0-lead-time
+      // series computes date === dueDate, same as before this field existed. dueDate is always
+      // stored (not just when leadDays > 0) — see saveReminder()'s matching comment for why a
+      // recurring series needs this reliably present on every row.
+      const dueDate = recurrenceOccurrenceDate(info.anchorDate, info.recurrence, n);
+      const picked = computeLeadDates(dueDate, info.leadDays);
       STATE.reminders.push({
-        id, date: recurrenceOccurrenceDate(info.anchorDate, info.recurrence, n),
+        id, date: picked.date, dueDate, leadDays: info.leadDays || null,
         time: template.time, endTime: template.endTime || null, title: template.title,
         notes: template.notes || '', createdAt: Date.now(), type: 'reminder',
         recurrence: info.recurrence, recurrenceId, anchorDate: info.anchorDate,
@@ -10507,7 +10618,7 @@ function ensureRecurringReminderOccurrences() {
 // a title would silently wipe it. Reset whenever the form actually opens or closes.
 function captureReminderFormDraft() {
   const get = id => { const el = document.getElementById(id); return el ? el.value : undefined; };
-  const draft = { title: get('remTitle'), time: get('remTime'), endTime: get('remEndTime'), notes: get('remNotes') };
+  const draft = { title: get('remTitle'), time: get('remTime'), endTime: get('remEndTime'), notes: get('remNotes'), leadDays: get('remLeadDays') };
   Object.keys(draft).forEach(k => { if (draft[k] !== undefined) UI.reminderFormDraft[k] = draft[k]; });
 }
 function setReminderFormRecurrence(v) { captureReminderFormDraft(); UI.reminderFormRecurrence = v; render(); }
@@ -10538,6 +10649,8 @@ function renderReminderForm() {
         <button class="${UI.reminderFormRecurrence==='monthly'?'active':''}" onclick="setReminderFormRecurrence('monthly')">MONTHLY</button>
       </div>
       <div style="font-size:11px; color:var(--text-faint); margin-bottom:10px;">${UI.reminderFormRecurrence === 'none' ? 'A one-off reminder on this date only.' : `Generates the next few occurrences now — this one plus ${RECURRENCE_HORIZON[UI.reminderFormRecurrence]} more. Each occurrence edits/deletes independently, same as any reminder.`}</div>
+      <label class="field"><span class="lbl">Remind me early (days before, optional)</span><input type="number" id="remLeadDays" min="0" step="1" value="${draft.leadDays || ''}" placeholder="0"></label>
+      <div style="font-size:11px; color:var(--text-faint); margin:-4px 0 10px;">The date above stays what this is ABOUT — this only moves when it fires. Leave blank to fire on the date itself.</div>
       <label class="field"><span class="lbl">Notes (optional)</span><textarea id="remNotes" placeholder="Any details...">${escapeHtml(draft.notes || '')}</textarea></label>`}
       <button class="btn btn-primary btn-block" onclick="saveReminder()">${isTodo ? 'SAVE TO-DO LIST' : 'SAVE REMINDER'}</button>
     </div>`;
@@ -10555,11 +10668,27 @@ function saveReminder() {
   const notesEl = document.getElementById('remNotes');
   const notes = notesEl ? notesEl.value.trim() : '';
   const id = uid();
-  const reminder = { id, date: NAV.calSelectedDate, time, endTime, title, notes, createdAt: Date.now(), type: isTodo ? 'todo' : 'reminder' };
-  if (isTodo) reminder.items = [];
+  // Lead time only applies to plain reminders, the same restriction as recurrence just below --
+  // a to-do's own `date` field is its due date directly, with no separate fire date to split out.
+  const leadDays = (!isTodo && Number(inputVal('remLeadDays'))) || 0;
+  const picked = computeLeadDates(NAV.calSelectedDate, leadDays);
   // Recurrence only applies to plain reminders — a recurring to-do's per-occurrence reset
   // semantics are a distinct feature this doesn't attempt to build.
   const recurrence = (!isTodo && UI.reminderFormRecurrence !== 'none') ? UI.reminderFormRecurrence : null;
+  const reminder = {
+    id, date: picked.date, time, endTime, title, notes, createdAt: Date.now(), type: isTodo ? 'todo' : 'reminder',
+    // A recurring series always carries its due date, whatever leadDays currently is — later
+    // editing the lead time (updateChargeReminderLead()) needs a reliable "what this is about" to
+    // read on every row, not just the ones that happened to have a nonzero lead time at creation.
+    // A one-off reminder has no such later-editing need, so it stays minimal: null unless there's
+    // actually a lead time to explain.
+    dueDate: recurrence ? NAV.calSelectedDate : (leadDays > 0 ? picked.dueDate : null),
+    leadDays: leadDays || null,
+  };
+  if (isTodo) reminder.items = [];
+  // The anchor stays the DUE date, not the fire date — recurrenceOccurrenceDate() marches this
+  // forward on the due-date cadence (the 30th of every month, say), and each occurrence's fire
+  // date is computed FROM that via the same lead time, in ensureRecurringReminderOccurrences().
   if (recurrence) { reminder.recurrence = recurrence; reminder.recurrenceId = id; reminder.anchorDate = NAV.calSelectedDate; }
   STATE.reminders.push(reminder);
   UI.reminderFormOpen = false;
@@ -10589,6 +10718,7 @@ function renderReminderCard(r) {
     </div>
     ${r.time && r.endTime ? `<div style="font-size:10px; color:var(--text-faint); margin-top:6px;">${icon('anchorMark')} On your day's schedule &middot; ${fmtReminderTime(r.time)}&ndash;${fmtReminderTime(r.endTime)}</div>` : ''}
     ${r.recurrence ? `<div style="font-size:10px; color:var(--text-faint); margin-top:6px;">${icon('repeat')} Repeats ${RECURRENCE_LABELS[r.recurrence].toLowerCase()} &middot; set when this series was created, not editable per-occurrence</div>` : ''}
+    ${reminderDueContext(r) ? `<div style="margin-top:6px;">${reminderDueBadge(r)}</div>` : ''}
     ${isTodo ? renderReminderTodoItems(r) : `<label class="field" style="margin-top:8px; margin-bottom:0;"><span class="lbl">Notes</span><textarea placeholder="Any details..." onchange="updateReminderField('${r.id}','notes',this.value)">${escapeHtml(r.notes || '')}</textarea></label>`}
     ${renderLinkChips('reminder', r.id)}
   </div>`;
@@ -11455,7 +11585,7 @@ function addRecurringCharge() {
   if (!amount || amount <= 0) { showToast('Enter an amount first'); return; }
   const category = inputVal('recCategory') || 'Other';
   const isSavings = inputChecked('recIsSavings');
-  STATE.budget.recurring.push({ id: uid(), name, amount, category, active: true, isSavings });
+  STATE.budget.recurring.push({ id: uid(), name, amount, category, active: true, isSavings, dueDay: null, reminderRecurrenceId: null });
   saveState();
   nameEl.value = ''; amountEl.value = ''; document.getElementById('recIsSavings').checked = false;
   showToast('Recurring charge added');
@@ -11466,8 +11596,89 @@ function updateRecurringField(id, field, value) {
   if (!r) return;
   if (field === 'amount') r.amount = Number(value) || 0;
   else if (field === 'name') r.name = value.trim();
+  else if (field === 'dueDay') {
+    const n = Math.round(Number(value));
+    r.dueDay = (n >= 1 && n <= 31) ? n : null;
+    // The due date is central to what the reminder IS, unlike name/amount below -- if it changes,
+    // the existing series is simply describing the wrong day and has to be rebuilt, not patched.
+    if (r.reminderRecurrenceId) resyncChargeReminder(r);
+  }
   else r.category = value;
   saveState();
+  render();
+}
+// Deletes every reminder in a series by id, regardless of which field it's keyed by -- the one
+// piece shared by disableChargeReminder(), resyncChargeReminder() and deleteRecurringCharge()'s
+// own cleanup, so there's exactly one place that knows "a series is every row with this
+// recurrenceId" rather than three copies of that filter drifting apart.
+function deleteReminderSeries(recurrenceId) {
+  if (!recurrenceId) return;
+  STATE.reminders = STATE.reminders.filter(r => r.recurrenceId !== recurrenceId);
+}
+// The next occurrence of dueDay from today -- this month's if it hasn't passed yet, otherwise
+// next month's. Mirrors what "add a recurring reminder starting now" means for any other
+// recurring reminder, just computed from a day-of-month rather than a picked calendar date.
+function nextChargeDueDate(dueDay) {
+  const today = todayStr();
+  const now = new Date(today + 'T00:00:00');
+  const thisMonth = dateKey(now.getFullYear(), now.getMonth(), Math.min(dueDay, daysInMonthOf(now)));
+  return thisMonth >= today ? thisMonth : addMonthsClamped(thisMonth, 1);
+}
+function enableChargeReminder(id) {
+  const r = STATE.budget.recurring.find(x => x.id === id);
+  if (!r || !r.dueDay) { showToast('Set a due day first'); return; }
+  const anchor = nextChargeDueDate(r.dueDay);
+  const rid = uid();
+  STATE.reminders.push({
+    id: rid, date: anchor, time: STATE.settings.defaultReminderTime || '09:00', endTime: null,
+    title: `${r.name} due`, notes: fmtMoney(r.amount), createdAt: Date.now(), type: 'reminder',
+    recurrence: 'monthly', recurrenceId: rid, anchorDate: anchor,
+    // Always carries dueDate, same rule saveReminder() uses for any recurring reminder -- see its
+    // comment. Same-day by default (leadDays null); the charge row's own input can raise it.
+    dueDate: anchor, leadDays: null,
+  });
+  r.reminderRecurrenceId = rid;
+  saveState();
+  ensureRecurringReminderOccurrences(); // materializes the rest of the series right away
+  queueReminderPushSync();
+  showToast('Reminder created');
+  render();
+}
+function disableChargeReminder(id) {
+  const r = STATE.budget.recurring.find(x => x.id === id);
+  if (!r) return;
+  deleteReminderSeries(r.reminderRecurrenceId);
+  r.reminderRecurrenceId = null;
+  saveState();
+  queueReminderPushSync();
+  render();
+}
+// Delete-and-recreate rather than patch-in-place: the series' anchor (and therefore every future
+// occurrence) is derived from dueDay, so a changed dueDay makes the whole existing series wrong,
+// not just its next row. Whatever lead time was set carries over to the fresh series.
+function resyncChargeReminder(charge) {
+  const oldSeries = STATE.reminders.filter(r => r.recurrenceId === charge.reminderRecurrenceId);
+  const leadDays = (oldSeries[0] && oldSeries[0].leadDays) || 0;
+  deleteReminderSeries(charge.reminderRecurrenceId);
+  charge.reminderRecurrenceId = null;
+  if (!charge.dueDay) return; // dueDay was cleared entirely -- nothing to rebuild
+  enableChargeReminder(charge.id);
+  if (leadDays > 0) updateChargeReminderLead(charge.id, leadDays);
+}
+// The lead time lives on the reminder series, not the charge -- editing it touches every row in
+// the series. Every row already carries its own dueDate (see enableChargeReminder() /
+// ensureRecurringReminderOccurrences()), so this only ever has to recompute `date` from it -- no
+// need to re-derive which occurrence a row is or recompute its due date from scratch.
+function updateChargeReminderLead(id, val) {
+  const r = STATE.budget.recurring.find(x => x.id === id);
+  if (!r || !r.reminderRecurrenceId) return;
+  const leadDays = Math.max(0, Math.round(Number(val)) || 0);
+  STATE.reminders.filter(x => x.recurrenceId === r.reminderRecurrenceId).forEach(x => {
+    x.date = computeLeadDates(x.dueDate, leadDays).date;
+    x.leadDays = leadDays || null;
+  });
+  saveState();
+  queueReminderPushSync();
   render();
 }
 function toggleRecurringActive(id, checked) {
@@ -11486,12 +11697,17 @@ function toggleRecurringSavings(id, checked) {
 }
 function deleteRecurringCharge(id) {
   showConfirm('Delete this recurring charge?', () => {
+    const charge = STATE.budget.recurring.find(x => x.id === id);
+    // Deleting the charge without this orphans a monthly-recurring reminder forever -- there'd be
+    // nothing left pointing at it to ever clean it up, and it would keep pushing about a charge
+    // that no longer exists.
+    if (charge && charge.reminderRecurrenceId) deleteReminderSeries(charge.reminderRecurrenceId);
     STATE.budget.recurring = STATE.budget.recurring.filter(x => x.id !== id);
     // A goal linked to this charge keeps its already-logged contribution history — only the
     // now-dangling link itself is cleared, same as any other delete-the-thing-it-points-to case.
     const linkedGoal = STATE.budget.goals.find(g => g.recurringChargeId === id);
     if (linkedGoal) linkedGoal.recurringChargeId = null;
-    saveState(); render();
+    saveState(); queueReminderPushSync(); render();
   });
 }
 function renderRecurringRow(r) {
@@ -11512,8 +11728,28 @@ function renderRecurringRow(r) {
       <input type="checkbox" ${r.isSavings ? 'checked' : ''} onchange="toggleRecurringSavings('${r.id}', this.checked)">
       Savings / Investment — money you're paying yourself, not spending
     </label>
+    ${renderChargeDueSection(r)}
     ${renderLinkChips('charge', r.id)}
   </div>`;
+}
+// The due day + optional reminder, split out from renderRecurringRow() since it's the one part of
+// the card with its own internal show/hide logic (the remind-me toggle and its lead-time field
+// only make sense once a due day exists).
+function renderChargeDueSection(r) {
+  const linkedReminder = r.reminderRecurrenceId ? STATE.reminders.find(x => x.recurrenceId === r.reminderRecurrenceId) : null;
+  return `
+    <div class="field-row" style="margin-top:10px;">
+      <label class="field" style="max-width:120px;"><span class="lbl">Due day (optional)</span><input type="number" min="1" max="31" step="1" value="${r.dueDay || ''}" placeholder="e.g. 3" onchange="updateRecurringField('${r.id}','dueDay',this.value)"></label>
+    </div>
+    ${!r.dueDay ? '' : `
+    <label style="display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text-dim); cursor:pointer; margin-top:2px;">
+      <input type="checkbox" ${r.reminderRecurrenceId ? 'checked' : ''} onchange="this.checked ? enableChargeReminder('${r.id}') : disableChargeReminder('${r.id}')">
+      Remind me &mdash; a monthly reminder, editable like any other, with push notifications if you've enabled those in Settings
+    </label>
+    ${!linkedReminder ? '' : `
+    <div class="field-row" style="margin-top:6px; align-items:flex-end;">
+      <label class="field" style="max-width:140px;"><span class="lbl">Remind me early (days before)</span><input type="number" min="0" step="1" value="${linkedReminder.leadDays || ''}" placeholder="0" onchange="updateChargeReminderLead('${r.id}',this.value)"></label>
+    </div>`}`}`;
 }
 
 // ---- Savings progress: one row per active isSavings recurring charge, checked off once
@@ -11857,6 +12093,7 @@ function renderDailySchedule(dateStr) {
 // Deliberately NOT included: recurring budget charges. Unlike the three above, a RecurringCharge
 // carries no due-date field to surface — putting those on the calendar means adding one plus the
 // UI to set it, which is its own small feature rather than part of surfacing existing data.
+// ~~shipped 2026-09-13~~ — a RecurringCharge can now carry `dueDay`; see chargesDueOn().
 
 // Which workouts were actually logged on a specific date. Workout logs are keyed by
 // `${cycle}_${workoutId}` and carry their own `date`, so completion is looked up by the date being
@@ -11878,6 +12115,7 @@ function renderDayUntimedItems(dateStr) {
   const planned = day.workouts;   // already empty on a day off — see dayModel()
   const meals = day.meals;
   const habits = day.habits;      // habits are NOT paused by a day off
+  const charges = day.charges;    // due dates are NOT paused by a day off either — see chargesDueOn()
   // Says the pause out loud rather than just rendering nothing, so an emptied plan never reads as
   // a bug. Habits still render underneath it, which is the point: the day is off, the streak isn't.
   const ex = day.exception;
@@ -11886,7 +12124,7 @@ function renderDayUntimedItems(dateStr) {
         <div style="font-size:12px; color:var(--text-dim);">Planned workouts and meals are paused for this day${ex.label ? ` (${escapeHtml(ex.label)})` : ''}. Habits carry on.</div>
       </div>`
     : '';
-  if (!planned.length && !meals.length && !habits.length) return pausedNotice;
+  if (!planned.length && !meals.length && !habits.length && !charges.length) return pausedNotice;
 
   const loggedIds = workoutIdsLoggedOn(dateStr);
   const group = (label, color, body) => `
@@ -11925,9 +12163,15 @@ function renderDayUntimedItems(dateStr) {
     </div>`;
   }).join(''));
 
+  const chargesHtml = !charges.length ? '' : group('DUE', entityColor('charge'), charges.map(c => `
+    <div class="day-extra-row" onclick="navigateToEntity('charge','${c.id}')" style="cursor:pointer;">
+      <span class="day-extra-name">${escapeHtml(c.name)}${c.isSavings ? ` <span style="color:var(--savings); font-weight:500;">&middot; savings</span>` : ''}</span>
+      <span class="day-extra-meta mono">${fmtMoney(c.amount)}</span>
+    </div>`).join(''));
+
   return `${pausedNotice}
     <div class="subtle-label" style="margin:16px 0 8px;">ALSO ${isToday ? 'TODAY' : 'THIS DAY'}</div>
-    <div class="panel">${workoutsHtml}${mealsHtml}${habitsHtml}</div>`;
+    <div class="panel">${workoutsHtml}${mealsHtml}${habitsHtml}${chargesHtml}</div>`;
 }
 // Is there anything for a day off to actually pause? dayModel() has already emptied the lists by
 // the time a caller sees them, so the notice has to ask the template directly -- otherwise a day

@@ -88,11 +88,9 @@ before starting any of these.
      duration~~ — **shipped 2026-09-12**, see Recently Shipped.
   2. ~~**Calendar as the true union of the app.**~~ — **shipped 2026-09-12** for planned workouts,
      planned meals and habits; see Recently Shipped. **Budget charge due dates were deliberately
-     left out** and remain open: unlike the other three, a `RecurringCharge` has no due-date field
-     at all (`{id, name, amount, category, active, isSavings}`), so putting one on the Calendar
-     means adding an optional `dueDay` plus the Budget → Recurring UI to set it — a data-model
-     change rather than surfacing data that already exists. That's the same work as the "Calendar
-     marker on a recurring budget charge's due date" cross-linking idea below; do it there.
+     left out — **shipped 2026-09-13**, see Recently Shipped. Built beyond the original minimal
+     scoping: not just the calendar marker, but an opt-in push reminder and a general lead-time
+     field any reminder can use.
   3. **Recurrence + single-day exceptions — split in two, first half shipped.** Scoped into two
      unrelated pieces before building, since they touch different parts of the data model:
      - ~~Recurring reminders (annual + monthly)~~ — **shipped 2026-09-12**, see Recently Shipped.
@@ -332,6 +330,46 @@ on an architecture split + a large wave of Maximalist aesthetics.
   pattern.
 
 ### Feature changes
+
+- **Budget charge due dates: a calendar marker, an opt-in push reminder, and a general lead-time
+  field on any reminder (2026-09-13).** The one piece deliberately left out of the earlier
+  calendar-union work — a `RecurringCharge` had no due-date field at all.
+  - **The marker and the push reminder are two separate things, on purpose.** `dueDay` (1-31,
+    clamped to a shorter month's last day) puts a charge on the calendar union — Day view, Agenda,
+    month grid — with zero notification involved. Confirmed by reading the deployed push worker
+    directly (`reminder-worker/src/index.js`): it skips any reminder with no `time` set, so a due
+    date alone can never push anything. `test_charge_due_dates.js` asserts this by reading the
+    worker source itself, not by assuming it.
+  - **"Remind me" creates a real, ordinary monthly-recurring Reminder** — the exact recurrence
+    engine the recurring-reminders feature already shipped (`recurrenceId`,
+    `RECURRENCE_HORIZON.monthly`, `ensureRecurringReminderOccurrences()`), so it rides the existing
+    push pipeline for free with zero worker changes. It's editable afterward exactly like any other
+    reminder (title, notes, time); editing the charge's **name or amount never touches** an
+    already-created reminder — only `dueDay` changing rebuilds the series, since the date is what
+    the reminder fundamentally is.
+  - **A general lead-time field, not just a charge-specific one** — added to the ordinary reminder
+    form (any plain reminder, recurring or not), because a due-date reminder firing after the thing
+    it's about is a reminder that arrived too late to act on. `Reminder.dueDate` (what it's about)
+    and `Reminder.date` (when it fires) split apart by `leadDays`; every read path that looks a
+    reminder up by date (`remindersOn`, the push worker, the Month/Year dots) still keys off `date`
+    unchanged — a lead-time reminder lists and fires on its early date, with a "due Sep 30" badge
+    everywhere it appears (the card, the Agenda, and the push notification's own title, built by a
+    new `reminderPushPayload()` that decorates what's *sent* without ever touching the stored
+    `title`).
+  - **A recurring reminder always stores `dueDate`, even at zero lead time** — a late design
+    correction caught before it shipped. The first draft only stored it when `leadDays > 0`, which
+    meant editing a charge's lead time later had to reverse-engineer the due date by regex-parsing
+    an occurrence's id and re-deriving it — fragile, and broken for string-vs-number id-suffix
+    coercion in exactly the way that class of bug always is. Always storing it makes
+    `updateChargeReminderLead()` a two-line function with nothing to reconstruct.
+  - **Savings charges are included** — a scheduled transfer to savings is exactly as "due" as a
+    bill, and `dayModel()`'s `charges` list makes no distinction. **Not paused by a schedule
+    exception**, same reasoning as habits: a due date has nothing to do with which daily schedule
+    you're following.
+  - **`STATE.settings.defaultReminderTime`** (default `09:00`, editable under Schedule → Setup)
+    exists only because an all-day reminder can't push — it's what a charge's "remind me" toggle
+    uses so the created reminder is push-capable immediately, and only affects reminders created
+    from that point forward, not anything already made.
 
 - **Hydration colour: trend strip, water association, staleness — and section colours derived
   rather than copied (2026-09-13).**

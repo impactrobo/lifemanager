@@ -576,6 +576,10 @@ select { -webkit-appearance: none; appearance: none; background-image: linear-gr
    Opposite corner from the reminder dot above so both signals are visible on the same cell at
    once; pointer-events:none so it never steals the cell button's own click. */
 .cal-anchor-icon { position: absolute; top: 2px; right: 2px; width: 10px; height: 10px; pointer-events: none; }
+/* Opposite corner from .cal-anchor-icon on purpose, so a scheduled day that's also a due day shows
+   both without collision. A plain colour swatch rather than an icon -- matches the day-extra rows'
+   own convention for a section identity that isn't tied to one specific glyph. */
+.cal-charge-mark { position: absolute; top: 3px; left: 3px; width: 6px; height: 6px; border-radius: 2px; pointer-events: none; }
 .cal-anchor-icon svg { width: 100%; height: 100%; display: block; }
 
 /* Zoom toggle (YEAR/MONTH/WEEK/DAY) — reuses .unit-toggle's pill styling, just stretched full

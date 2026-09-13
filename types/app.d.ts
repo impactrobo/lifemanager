@@ -71,6 +71,11 @@ interface AppSettings {
   restTimer: RestTimerSettings;
   mealUnitSystem: 'metric' | 'imperial';
   defaultPage: string;
+  /** 'HH:MM'. The only place this is used is an auto-created reminder that needs SOME time to be
+   *  push-capable at all -- the push worker skips any reminder with no `time` (see
+   *  reminder-worker/src/index.js). Does NOT change the blank-by-default time on a normal,
+   *  manually-created reminder. */
+  defaultReminderTime: string;
   /** Water is stored in millilitres everywhere and converted for display, the same way weight
    *  stores lb. `waterUnit` only changes what you see and type. The target is a target, not a
    *  cap — the counter is free to go past it — and `waterServingMl` is what one tap of the
@@ -184,6 +189,17 @@ interface RecurringCharge {
   category: string;
   active: boolean;
   isSavings: boolean;
+  /** Day of month (1-31) this is due, or null/absent if not set. Clamped to the last real day of
+   *  a shorter month at evaluation time (31 shows on Feb 28) -- see chargeFallsOnDate(). NOT
+   *  paused by a schedule exception: unlike planned workouts/meals, a due date has nothing to do
+   *  with which daily schedule you're following. */
+  dueDay?: number | null;
+  /** The id of the monthly-recurring Reminder series this charge owns, when the opt-in "remind
+   *  me" toggle is on -- null/absent otherwise. Deleting the charge, turning the toggle off, or
+   *  changing dueDay all delete this series (see disableChargeReminder()/resyncChargeReminder());
+   *  editing the charge's name or amount does NOT touch an already-created reminder, which is a
+   *  real independently-editable Reminder from that point on. */
+  reminderRecurrenceId?: string | null;
 }
 interface BudgetState {
   recurringIncome: RecurringIncome[];
@@ -383,6 +399,18 @@ interface Reminder {
   anchorDate?: string;
   /** Only meaningful when type === 'todo'. */
   items?: Array<{ id: string; text: string; done: boolean }>;
+  /** The date this reminder is actually ABOUT, when it fires earlier than that -- absent/null
+   *  means `date` IS the due date (every reminder before this field existed, and every reminder
+   *  without a lead time). Display-only: nothing that looks the reminder up by date (remindersOn,
+   *  scheduleBlocksForDate, the push worker) reads this -- they all key off `date`, which is
+   *  deliberately the fire date, not the due date. See reminderDueContext(). */
+  dueDate?: string | null;
+  /** How many days before `dueDate` this fires. The rule, kept alongside the result (`date`) so a
+   *  recurring series can regenerate future occurrences with the same offset -- see
+   *  ensureRecurringReminderOccurrences(). 0/absent means same-day (date === dueDate). Only ever
+   *  set on type 'reminder', same restriction as `recurrence`: a to-do's `date` is its own due
+   *  date directly. */
+  leadDays?: number | null;
 }
 
 /** The single global object holding all app data. Built by `defaultState()`, persisted verbatim
