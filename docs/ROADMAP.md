@@ -326,6 +326,46 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Recipe notes: a second kind of note, with structured ingredients and one-tap conversion to a
+  Meal (2026-09-13).** A recipe is a distinct `Note.type === 'recipe'` rather than a tag — tags
+  here are fully user-editable (renameable, deletable) and carry no behaviour, whereas a recipe has
+  its own fields and its own action. Same precedent as a to-do being `Reminder.type`.
+  - **Ingredients use the identical `{id, foodId, qty, unit}` shape as `Meal.items`**, which is the
+    structural choice the whole feature rests on: converting a recipe into a Meal is a copy rather
+    than a translation, and `computeMealTotals()` works on both unchanged. Recipes also carry
+    servings, prep and cook minutes; the prose body underneath stays exactly what a note always was
+    (method, photos, the story).
+  - **Conversion asks every time, but only when there's a choice.** A multi-serving recipe offers
+    ADD 1 SERVING / ADD WHOLE BATCH as two visible buttons; a single-serving one just offers ADD TO
+    MEALS. Guessing wrong silently produces a Meal whose calories are Nx off everywhere they're
+    shown or planned against, and the options are the point, so they aren't hidden behind a modal
+    whose Cancel means "batch". Either way the new Meal is linked to its recipe, so the meal
+    carries the macros and feeds the planner while the recipe keeps the method.
+  - **Ingredient search is now word-based** — every typed word must appear somewhere in the name, in
+    any order, so "breast chicken" finds "Chicken breast, cooked" where a strict substring never
+    could. Deliberately no fuzzy/edit-distance matching: it surfaces confidently wrong suggestions,
+    and "+ NEW INGREDIENT" is the honest escape hatch. `renderFoodSearchResults()` is shared, so the
+    Meal Builder's own search improved for free.
+  - **"+ NEW INGREDIENT" reuses the real Custom Foods form** as an overlay rather than a cut-down
+    copy — that screen already collects and validates a food in exactly the shape `allFoods()`
+    searches, including micronutrients a second form would omit. It renders over the Notes screen
+    because navigating away would lose the in-progress note, whose title and body live only in the DOM.
+  - **Ingredient edits patch their own container rather than calling `render()`.** The body is
+    contenteditable and DOM-only, so a re-render mid-compose would silently wipe what's been
+    written — the same reason `renderNotePhotoRow()` already patches. For the two places a real
+    re-render is unavoidable (switching NOTE/RECIPE, and the ingredient overlay),
+    `captureNoteDraftText()` parks the typed text and the form reads it back.
+  - **A CSS specificity trap, third sighting.** `styles.css`'s `input[type="number"], select
+    { width: 100% }` is specificity (0,1,1) and beats a bare class (0,1,0), so the quantity box went
+    full-width, pushed the row past the panel edge and squeezed the ingredient name to nothing. Fixed
+    with descendant-scoped selectors (0,2,0). Same trap CLAUDE.md documents for `.btn`/`.btn-primary`
+    and that bit the edit-pencil highlight earlier this week.
+  - `tests/test_recipe_notes.js` covers word-based matching (including a guard that the fixture
+    isn't one a substring would already match), composing through the real form, the body surviving
+    an ingredient add, persistence of every recipe field, the draft resetting so the next note isn't
+    another recipe, both conversion paths and their arithmetic, the choice only appearing when it
+    exists, reopening for edit, text surviving a type switch, plain notes staying entirely plain,
+    notes predating the feature still rendering, and a reload.
 - **Cross-entity links: one primitive replacing bespoke cross-feature wiring (2026-09-13).** The
   app was six well-built sections sharing one STATE and one render loop, where every connection
   between them was its own feature. Now any two things in the app can be marked as being about
