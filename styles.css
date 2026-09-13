@@ -778,6 +778,33 @@ select { -webkit-appearance: none; appearance: none; background-image: linear-gr
   font-style: normal; font-size: 11px; font-weight: 700; margin-left: 3px;
   color: var(--text-faint); vertical-align: 1px;
 }
+/* Water's numbers mean nothing without their unit, and the chip is too narrow to spell it out on
+   the value line, so it rides along in the label. */
+.log-chip-unit { font-style: normal; opacity: 0.75; }
+/* Water is the only chip carrying a fraction of four-digit numbers plus a + and a dot, so it gets
+   a smaller value type rather than crowding its neighbours out of alignment. */
+.log-chip-wide .log-chip-value { font-size: 13px; }
+/* The hydration colour marker, on the chip itself — a marker that "lasts until changed" is only
+   useful if it's visible without opening anything. Fixed swatch colours by design: this is a
+   physical reference scale, so it must NOT follow the aesthetic's palette. The ring is what adapts. */
+.log-chip-dot {
+  display: inline-block; width: 9px; height: 9px; border-radius: 50%;
+  margin-left: 5px; vertical-align: 1px;
+  border: 1px solid rgba(0, 0, 0, 0.35);
+}
+
+.log-color-row { align-items: center; }
+.log-color-scale { flex: 1; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; }
+.log-color-sw {
+  height: 30px; border-radius: 5px; border: 1px solid rgba(0, 0, 0, 0.35);
+  padding: 0; cursor: pointer;
+}
+/* Outline rather than a fill change, so the swatch still shows its own true colour while selected —
+   the whole point is comparing against it. */
+.log-color-sw-on { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent); }
+.log-color-sw:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.log-color-note { font-size: 10px; color: var(--text-faint); margin: -2px 0 8px; line-height: 1.45; }
+.log-color-note b { color: var(--text-dim); }
 
 /* The sheet itself reuses .home-popup / .home-popup-backdrop (the bottom-sheet pattern Home's
    "add back a box" popup already uses), so only its rows need styling. */
@@ -789,7 +816,7 @@ select { -webkit-appearance: none; appearance: none; background-image: linear-gr
 .log-sheet-label { flex: 0 0 70px; font-size: 12px; color: var(--text-dim); }
 .log-sheet-row input[type="number"], .log-sheet-row select { flex: 1; min-width: 0; }
 .log-sheet-unit { flex: 0 0 auto; font-size: 11px; color: var(--text-faint); }
-.log-water-ctl { flex: 1; display: flex; align-items: center; gap: 8px; }
+.log-water-ctl { flex: 1; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .log-water-count { font-size: 16px; font-weight: 700; min-width: 2ch; text-align: center; }
 /* Beats input[type="number"] (0,1,1) -- a bare class would lose to it. Same trap as the recipe
    ingredient rows; see CLAUDE.md. */

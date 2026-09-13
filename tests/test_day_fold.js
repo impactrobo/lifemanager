@@ -131,7 +131,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   console.log('band labels:', folded.bandText);
   if (!/\d+ passed/.test(folded.bandText[0])) throw new Error('The first band should count what is behind you');
   if (!/of \d+ done/.test(folded.bandText[0])) throw new Error('The passed band should say how much of it you actually did');
-  if (!/\d+ coming/.test(folded.bandText[1])) throw new Error('The second band should count what is ahead');
+  if (!/\d+ upcoming/.test(folded.bandText[1])) throw new Error('The second band should count what is ahead');
   if (!/next:/.test(folded.bandText[1])) throw new Error('The coming band should name what is next without being opened');
 
   // ---- 4. Opening a band reveals exactly its own rows ----

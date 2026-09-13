@@ -71,9 +71,13 @@ interface AppSettings {
   restTimer: RestTimerSettings;
   mealUnitSystem: 'metric' | 'imperial';
   defaultPage: string;
-  /** Glasses/day the LOG · PM water chip counts towards. A target, not a cap — the counter
-   *  is free to go past it. */
-  waterTarget: number;
+  /** Water is stored in millilitres everywhere and converted for display, the same way weight
+   *  stores lb. `waterUnit` only changes what you see and type. The target is a target, not a
+   *  cap — the counter is free to go past it — and `waterServingMl` is what one tap of the
+   *  chip's + adds. */
+  waterTargetMl: number;
+  waterServingMl: number;
+  waterUnit: 'ml' | 'cup';
   homeLayout: unknown;
   cloudSync: { enabled: boolean };
   reminderPush: { enabled: boolean };
@@ -273,9 +277,15 @@ interface GuitarState {
 }
 interface LifeState {
   /** date -> that day's log. Mixed value types on purpose: `true` for each completed anchor id,
-   *  plus the day's own numbers (sleepHours, sleepQuality, water, steps). One object per date
+   *  plus the day's own numbers (sleepHours, sleepQuality, waterMl, steps). One object per date
    *  rather than four parallel date-keyed maps. */
   dailyLog: Record<string, Record<string, boolean | number>>;
+  /** The hydration colour marker, 1 (pale) to 8 (dark). Deliberately NOT in dailyLog: it persists
+   *  until changed rather than resetting at midnight, because it describes a current state rather
+   *  than something that happened on a date. Nothing computes off it. `waterColorLog` records
+   *  every change — unused today, and what a trend view would be built from. */
+  waterColor: { value: number | null; at: string | null };
+  waterColorLog: { value: number; at: string }[];
   periodicLog: Record<string, string>;
   anchors: ScheduleAnchor[];
   periodic: PeriodicAnchor[];

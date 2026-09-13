@@ -337,6 +337,37 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Water in millilitres, a hydration colour marker, and "upcoming" (2026-09-13).**
+  - **Water is stored in millilitres and displayed in whichever unit is set** — the same
+    store-canonical/convert-at-the-edge shape weight already uses (`weightLb` + `lbToDisplay`).
+    `settings.waterUnit` (`'ml'` default, `'cup'` optional) only changes what you see and type;
+    switching it never touches the stored number, so past days can't silently rescale.
+    `waterServingMl` (250 default) is what one tap of the chip adds, settable in whichever unit is
+    showing.
+  - **The glasses→millilitres change renames the field rather than reinterpreting it.** Water
+    shipped counting glasses for a few hours earlier the same day, and a stored `8` is unreadable on
+    its own — eight glasses or eight millilitres? Guessing from magnitude would be a coin flip on
+    small values, so `water` → `waterMl` (×250) and `waterTarget` → `waterTargetMl`, with the old
+    keys deleted so a second load can't double them. Covered, including idempotency, in
+    `test_quick_logs.js`.
+  - **The hydration colour marker is deliberately inert.** Eight swatches, pale to dark, the scale
+    every hydration chart uses. Nothing computes off it — its whole job is to *still be showing what
+    you last saw*, so it lives on `STATE.life.waterColor` rather than in `dailyLog`: it persists
+    until changed instead of resetting at midnight, because it describes a current state rather than
+    something that happened on a date. That's the one behaviour separating it from everything else
+    on these strips, and the test asserts it survives a day rollover.
+  - **The marker shows as a dot on the water chip**, not only inside the sheet — a marker you have
+    to open something to see isn't a marker. The sheet also says how long ago it was set, since a
+    reading from three days ago says nothing about right now. Tapping the active swatch clears it,
+    the same toggle-off the habit buttons use.
+  - **`waterColorLog` records every change and is unused today.** It costs nothing and is what any
+    trend view would have to be built from; building the view itself was left out deliberately.
+  - **Swatch colours are fixed hex, NOT theme tokens.** This is a physical reference scale — the
+    whole point is holding it up against something real — so it must not follow the aesthetic's
+    palette. The selection ring is the part that adapts.
+  - The collapsed day timeline's second band now reads **"N upcoming"** rather than "N coming".
+    One renderer, so this changed on the Calendar Day view too, not just Home.
+
 - **Quick logs become two chip strips and a sheet; water and steps added (2026-09-13).** Step 5,
   the last of the "Home Becomes Today" scope. WAKE-UP and CALORIES were two panels of
   always-visible number inputs — about 360px of Home, the single biggest block on the screen, for

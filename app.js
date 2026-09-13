@@ -1176,6 +1176,12 @@ function defaultLifeState() {
     schedules: [],     // [{id, name, days:[0-6, 0=Sun], wakeStart, wakeEnd, bedStart, bedEnd, activities:[{id,start,end,title,description}]}] — built in Schedule -> Setup -> Schedule Builder
     guitar: { chordStatus: {}, songStatus: {}, techStatus: {}, practiceLog: [], chordLearnedDate: {}, songLearnedDate: {} }, // status: 0 none, 1 learning, 2 learned; *LearnedDate: index -> date string, for the Hobbies Progress timeline
     skinCycleStart: null, // date string the 4-night rotation started
+    // The hydration colour marker. NOT in dailyLog on purpose: it deliberately persists until you
+    // change it rather than resetting at midnight, because it describes your current state, not
+    // something that happened on a date. Every change is appended to waterColorLog anyway -- it
+    // costs nothing and is what any future trend view would need.
+    waterColor: { value: null, at: null },
+    waterColorLog: [],
     supplementLog: {}, // date -> { suppName: true }
     // Habits (added 2026-09-12) are distinct from anchors on purpose: an anchor is a permanent,
     // time-of-day-scoped routine item that's always there; a habit is a discipline push with a
@@ -1463,7 +1469,8 @@ function defaultState() {
     updatedAt: null,
     settings: {
       accentByAesthetic: {}, noteTagNames: {}, customNoteTags: [], noteTagsMigrated: false, aesthetic: 'cyberpunk',
-      restTimer: defaultRestTimerSettings(), mealUnitSystem: 'metric', defaultPage: 'home', waterTarget: 8,
+      restTimer: defaultRestTimerSettings(), mealUnitSystem: 'metric', defaultPage: 'home',
+      waterTargetMl: 2000, waterServingMl: 250, waterUnit: 'ml',
       homeLayout: defaultHomeLayout(),
       // Purely a user preference flag ("did I opt into this"). The actual signed-in/out truth
       // comes from Firebase Auth itself at runtime (see CLOUD SYNC section) — this just decides
@@ -1884,7 +1891,25 @@ function migrateState() {
   if (!STATE.settings.mealUnitSystem) STATE.settings.mealUnitSystem = 'metric';
   MEAL_UNIT_SYSTEM = STATE.settings.mealUnitSystem;
   if (!STATE.settings.defaultPage) STATE.settings.defaultPage = 'home';
-  if (STATE.settings.waterTarget == null) STATE.settings.waterTarget = 8;
+  // Water was shipped counting GLASSES for a few hours before moving to millilitres. The field
+  // is renamed rather than reinterpreted: a stored `8` is unreadable otherwise -- eight glasses or
+  // eight millilitres? -- and guessing from magnitude would be a coin flip on small values.
+  if (STATE.settings.waterTargetMl == null) {
+    STATE.settings.waterTargetMl = STATE.settings.waterTarget != null
+      ? Math.round(Number(STATE.settings.waterTarget) * 250) : 2000;
+  }
+  delete STATE.settings.waterTarget;
+  if (STATE.settings.waterServingMl == null) STATE.settings.waterServingMl = 250;
+  if (STATE.settings.waterUnit !== 'cup') STATE.settings.waterUnit = 'ml';
+  Object.keys(STATE.life.dailyLog).forEach(d => {
+    const log = STATE.life.dailyLog[d];
+    if (log && log.water != null) {
+      if (log.waterMl == null) log.waterMl = Math.round(Number(log.water) * 250);
+      delete log.water;
+    }
+  });
+  if (!STATE.life.waterColor || typeof STATE.life.waterColor !== 'object') STATE.life.waterColor = { value: null, at: null };
+  if (!Array.isArray(STATE.life.waterColorLog)) STATE.life.waterColorLog = [];
   // 'schedule' was a valid landing page while it was its own tile. Home shows the day now, so that
   // choice means Home -- and a save still holding it would otherwise boot to a tab with no way
   // back to Home in its bar's first slot.
@@ -9472,7 +9497,7 @@ const LOG_FIELDS = {
   sleepLen:  { group: 'am', label: 'Sleep',    unit: () => 'hrs', step: '0.1' },
   sleepQual: { group: 'am', label: 'Quality',  unit: () => '1-5' },
   calories:  { group: 'pm', label: 'Calories', unit: () => 'kcal', step: '1' },
-  water:     { group: 'pm', label: 'Water',    unit: () => 'glasses' },
+  water:     { group: 'pm', label: 'Water',    unit: () => waterUnitLabel() },
   steps:     { group: 'pm', label: 'Steps',    unit: () => 'steps', step: '1' },
 };
 // Today's value for a field, or null when it hasn't been logged. One reader for the chips, the
@@ -9485,7 +9510,7 @@ function logFieldValue(field) {
     case 'calories':  return w && w.calories != null ? w.calories : null;
     case 'sleepLen':  return log.sleepHours != null ? log.sleepHours : null;
     case 'sleepQual': return log.sleepQuality != null ? log.sleepQuality : null;
-    case 'water':     return log.water != null ? log.water : null;
+    case 'water':     return log.waterMl != null ? log.waterMl : null;
     case 'steps':     return log.steps != null ? log.steps : null;
     default:          return null;
   }
@@ -9494,7 +9519,7 @@ function logFieldValue(field) {
 // because "0/8" is the number that makes you drink something and a dash is not.
 function logFieldDisplay(field) {
   const v = logFieldValue(field);
-  if (field === 'water') return `${v || 0}/${waterTarget()}`;
+  if (field === 'water') return `${fmtWater(v || 0)}/${fmtWater(waterTargetMl())}`;
   if (v == null) return '&mdash;';
   if (field === 'weight') return fmt(v, 1);
   if (field === 'sleepLen') return fmt(v, 1) + 'h';
@@ -9502,15 +9527,82 @@ function logFieldDisplay(field) {
   if (field === 'steps') return Number(v).toLocaleString();
   return Number(v).toLocaleString();
 }
-function waterTarget() { return Number(STATE.settings.waterTarget) || 8; }
+// Water is stored in millilitres, always, and displayed in whichever unit is set -- the same
+// store-canonical/convert-at-the-edge shape weight already uses (weightLb + lbToDisplay).
+const ML_PER_CUP = 236.588;
+function waterUnit() { return STATE.settings.waterUnit === 'cup' ? 'cup' : 'ml'; }
+function waterUnitLabel() { return waterUnit() === 'cup' ? 'cups' : 'mL'; }
+function waterTargetMl() { return Number(STATE.settings.waterTargetMl) || 2000; }
+function waterServingMl() { return Number(STATE.settings.waterServingMl) || 250; }
+function mlToDisplay(ml) { return waterUnit() === 'cup' ? ml / ML_PER_CUP : ml; }
+function displayToMl(v) { return waterUnit() === 'cup' ? Number(v) * ML_PER_CUP : Number(v); }
+// Cups land on fractions, millilitres don't -- 1250 mL is 5.3 cups, and "5.28471" helps nobody.
+function fmtWater(ml) {
+  const v = mlToDisplay(ml);
+  return waterUnit() === 'cup' ? fmt(v, 1) : String(Math.round(v));
+}
+function setWaterUnit(u) {
+  STATE.settings.waterUnit = u === 'cup' ? 'cup' : 'ml';
+  saveState();
+  render();
+}
+function setWaterServing(val) {
+  const ml = Math.round(displayToMl(val));
+  STATE.settings.waterServingMl = ml > 0 ? ml : 250;
+  saveState();
+  render();
+}
+
+// The hydration colour marker: eight steps, pale to dark, the scale every hydration chart uses.
+// It is deliberately inert -- nothing computes off it. Its whole job is to still be showing what
+// you last saw, so the number in front of you means something.
+const WATER_COLORS = ['#F8F7D4', '#F5EFA6', '#F2E778', '#EDDA4C', '#E3C93A', '#D6AF2A', '#C08F1E', '#A16B17'];
+function waterColorValue() { return (STATE.life.waterColor && STATE.life.waterColor.value) || null; }
+function waterColorHex(v) { return WATER_COLORS[(v || 1) - 1] || WATER_COLORS[0]; }
+function setWaterColor(v) {
+  const n = Number(v);
+  // Tapping the swatch you're already on clears it, the same toggle-off the habit buttons use.
+  const next = waterColorValue() === n ? null : n;
+  STATE.life.waterColor = { value: next, at: next ? new Date().toISOString() : null };
+  if (next) {
+    STATE.life.waterColorLog.push({ value: next, at: STATE.life.waterColor.at });
+    // A marker you change a couple of times a day will never approach this; the cap just stops an
+    // unbounded array from riding along in every cloud sync forever.
+    if (STATE.life.waterColorLog.length > 400) STATE.life.waterColorLog = STATE.life.waterColorLog.slice(-400);
+  }
+  saveState();
+  render();
+}
+// "Lasts until changed" only reads as useful if you can tell how old it is -- a marker from three
+// days ago says nothing about right now.
+function waterColorAge() {
+  const at = STATE.life.waterColor && STATE.life.waterColor.at;
+  if (!at) return '';
+  const mins = Math.floor((Date.now() - new Date(at).getTime()) / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return mins + 'm ago';
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return hrs + 'h ago';
+  const days = Math.floor(hrs / 24);
+  return days + 'd ago';
+}
 function logChip(field) {
   const logged = field === 'water' ? (logFieldValue('water') || 0) > 0 : logFieldValue(field) != null;
   // Water's chip logs instead of opening the sheet -- a glass of water is the one of these you hit
   // several times a day, and making that a sheet-open-type-save round trip would be absurd.
   const onclick = field === 'water' ? `addWater(1)` : `openLogPopup('${LOG_FIELDS[field].group}','${field}')`;
-  return `<button class="log-chip ${logged ? 'log-chip-set' : ''}" onclick="${onclick}">
-    <span class="log-chip-label">${LOG_FIELDS[field].label}</span>
-    <span class="log-chip-value">${logFieldDisplay(field)}${field === 'water' ? '<i class="log-chip-plus">+</i>' : ''}</span>
+  // Water carries two extras: its unit (the numbers are meaningless without it) and a dot of the
+  // current colour marker, which is the whole point of a marker that "lasts until changed" -- it
+  // has to be visible without opening anything.
+  const colorVal = field === 'water' ? waterColorValue() : null;
+  const label = field === 'water'
+    ? `${LOG_FIELDS[field].label} <i class="log-chip-unit">&middot; ${waterUnitLabel()}</i>`
+    : LOG_FIELDS[field].label;
+  const dot = colorVal
+    ? `<i class="log-chip-dot" style="background:${waterColorHex(colorVal)};" title="Colour ${colorVal} &middot; ${waterColorAge()}"></i>` : '';
+  return `<button class="log-chip ${logged ? 'log-chip-set' : ''} ${field === 'water' ? 'log-chip-wide' : ''}" onclick="${onclick}">
+    <span class="log-chip-label">${label}</span>
+    <span class="log-chip-value">${logFieldDisplay(field)}${field === 'water' ? '<i class="log-chip-plus">+</i>' : ''}${dot}</span>
   </button>`;
 }
 function renderLogStrip(group, fields) {
@@ -9525,15 +9617,15 @@ function openLogPopup(group, focus) { UI.logPopup = { group, focus }; render(); 
 function closeLogPopup() { UI.logPopup = null; render(); }
 // Water increments straight off the chip. Clamped at zero so tapping past the bottom in the sheet
 // can't drive it negative; there's deliberately no upper clamp -- the target is a target, not a cap.
-function addWater(delta) {
+function addWater(servings) {
   const log = todayLifeLog();
-  log.water = Math.max(0, (log.water || 0) + delta);
+  log.waterMl = Math.max(0, (log.waterMl || 0) + servings * waterServingMl());
   saveState();
   render();
 }
 function setWaterTarget(val) {
-  const n = Math.round(Number(val));
-  STATE.settings.waterTarget = n > 0 ? n : 8;
+  const ml = Math.round(displayToMl(val));
+  STATE.settings.waterTargetMl = ml > 0 ? ml : 2000;
   saveState();
   render();
 }
@@ -9576,17 +9668,37 @@ function renderLogPopup() {
     if (f === 'water') {
       // Water is a counter, not a text field -- it gets the same +/- it has on the chip plus the
       // target, which is set here because this is the only place the number is ever looked at.
+      const cur = waterColorValue();
       return `
         <div class="log-sheet-row">
           <span class="log-sheet-label">Water</span>
           <div class="log-water-ctl">
             <button class="btn btn-sm" onclick="addWater(-1)">&minus;</button>
-            <span class="log-water-count mono">${v || 0}</span>
+            <span class="log-water-count mono">${fmtWater(v || 0)}</span>
             <button class="btn btn-sm" onclick="addWater(1)">+</button>
             <span class="log-sheet-unit">of</span>
-            <input type="number" class="log-water-target" min="1" step="1" value="${waterTarget()}" onchange="setWaterTarget(this.value)">
+            <input type="number" class="log-water-target" min="1" step="${waterUnit() === 'cup' ? '0.5' : '50'}" value="${fmtWater(waterTargetMl())}" onchange="setWaterTarget(this.value)">
+            <span class="log-sheet-unit">${waterUnitLabel()}</span>
           </div>
-        </div>`;
+        </div>
+        <div class="log-sheet-row">
+          <span class="log-sheet-label">Units</span>
+          <div class="unit-toggle">
+            <button class="${waterUnit() === 'ml' ? 'active' : ''}" onclick="setWaterUnit('ml')">ML</button>
+            <button class="${waterUnit() === 'cup' ? 'active' : ''}" onclick="setWaterUnit('cup')">CUPS</button>
+          </div>
+          <span class="log-sheet-unit">+ adds</span>
+          <input type="number" class="log-water-target" min="1" step="${waterUnit() === 'cup' ? '0.25' : '10'}" value="${fmtWater(waterServingMl())}" onchange="setWaterServing(this.value)">
+        </div>
+        <div class="log-sheet-row log-color-row">
+          <span class="log-sheet-label">Color</span>
+          <div class="log-color-scale">
+            ${WATER_COLORS.map((hex, i) => `<button class="log-color-sw ${cur === i + 1 ? 'log-color-sw-on' : ''}" style="background:${hex};" onclick="setWaterColor(${i + 1})" title="${i + 1}" aria-label="Color ${i + 1}"></button>`).join('')}
+          </div>
+        </div>
+        <div class="log-color-note">${cur
+          ? `Showing <b>${cur}</b> of 8 &middot; set ${waterColorAge()}. Stays until you change it.`
+          : 'Lighter is more hydrated. Tap a shade to set your marker &mdash; it stays until you change it.'}</div>`;
     }
     if (f === 'sleepQual') {
       const opts = [1, 2, 3, 4, 5].map(n => {
@@ -11579,7 +11691,7 @@ function toggleDayBand(which) {
 function renderDayBand(which, blocks, hint, ctx) {
   if (!blocks.length) return '';
   const open = !!VIEW.dayBandsOpen[which];
-  const label = which === 'passed' ? 'passed' : 'coming';
+  const label = which === 'passed' ? 'passed' : 'upcoming';
   return `
     <button class="day-band ${open ? 'day-band-open' : ''}" onclick="toggleDayBand('${which}')" aria-expanded="${open}">
       <span class="day-band-caret">${icon('chevronRight')}</span>
