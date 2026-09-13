@@ -1,7 +1,7 @@
 // test_calendar_anchors.js — merging the old dedicated TODAY subtab into Calendar's Day zoom:
 // renderDailySchedule() shows the day's anchors/schedule same as the old renderLifeDaily() did
 // but for an arbitrary date, toggleDailyAnchor() writes into that specific date's own dailyLog
-// entry, the bottom bar has one less button, and the per-schedule color-coded anchor icon shows
+// entry, no TODAY button remains in the bottom bar, and the per-schedule color-coded anchor icon shows
 // up on Month/Week/Year calendar cells for days a schedule actually covers.
 const { chromium } = require('playwright');
 const path = require('path');
@@ -28,7 +28,14 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   const bottomBarLabels = await page.evaluate(() => [...document.querySelectorAll('.tabbar button')].map(b => b.textContent.trim()));
   console.log('bottom bar while inside Schedule:', bottomBarLabels);
   if (bottomBarLabels.some(l => l.includes('TODAY'))) throw new Error(`Expected no TODAY button in the bottom bar, got ${JSON.stringify(bottomBarLabels)}`);
-  if (bottomBarLabels.length !== 3) throw new Error(`Expected exactly 3 bottom-bar buttons (HOME/CALENDAR/SETUP), got ${JSON.stringify(bottomBarLabels)}`);
+  // The exact set, not a bare count: a count was really just shorthand for "TODAY is gone" (the
+  // assertion above says that properly) and blocked any later addition to this bar -- which is
+  // what happened when AGENDA was added. Listing them makes a nav change a deliberate edit here
+  // and still catches an accidental removal.
+  const expectedBar = ['HOME', 'CALENDAR', 'AGENDA', 'SETUP'];
+  if (JSON.stringify(bottomBarLabels) !== JSON.stringify(expectedBar)) {
+    throw new Error(`Expected the Schedule bottom bar to be ${JSON.stringify(expectedBar)}, got ${JSON.stringify(bottomBarLabels)}`);
+  }
 
   // 2. The merged Day view actually shows anchors — same content the old TODAY subtab had.
   const dayHasAnchors = await page.evaluate(() => {
