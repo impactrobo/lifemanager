@@ -84,12 +84,7 @@ before starting any of these.
      - ~~Overlap detection between the things in a day~~ — **shipped 2026-09-13**, see Recently
        Shipped.
      - ~~Forward-looking agenda~~ — **shipped 2026-09-13**, see Recently Shipped.
-     - **Time-budget rollup — still open, and it needs a data-model change first.** "Hobbies got 4h
-       this week" can't be grouped that way today: schedule activities are
-       `{id, start, end, title, description}` with no category, and anchors likewise. Agreed
-       approach when it's built: **add a category field to activities** (and probably anchors),
-       plus UI to set it — chosen over the no-new-data alternatives (grouping by activity name, or
-       by block kind). Same shape of prerequisite as the budget `dueDay` gap.
+     - ~~Time-budget rollup~~ — **shipped 2026-09-13**, see Recently Shipped.
   Explicitly ruled out as groupware that doesn't apply to a single-user local-first app: invites,
   attendees, free/busy sharing, calendar subscriptions.
 - **Cross-feature linking, other candidates surfaced 2026-09-12** (four of the batch already
@@ -311,6 +306,38 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Time rollup: "where the week went" (2026-09-13).** The last item of the scheduling build-out.
+  Needed a data-model change first — activities and anchors had no category, so "hobbies got 4h
+  this week" couldn't be grouped that way at all.
+  - **Categories are the five non-Schedule Home sections**, the person's own idea and a better one
+    than a free-text field: `timeCategories()` reads ids, labels and colours straight out of
+    `HOME_SECTION_META`, so the rollup matches the Home tiles automatically and invents no new
+    vocabulary for the areas the app already tracks. Schedule itself is excluded — it's the
+    container everything sits in, not an area you spend time *on*.
+  - **Plus four extras** (`EXTRA_TIME_CATEGORIES`: work, sleep, social, chores), added after
+    flagging that the five sections alone leave the biggest blocks of a real day homeless — Work is
+    typically 8h and fits none of them, and sleep would have to masquerade as Health and drown it.
+  - **Only categorised time counts.** Untagged blocks are left out entirely rather than lumped into
+    an "other" pile that Work and sleep would dominate. This reframes the feature as "did my life
+    areas actually get time this week" rather than "where did all 168 hours go" — which is the
+    question actually worth asking, and it's why nothing is auto-tagged. Also flagged at scoping
+    time: tagging the default anchors thoroughly would make HEALTH ~90% of the chart (sleep, meals,
+    skincare, wind-down all land there), so leaving most of them untagged is the intended default.
+  - **Lives in the Calendar's WEEK zoom**, which needed no new nav and gave that zoom a purpose it
+    was missing — it had been a 7-cell copy of Month with nothing to distinguish it, noted as a
+    weakness in the original review that kicked off this whole build-out.
+  - Overlapping blocks each count their own duration (a 30-minute Lunch inside an 8-hour Work block
+    contributes to both), so the totals deliberately don't sum to elapsed time. Each category's own
+    figure is what's being asked about, and nothing claims they tile a day.
+  - **Wake-Up and Bed Time carry their own categories** (`wakeCategory`/`bedCategory` on the
+    schedule). Found while testing: Bed Time is a schedule-level field rather than an activity, so
+    without this the SLEEP category would have sat in the picker permanently unreachable.
+  - `tests/test_time_rollup.js` covers the category set (sections reusing their own colours,
+    Schedule excluded, the extras present), hand-computed weekly totals across a Mon–Fri schedule
+    plus every-day anchors, untagged time contributing nothing anywhere, SLEEP being reachable, a
+    day-off exception subtracting exactly that day's schedule blocks while its anchors survive,
+    overlapping blocks counting independently, longest-first ordering, the empty state, and all
+    three editors persisting and clearing a category.
 - **Agenda: the next 7 days, forward-looking (2026-09-13).** From step 4 of the scheduling
   build-out. Every other calendar view answers "what does this one day look like" — you had to walk
   forward a day at a time to find out what was coming. A third Schedule subtab
