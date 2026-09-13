@@ -657,6 +657,18 @@ select { -webkit-appearance: none; appearance: none; background-image: linear-gr
 .day-gap-line { flex: 1; border-top: 1px dashed var(--border-soft); }
 .day-chip { display: inline-block; font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 3px; margin-left: 5px; vertical-align: middle; letter-spacing: 0.04em; }
 .day-chip-now { background: var(--bad); color: #fff; }
+/* ---------- Agenda: the next 7 days (renderAgenda()) ---------- */
+.agenda-day { cursor: pointer; }
+.agenda-today { border-color: var(--accent); }
+.agenda-daylabel { font-size: 13px; font-weight: 800; letter-spacing: 0.04em; }
+.agenda-date { font-size: 11px; color: var(--text-faint); }
+.agenda-items { margin-top: 8px; border-top: 1px solid var(--border-soft); }
+.agenda-item { display: flex; gap: 10px; align-items: baseline; padding: 6px 0; }
+.agenda-item + .agenda-item { border-top: 1px solid var(--border-soft); }
+.agenda-time { font-size: 10px; color: var(--text-faint); flex: 0 0 58px; }
+.agenda-label { font-size: 13px; font-weight: 600; flex: 1; min-width: 0; }
+.agenda-repeat { margin-left: 5px; color: var(--text-faint); font-size: 11px; vertical-align: middle; }
+
 /* A genuine collision between two blocks neither of which is marked "open" (see
    dayOverlapWarnings()). --warn, matching the app's other "pay attention" signals. */
 .day-chip-clash { background: color-mix(in srgb, var(--warn) 20%, transparent); color: var(--warn); }

@@ -2814,6 +2814,7 @@ function renderTabbar() {
     // on every fresh visit, see switchTab()) so the bottom bar has one less button.
     sectionBtns = `
       <button class="${SCHEDULE_SUBTAB==='calendar'?'active':''}" onclick="setScheduleSubtab('calendar')"><span class="ic">${icon('schedule')}</span>CALENDAR</button>
+      <button class="${SCHEDULE_SUBTAB==='agenda'?'active':''}" onclick="setScheduleSubtab('agenda')"><span class="ic">${icon('flag')}</span>AGENDA</button>
       <button class="${SCHEDULE_SUBTAB==='setup'?'active':''}" onclick="setScheduleSubtab('setup')"><span class="ic">${icon('setup')}</span>SETUP</button>`;
   } else if (CURRENT_TAB === 'budget') {
     sectionBtns = `
@@ -9273,12 +9274,87 @@ function renderHome() {
 }
 function renderSchedule() {
   if (SCHEDULE_SUBTAB === 'setup') return renderScheduleSetup(); // already a full .screen with its own header — don't double-wrap
-  // Calendar is the only other subtab now — the old dedicated "Today" subtab was folded into
-  // Calendar's Day zoom (see renderCalDay() / renderDailySchedule()), one less bottom-bar button.
+  if (SCHEDULE_SUBTAB === 'agenda') {
+    return `<div class="screen">
+      <div class="section-title">Agenda</div>
+      ${renderAgenda()}
+    </div>`;
+  }
+  // Calendar's Day zoom absorbed the old dedicated "Today" subtab (see renderCalDay() /
+  // renderDailySchedule()), which is why the bottom bar has Calendar rather than Today.
   return `<div class="screen">
     <div class="section-title">Schedule</div>
     ${renderScheduleCalendar()}
   </div>`;
+}
+
+// ---- Agenda: the next 7 days, forward-looking ----
+// Every other calendar view answers "what does this one day look like" — you had to walk forward a
+// day at a time to find out what's coming. This answers "what's coming up".
+//
+// Deliberately shows only what's *distinctive* about each day. Listing every anchor for all seven
+// days would repeat your morning routine seven times and bury the one dentist appointment that's
+// actually news; the recurring baseline is summarised as a single schedule-name + booked-hours
+// line instead, and the Day view remains the place to see a day in full.
+const AGENDA_DAYS = 7;
+function renderAgenda() {
+  const today = todayStr();
+  const start = new Date(today + 'T00:00:00');
+  let cards = '';
+  for (let i = 0; i < AGENDA_DAYS; i++) {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    const dateStr = dateKey(d.getFullYear(), d.getMonth(), d.getDate());
+    const ex = scheduleExceptionForDate(dateStr);
+    const sched = scheduleForDate(d);
+    const isDayOff = !!(ex && !ex.scheduleId);
+    const { blocks } = scheduleBlocksForDate(d);
+    const booked = dayBookedMinutes(blocks);
+
+    const reminders = remindersOn(dateStr);
+    // Planned workouts come from the weekday template, so a day off pauses them — same rule the
+    // Day view's untimed band already applies.
+    const planned = isDayOff ? [] : (STATE.exercisePlan[d.getDay()] || [])
+      .filter(e => e.workoutId).map(e => getWorkout(e.workoutId)).filter(Boolean);
+
+    const items = [
+      ...reminders.map(r => ({
+        sort: r.time || '99:99',
+        html: `<div class="agenda-item">
+          <span class="agenda-time mono">${r.time ? fmtReminderTime(r.time) : 'all day'}</span>
+          <span class="agenda-label">${escapeHtml(r.title)}${r.endTime ? `<span class="day-chip" style="background:${BLOCK_KIND_META.event.color}22; color:${BLOCK_KIND_META.event.color};">EVENT</span>` : ''}${r.recurrence ? `<span class="agenda-repeat">${icon('repeat')}</span>` : ''}</span>
+        </div>`,
+      })),
+      ...planned.map(w => ({
+        sort: '~', // after timed items — a planned workout has no time of its own
+        html: `<div class="agenda-item">
+          <span class="agenda-time mono" style="color:${BLOCK_KIND_META.anchor.color};">workout</span>
+          <span class="agenda-label">${escapeHtml(w.name)}</span>
+        </div>`,
+      })),
+    ].sort((a, b) => a.sort.localeCompare(b.sort));
+
+    const label = i === 0 ? 'TODAY' : (i === 1 ? 'TOMORROW' : d.toLocaleDateString(undefined, { weekday: 'long' }).toUpperCase());
+    const dateLabel = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    // An excepted day still shows its booked time — a day off with anchors left running isn't
+    // empty, and dropping the figure would hide that.
+    const bookedNote = booked ? ` &middot; ${fmtDuration(booked)} booked` : '';
+    const context = ex
+      ? `<span style="color:var(--warn);">${escapeHtml(ex.label || 'Marked different')}</span>${bookedNote}`
+      : `${sched ? escapeHtml(sched.name || 'Untitled schedule') : 'No schedule'}${bookedNote}`;
+
+    cards += `
+      <div class="panel agenda-day ${i === 0 ? 'agenda-today' : ''}" onclick="calSelectDayAndZoom('${dateStr}','day')" style="cursor:pointer;">
+        <div class="row" style="align-items:baseline;">
+          <div><span class="agenda-daylabel">${label}</span> <span class="agenda-date">${dateLabel}</span></div>
+          <div style="font-size:11px; color:var(--text-dim); text-align:right; min-width:0;">${context}</div>
+        </div>
+        ${items.length ? `<div class="agenda-items">${items.map(x => x.html).join('')}</div>` : ''}
+      </div>`;
+  }
+  return `
+    <div style="font-size:11px; color:var(--text-faint); margin:0 0 12px;">The next ${AGENDA_DAYS} days — what's actually coming up, not your day-to-day routine. Tap any day to open it in full.</div>
+    <div class="stack">${cards}</div>`;
 }
 function setScheduleSubtab(t) { SCHEDULE_SUBTAB = t; render(); }
 
@@ -9339,6 +9415,11 @@ function calSelectDayAndZoom(dateStr, zoom) {
   CAL_MONTH = { year: d.getFullYear(), month: d.getMonth() };
   CAL_ZOOM = zoom;
   REMINDER_FORM_OPEN = false;
+  EXCEPTION_FORM_OPEN = false;
+  // The Agenda calls this too, from its own subtab — without this it would set the zoom and then
+  // render the Agenda again, looking like the tap did nothing. Harmless from the Year grid, which
+  // is already on the Calendar subtab.
+  SCHEDULE_SUBTAB = 'calendar';
   render();
 }
 function calZoomToMonth(year, month) {
