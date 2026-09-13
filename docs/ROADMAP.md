@@ -1108,7 +1108,8 @@ on an architecture split + a large wave of Maximalist aesthetics.
   toggle an anchor done, fire a LOG button) — easy to trigger by accident while trying to
   drag-reorder. One delegated, capturing click listener on `#app` (added once — the element
   itself survives every render, only its contents get replaced) now kills any click landing
-  inside `.home-edit-box` while `HOME_EDIT_MODE` is true, excluding the hide (X) button so that
+  inside `.home-edit-box` while home edit mode is on (`UI.homeEditMode`, formerly `HOME_EDIT_MODE`),
+  excluding the hide (X) button so that
   keeps working. Also confirmed (already implemented, just verified): the edit button itself
   gets `.home-edit-toggle-active` (accent border/background/text) while active — no styling pass
   requested beyond that yet. `test_home.js` extended to cover both with real `.click()`s.

@@ -2495,6 +2495,42 @@ function renderPhotoThumbs(photos, extraStyle) {
 }
 
 // ================= TAB SWITCHING =================
+// ---- Transient UI state ----
+// Everything that means "a panel/form/picker is open" or "a mode is engaged" right now. These were
+// 19 separate module-level `let`s, and resetTransientUi() had to name each one -- two lists that
+// could silently drift, which is exactly how all 19 came to leak across navigation in the first
+// place. Here the defaults literal below IS the reset, so adding a field to one adds it to both.
+//
+// Only transient state belongs here. Navigation position (which tab/subtab/date you're on) has to
+// survive a nav by definition, and content drafts with their own lifecycle (MEAL_BUILDER_DRAFT,
+// MEASURE_DRAFT_PHOTOS) should resume rather than discard -- both stay outside.
+function defaultTransientUi() {
+  return {
+    reminderFormOpen: false,
+    reminderFormType: 'reminder',      // 'reminder' | 'todo' -- which shape the open form saves as
+    reminderFormRecurrence: 'none',    // 'none' | 'annual' | 'monthly'
+    // What's currently typed into the open reminder form, captured before a toggle (REPEATS or
+    // REMINDER/TO-DO) makes renderReminderForm() regenerate fresh, empty inputs. Without it,
+    // choosing ANNUALLY after typing a title silently wiped the title.
+    reminderFormDraft: {},
+    exceptionFormOpen: false,
+    homeEditMode: false,
+    homeAddPopup: null,                // 'sections' | 'boxes' | null
+    customFoodFormOpen: false,
+    customFoodEditId: null,
+    shoppingListFormOpen: false,
+    tdeeCalcOpen: false,
+    macroCalcOpen: false,
+    measureFormOpen: false,
+    weightLogFormOpen: false,
+    guitarLogFormOpen: false,
+    builderStylePickerOpen: false,
+    autofillPickerOpen: false,
+    noteTagPaletteOpen: null,
+    cloudSyncModalOpen: false,
+  };
+}
+let UI = defaultTransientUi();
 let CURRENT_TAB = (STATE.settings && STATE.settings.defaultPage) || 'home'; // opens to Settings -> Default Page instead of always Home
 /** @type {{ mode: string, workoutId?: any, cardioId?: any }} */
 let TRAIN_VIEW = { mode: 'grid', workoutId: null }; // {mode:'grid'} | {mode:'log', workoutId} | {mode:'cardioLog', cardioId}
@@ -2566,28 +2602,11 @@ function pushNavHistory() {
   if (NAV_HISTORY.length > 50) NAV_HISTORY.shift();
   NAV_FORWARD = []; // any new navigation branches away from whatever redo path existed
 }
-// ---- Transient UI state: everything that's "open" or "mid-mode" right now ----
-// Each of these is a module-level flag meaning a panel/form/picker is open or a mode is engaged on
-// some screen. None was reset when you left that screen, so a half-open reminder form abandoned on
-// the Calendar was still open when you came back a day later — verified true for all 15 before
-// this existed. This is the one place they close. It runs at *navigation time* (switchTab(),
-// applyNavSnapshot() for Back/Forward, and the direct CURRENT_TAB assignment in
-// openTodayWorkout()), NOT inside _doRender(): render() is rAF-deferred, so a render-time reset
-// would close a form that `switchTab(); toggleReminderForm()` had just opened in the same tick.
-//
-// Deliberately NOT reset: content-bearing drafts with their own lifecycle (MEAL_BUILDER_DRAFT,
-// MEASURE_DRAFT_PHOTOS) — leaving mid-build and returning should resume, not discard. Notes' edit
-// state keeps its own existing guard in switchTab().
-function resetTransientUi() {
-  REMINDER_FORM_OPEN = false; REMINDER_FORM_TYPE = 'reminder'; REMINDER_FORM_RECURRENCE = 'none'; REMINDER_FORM_DRAFT = {};
-  EXCEPTION_FORM_OPEN = false;
-  HOME_EDIT_MODE = false; HOME_ADD_POPUP = null;
-  CUSTOM_FOOD_FORM_OPEN = false; CUSTOM_FOOD_EDIT_ID = null;
-  SHOPPING_LIST_FORM_OPEN = false; TDEE_CALC_OPEN = false; MACRO_CALC_OPEN = false;
-  MEASURE_FORM_OPEN = false; WEIGHTLOG_FORM_OPEN = false; GUITAR_LOG_FORM_OPEN = false;
-  BUILDER_STYLE_PICKER_OPEN = false; AUTOFILL_PICKER_OPEN = false;
-  NOTE_TAG_PALETTE_OPEN = null; CLOUD_SYNC_MODAL_OPEN = false;
-}
+// Closes every transient panel/mode. Called at NAVIGATION time (switchTab(), applyNavSnapshot()
+// for Back/Forward, and the direct CURRENT_TAB assignments in openSetup()/openTodayWorkout()) --
+// not inside _doRender(), because render() is rAF-deferred and would close a form that
+// `switchTab(); toggleReminderForm()` had just opened in the same tick.
+function resetTransientUi() { Object.assign(UI, defaultTransientUi()); }
 function switchTab(tab) {
   pushNavHistory();
   resetTransientUi();
@@ -2903,7 +2922,7 @@ function _doRender() {
     app.innerHTML = renderHobbies();
   } else if (CURRENT_TAB === 'health') {
     app.innerHTML = renderHealth();
-    if (HEALTH_SUBTAB === 'specs' && MEASURE_FORM_OPEN) renderMeasurePhotoRow();
+    if (HEALTH_SUBTAB === 'specs' && UI.measureFormOpen) renderMeasurePhotoRow();
   } else if (CURRENT_TAB === 'setup') {
     app.innerHTML = renderSetup();
     attachSetupHandlers();
@@ -2932,7 +2951,7 @@ function _doRender() {
   document.getElementById('settingsBtn').classList.toggle('hidden', CURRENT_TAB === 'setup');
   // Edit layout only makes sense on Home — hidden everywhere else, highlighted while active.
   document.getElementById('homeEditBtn').classList.toggle('hidden', CURRENT_TAB !== 'home');
-  document.getElementById('homeEditBtn').classList.toggle('home-edit-toggle-active', HOME_EDIT_MODE);
+  document.getElementById('homeEditBtn').classList.toggle('home-edit-toggle-active', UI.homeEditMode);
   renderRestTimerWidget(); // re-checks isInWorkoutLogScreen() so the FAB/widget show only there
   attachScrollIndicators();
   updatePageScrollIndicator(false);
@@ -4220,7 +4239,7 @@ function renderNotesSetup() {
 }
 function renderNoteTagSetupRow(key, def) {
   const isGeneral = key === 'general';
-  const paletteOpen = !isGeneral && NOTE_TAG_PALETTE_OPEN === key;
+  const paletteOpen = !isGeneral && UI.noteTagPaletteOpen === key;
   return `<div class="panel">
     <div class="field-row">
       <label class="field" style="flex:2;">
@@ -4794,7 +4813,7 @@ function renderScheduleActivityRow(schedId, act) {
 // ---------------- HEALTH SETUP: Meal Builder / All Meals ----------------
 function setHealthSetupSubtab(t) {
   HEALTH_SETUP_SUBTAB = t;
-  CUSTOM_FOOD_FORM_OPEN = false; CUSTOM_FOOD_EDIT_ID = null; // don't resume a stale add/edit form across subtab switches
+  UI.customFoodFormOpen = false; UI.customFoodEditId = null; // don't resume a stale add/edit form across subtab switches
   render();
 }
 // Health's own Setup: MEAL BUILDER (build/edit one meal from the FOOD_DB categories, with a
@@ -4957,8 +4976,8 @@ function renderMealBuilderForm() {
 
     <div class="subtle-label" style="margin-bottom:8px;">ADD A FOOD</div>
     <input type="text" placeholder="Search foods…" value="${escapeHtml(draft.searchQuery || '')}" style="margin-bottom:12px;" oninput="onMealSearchInput(this.value)">
-    <button type="button" class="btn btn-ghost btn-sm" style="margin-bottom:12px;" onclick="toggleCustomFoodForm()">${CUSTOM_FOOD_FORM_OPEN ? 'CANCEL' : '+ ADD CUSTOM FOOD'}</button>
-    ${CUSTOM_FOOD_FORM_OPEN ? renderCustomFoodForm() : ''}
+    <button type="button" class="btn btn-ghost btn-sm" style="margin-bottom:12px;" onclick="toggleCustomFoodForm()">${UI.customFoodFormOpen ? 'CANCEL' : '+ ADD CUSTOM FOOD'}</button>
+    ${UI.customFoodFormOpen ? renderCustomFoodForm() : ''}
     <div id="mealFoodPicker">
       ${draft.searchQuery && draft.searchQuery.trim() ? renderFoodSearchResults(draft.searchQuery) : renderMealCategoryPicker(draft)}
     </div>
@@ -5057,22 +5076,20 @@ function renderMealItemRow(item) {
 // nobody has to do the math by hand. For a "count" food (e.g. "1 slice"), itemAmount is fixed at
 // 100 and the entered per-serving values ARE per100 directly (baseAmount = qty*100, factor =
 // baseAmount/100 = qty) — the simplest way to make "per item" and "per100" the same number.
-let CUSTOM_FOOD_FORM_OPEN = false;
-let CUSTOM_FOOD_EDIT_ID = null; // id being edited, or null when the form is composing a new food
 function nutrientInputId(key) { return 'cf' + key.charAt(0).toUpperCase() + key.slice(1); }
 function toggleCustomFoodForm() {
-  CUSTOM_FOOD_FORM_OPEN = !CUSTOM_FOOD_FORM_OPEN;
-  CUSTOM_FOOD_EDIT_ID = null; // always resets to "new food" mode — editCustomFood() sets it explicitly afterward
+  UI.customFoodFormOpen = !UI.customFoodFormOpen;
+  UI.customFoodEditId = null; // always resets to "new food" mode — editCustomFood() sets it explicitly afterward
   render();
 }
 function editCustomFood(id) {
-  CUSTOM_FOOD_EDIT_ID = id;
-  CUSTOM_FOOD_FORM_OPEN = true;
+  UI.customFoodEditId = id;
+  UI.customFoodFormOpen = true;
   render();
 }
 function cancelCustomFoodForm() {
-  CUSTOM_FOOD_FORM_OPEN = false;
-  CUSTOM_FOOD_EDIT_ID = null;
+  UI.customFoodFormOpen = false;
+  UI.customFoodEditId = null;
   render();
 }
 // Pure DOM show/hide, no render() — toggling this must NOT wipe whatever's already been typed
@@ -5087,7 +5104,7 @@ function toggleCustomFoodMicroVisibility() {
   btn.textContent = wrap.hidden ? '+ ADD MICRONUTRIENTS (OPTIONAL)' : 'HIDE MICRONUTRIENTS';
 }
 function renderCustomFoodForm() {
-  const editing = CUSTOM_FOOD_EDIT_ID ? STATE.diet.customFoods.find(f => f.id === CUSTOM_FOOD_EDIT_ID) : null;
+  const editing = UI.customFoodEditId ? STATE.diet.customFoods.find(f => f.id === UI.customFoodEditId) : null;
   const servingType = editing ? editing.unit : 'weight';
   const servingAmount = editing && editing.servingAmount ? editing.servingAmount : 100;
   const multiplier = editing ? (servingType === 'count' ? 1 : servingAmount / 100) : 0;
@@ -5146,9 +5163,9 @@ function saveCustomFood() {
   const per100 = {};
   NUTRIENT_KEYS.forEach(k => { per100[k] = (Number(document.getElementById(nutrientInputId(k)).value) || 0) / divisor; });
 
-  const wasEditing = !!CUSTOM_FOOD_EDIT_ID;
+  const wasEditing = !!UI.customFoodEditId;
   const food = {
-    id: CUSTOM_FOOD_EDIT_ID || uid(), name, category,
+    id: UI.customFoodEditId || uid(), name, category,
     unit: servingType, base: servingType === 'weight' ? 'g' : servingType === 'volume' ? 'mL' : 'g',
     per100, custom: true,
   };
@@ -5156,21 +5173,21 @@ function saveCustomFood() {
   else { food.servingAmount = servingAmount; } // metadata only, for re-showing "per serving" when editing — never read by the macro math
 
   if (wasEditing) {
-    const idx = STATE.diet.customFoods.findIndex(f => f.id === CUSTOM_FOOD_EDIT_ID);
+    const idx = STATE.diet.customFoods.findIndex(f => f.id === UI.customFoodEditId);
     if (idx >= 0) STATE.diet.customFoods[idx] = food;
   } else {
     STATE.diet.customFoods.push(food);
   }
   saveState();
-  CUSTOM_FOOD_FORM_OPEN = false;
-  CUSTOM_FOOD_EDIT_ID = null;
+  UI.customFoodFormOpen = false;
+  UI.customFoodEditId = null;
   showToast(wasEditing ? 'Custom food updated' : 'Custom food saved');
   render();
 }
 function deleteCustomFood(id) {
   showConfirm('Delete this custom food? Any saved meals using it will show 0 for its macros afterward, instead of erroring.', () => {
     STATE.diet.customFoods = STATE.diet.customFoods.filter(f => f.id !== id);
-    if (CUSTOM_FOOD_EDIT_ID === id) { CUSTOM_FOOD_EDIT_ID = null; CUSTOM_FOOD_FORM_OPEN = false; }
+    if (UI.customFoodEditId === id) { UI.customFoodEditId = null; UI.customFoodFormOpen = false; }
     saveState();
     render();
   });
@@ -5182,9 +5199,9 @@ function renderMyFoodsTab() {
   return `
     <div class="row" style="margin:18px 0 8px;">
       <div class="subtle-label" style="margin-bottom:0;">MY FOODS</div>
-      <button class="btn btn-sm btn-primary" onclick="toggleCustomFoodForm()">${CUSTOM_FOOD_FORM_OPEN ? 'CANCEL' : '+ ADD CUSTOM FOOD'}</button>
+      <button class="btn btn-sm btn-primary" onclick="toggleCustomFoodForm()">${UI.customFoodFormOpen ? 'CANCEL' : '+ ADD CUSTOM FOOD'}</button>
     </div>
-    ${CUSTOM_FOOD_FORM_OPEN ? renderCustomFoodForm() : ''}
+    ${UI.customFoodFormOpen ? renderCustomFoodForm() : ''}
     <div class="stack">
       ${foods.length ? foods.map(renderCustomFoodCard).join('') : emptyState('No custom foods yet — add one above, or from Meal Builder while building a meal.')}
     </div>
@@ -5445,8 +5462,7 @@ function renderMealPlanTab() {
 // into one "what to buy" list, then saves it as a to-do-type Reminder (checklist items, one per
 // ingredient) on whichever date the person picks — from there it's just a normal to-do reminder,
 // editable/checkable on the Calendar like any other. ----
-let SHOPPING_LIST_FORM_OPEN = false;
-function toggleShoppingListForm() { SHOPPING_LIST_FORM_OPEN = !SHOPPING_LIST_FORM_OPEN; render(); }
+function toggleShoppingListForm() { UI.shoppingListFormOpen = !UI.shoppingListFormOpen; render(); }
 // Grouped by (foodId, unit) rather than foodId alone — two meals measuring the same food in
 // different units (e.g. one in g, another in oz) stay as separate lines rather than risking a
 // wrong unit conversion just to merge them into one.
@@ -5478,14 +5494,14 @@ function renderShoppingListGenerator() {
   const items = generateShoppingListItems();
   return `
     <div class="panel" style="margin-bottom:14px;">
-      <div class="row" style="margin-bottom:${SHOPPING_LIST_FORM_OPEN ? '10px' : '0'};">
+      <div class="row" style="margin-bottom:${UI.shoppingListFormOpen ? '10px' : '0'};">
         <div>
           <div class="subtle-label" style="margin-bottom:2px;">SHOPPING LIST</div>
           <div style="font-size:11px; color:var(--text-dim);">${items.length ? `${items.length} ingredient${items.length===1?'':'s'} across this week's Meal Plan` : 'Assign some meals below to generate one'}</div>
         </div>
-        <button class="btn btn-sm btn-primary" ${items.length ? '' : 'disabled'} onclick="toggleShoppingListForm()">${SHOPPING_LIST_FORM_OPEN ? 'CANCEL' : 'GENERATE'}</button>
+        <button class="btn btn-sm btn-primary" ${items.length ? '' : 'disabled'} onclick="toggleShoppingListForm()">${UI.shoppingListFormOpen ? 'CANCEL' : 'GENERATE'}</button>
       </div>
-      ${SHOPPING_LIST_FORM_OPEN ? `
+      ${UI.shoppingListFormOpen ? `
         <label class="field"><span class="lbl">Save as a to-do list on this date</span><input type="date" id="shoppingListDate" value="${todayStr()}"></label>
         <button class="btn btn-primary btn-block" onclick="generateShoppingListReminder()">+ CREATE TO-DO LIST</button>
       ` : ''}
@@ -5502,7 +5518,7 @@ function generateShoppingListReminder() {
   });
   saveState();
   queueReminderPushSync(); // no-op unless reminder notifications are enabled — see REMINDER PUSH section
-  SHOPPING_LIST_FORM_OPEN = false;
+  UI.shoppingListFormOpen = false;
   showToast('Shopping list saved — opening it now');
   jumpToReminderDay(date); // same "land on Calendar's Day view for it" convenience as tapping a Home reminder
 }
@@ -5570,8 +5586,7 @@ function renderPlanMealEntry(day, entry) {
   </div>`;
 }
 // ---------------- GENERAL ----------------
-let TDEE_CALC_OPEN = false;
-function toggleTDEECalc() { TDEE_CALC_OPEN = !TDEE_CALC_OPEN; render(); }
+function toggleTDEECalc() { UI.tdeeCalcOpen = !UI.tdeeCalcOpen; render(); }
 // Exact replica of the "TDEE Tracker" calculator (BV4:CE6) from the source workbook:
 // averages the Revised Harris-Benedict and Mifflin-St Jeor BMR estimates, then applies
 // an activity multiplier. Weight in lb converts to kg via /2.2 (matches the sheet's own
@@ -5700,7 +5715,7 @@ function renderDietSetup() {
   const hasAllInputs = calc.weight && calc.height && calc.age && calc.sex && calc.heightUnit && calc.weightUnit && calc.activity;
   const result = hasAllInputs ? computeTDEE(calc) : null;
 
-  const calcPanel = TDEE_CALC_OPEN ? `
+  const calcPanel = UI.tdeeCalcOpen ? `
     <div class="panel">
       <div class="subtle-label" style="margin-bottom:8px;">TDEE CALCULATOR</div>
       <div class="field-row">
@@ -5758,7 +5773,7 @@ function renderDietSetup() {
         <input type="number" value="${STATE.diet.tdee ?? ''}" onchange="updateTDEE(this.value)">
       </label>
       <div style="font-size:11px; color:var(--text-faint); margin-top:4px;">Your estimated Total Daily Energy Expenditure — used as a reference point for diet planning.</div>
-      <button class="btn btn-ghost btn-sm" style="margin-top:10px;" onclick="toggleTDEECalc()">${TDEE_CALC_OPEN ? 'HIDE' : 'OPEN'} CALCULATOR</button>
+      <button class="btn btn-ghost btn-sm" style="margin-top:10px;" onclick="toggleTDEECalc()">${UI.tdeeCalcOpen ? 'HIDE' : 'OPEN'} CALCULATOR</button>
     </div>
     ${calcPanel}
     ${renderRollingTdeePanel()}
@@ -5846,15 +5861,14 @@ function computeMacros(macro) {
   }
   return { proteinG, fatG, carbG };
 }
-let MACRO_CALC_OPEN = false;
-function toggleMacroCalc() { MACRO_CALC_OPEN = !MACRO_CALC_OPEN; render(); }
+function toggleMacroCalc() { UI.macroCalcOpen = !UI.macroCalcOpen; render(); }
 function renderMacroCalc() {
   const m = STATE.diet.macro;
   const weightLabel = m.weightUnit === 'Kg' ? 'kg' : 'lb';
   const hasAllInputs = m.energy && m.weight && m.proteinPerUnit !== null && m.proteinPerUnit !== undefined;
   const result = hasAllInputs ? computeMacros(m) : null;
 
-  const calcPanel = MACRO_CALC_OPEN ? `
+  const calcPanel = UI.macroCalcOpen ? `
     <div class="panel">
       <div class="subtle-label" style="margin-bottom:8px;">MACRO CALCULATOR</div>
       <div class="field-row">
@@ -5910,7 +5924,7 @@ function renderMacroCalc() {
         <span class="mono" style="font-weight:700">${STATE.diet.proteinG ?? '—'} / ${STATE.diet.fatG ?? '—'} / ${STATE.diet.carbG ?? '—'}</span>
       </div>
       <div style="font-size:11px; color:var(--text-faint); margin-top:4px;">Your target daily macro split.</div>
-      <button class="btn btn-ghost btn-sm" style="margin-top:10px;" onclick="toggleMacroCalc()">${MACRO_CALC_OPEN ? 'HIDE' : 'OPEN'} CALCULATOR</button>
+      <button class="btn btn-ghost btn-sm" style="margin-top:10px;" onclick="toggleMacroCalc()">${UI.macroCalcOpen ? 'HIDE' : 'OPEN'} CALCULATOR</button>
     </div>
     ${calcPanel}`;
 }
@@ -6084,9 +6098,8 @@ function initCloudSync() {
     console.error('Cloud Sync init failed', e);
   }
 }
-function openCloudSyncModal() { CLOUD_SYNC_MODAL_OPEN = true; render(); }
-function closeCloudSyncModal() { CLOUD_SYNC_MODAL_OPEN = false; CLOUD_SYNC_EMAIL_LINK_SENT = false; render(); }
-let CLOUD_SYNC_MODAL_OPEN = false;
+function openCloudSyncModal() { UI.cloudSyncModalOpen = true; render(); }
+function closeCloudSyncModal() { UI.cloudSyncModalOpen = false; CLOUD_SYNC_EMAIL_LINK_SENT = false; render(); }
 function signInWithGoogle() {
   if (!CLOUD_SYNC_READY) { showToast('Cloud Sync isn\'t available right now'); return; }
   const provider = new firebase.auth.GoogleAuthProvider();
@@ -6214,7 +6227,7 @@ function renderCloudSyncPanel() {
   `;
 }
 function renderCloudSyncModal() {
-  if (!CLOUD_SYNC_MODAL_OPEN) return '';
+  if (!UI.cloudSyncModalOpen) return '';
   const body = CLOUD_SYNC_EMAIL_LINK_SENT ? `
         <div style="font-size:12px; color:var(--text-dim); margin-bottom:12px;">Check your email for the sign-in link. Tapping it works, but opens in Safari instead of this app — for the smoothest experience, long-press the link in Mail, tap <b>Copy Link</b>, then paste it below.</div>
         <label class="field" style="margin-bottom:8px;"><span class="lbl">Paste the link here</span><textarea id="cloudSyncPastedLink" rows="3" placeholder="https://..."></textarea></label>
@@ -6386,14 +6399,14 @@ function resetUI() {
     STATE.settings.aesthetic = 'cyberpunk';
     STATE.settings.accentByAesthetic = {};
     STATE.settings.homeLayout = defaultHomeLayout();
-    HOME_EDIT_MODE = false;
-    HOME_ADD_POPUP = null;
-    MEASURE_FORM_OPEN = false;
-    WEIGHTLOG_FORM_OPEN = false;
-    TDEE_CALC_OPEN = false;
-    BUILDER_STYLE_PICKER_OPEN = false;
-    AUTOFILL_PICKER_OPEN = false;
-    NOTE_TAG_PALETTE_OPEN = null;
+    UI.homeEditMode = false;
+    UI.homeAddPopup = null;
+    UI.measureFormOpen = false;
+    UI.weightLogFormOpen = false;
+    UI.tdeeCalcOpen = false;
+    UI.builderStylePickerOpen = false;
+    UI.autofillPickerOpen = false;
+    UI.noteTagPaletteOpen = null;
     MEAL_PLAN_EXPANDED = {};
     EXPLAN_EXPANDED = {};
     saveState();
@@ -6582,7 +6595,6 @@ function updateTierField(catId, tierKey, field, val) {
 // ---------------- WORKOUT BUILDER ----------------
 const WEIGHTS_STYLES = ['P-Zero (GZCL)', 'Hypertrophy (RP Strength)', 'Free Entry'];
 const CARDIO_STYLES = ['Time/Dist/Cal', 'Interval'];
-let BUILDER_STYLE_PICKER_OPEN = false; // true while choosing a style for a brand-new weights/cardio workout
 
 function renderWorkoutBuilder() {
   const list = workoutsByType(BUILDER_TYPE);
@@ -6598,7 +6610,7 @@ function renderWorkoutBuilder() {
       <button style="flex:1 1 45%; ${BUILDER_TYPE==='warmup' ? 'background:var(--accent); color:#17181b;' : ''}" onclick="setBuilderType('warmup')"><span class="ic">${icon('warmup')}</span>WARMUP</button>
     </div>`;
 
-  if (BUILDER_STYLE_PICKER_OPEN) {
+  if (UI.builderStylePickerOpen) {
     const styles = BUILDER_TYPE === 'weights' ? WEIGHTS_STYLES : CARDIO_STYLES;
     return typeToggle + `
       <div class="panel">
@@ -6655,7 +6667,7 @@ function renderWorkoutBuilder() {
 }
 function setBuilderType(type) {
   BUILDER_TYPE = type;
-  BUILDER_STYLE_PICKER_OPEN = false;
+  UI.builderStylePickerOpen = false;
   render();
 }
 function setBuilderSelected(id) {
@@ -6666,7 +6678,7 @@ function setBuilderSelected(id) {
 // good, see createWorkout()); mobility/warmup have only one shape, so they're created immediately.
 function startNewWorkout() {
   if (BUILDER_TYPE === 'weights' || BUILDER_TYPE === 'cardio') {
-    BUILDER_STYLE_PICKER_OPEN = true;
+    UI.builderStylePickerOpen = true;
     render();
     return;
   }
@@ -6678,12 +6690,12 @@ function startNewWorkout() {
 function finishNewWorkout(style) {
   const w = createWorkout(BUILDER_TYPE, style);
   BUILDER_SELECTED[BUILDER_TYPE] = w.id;
-  BUILDER_STYLE_PICKER_OPEN = false;
+  UI.builderStylePickerOpen = false;
   saveState();
   render();
 }
 function cancelNewWorkout() {
-  BUILDER_STYLE_PICKER_OPEN = false;
+  UI.builderStylePickerOpen = false;
   render();
 }
 function updateCardioWorkoutName(id, val) {
@@ -6775,7 +6787,7 @@ function editWorkout(id) {
   if (!w) return;
   BUILDER_TYPE = w.type;
   BUILDER_SELECTED[w.type] = w.id;
-  BUILDER_STYLE_PICKER_OPEN = false;
+  UI.builderStylePickerOpen = false;
   setSetupSubtab('builder');
 }
 
@@ -6831,7 +6843,7 @@ function renderExercisePlanTab() {
   return `
     <div style="font-size:11px; color:var(--text-dim); margin:18px 0 14px;">Assign saved workouts to each day of the week. Copy a day's plan to reuse it elsewhere.</div>
     ${hasProgram ? `<button class="btn btn-sm btn-block" style="margin-bottom:14px;" onclick="openAutoFillPicker()">AUTO-FILL C25K / C2TRIATHLON</button>` : ''}
-    ${AUTOFILL_PICKER_OPEN ? renderAutoFillPicker() : ''}
+    ${UI.autofillPickerOpen ? renderAutoFillPicker() : ''}
     ${clipboardLabel ? `<div class="panel" style="margin-bottom:14px; font-size:11px; color:var(--text-dim);">Clipboard: ${escapeHtml(clipboardLabel)}</div>` : ''}
     <div class="stack" style="margin-bottom:20px;">
       ${MEAL_PLAN_DAY_ORDER.map(renderExercisePlanDay).join('')}
@@ -6888,17 +6900,16 @@ function renderPlanWorkoutEntry(day, entry) {
 // (matters for C2Triathlon's swim/run/bike sequence) — additive, appends rather than replacing
 // whatever's already on that day. Wraps if fewer/more days are picked than the program has
 // sessions (e.g. picking 2 days for C25K's 3 sessions just cycles back to session 1).
-let AUTOFILL_PICKER_OPEN = false;
 let AUTOFILL_PROGRAM = null;
 let AUTOFILL_DAYS = [];
 function openAutoFillPicker() {
-  AUTOFILL_PICKER_OPEN = true;
+  UI.autofillPickerOpen = true;
   AUTOFILL_PROGRAM = programWorkouts('C25K').length ? 'C25K' : 'C2Triathlon';
   AUTOFILL_DAYS = [];
   render();
 }
 function closeAutoFillPicker() {
-  AUTOFILL_PICKER_OPEN = false;
+  UI.autofillPickerOpen = false;
   render();
 }
 function setAutoFillProgram(program) {
@@ -6946,7 +6957,7 @@ function applyAutoFill() {
   });
   saveState();
   showToast(AUTOFILL_PROGRAM + ' scheduled');
-  AUTOFILL_PICKER_OPEN = false;
+  UI.autofillPickerOpen = false;
   render();
 }
 
@@ -7496,8 +7507,6 @@ const MEASURE_FIELDS = [
   { key: 'rCalf', label: 'R Calf', unit: 'length' },
   { key: 'lCalf', label: 'L Calf', unit: 'length' },
 ];
-let MEASURE_FORM_OPEN = false;
-let WEIGHTLOG_FORM_OPEN = false;
 let COMPARE_A = null, COMPARE_B = null;
 
 function renderHealth() {
@@ -7536,7 +7545,7 @@ function setProgressSubtab(t) { PROGRESS_SUBTAB = t; render(); }
 // ---------------- BODY MEASUREMENTS ----------------
 function renderMeasurements() {
   const list = [...STATE.measurements].sort((a,b) => b.date.localeCompare(a.date));
-  const addForm = MEASURE_FORM_OPEN ? renderMeasureForm() : `<button class="btn btn-primary btn-block" onclick="toggleMeasureForm()">+ ADD MEASUREMENT</button>`;
+  const addForm = UI.measureFormOpen ? renderMeasureForm() : `<button class="btn btn-primary btn-block" onclick="toggleMeasureForm()">+ ADD MEASUREMENT</button>`;
 
   let compareBlock = '';
   if (list.length >= 2) {
@@ -7563,8 +7572,8 @@ function renderMeasurements() {
     <div class="entry-list">${cards || emptyState('No measurements logged yet.')}</div>`;
 }
 function toggleMeasureForm() {
-  MEASURE_FORM_OPEN = !MEASURE_FORM_OPEN;
-  if (MEASURE_FORM_OPEN) MEASURE_DRAFT_PHOTOS = [];
+  UI.measureFormOpen = !UI.measureFormOpen;
+  if (UI.measureFormOpen) MEASURE_DRAFT_PHOTOS = [];
   render();
 }
 function renderMeasureForm() {
@@ -7625,7 +7634,7 @@ function saveMeasurement() {
     else fields[f.key] = Number(raw);
   });
   STATE.measurements.push({ id: uid(), date, fields, photos: MEASURE_DRAFT_PHOTOS.slice() });
-  MEASURE_FORM_OPEN = false;
+  UI.measureFormOpen = false;
   MEASURE_DRAFT_PHOTOS = [];
   saveState();
   showToast('Measurement saved');
@@ -7685,7 +7694,7 @@ function renderSpecs() {
 }
 function renderWeightLog() {
   const list = [...STATE.weightLog].sort((a,b) => b.date.localeCompare(a.date));
-  const addForm = WEIGHTLOG_FORM_OPEN ? renderWeightForm() : `<button class="btn btn-primary btn-block" onclick="toggleWeightForm()">+ ADD ENTRY</button>`;
+  const addForm = UI.weightLogFormOpen ? renderWeightForm() : `<button class="btn btn-primary btn-block" onclick="toggleWeightForm()">+ ADD ENTRY</button>`;
   const cards = list.map(e => `
     <div class="entry-card">
       <div class="ehead">
@@ -7705,7 +7714,7 @@ function renderWeightLog() {
     <div style="font-size:11px; color:var(--text-faint); margin-bottom:10px;">See the trend over time on <b style="color:var(--text)">Exercise &rarr; Progress &rarr; Body Weight</b>.</div>
     <div class="entry-list">${cards || emptyState('No weight entries logged yet.')}</div>`;
 }
-function toggleWeightForm() { WEIGHTLOG_FORM_OPEN = !WEIGHTLOG_FORM_OPEN; render(); }
+function toggleWeightForm() { UI.weightLogFormOpen = !UI.weightLogFormOpen; render(); }
 function renderWeightForm() {
   return `
     <div class="panel">
@@ -7741,7 +7750,7 @@ function saveWeightEntry() {
     bodyWaterPct: bodyWater ? Number(bodyWater) : null,
     calories: cal ? Number(cal) : null, cardioCalories: cardioCal ? Number(cardioCal) : null,
   });
-  WEIGHTLOG_FORM_OPEN = false;
+  UI.weightLogFormOpen = false;
   saveState();
   showToast('Entry saved');
   render();
@@ -8255,7 +8264,7 @@ function removeNoteTagByKey(key) {
     STATE.notes.forEach(n => { if (n.tag === key) n.tag = 'general'; });
     if (NOTES_SELECTED_TAG === key) NOTES_SELECTED_TAG = 'general';
     if (NOTES_FILTER_TAG === key) NOTES_FILTER_TAG = null;
-    if (NOTE_TAG_PALETTE_OPEN === key) NOTE_TAG_PALETTE_OPEN = null;
+    if (UI.noteTagPaletteOpen === key) UI.noteTagPaletteOpen = null;
     saveState();
     showToast('Tag deleted');
     render();
@@ -8265,12 +8274,12 @@ function removeNoteTagByKey(key) {
 // dot toggles it; only one row is ever open at a time (opening one implicitly closes any other).
 // General has no dot to click (its row never calls this).
 function toggleNoteTagPalette(key) {
-  NOTE_TAG_PALETTE_OPEN = (NOTE_TAG_PALETTE_OPEN === key) ? null : key;
+  UI.noteTagPaletteOpen = (UI.noteTagPaletteOpen === key) ? null : key;
   render();
 }
 // CANCEL button inside an open palette -- collapses it without changing the tag's color.
 function closeNoteTagPalette() {
-  NOTE_TAG_PALETTE_OPEN = null;
+  UI.noteTagPaletteOpen = null;
   render();
 }
 // Recolor a tag from the palette grid in renderNotesSetup. General is excluded (no picker is
@@ -8283,7 +8292,7 @@ function setNoteTagColor(key, paletteKey) {
   if (!t || !p) return;
   t.dark = p.dark;
   t.light = p.light;
-  NOTE_TAG_PALETTE_OPEN = null;
+  UI.noteTagPaletteOpen = null;
   saveState();
   render();
 }
@@ -8336,7 +8345,6 @@ let NOTE_EDIT_ID = null;
 // Key of the tag whose color palette is currently expanded in Notes Setup (renderNoteTagSetupRow),
 // or null when every row is collapsed. Only one row's palette is open at a time; clicking a row's
 // color dot toggles it via toggleNoteTagPalette, and picking a color or hitting CANCEL closes it.
-let NOTE_TAG_PALETTE_OPEN = null;
 const MAX_NOTE_PHOTOS = 4;
 function setNotesSubtab(t) {
   // Navigating into Write from somewhere else while an edit was left in progress (e.g. pencil'd a
@@ -8863,15 +8871,14 @@ function updateScheduleExceptionField(id, field, value) {
 }
 
 // ---- The Day view's own exception control ----
-let EXCEPTION_FORM_OPEN = false;
-function toggleExceptionForm() { EXCEPTION_FORM_OPEN = !EXCEPTION_FORM_OPEN; render(); }
+function toggleExceptionForm() { UI.exceptionFormOpen = !UI.exceptionFormOpen; render(); }
 function saveExceptionFromDayView() {
   const start = inputVal('excStart') || CAL_SELECTED_DATE;
   const end = inputVal('excEnd') || start;
   const scheduleId = inputVal('excSchedule') || null;
   const skipAnchors = inputChecked('excSkipAnchors');
   const label = inputVal('excLabel');
-  EXCEPTION_FORM_OPEN = false;
+  UI.exceptionFormOpen = false;
   addScheduleException(start, end, scheduleId, skipAnchors, label);
   showToast('Day marked');
 }
@@ -8889,7 +8896,7 @@ function renderDayExceptionControl(dateStr) {
       </div>
     </div>`;
   }
-  if (!EXCEPTION_FORM_OPEN) {
+  if (!UI.exceptionFormOpen) {
     return `<div style="margin-bottom:14px;">
       <button class="btn btn-sm btn-block" onclick="toggleExceptionForm()">MARK THIS DAY DIFFERENT</button>
     </div>`;
@@ -9118,11 +9125,9 @@ function openTodayWorkout(workoutId) {
   if (w.type === 'cardio') openCardioLog(w.id);
   else openWorkoutLog(w.id); // auto-detects GZCL vs exercises[] shape
 }
-let HOME_EDIT_MODE = false;
-let HOME_ADD_POPUP = null; // 'sections' | 'boxes' | null
 function toggleHomeEditMode() {
-  HOME_EDIT_MODE = !HOME_EDIT_MODE;
-  HOME_ADD_POPUP = null;
+  UI.homeEditMode = !UI.homeEditMode;
+  UI.homeAddPopup = null;
   render();
 }
 function homeLayout() { return STATE.settings.homeLayout; }
@@ -9169,12 +9174,12 @@ function reorderHomeList(listKey, draggedId, targetId, insertAfter) {
   arr.splice(insertAt, 0, draggedId);
   saveState(); render();
 }
-function openHomeAddPopup(which) { HOME_ADD_POPUP = which; render(); }
-function closeHomeAddPopup() { HOME_ADD_POPUP = null; render(); }
+function openHomeAddPopup(which) { UI.homeAddPopup = which; render(); }
+function closeHomeAddPopup() { UI.homeAddPopup = null; render(); }
 function renderHomeAddPopup() {
-  if (!HOME_ADD_POPUP) return '';
+  if (!UI.homeAddPopup) return '';
   const L = homeLayout();
-  const isSections = HOME_ADD_POPUP === 'sections';
+  const isSections = UI.homeAddPopup === 'sections';
   const hiddenIds = isSections ? L.sectionHidden : L.boxHidden;
   const meta = isSections ? HOME_SECTION_META : HOME_BOX_META;
   const rows = hiddenIds.length ? hiddenIds.map(id => `
@@ -9211,7 +9216,7 @@ function renderHomeSectionsGrid() {
   const tiles = L.sectionOrder.map(id => {
     const meta = HOME_SECTION_META[id];
     if (!meta) return '';
-    if (!HOME_EDIT_MODE) {
+    if (!UI.homeEditMode) {
       return `<div class="workout-cell home-tile" style="${homeTileGlowStyle(meta.color)}" onclick="goHomeSection('${id}')">
         <div style="font-size:36px;">${icon(meta.icon)}</div>
         <div class="wname">${meta.label}</div>
@@ -9224,9 +9229,9 @@ function renderHomeSectionsGrid() {
     </div>`;
   }).join('');
   return `
-    <div style="position:relative; ${HOME_EDIT_MODE ? 'margin-bottom:22px;' : ''}">
+    <div style="position:relative; ${UI.homeEditMode ? 'margin-bottom:22px;' : ''}">
       <div class="workout-grid">${tiles}</div>
-      ${HOME_EDIT_MODE ? `<button class="home-add-btn" onclick="openHomeAddPopup('sections')" title="Add back a hidden section">+</button>` : ''}
+      ${UI.homeEditMode ? `<button class="home-add-btn" onclick="openHomeAddPopup('sections')" title="Add back a hidden section">+</button>` : ''}
     </div>`;
 }
 function renderHomeWakeupBox() {
@@ -9307,18 +9312,18 @@ function renderHomeBoxesSection() {
   const boxesHtml = L.boxOrder.map(id => {
     const rawFn = HOME_BOX_RENDERERS[id];
     const raw = rawFn ? rawFn() : '';
-    if (!HOME_EDIT_MODE && !raw) return ''; // conditional boxes (Reminders) just don't show when empty, same as before
+    if (!UI.homeEditMode && !raw) return ''; // conditional boxes (Reminders) just don't show when empty, same as before
     const content = raw || `<div class="subtle-label" style="margin:18px 0 8px;">${HOME_BOX_META[id].label}</div><div class="panel" style="opacity:.5;"><div style="font-size:11px; color:var(--text-faint);">Nothing to show right now.</div></div>`;
-    if (!HOME_EDIT_MODE) return content;
+    if (!UI.homeEditMode) return content;
     return `<div class="home-edit-item home-edit-box" data-home-drag-list="boxes" data-home-drag-id="${id}" onpointerdown="startHomeDrag('boxes','${id}',event,this)">
       <button class="home-edit-x" onclick="event.stopPropagation(); hideHomeBox('${id}')" title="Hide">${icon('close')}</button>
       ${content}
     </div>`;
   }).join('');
   return `
-    <div style="position:relative; ${HOME_EDIT_MODE ? 'padding-bottom:20px;' : ''}">
+    <div style="position:relative; ${UI.homeEditMode ? 'padding-bottom:20px;' : ''}">
       ${boxesHtml}
-      ${HOME_EDIT_MODE ? `<button class="home-add-btn" onclick="openHomeAddPopup('boxes')" title="Add back a hidden box">+</button>` : ''}
+      ${UI.homeEditMode ? `<button class="home-add-btn" onclick="openHomeAddPopup('boxes')" title="Add back a hidden box">+</button>` : ''}
     </div>`;
 }
 // ---- Custom pointer-based drag for Home's Edit mode — same ghost-clone/pointer-capture
@@ -9328,7 +9333,7 @@ function renderHomeBoxesSection() {
 // independent ordered lists (sections, boxes) that never mix with each other.
 let HOME_DRAG = null; // { listKey, id, ghostEl, sourceEl, startX, startY, offsetX, offsetY, currentTarget, moved, scrollDir, insertAfter }
 function startHomeDrag(listKey, id, evt, el) {
-  if (!HOME_EDIT_MODE) return;
+  if (!UI.homeEditMode) return;
   if (evt.target.closest('.home-edit-x')) return; // let the X's own click through — don't capture the pointer or preventDefault over it
   evt.preventDefault();
   const rect = el.getBoundingClientRect();
@@ -9408,7 +9413,7 @@ function onHomeDragEnd(evt) {
 // (pointerdown-based, untouched here) and the hide (X) button working — same exclusion
 // startHomeDrag() above already makes for the X, so it stays consistent with that.
 document.getElementById('app').addEventListener('click', (e) => {
-  if (!HOME_EDIT_MODE) return;
+  if (!UI.homeEditMode) return;
   const target = /** @type {any} */ (e.target);
   if (!target.closest('.home-edit-box')) return;
   if (target.closest('.home-edit-x')) return;
@@ -9522,8 +9527,6 @@ let CAL_SELECTED_DATE = null; // 'YYYY-MM-DD', lazily set to today
 // tab switches, same treatment as CAL_MONTH/CAL_SELECTED_DATE — it's a "where you left the
 // calendar" convenience, not part of the tab/subtab nav history.
 let CAL_ZOOM = 'month';
-let REMINDER_FORM_OPEN = false;
-let REMINDER_FORM_TYPE = 'reminder'; // 'reminder' | 'todo' — which shape toggleReminderForm()'s open form saves as
 function ensureCalState() {
   if (!CAL_MONTH) { const d = new Date(); CAL_MONTH = { year: d.getFullYear(), month: d.getMonth() }; }
   if (!CAL_SELECTED_DATE) CAL_SELECTED_DATE = todayStr();
@@ -9552,13 +9555,13 @@ function calShiftSelectedDate(deltaDays) {
   d.setDate(d.getDate() + deltaDays);
   CAL_SELECTED_DATE = dateKey(d.getFullYear(), d.getMonth(), d.getDate());
   CAL_MONTH = { year: d.getFullYear(), month: d.getMonth() };
-  EXCEPTION_FORM_OPEN = false; // a half-filled form shouldn't follow you onto another day
+  UI.exceptionFormOpen = false; // a half-filled form shouldn't follow you onto another day
   render();
 }
 function calSelectDay(dateStr) {
   CAL_SELECTED_DATE = dateStr;
-  REMINDER_FORM_OPEN = false;
-  EXCEPTION_FORM_OPEN = false;
+  UI.reminderFormOpen = false;
+  UI.exceptionFormOpen = false;
   render();
 }
 // Used from Year view, where a day cell has no reminders panel of its own to drop down into —
@@ -9568,8 +9571,8 @@ function calSelectDayAndZoom(dateStr, zoom) {
   const d = new Date(dateStr + 'T00:00:00');
   CAL_MONTH = { year: d.getFullYear(), month: d.getMonth() };
   CAL_ZOOM = zoom;
-  REMINDER_FORM_OPEN = false;
-  EXCEPTION_FORM_OPEN = false;
+  UI.reminderFormOpen = false;
+  UI.exceptionFormOpen = false;
   // The Agenda calls this too, from its own subtab — without this it would set the zoom and then
   // render the Agenda again, looking like the tap did nothing. Harmless from the Year grid, which
   // is already on the Calendar subtab.
@@ -9792,9 +9795,9 @@ function renderSelectedDayReminders() {
   return `
     <div class="row" style="margin-bottom:10px; align-items:flex-start;">
       <div class="subtle-label" style="margin-bottom:0; padding-top:8px;">${label.toUpperCase()}</div>
-      <button class="btn btn-primary btn-sm" onclick="toggleReminderForm()">${REMINDER_FORM_OPEN ? 'CANCEL' : '+ ADD REMINDER'}</button>
+      <button class="btn btn-primary btn-sm" onclick="toggleReminderForm()">${UI.reminderFormOpen ? 'CANCEL' : '+ ADD REMINDER'}</button>
     </div>
-    ${REMINDER_FORM_OPEN ? renderReminderForm() : ''}
+    ${UI.reminderFormOpen ? renderReminderForm() : ''}
     <div class="entry-list">${list.length ? list.map(renderReminderCard).join('') : emptyState('No reminders for this day.')}</div>`;
 }
 // ---- Recurring reminders (annual / monthly) ----
@@ -9870,24 +9873,22 @@ function ensureRecurringReminderOccurrences() {
   if (changed) { saveState(); queueReminderPushSync(); }
 }
 
-let REMINDER_FORM_RECURRENCE = 'none'; // 'none' | 'annual' | 'monthly' — resets whenever the form opens/closes
 // Whatever's currently typed into the open form, captured right before a toggle (REPEATS or
 // REMINDER/TO-DO) forces renderReminderForm() to regenerate fresh, empty inputs. The REPEATS
 // selector sits below Title/Time — unlike the REMINDER/TO-DO toggle above it, which is always
 // tapped before anyone's typed anything — so without this, choosing ANNUALLY/MONTHLY after typing
 // a title would silently wipe it. Reset whenever the form actually opens or closes.
-let REMINDER_FORM_DRAFT = {};
 function captureReminderFormDraft() {
   const get = id => { const el = document.getElementById(id); return el ? el.value : undefined; };
   const draft = { title: get('remTitle'), time: get('remTime'), endTime: get('remEndTime'), notes: get('remNotes') };
-  Object.keys(draft).forEach(k => { if (draft[k] !== undefined) REMINDER_FORM_DRAFT[k] = draft[k]; });
+  Object.keys(draft).forEach(k => { if (draft[k] !== undefined) UI.reminderFormDraft[k] = draft[k]; });
 }
-function setReminderFormRecurrence(v) { captureReminderFormDraft(); REMINDER_FORM_RECURRENCE = v; render(); }
-function toggleReminderForm() { REMINDER_FORM_OPEN = !REMINDER_FORM_OPEN; REMINDER_FORM_TYPE = 'reminder'; REMINDER_FORM_RECURRENCE = 'none'; REMINDER_FORM_DRAFT = {}; render(); }
-function setReminderFormType(t) { captureReminderFormDraft(); REMINDER_FORM_TYPE = t; render(); }
+function setReminderFormRecurrence(v) { captureReminderFormDraft(); UI.reminderFormRecurrence = v; render(); }
+function toggleReminderForm() { UI.reminderFormOpen = !UI.reminderFormOpen; UI.reminderFormType = 'reminder'; UI.reminderFormRecurrence = 'none'; UI.reminderFormDraft = {}; render(); }
+function setReminderFormType(t) { captureReminderFormDraft(); UI.reminderFormType = t; render(); }
 function renderReminderForm() {
-  const isTodo = REMINDER_FORM_TYPE === 'todo';
-  const draft = REMINDER_FORM_DRAFT;
+  const isTodo = UI.reminderFormType === 'todo';
+  const draft = UI.reminderFormDraft;
   return `
     <div class="panel">
       <div class="unit-toggle" style="margin-bottom:12px;">
@@ -9905,11 +9906,11 @@ function renderReminderForm() {
         : `
       <div class="subtle-label" style="margin-bottom:6px;">REPEATS</div>
       <div class="unit-toggle" style="margin-bottom:4px;">
-        <button class="${REMINDER_FORM_RECURRENCE==='none'?'active':''}" onclick="setReminderFormRecurrence('none')">NEVER</button>
-        <button class="${REMINDER_FORM_RECURRENCE==='annual'?'active':''}" onclick="setReminderFormRecurrence('annual')">ANNUALLY</button>
-        <button class="${REMINDER_FORM_RECURRENCE==='monthly'?'active':''}" onclick="setReminderFormRecurrence('monthly')">MONTHLY</button>
+        <button class="${UI.reminderFormRecurrence==='none'?'active':''}" onclick="setReminderFormRecurrence('none')">NEVER</button>
+        <button class="${UI.reminderFormRecurrence==='annual'?'active':''}" onclick="setReminderFormRecurrence('annual')">ANNUALLY</button>
+        <button class="${UI.reminderFormRecurrence==='monthly'?'active':''}" onclick="setReminderFormRecurrence('monthly')">MONTHLY</button>
       </div>
-      <div style="font-size:11px; color:var(--text-faint); margin-bottom:10px;">${REMINDER_FORM_RECURRENCE === 'none' ? 'A one-off reminder on this date only.' : `Generates the next few occurrences now — this one plus ${RECURRENCE_HORIZON[REMINDER_FORM_RECURRENCE]} more. Each occurrence edits/deletes independently, same as any reminder.`}</div>
+      <div style="font-size:11px; color:var(--text-faint); margin-bottom:10px;">${UI.reminderFormRecurrence === 'none' ? 'A one-off reminder on this date only.' : `Generates the next few occurrences now — this one plus ${RECURRENCE_HORIZON[UI.reminderFormRecurrence]} more. Each occurrence edits/deletes independently, same as any reminder.`}</div>
       <label class="field"><span class="lbl">Notes (optional)</span><textarea id="remNotes" placeholder="Any details...">${escapeHtml(draft.notes || '')}</textarea></label>`}
       <button class="btn btn-primary btn-block" onclick="saveReminder()">${isTodo ? 'SAVE TO-DO LIST' : 'SAVE REMINDER'}</button>
     </div>`;
@@ -9917,13 +9918,13 @@ function renderReminderForm() {
 function saveReminder() {
   const titleEl = document.getElementById('remTitle');
   const title = titleEl ? titleEl.value.trim() : '';
-  if (!title) { showToast(REMINDER_FORM_TYPE === 'todo' ? 'Give the to-do list a title' : 'Give the reminder a title'); return; }
+  if (!title) { showToast(UI.reminderFormType === 'todo' ? 'Give the to-do list a title' : 'Give the reminder a title'); return; }
   const time = inputVal('remTime') || null;
   const endEl = document.getElementById('remEndTime');
   // An end time only means anything alongside a start — on its own there's nothing to measure it
   // from, so it's dropped rather than saved as a half-specified block.
   const endTime = (time && endEl && endEl.value) ? endEl.value : null;
-  const isTodo = REMINDER_FORM_TYPE === 'todo';
+  const isTodo = UI.reminderFormType === 'todo';
   const notesEl = document.getElementById('remNotes');
   const notes = notesEl ? notesEl.value.trim() : '';
   const id = uid();
@@ -9931,11 +9932,11 @@ function saveReminder() {
   if (isTodo) reminder.items = [];
   // Recurrence only applies to plain reminders — a recurring to-do's per-occurrence reset
   // semantics are a distinct feature this doesn't attempt to build.
-  const recurrence = (!isTodo && REMINDER_FORM_RECURRENCE !== 'none') ? REMINDER_FORM_RECURRENCE : null;
+  const recurrence = (!isTodo && UI.reminderFormRecurrence !== 'none') ? UI.reminderFormRecurrence : null;
   if (recurrence) { reminder.recurrence = recurrence; reminder.recurrenceId = id; reminder.anchorDate = CAL_SELECTED_DATE; }
   STATE.reminders.push(reminder);
-  REMINDER_FORM_OPEN = false;
-  REMINDER_FORM_DRAFT = {};
+  UI.reminderFormOpen = false;
+  UI.reminderFormDraft = {};
   saveState();
   if (recurrence) ensureRecurringReminderOccurrences(); // materializes the rest of the series right away
   queueReminderPushSync(); // no-op unless reminder notifications are enabled — see REMINDER PUSH section
@@ -11118,10 +11119,9 @@ function toggleTechStatus(idx) {
   g.techStatus[idx] = !g.techStatus[idx];
   saveState(); render();
 }
-let GUITAR_LOG_FORM_OPEN = false;
 function renderGuitarPracticeLog() {
   const list = [...STATE.life.guitar.practiceLog].sort((a,b) => b.date.localeCompare(a.date));
-  const addForm = GUITAR_LOG_FORM_OPEN ? renderGuitarLogForm() : `<button class="btn btn-primary btn-block" onclick="toggleGuitarLogForm()">+ ADD PRACTICE SESSION</button>`;
+  const addForm = UI.guitarLogFormOpen ? renderGuitarLogForm() : `<button class="btn btn-primary btn-block" onclick="toggleGuitarLogForm()">+ ADD PRACTICE SESSION</button>`;
   const cards = list.map(e => `
     <div class="entry-card">
       <div class="ehead">
@@ -11137,7 +11137,7 @@ function renderGuitarPracticeLog() {
     <div style="margin-bottom:12px;">${addForm}</div>
     <div class="entry-list">${cards || emptyState('No practice sessions logged yet.')}</div>`;
 }
-function toggleGuitarLogForm() { GUITAR_LOG_FORM_OPEN = !GUITAR_LOG_FORM_OPEN; render(); }
+function toggleGuitarLogForm() { UI.guitarLogFormOpen = !UI.guitarLogFormOpen; render(); }
 function renderGuitarLogForm() {
   return `
     <div class="panel">
@@ -11156,7 +11156,7 @@ function saveGuitarLog() {
   const notes = inputVal('gNotes');
   if (!minutes) { showToast('Enter minutes practiced'); return; }
   STATE.life.guitar.practiceLog.push({ id: uid(), date, minutes: Number(minutes), notes });
-  GUITAR_LOG_FORM_OPEN = false;
+  UI.guitarLogFormOpen = false;
   saveState();
   showToast('Session logged');
   render();

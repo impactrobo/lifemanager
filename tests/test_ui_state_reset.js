@@ -12,20 +12,17 @@ const path = require('path');
 
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
-// Top-level `let` bindings in a classic <script> are NOT window properties, so a probe has to go
-// through new Function to read/write the real binding. (A window[name] probe reads back its own
-// write and passes vacuously -- which is how a first draft of this survey nearly reported nonsense.)
-const FLAGS = [
-  ['REMINDER_FORM_OPEN', 'schedule', 'true', false], ['EXCEPTION_FORM_OPEN', 'schedule', 'true', false],
-  ['HOME_ADD_POPUP', 'home', '"sections"', null], ['HOME_EDIT_MODE', 'home', 'true', false],
-  ['CUSTOM_FOOD_FORM_OPEN', 'health', 'true', false], ['SHOPPING_LIST_FORM_OPEN', 'health', 'true', false],
-  ['TDEE_CALC_OPEN', 'health', 'true', false], ['MACRO_CALC_OPEN', 'health', 'true', false],
-  ['MEASURE_FORM_OPEN', 'health', 'true', false], ['WEIGHTLOG_FORM_OPEN', 'health', 'true', false],
-  ['GUITAR_LOG_FORM_OPEN', 'hobbies', 'true', false], ['BUILDER_STYLE_PICKER_OPEN', 'train', 'true', false],
-  ['AUTOFILL_PICKER_OPEN', 'train', 'true', false], ['NOTE_TAG_PALETTE_OPEN', 'notes', '"idea"', null],
-  ['CLOUD_SYNC_MODAL_OPEN', 'setup', 'true', false],
-];
+// UI is one object now, so the test no longer needs a per-flag table: it dirties EVERY field and
+// asserts the whole object comes back deep-equal to defaultTransientUi(). That means a field added
+// to the app is covered here automatically -- there is no list in the test to forget to update,
+// mirroring the fact that there's no list in resetTransientUi() either.
+//
+// UI is a top-level `let` in a classic <script>, which is not a window property but IS reachable
+// from a subsequently-evaluated global-scope expression -- which is why page.evaluate(() => UI.x)
+// works while window.UI would be undefined.
 
+// A value guaranteed different from any default, so "still dirty" can't be mistaken for "reset".
+const DIRTY = '__dirty__';
 (async () => {
   const browser = await chromium.launch({ executablePath: process.env.PW_CHROMIUM_PATH || undefined });
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
@@ -39,41 +36,37 @@ const FLAGS = [
   await page.goto(APP_PATH);
   await settle(page);
 
-  const probe = (flags, route) => page.evaluate(({ flags, route }) => {
-    const get = f => new Function('return ' + f)();
-    const set = (f, v) => new Function(f + ' = ' + v)();
-    const results = [];
-    for (const [f, tab, openVal, expectReset] of flags) {
-      switchTab(tab);
-      set(f, openVal);
-      if (route === 'switchTab')        { switchTab(tab === 'home' ? 'train' : 'home'); switchTab(tab); }
-      else if (route === 'goBack')      { switchTab(tab === 'home' ? 'train' : 'home'); goBack(); }
-      else if (route === 'openSetup')   { openSetup('train'); }
-      else if (route === 'openWorkout') { openTodayWorkout(window.__probeWorkoutId); }
-      const after = get(f);
-      results.push({ flag: f, after, ok: after === expectReset });
-      set(f, expectReset === null ? 'null' : 'false');
-    }
-    return results;
-  }, { flags, route });
+  const probe = (route) => page.evaluate(({ route, DIRTY }) => {
+    const keys = Object.keys(defaultTransientUi());
+    keys.forEach(k => { UI[k] = DIRTY; });           // dirty every field, whatever it is
+    if (route === 'switchTab')        { switchTab('home'); switchTab('health'); }
+    else if (route === 'goBack')      { switchTab('home'); goBack(); }
+    else if (route === 'openSetup')   { openSetup('train'); }
+    else if (route === 'openWorkout') { openTodayWorkout(window.__probeWorkoutId); }
+    const defaults = defaultTransientUi();
+    const stillDirty = keys.filter(k => JSON.stringify(UI[k]) !== JSON.stringify(defaults[k]));
+    return { total: keys.length, stillDirty, extraKeys: Object.keys(UI).filter(k => !keys.includes(k)) };
+  }, { route, DIRTY });
 
   // A workout for the openTodayWorkout() route (it leaves Home by assigning CURRENT_TAB directly).
   await page.evaluate(() => { const w = createWorkout('weights', 'P-Zero (GZCL)'); window.__probeWorkoutId = w.id; });
 
-  // ---- 1. Every route that changes the tab closes every flag ----
+  // ---- 1. Every route that changes the tab resets the entire object ----
   for (const route of ['switchTab', 'goBack', 'openSetup', 'openWorkout']) {
-    const r = await probe(FLAGS, route);
-    const leaked = r.filter(x => !x.ok);
-    console.log(`${route.padEnd(11)} -> ${r.length - leaked.length}/${r.length} reset`);
-    if (leaked.length) throw new Error(`${route}: still set after navigating: ${leaked.map(x => `${x.flag}=${JSON.stringify(x.after)}`).join(', ')}`);
+    const r = await probe(route);
+    console.log(`${route.padEnd(11)} -> ${r.total - r.stillDirty.length}/${r.total} fields reset`);
+    if (r.stillDirty.length) throw new Error(`${route}: these survived navigation: ${r.stillDirty.join(', ')}`);
+    // A field living on UI but absent from the defaults would never be reset -- and, being absent
+    // from the literal, would be invisible to the check above.
+    if (r.extraKeys.length) throw new Error(`UI carries fields that defaultTransientUi() doesn't, so nothing resets them: ${r.extraKeys.join(', ')}`);
   }
 
   // ---- 2. The reminder form's sub-state resets with it (a stale draft/recurrence has no meaning with the form closed) ----
   const sub = await page.evaluate(() => {
     switchTab('schedule');
-    new Function('REMINDER_FORM_OPEN = true; REMINDER_FORM_RECURRENCE = "monthly"; REMINDER_FORM_TYPE = "todo"; REMINDER_FORM_DRAFT = { title: "leftover" };')();
+    new Function('UI.reminderFormOpen = true; UI.reminderFormRecurrence = "monthly"; UI.reminderFormType = "todo"; UI.reminderFormDraft = { title: "leftover" };')();
     switchTab('home'); switchTab('schedule');
-    return new Function('return { rec: REMINDER_FORM_RECURRENCE, type: REMINDER_FORM_TYPE, draft: REMINDER_FORM_DRAFT }')();
+    return new Function('return { rec: UI.reminderFormRecurrence, type: UI.reminderFormType, draft: UI.reminderFormDraft }')();
   });
   console.log('reminder form sub-state after nav:', sub);
   if (sub.rec !== 'none' || sub.type !== 'reminder' || Object.keys(sub.draft).length) throw new Error(`Reminder form sub-state should reset with the form, got ${JSON.stringify(sub)}`);
@@ -95,7 +88,7 @@ const FLAGS = [
   // reset (in _doRender) would close it, since render() is rAF-deferred past both calls.
   await page.evaluate(() => { switchTab('schedule'); calSetZoom('day'); toggleReminderForm(); });
   await settle(page);
-  const arrivedOpen = await page.evaluate(() => ({ flag: new Function('return REMINDER_FORM_OPEN')(), inDom: !!document.getElementById('remTitle') }));
+  const arrivedOpen = await page.evaluate(() => ({ flag: new Function('return UI.reminderFormOpen')(), inDom: !!document.getElementById('remTitle') }));
   console.log('navigate-then-open in one tick:', arrivedOpen);
   if (!arrivedOpen.flag || !arrivedOpen.inDom) throw new Error('Opening a form right after navigating must not be undone by the reset');
   await page.evaluate(() => toggleReminderForm());
@@ -104,8 +97,8 @@ const FLAGS = [
   const inTab = await page.evaluate(() => {
     switchTab('schedule'); calSetZoom('day'); toggleReminderForm();
     calSetZoom('month'); // same tab, different zoom
-    const stillOpen = new Function('return REMINDER_FORM_OPEN')();
-    new Function('REMINDER_FORM_OPEN = false')();
+    const stillOpen = new Function('return UI.reminderFormOpen')();
+    new Function('UI.reminderFormOpen = false')();
     return stillOpen;
   });
   console.log('form open after an in-tab zoom change:', inTab);

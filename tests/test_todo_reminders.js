@@ -28,7 +28,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // 1. Opening the form defaults to the plain 'reminder' type; the toggle switches to 'todo'
   await page.evaluate(() => toggleReminderForm());
   await settle(page);
-  const defaultType = await page.evaluate(() => REMINDER_FORM_TYPE);
+  const defaultType = await page.evaluate(() => UI.reminderFormType);
   if (defaultType !== 'reminder') throw new Error(`Expected the form to default to type "reminder", got "${defaultType}"`);
   await page.evaluate(() => setReminderFormType('todo'));
   await settle(page);

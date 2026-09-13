@@ -43,13 +43,13 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // 2. Edit mode toggles and shows per-tile hide ("x") buttons
   await page.click('#homeEditBtn');
   await settle(page);
-  const editMode = await page.evaluate(() => HOME_EDIT_MODE === true);
-  console.log('HOME_EDIT_MODE after toggle:', editMode);
-  if (!editMode) throw new Error('Expected HOME_EDIT_MODE to be true after clicking #homeEditBtn');
+  const editMode = await page.evaluate(() => UI.homeEditMode === true);
+  console.log('UI.homeEditMode after toggle:', editMode);
+  if (!editMode) throw new Error('Expected UI.homeEditMode to be true after clicking #homeEditBtn');
 
   const hideButtons = await page.$$eval('.home-edit-x', els => els.length);
   console.log('hide (x) buttons visible in edit mode:', hideButtons);
-  if (hideButtons === 0) throw new Error('Expected .home-edit-x buttons while HOME_EDIT_MODE is true');
+  if (hideButtons === 0) throw new Error('Expected .home-edit-x buttons while UI.homeEditMode is true');
 
   // 2b. The edit button itself is highlighted while edit mode is active. Checks the *computed*
   // border color against a live-rendered var(--warn) probe, not just class presence — a class can
@@ -57,7 +57,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // styling, which is exactly the bug this once shipped as (see styles.css's
   // .icon-btn.home-edit-toggle-active comment). A plain classList check would never have caught it.
   const hasClass = await page.evaluate(() => document.getElementById('homeEditBtn').classList.contains('home-edit-toggle-active'));
-  if (!hasClass) throw new Error('Expected #homeEditBtn to carry .home-edit-toggle-active while HOME_EDIT_MODE is true');
+  if (!hasClass) throw new Error('Expected #homeEditBtn to carry .home-edit-toggle-active while UI.homeEditMode is true');
   // The border ANIMATES: styles.css gives .icon-btn a 150ms border-color transition (for hover), so
   // an immediate computed-style read lands mid-transition and reports an in-between colour. This
   // used to pass only because the old waitForTimeout(150) happened to equal the transition -- a
@@ -109,8 +109,8 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // 2e. Leaving edit mode restores normal tap-to-navigate behavior on the same panel
   await page.click('#homeEditBtn'); // toggle edit mode back off
   await settle(page);
-  const editModeOff = await page.evaluate(() => HOME_EDIT_MODE === false);
-  if (!editModeOff) throw new Error('Expected HOME_EDIT_MODE to be false after toggling #homeEditBtn a second time');
+  const editModeOff = await page.evaluate(() => UI.homeEditMode === false);
+  if (!editModeOff) throw new Error('Expected UI.homeEditMode to be false after toggling #homeEditBtn a second time');
   const rightNowPanelAgain = await page.$('.panel[onclick*="goHomeSection"]');
   if (!rightNowPanelAgain) throw new Error("Expected RIGHT NOW's panel to still be present outside edit mode");
   await rightNowPanelAgain.click();
