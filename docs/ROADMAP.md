@@ -56,6 +56,24 @@ These are **not** requested features — they're natural extensions given the cu
 app, logged here so they're not lost, not so they get built unprompted. Confirm with the person
 before starting any of these.
 
+- **Codebase survey findings not acted on (2026-09-13)** — from the same investigation whose
+  three fixes are under Recently Shipped. Ranked; all confirmed, none urgent:
+  - **~82 module-level mutable globals hold all UI state** (1,405 references across 454 of 706
+    functions). The reset-on-navigate fix above treats the *symptom*; consolidating these into one
+    state object is what would make that class of bug impossible rather than fixed, and it is the
+    natural first slice of the `app.js` split already on the roadmap (82 bare `let`s in one script
+    scope can't be divided across files; one object can). Sized honestly: a purely mechanical
+    refactor — same functions, same behaviour, same file — but it must land one state-group at a
+    time with the suite green after each slice. A session or two of boring, not a rewrite.
+  - **`updateAllTMs()` — 207 lines of boot-time migration plus a real `tmLb` recompute — runs on
+    every render of the Training Maxes screen** via `renderTMSetup()`. No `saveState()` inside, so
+    no write-on-render, and it's idempotent; but a migration on a hot render path is misnamed and
+    misplaced. Split into `migrateState()` (boot) and `recomputeTMs()`.
+  - **Nine remaining literal-count test assertions** (`length !== 3` and the like) of the shape
+    that rotted twice in one day (`test_ui_polish` "2 tabs", `test_calendar_anchors` "3
+    buttons"): `test_budget_goals`, `test_diet_log` ×2, `test_photos`, `test_progress_compare`,
+    `test_week_overview`, and others. Each is fine until the fixture grows.
+  - Five inline `padStart(2,'0')` date-format duplicates outside the `dateKey`/`fmt` helpers.
 - **Scheduling build-out — agreed 2026-09-12, step 1 of 4 shipped.** Came from a review of what
   this app's scheduling lacked next to general calendar apps. The person picked four areas and
   approved this dependency order; steps 2-4 are **agreed work, not speculative ideas**, but still
@@ -306,6 +324,48 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Codebase survey — three fixes landed, the rest recorded below under Ideas (2026-09-13).** A
+  full investigation of `app.js` (11,270 lines, 706 functions, 46 test files) for bugs,
+  limitations and refactorable code. Clean bill of health on several fronts worth knowing: **0
+  dead functions** (checked against markup, `sw.js`, the reminder worker, every FX module, and
+  tests), all 5 swallowed `catch {}`s benign, all 7 off-render-path `innerHTML` writes legitimate
+  owned-container patches, 0 TODO/FIXME markers. Three findings were fixed:
+  - **Every transient UI flag leaked across navigation — all 15, verified empirically.** Each
+    "a form/picker/modal is open" or "a mode is engaged" flag is a module-level `let`, and none
+    was reset on leaving its screen, so a half-open reminder form abandoned on the Calendar was
+    still open a day later, and Home's edit mode survived a trip to Exercise. Three instances had
+    already been patched locally that week; `resetTransientUi()` now fixes the family, called at
+    the four points where the top-level tab actually changes (`switchTab()`, `applyNavSnapshot()`
+    for Back/Forward, and the direct `CURRENT_TAB` assignments in `openSetup()` and
+    `openTodayWorkout()`). **Deliberately at navigation time, not inside `_doRender()`**: a
+    render-time hook would catch every future nav path for free, but `render()` is rAF-deferred,
+    so it would close a form that `switchTab(); toggleReminderForm()` had just opened in the same
+    tick — a sequence existing tests already rely on. Two boundaries pinned by the test: content
+    drafts with their own lifecycle (`MEAL_BUILDER_DRAFT`) are *not* wiped, and in-tab moves don't
+    reset anything. The probe reads the real script-scope bindings via `new Function` — a
+    `window[name]` probe reads back its own write and passes vacuously, which is how a first draft
+    of the survey nearly reported nonsense.
+  - **All 35 literal-id `getElementById(...).value`/`.checked` reads were unguarded, and the
+    typechecker can't see it** — `types/app.d.ts` widens `HTMLElement` with `value: any` (its own
+    comment calls this a known blind spot), so a wrong or not-yet-rendered id compiles clean and
+    throws at runtime; exactly how `saveReminder()` crashed mid-save when `#remEndTime` didn't
+    exist yet. `inputVal()`/`inputChecked()` return `''`/`false` for an absent element; the 35
+    reads were replaced mechanically (the 4 `.value =` *assignments* aren't the hazard and were
+    left). `test_input_helpers.js` carries a static guard that reads `app.js` and fails the suite
+    if a bare read creeps back in, plus the original crash as a regression.
+  - **The suite's recurring flakiness — 284 fixed `waitForTimeout` sleeps racing the app's
+    rAF-deferred render.** Runs are sequential, so it was never parallelism: purely timing under
+    load, the "one random file fails, passes on rerun" seen ~6 times in one day. `tests/helpers.js`
+    now exports `settle(page)` (two `requestAnimationFrame`s — exactly when `_doRender()` has
+    painted), swapped in for every sleep ≤350ms across all 48 files. The 10 sleeps ≥500ms are
+    **real-timer** waits (toast auto-hide, scroll-indicator fade, rest timer, FX animations) and
+    were left alone; `tests/README.md` documents the rule. Verified by three consecutive full-suite
+    runs — and as a bonus the suite went from ~137s to ~89s, since the sleeps were ~50s of dead
+    waiting per run. One mis-categorisation surfaced on the first run and is worth remembering:
+    `test_home.js` read the edit-pencil's computed border immediately, and `styles.css` gives
+    `.icon-btn` a 150ms border-colour *transition* — the old 150ms sleep had matched it by pure
+    luck. That assertion now waits on the actual condition via `page.waitForFunction`, so the
+    cascade bug it guards would time out loudly rather than pass mid-transition.
 - **Time rollup: "where the week went" (2026-09-13).** The last item of the scheduling build-out.
   Needed a data-model change first — activities and anchors had no category, so "hobbies got 4h
   this week" couldn't be grouped that way at all.
