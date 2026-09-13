@@ -300,6 +300,32 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Fixed: sub-nav strips snapped back to the start the instant you tapped a button in them
+  (2026-09-12).** Reported directly against Exercise Setup's GENERAL tab, but the bug lived in
+  the shared `subNav()`/`attachSubnavScrollAffordances()` system (see
+  `subnav-scroll-affordances` memory) — every render fully replaces `#app`'s innerHTML, so a
+  `.subnav-wrap`'s `.subnav` element is a brand-new DOM node on every single render, including
+  the one triggered by tapping a button inside that very strip, and a brand-new node's native
+  `scrollLeft` starts at 0. Scroll a strip over to reach an off-screen button, tap it, and the
+  whole strip visibly jumped back to the start even though the tap itself never scrolled
+  anything.
+  - Fixed with a small `_subnavScrollMemory` `Map`: `_captureSubnavScroll()` runs at the very
+    top of `_doRender()`, before any `innerHTML` assignment, and records every current
+    `.subnav-wrap > .subnav`'s `scrollLeft`. `attachSubnavScrollAffordances()` (already called
+    after the new DOM exists) writes the remembered value back onto the new node before
+    computing its chevron/scrollbar visibility, so there's no visible flash and the affordance
+    state is correct on the very first paint.
+  - Keyed by the strip's own button-label text (`nav.textContent`) rather than DOM position —
+    navigating to a different screen can put an unrelated sub-nav in the same structural slot,
+    and a position-based key would have leaked that sub-nav's scroll offset onto this one.
+    Distinct sub-navs always have distinct labels, so this can't collide.
+  - Fixes all 6 `subNav()` call sites at once (Exercise Setup, Progress, Notes, Schedule/Health
+    Setup) — this was never specific to GENERAL, just most visible there since it's the tab
+    furthest from view.
+  - `test_ui_polish.js` gained two cases: a real click on GENERAL preserves both scroll position
+    and chevron state through the resulting re-render; switching to a different, unrelated
+    overflowing sub-nav (Progress) starts at 0 rather than inheriting Exercise Setup's leftover
+    offset — the cross-contamination guard the text-keying is specifically for.
 - **Home edit mode's pencil now turns `var(--warn)` while active — and this surfaced a real,
   previously-dormant styling bug (2026-09-12).** The person asked for the pencil to change color
   in edit mode for clarity; investigating found it technically already had an "active" rule
@@ -347,6 +373,16 @@ on an architecture split + a large wave of Maximalist aesthetics.
     animation — asserted against the *resolved* `--warn` rather than a hardcoded value, and
     re-checked after switching aesthetic, so it's the linkage being tested rather than a magic
     number. A dropped stylesheet rule fails rather than silently shipping an unstyled character.
+  - **Fixed the same day:** the test's own offset helper (`at(offsetMin)` — "90 minutes from
+    now") built an HH:MM string but always dated the reminder `todayStr()`, which is wrong
+    exactly when the offset crosses local midnight (e.g. at 22:36, "90 minutes from now" is
+    00:06 *tomorrow*, not a late-night time today) — `reminderIsPastDue()` correctly read the
+    numerically-small resulting time as already past, given that malformed input, and the test
+    failed for real, deterministically, for a ~3-hour window around local midnight every day.
+    Not caught immediately because the suite doesn't happen to run in that window often. Fixed by
+    clamping every case's target minute-of-day into `[1, 1439]` on `todayStr()` rather than
+    letting an add/subtract wander across a date boundary — none of these cases care about the
+    exact elapsed real time, only "clearly before/after now, same day."
 - **Dated one-off events, and a Day timeline that shows duration (2026-09-12).** Came out of a
   review of what this app's scheduling was missing next to general calendar apps. The structural
   finding: everything in Schedule was a *weekday template* (anchors, schedules, `exercisePlan`),
