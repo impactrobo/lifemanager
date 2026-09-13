@@ -69,16 +69,22 @@ before starting any of these.
      means adding an optional `dueDay` plus the Budget → Recurring UI to set it — a data-model
      change rather than surfacing data that already exists. That's the same work as the "Calendar
      marker on a recurring budget charge's due date" cross-linking idea below; do it there.
-  3. **Recurrence + single-day exceptions.** No recurrence exists beyond day-of-week, so monthly,
-     annual (birthdays/anniversaries have no home at all), every-other-week and every-N-days are
-     all unrepresentable; `periodic` anchors do cadence-days but are a due-list that never lands
-     on a date. Separately, a schedule is a weekday template with no way to say "this Tuesday is
-     different" — a holiday, a vacation week, a sick day — nor to skip one occurrence.
+  3. **Recurrence + single-day exceptions — split in two, first half shipped.** Scoped into two
+     unrelated pieces before building, since they touch different parts of the data model:
+     - ~~Recurring reminders (annual + monthly)~~ — **shipped 2026-09-12**, see Recently Shipped.
+     - **Schedule single-day exceptions — still open.** A schedule is a weekday template with no
+       way to say "this Tuesday is different" — a holiday, a vacation week, a sick day — nor to
+       skip one occurrence. Scoped (not yet built): an override can be either "skip the schedule
+       entirely that day" (anchors still apply) or "swap in a different named schedule for one
+       day," picked per the person's own direction when this was scoped.
+     Every-other-week/every-N-days recurrence and `periodic` anchors landing on actual calendar
+     dates (they're currently a cadence-days due-list that never does) were both considered and
+     deliberately left out of the recurring-reminders half — annual + monthly were judged the
+     patterns actually worth building now.
   4. Smaller items surfaced by the same review, not yet scheduled: overlap detection *between
      activities in a day* (the Week At A Glance strip only catches two schedules claiming the same
      weekday); a forward-looking agenda ("next 7 days across everything" — there is no such view,
-     you navigate day by day); repeating reminders (every reminder is a single date, so a weekly
-     bin-day nudge must be hand-recreated); and a time-budget rollup ("hobbies got 4h this week"),
+     you navigate day by day); and a time-budget rollup ("hobbies got 4h this week"),
      which would fit this app's existing habit of rolling things up (TDEE, budget bars, streaks).
   Explicitly ruled out as groupware that doesn't apply to a single-user local-first app: invites,
   attendees, free/busy sharing, calendar subscriptions.
@@ -301,6 +307,46 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Recurring reminders: annual + monthly — first half of step 3 of the scheduling build-out
+  (2026-09-12).** Scoped explicitly before building: step 3 turned out to be two unrelated
+  data-model changes (recurring reminders vs. schedule single-day exceptions), so it was split
+  and only the reminders half was built now. Materialized, not virtual: setting a recurrence
+  immediately generates real, independent `Reminder` rows for the next several occurrences
+  (`ensureRecurringReminderOccurrences()`), rather than storing a rule and computing instances on
+  the fly. The tradeoff, chosen deliberately over the virtual alternative: every existing reminder
+  code path — `remindersOn()`, `scheduleBlocksForDate()`, the Month/Year calendar dots, push sync —
+  needed zero changes, since a generated occurrence is just an ordinary `STATE.reminders` entry.
+  The cost is there's no "edit changes all future occurrences" — editing or deleting any one
+  occurrence only ever touches that single row, exactly like any reminder today.
+  - **Occurrence dates are computed from the series' own unchanging anchor date**, not by rolling
+    forward from the previous occurrence — a monthly reminder anchored on the 31st lands on the
+    31st whenever the target month has one (Jan 31 → Feb 28 → Mar 31 → Apr 30 → May 31…), rather
+    than permanently drifting down to the 28th the first time a short month clamps it. Same
+    clamping convention for annual on a leap day (Feb 29 → Feb 28 in non-leap years, back to
+    Feb 29 whenever the target year is one).
+  - **Idempotent by construction**: deterministic `${recurrenceId}_r${n}` occurrence ids mean
+    `ensureRecurringReminderOccurrences()` — called right after creating a recurring reminder, and
+    on every app load — never duplicates a row. Deleting every remaining occurrence in a series
+    (there's no dedicated "cancel series" action) is genuinely how it stops, since top-up only
+    ever extends forward from whatever's still there.
+  - Horizon of 2 future occurrences for annual, 6 for monthly — enough to always show something
+    coming up without materializing years of monthly rows. Only `type: 'reminder'` can recur; a
+    recurring to-do's per-occurrence checklist-reset semantics are a distinct feature, deliberately
+    not built here.
+  - **Fixed along the way**: choosing REPEATS after typing a title would have silently wiped it —
+    the REPEATS toggle sits below Title (unlike the existing REMINDER/TO-DO toggle above it, which
+    is always tapped before anyone's typed anything, so its identical defect was never actually
+    hit in practice). `REMINDER_FORM_DRAFT` now captures the open form's fields before any toggle
+    forces a re-render, and the fresh inputs restore from it.
+  - A recurring reminder's card shows a `↻ Repeats annually/monthly` line and its delete
+    confirmation names the cadence, so it's never a mystery why a reminder nobody directly typed
+    is sitting on some future date.
+  - `tests/test_recurring_reminders.js` covers the date-clamping edge cases by hand, materializing
+    on creation via the real form, the draft-preservation fix, idempotence across redundant
+    top-up calls, a deleted occurrence staying deleted (and a fully-deleted series staying
+    stopped) after re-running top-up, a to-do never acquiring a recurrence even if REPEATS was
+    touched first, the card badge, the delete-confirm wording, and `remindersOn()` picking up a
+    generated occurrence for free.
 - **Calendar Day view now shows the untimed half of a day too — step 2 of the scheduling
   build-out (2026-09-12).** The Day view knew only about anchors, schedule activities and
   reminders, so three things that are unambiguously part of "what's going on this day" never
