@@ -65,15 +65,19 @@ before starting any of these.
     scope can't be divided across files; one object can). Sized honestly: a purely mechanical
     refactor — same functions, same behaviour, same file — but it must land one state-group at a
     time with the suite green after each slice. A session or two of boring, not a rewrite.
-  - **`updateAllTMs()` — 207 lines of boot-time migration plus a real `tmLb` recompute — runs on
-    every render of the Training Maxes screen** via `renderTMSetup()`. No `saveState()` inside, so
-    no write-on-render, and it's idempotent; but a migration on a hot render path is misnamed and
-    misplaced. Split into `migrateState()` (boot) and `recomputeTMs()`.
-  - **Nine remaining literal-count test assertions** (`length !== 3` and the like) of the shape
-    that rotted twice in one day (`test_ui_polish` "2 tabs", `test_calendar_anchors` "3
-    buttons"): `test_budget_goals`, `test_diet_log` ×2, `test_photos`, `test_progress_compare`,
-    `test_week_overview`, and others. Each is fine until the fixture grows.
-  - Five inline `padStart(2,'0')` date-format duplicates outside the `dateKey`/`fmt` helpers.
+  - ~~`updateAllTMs()` running on every render of the Training Maxes screen~~ — **fixed
+    2026-09-13**, and it was hiding a real data-loss bug; see Recently Shipped.
+  - ~~Rot-prone literal-count test assertions~~ — **addressed 2026-09-13**, and the original
+    finding was **overstated**: it claimed nine assertions "of the shape that rotted twice", having
+    pattern-matched the syntax `length !== N` rather than the actual failure mode. The shape that
+    rotted was *a count of app structure the test doesn't control*, and only **two** fit
+    (`test_agenda`'s 7 = `AGENDA_DAYS`, `test_recurring_reminders`' 7 = seed +
+    `RECURRENCE_HORIZON.monthly`). Both now read the constant. Two more were tightened for other
+    reasons; the remaining six are counts the test's own fixture creates (3 contributions it
+    logged, 3 photos it attached, 7 days in a week) and were deliberately left — changing them
+    would be busywork that makes them less readable.
+  - ~~Inline `padStart(2,'0')` date-format duplicates~~ — **fixed 2026-09-13**, see Recently
+    Shipped.
 - **Scheduling build-out — agreed 2026-09-12, step 1 of 4 shipped.** Came from a review of what
   this app's scheduling lacked next to general calendar apps. The person picked four areas and
   approved this dependency order; steps 2-4 are **agreed work, not speculative ideas**, but still
@@ -324,6 +328,39 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Survey items 4, 5 and 7 — and a data-loss bug the refactor uncovered (2026-09-13).**
+  - **`updateAllTMs()` split into `migrateState()` + `recomputeTMs()`.** The old name described
+    its last few lines and hid the fact that ~200 lines of save migration ran on every visit to
+    the Training Maxes screen, because `renderTMSetup()` called the whole thing. Harmless in
+    itself — no `saveState()` inside, every step idempotent — but a migration on a hot render path
+    is one careless edit away from writing on every frame. Boot calls `migrateState()`; renders
+    call `recomputeTMs()` alone. The seam wasn't a clean cut: the `tmLb` recompute was interleaved
+    inside a loop also doing migration, and it reads the `testType`/`conv` snapping done earlier in
+    that same loop, so `migrateState()` finishes by calling `recomputeTMs()`.
+  - **The bug that split exposed: importing a backup silently destroyed data.** `importData()` and
+    the cloud-pull branch both did `STATE = Object.assign(defaultState(), data)` — a *shallow*
+    merge, so an older save's `life` object replaced the default wholesale and took every field
+    added since with it. Measured against the pre-fix build with a 2026-era backup: **8 of 8
+    probed fields vanished** — habits, habit log, schedules, schedule exceptions, meal plan, saved
+    meals, food log, budget goals. It had been survivable only by accident, because visiting
+    Training Maxes re-ran the full migration and repaired it; removing that crutch is what made it
+    visible. Both routes now adopt state exactly as boot does — write it, `loadState()` for the
+    per-key merge, `migrateState()` for the backfills. `tests/test_state_adoption.js` checks all
+    three routes against a deliberately antique save and carries a source guard so no future route
+    can go back to a shallow assign.
+  - **One canonical `Date` → `'YYYY-MM-DD'`.** There were three copies of the same concatenation —
+    `todayStr()`, `fmtDateKey()` and `dateKey()`. Now `dateKeyOf(d)` wraps `dateKey()`, `todayStr()`
+    is `dateKeyOf(new Date())`, `fmtDateKey()` is gone, and the one remaining hand-built date string
+    (the month-end contribution date in the budget goal sync) uses `dateKey()` too. Local time
+    throughout, deliberately — `toISOString()` would report tomorrow's date on an evening in a
+    negative-offset zone.
+  - **Two test assertions repointed at the app constants they were really asserting** —
+    `test_agenda` reads `AGENDA_DAYS`, `test_recurring_reminders` reads `RECURRENCE_HORIZON.monthly`.
+    Both would otherwise have failed as "expected 7, got 10" the day those were tuned, blaming a
+    stale literal for a deliberate product change. `test_calendar_day_union` now asserts its six
+    rows by name rather than by total (a total says nothing about *which* six, and breaks if the
+    band gains a group), and `test_activity_overlaps` checks an exact array, matching the two
+    sibling assertions beside it.
 - **Codebase survey — three fixes landed, the rest recorded below under Ideas (2026-09-13).** A
   full investigation of `app.js` (11,270 lines, 706 functions, 46 test files) for bugs,
   limitations and refactorable code. Clean bill of health on several fronts worth knowing: **0
