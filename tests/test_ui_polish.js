@@ -153,6 +153,37 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (subnavEnd.rightVisible) throw new Error('right chevron should hide at the end of the strip');
   if (!subnavEnd.barVisible) throw new Error('the thin scroll bar should fade in on a scroll event');
 
+  // 5b. Scroll position survives the real render a tap on the strip itself triggers — render()
+  // fully replaces #app's innerHTML (see ARCHITECTURE.md), so without _captureSubnavScroll()/
+  // restoration in attachSubnavScrollAffordances(), the freshly-created .subnav node's native
+  // scrollLeft would start back at 0 the instant any button in it (including GENERAL, off-screen
+  // to the right) is tapped, snapping the whole strip back to the start.
+  const scrollBeforeTap = await page.evaluate(() => document.querySelector('#app .subnav-wrap > .subnav').scrollLeft);
+  await page.evaluate(() => {
+    const btn = [...document.querySelectorAll('#app .subnav button')].find(b => b.textContent.trim() === 'GENERAL');
+    btn.click(); // a real click through the real onclick="setSetupSubtab('general')", not calling the handler directly
+  });
+  await page.waitForTimeout(150);
+  const afterTap = await page.evaluate(() => ({
+    scrollLeft: document.querySelector('#app .subnav-wrap > .subnav').scrollLeft,
+    generalActive: [...document.querySelectorAll('#app .subnav button')].find(b => b.textContent.trim() === 'GENERAL').classList.contains('active'),
+    leftVisible: document.querySelector('#app .subnav-more-l').classList.contains('visible'),
+  }));
+  console.log('sub-nav after tapping GENERAL (a real re-render):', { scrollBeforeTap, ...afterTap });
+  if (!afterTap.generalActive) throw new Error('Expected GENERAL to actually become the active sub-tab');
+  if (afterTap.scrollLeft !== scrollBeforeTap) throw new Error(`Expected scroll position to survive the re-render (was ${scrollBeforeTap}), got ${afterTap.scrollLeft} — the strip snapped back`);
+  if (!afterTap.leftVisible) throw new Error('Expected the left chevron to still reflect the restored (scrolled-away-from-start) position, not the new node\'s default');
+
+  // 5c. A different sub-nav (different button labels) must never inherit this one's leftover
+  // scroll offset — _subnavScrollMemory is keyed by the strip's own text, specifically to prevent
+  // a totally unrelated sub-nav that happens to land in the same structural slot from restoring a
+  // stale, likely out-of-range position on first render.
+  await page.evaluate(() => { switchTab('train'); setTrainTopSubtab('progress'); });
+  await page.waitForTimeout(150);
+  const otherSubnav = await page.evaluate(() => document.querySelector('#app .subnav-wrap > .subnav').scrollLeft);
+  console.log("a different sub-nav (Progress) on first render:", otherSubnav);
+  if (otherSubnav !== 0) throw new Error(`Expected an unrelated sub-nav to start at 0, not inherit Exercise Setup's scroll offset — got ${otherSubnav}`);
+
   // A sub-nav that fits (Schedule Setup, 2 tabs) shows no affordances.
   const subnavShort = await page.evaluate(() => {
     document.getElementById('app').innerHTML = renderScheduleSetup();

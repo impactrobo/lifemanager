@@ -2692,6 +2692,27 @@ function subNav(inner, opts) {
   </div>`;
 }
 const _subnavHideTimers = new WeakMap();
+// Every render() fully replaces #app's innerHTML (see ARCHITECTURE.md), so a .subnav-wrap's
+// .subnav element is a brand-new DOM node on every single render — including the one triggered by
+// tapping a button inside that very strip — and a brand-new node's native scrollLeft starts at 0.
+// Without this, scrolling a subnav over to reach a button and tapping it makes the strip visibly
+// snap back to the start the instant it's tapped, even though the tap itself never scrolled
+// anything. _captureSubnavScroll() reads each strip's scrollLeft from the outgoing DOM right
+// before _doRender() overwrites it; attachSubnavScrollAffordances() (called after the new DOM
+// exists) writes it back onto the new node before that node's own chevron/scrollbar state is
+// computed, so there's no visible flash back to the start and no stale affordance state either.
+//
+// Keyed by the strip's own button-label text (nav.textContent) rather than DOM position/index —
+// navigating to a totally different screen can put an unrelated subnav in the same structural
+// slot, and a position-based key would leak that subnav's scroll offset onto this one. Distinct
+// subnavs always have distinct button labels, so this can't collide in practice, and the map is
+// bounded by the small, fixed number of subnavs the app actually has.
+let _subnavScrollMemory = new Map();
+function _captureSubnavScroll() {
+  document.querySelectorAll('#app .subnav-wrap > .subnav').forEach((/** @type {any} */ nav) => {
+    _subnavScrollMemory.set(nav.textContent, nav.scrollLeft);
+  });
+}
 // Wires (idempotently — uses .onscroll/.onclick, not addEventListener) each .subnav-wrap in the
 // current render: the end chevrons toggle on whenever there's more strip that way, the thin bar
 // tracks scrollLeft and fades itself out ~800ms after motion stops, and on a fine pointer a
@@ -2702,6 +2723,10 @@ function attachSubnavScrollAffordances() {
   wraps.forEach((/** @type {any} */ wrap) => {
     const nav = wrap.querySelector(':scope > .subnav');
     if (!nav) return;
+    // Restored before update(false) below reads scrollLeft, so the chevrons/scrollbar reflect the
+    // restored position immediately rather than the brand-new node's default 0.
+    const remembered = _subnavScrollMemory.get(nav.textContent);
+    if (remembered) nav.scrollLeft = remembered; // out-of-range is safely clamped by the browser
     const left = wrap.querySelector(':scope > .subnav-more-l');
     const right = wrap.querySelector(':scope > .subnav-more-r');
     const bar = wrap.querySelector(':scope > .subnav-scrollbar');
@@ -2794,6 +2819,7 @@ function renderTabbar() {
   return homeBtn + sectionBtns;
 }
 function _doRender() {
+  _captureSubnavScroll(); // read the outgoing DOM's scroll positions before innerHTML below destroys it
   const app = document.getElementById('app');
   if (CURRENT_TAB === 'home') {
     app.innerHTML = renderHome();
