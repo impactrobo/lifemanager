@@ -25,6 +25,7 @@ const ICONS = {
   timer: `<svg class="icon-svg" viewBox="0 0 24 24" width="1em" height="1em" aria-hidden="true"><circle cx="12" cy="13" r="8" fill="var(--accent)" fill-opacity=".16" stroke="var(--accent)" stroke-width="1.6"/><path d="M12 9v4l3 2" fill="none" stroke="var(--accent)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M9.5 2.5h5M12 4.5V2.5" stroke="var(--accent)" stroke-width="1.6" stroke-linecap="round"/></svg>`,
   pause: `<svg class="icon-svg" viewBox="0 0 24 24" width="1em" height="1em" aria-hidden="true"><rect x="7" y="5" width="4" height="14" rx="1" fill="var(--accent)"/><rect x="13" y="5" width="4" height="14" rx="1" fill="var(--accent)"/></svg>`,
   play: `<svg class="icon-svg" viewBox="0 0 24 24" width="1em" height="1em" aria-hidden="true"><path d="M7 4.5v15l13-7.5z" fill="var(--accent)"/></svg>`,
+  chevronRight: `<svg class="icon-svg" viewBox="0 0 24 24" width="1em" height="1em" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
   repeat: `<svg class="icon-svg" viewBox="0 0 24 24" width="1em" height="1em" aria-hidden="true"><path d="M4 11a8 8 0 0 1 13.9-5.4M20 13a8 8 0 0 1-13.9 5.4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M17.5 3v3.2h-3.2M6.5 21v-3.2h3.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
   clipboard: `<svg class="icon-svg" viewBox="0 0 24 24" width="1em" height="1em" aria-hidden="true"><rect x="5" y="4.5" width="14" height="17" rx="1.8" fill="var(--accent)" fill-opacity=".12" stroke="var(--accent)" stroke-width="1.6"/><rect x="9" y="3" width="6" height="3.4" rx="1" fill="var(--accent)" stroke="var(--accent)" stroke-width="1.2"/><path d="M8.3 12h7.4M8.3 15.3h7.4M8.3 8.7h4" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"/></svg>`,
   lock: `<svg class="icon-svg" viewBox="0 0 24 24" width="1em" height="1em" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="1.8" fill="var(--accent)" fill-opacity=".16" stroke="var(--accent)" stroke-width="1.6"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" fill="none" stroke="var(--accent)" stroke-width="1.6" stroke-linecap="round"/><circle cx="12" cy="15" r="1.6" fill="var(--accent)"/><path d="M12 16.6v2" stroke="var(--accent)" stroke-width="1.6" stroke-linecap="round"/></svg>`,
@@ -2569,6 +2570,9 @@ let VIEW = {
   noteDraftIngredientQuery: '',      // the ingredient search box's current text
   noteEditId: null,
   goalExpanded: null,                // which goal's ledger is open, one at a time
+  // Which halves of the collapsed day timeline are expanded. Lives in VIEW rather than UI because
+  // opening "what's coming" and then tapping into one of those blocks shouldn't close it again.
+  dayBandsOpen: { passed: false, coming: false },
 };
 
 // ---- Navigation position: "where am I" ----
@@ -11418,6 +11422,88 @@ function lifeLogForDate(dateStr) {
 // Was renderLifeDaily(), hardcoded to `new Date()` under the old dedicated TODAY subtab — now
 // generalized to any date and rendered inside Calendar's Day zoom (see renderCalDay()), so
 // browsing to a past or future day shows that day's anchors/schedule too, not just today's.
+// Below this many blocks there is nothing worth folding away, so the day renders in full.
+const DAY_COLLAPSE_MIN = 6;
+// Split a day around the moment you're in. "Active" is by clock span, not by which block
+// currentScheduleBlock() singled out: two overlapping blocks can both be underway, and calling the
+// wider one "passed" because the narrower one won the NOW badge would be a lie about the day.
+// A block crossing midnight counts as active on both sides of the wrap.
+function partitionDayBlocks(blocks, nowMin) {
+  const passed = [], now = [], coming = [];
+  blocks.forEach(b => {
+    const s = anchorMinutes(b.start);
+    const e = anchorMinutes(b.end);
+    const crosses = e < s;   // strict: e === s is a zero-length block, never active
+    const active = crosses ? (nowMin >= s || nowMin < e) : (nowMin >= s && nowMin < e);
+    if (active) now.push(b);
+    else if (!crosses && e <= nowMin) passed.push(b);
+    else coming.push(b);     // not started yet, including a midnight-crosser later today
+  });
+  return { passed, now, coming };
+}
+// One block's row. Pulled out of renderDailySchedule() so the folded and full views render an
+// identical row -- expanding a band must not produce subtly different markup from the full day.
+function renderDayTimelineRow(b, ctx) {
+  const d = blockDurationMinutes(b);
+  const meta = blockKindMeta(b.kind);
+  const barH = Math.round(14 + Math.sqrt(d / ctx.maxDur) * 28);
+  const badge = meta.badge
+    ? `<span class="day-chip" style="background:${meta.color}22; color:${meta.color};">${meta.badge}</span>` : '';
+  let leftMin = anchorMinutes(b.end) - ctx.nowMin; if (leftMin < 0) leftMin += 1440;
+  const nowBadge = b.id === ctx.currentId
+    ? `<span class="day-chip day-chip-now">NOW &middot; ${fmtDuration(leftMin)} LEFT</span>` : '';
+  const clash = ctx.overlaps[b.id];
+  const clashBadge = clash
+    ? `<span class="day-chip day-chip-clash" title="Overlaps ${escapeHtml(clash.join(', '))}">OVERLAPS ${escapeHtml(clash.length === 1 ? clash[0] : clash.length + ' OTHERS')}</span>` : '';
+  const isAnchor = b.kind === 'anchor';
+  const done = isAnchor && !!ctx.log[b.anchorId];
+  return `
+      <div class="day-row ${b.id === ctx.currentId ? 'day-row-now' : ''} ${done ? 'day-row-done' : ''}" ${isAnchor ? `onclick="toggleDailyAnchor('${b.anchorId}','${ctx.dateStr}')" style="cursor:pointer;"` : ''}>
+        <div class="day-bar-col"><div class="day-bar" style="background:${meta.color}; height:${barH}px;"></div></div>
+        <div class="day-body">
+          <div style="font-size:13px; font-weight:600;">${escapeHtml(b.label)}${badge}${nowBadge}${clashBadge}
+            <span style="color:var(--text-faint); font-weight:500; font-size:11px;">${fmtBlockTime(b)}${d ? ` &middot; ${fmtDuration(d)}` : ''}</span></div>
+          ${b.detail ? `<div style="font-size:11px; color:var(--text-dim); margin-top:2px;">${escapeHtml(b.detail)}</div>` : ''}
+        </div>
+        ${isAnchor ? `<div class="hit-mark ${done ? 'hit' : ''}" style="flex-shrink:0; align-self:center;">${done ? icon('check') : ''}</div>` : ''}
+      </div>`;
+}
+// A run of rows, with the "N free" markers between them. coveredTo tracks the running end of
+// everything placed so far so an overlap never reads as a gap.
+function renderDayTimelineRows(blocks, ctx) {
+  let out = '';
+  let coveredTo = -1;
+  blocks.forEach(b => {
+    const start = anchorMinutes(b.start);
+    const d = blockDurationMinutes(b);
+    // 30 minutes is the floor -- less than that is changeover, not a gap you'd plan into.
+    if (coveredTo >= 0 && start - coveredTo >= 30) {
+      out += `<div class="day-gap"><span>${fmtDuration(start - coveredTo)} free</span><span class="day-gap-line"></span></div>`;
+    }
+    coveredTo = Math.max(coveredTo, Math.min(start + d, 1440));
+    out += renderDayTimelineRow(b, ctx);
+  });
+  return out;
+}
+function toggleDayBand(which) {
+  VIEW.dayBandsOpen[which] = !VIEW.dayBandsOpen[which];
+  render();
+}
+// One fold. `hint` is what the band is worth knowing without opening it -- how much of what's
+// behind you actually got done, what's up next -- so the collapsed state still answers something.
+function renderDayBand(which, blocks, hint, ctx) {
+  if (!blocks.length) return '';
+  const open = !!VIEW.dayBandsOpen[which];
+  const label = which === 'passed' ? 'passed' : 'coming';
+  return `
+    <button class="day-band ${open ? 'day-band-open' : ''}" onclick="toggleDayBand('${which}')" aria-expanded="${open}">
+      <span class="day-band-caret">${icon('chevronRight')}</span>
+      <span class="day-band-count mono">${blocks.length}</span>
+      <span class="day-band-label">${label}</span>
+      ${hint ? `<span class="day-band-hint">${hint}</span>` : ''}
+    </button>
+    ${open ? `<div class="day-band-list">${renderDayTimelineRows(blocks, ctx)}</div>` : ''}`;
+}
 function renderDailySchedule(dateStr) {
   const log = lifeLogForDate(dateStr);
   const day = dayModel(dateStr);
@@ -11427,48 +11513,37 @@ function renderDailySchedule(dateStr) {
   const doneCount = anchorBlocks.filter(b => log[b.anchorId]).length;
   const isToday = day.isToday;
   // Reuses currentScheduleBlock() rather than re-deriving "what's on now", so the Day view and
-  // Home's RIGHT NOW card can never disagree about which block you're actually in.
+  // Home's day box can never disagree about which block you're actually in.
   const currentId = isToday ? ((currentScheduleBlock() || {}).id || null) : null;
   const booked = day.bookedMinutes;
-  const maxDur = Math.max(...blocks.map(blockDurationMinutes), 1);
   const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
-  const overlaps = dayOverlapWarnings(blocks);
+  const ctx = {
+    log, dateStr, currentId, nowMin,
+    maxDur: Math.max(...blocks.map(blockDurationMinutes), 1),
+    overlaps: dayOverlapWarnings(blocks),
+  };
 
-  let rows = '';
-  let coveredTo = -1; // running end of everything placed so far, so an overlap never reads as a gap
-  blocks.forEach(b => {
-    const start = anchorMinutes(b.start);
-    const d = blockDurationMinutes(b);
-    const meta = blockKindMeta(b.kind);
-    // Unscheduled time worth naming. 30 minutes is the floor — smaller than that is changeover,
-    // not a gap you'd plan into.
-    if (coveredTo >= 0 && start - coveredTo >= 30) {
-      rows += `<div class="day-gap"><span>${fmtDuration(start - coveredTo)} free</span><span class="day-gap-line"></span></div>`;
-    }
-    coveredTo = Math.max(coveredTo, Math.min(start + d, 1440));
-    // Square-root rather than linear: an 8-hour block should read as clearly longer than a 30
-    // minute one without dragging a nearly empty row 100px tall. Exact length is in the text.
-    const barH = Math.round(14 + Math.sqrt(d / maxDur) * 28);
-    const badge = meta.badge
-      ? `<span class="day-chip" style="background:${meta.color}22; color:${meta.color};">${meta.badge}</span>` : '';
-    let leftMin = anchorMinutes(b.end) - nowMin; if (leftMin < 0) leftMin += 1440;
-    const nowBadge = b.id === currentId
-      ? `<span class="day-chip day-chip-now">NOW &middot; ${fmtDuration(leftMin)} LEFT</span>` : '';
-    const clash = overlaps[b.id];
-    const clashBadge = clash
-      ? `<span class="day-chip day-chip-clash" title="Overlaps ${escapeHtml(clash.join(', '))}">OVERLAPS ${escapeHtml(clash.length === 1 ? clash[0] : clash.length + ' OTHERS')}</span>` : '';
-    const isAnchor = b.kind === 'anchor';
-    rows += `
-      <div class="day-row ${b.id === currentId ? 'day-row-now' : ''}" ${isAnchor ? `onclick="toggleDailyAnchor('${b.anchorId}','${dateStr}')" style="cursor:pointer;"` : ''}>
-        <div class="day-bar-col"><div class="day-bar" style="background:${meta.color}; height:${barH}px;"></div></div>
-        <div class="day-body">
-          <div style="font-size:13px; font-weight:600;">${escapeHtml(b.label)}${badge}${nowBadge}${clashBadge}
-            <span style="color:var(--text-faint); font-weight:500; font-size:11px;">${fmtBlockTime(b)}${d ? ` &middot; ${fmtDuration(d)}` : ''}</span></div>
-          ${b.detail ? `<div style="font-size:11px; color:var(--text-dim); margin-top:2px;">${escapeHtml(b.detail)}</div>` : ''}
-        </div>
-        ${isAnchor ? `<div class="hit-mark ${log[b.anchorId] ? 'hit' : ''}" style="flex-shrink:0; align-self:center;">${log[b.anchorId] ? icon('check') : ''}</div>` : ''}
-      </div>`;
-  });
+  // Folding only means anything on today: a past or future date has no "now" to fold around, and
+  // every block would land in one band, which is just the full day with an extra tap in front.
+  const folded = isToday && blocks.length >= DAY_COLLAPSE_MIN;
+  let rows;
+  if (!folded) {
+    rows = renderDayTimelineRows(blocks, ctx);
+  } else {
+    const { passed, now, coming } = partitionDayBlocks(blocks, nowMin);
+    const passedAnchors = passed.filter(b => b.kind === 'anchor');
+    const passedDone = passedAnchors.filter(b => log[b.anchorId]).length;
+    // What each fold is worth knowing without opening it.
+    const passedHint = passedAnchors.length ? `${passedDone} of ${passedAnchors.length} done` : '';
+    const next = coming[0];
+    const comingHint = next ? `next: ${escapeHtml(next.label)} ${fmtReminderTime(next.start)}` : '';
+    rows =
+      renderDayBand('passed', passed, passedHint, ctx)
+      + (now.length
+          ? renderDayTimelineRows(now, ctx)
+          : `<div class="day-nownothing">Nothing scheduled right now</div>`)
+      + renderDayBand('coming', coming, comingHint, ctx);
+  }
 
   return `
     <div class="panel" style="margin-bottom:14px;">

@@ -750,6 +750,35 @@ select { -webkit-appearance: none; appearance: none; background-image: linear-gr
   .entity-flash { animation: none; box-shadow: 0 0 0 2px var(--accent); }
 }
 
+
+/* ---------- Collapsed day timeline ---------- */
+/* The day folds around the moment you're in: what's behind you and what's ahead collapse to a
+   count you can open, with the block(s) actually underway left expanded between them. Only used
+   on today (see renderDailySchedule) -- another date has no "now" to fold around. */
+.day-band {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 10px 0; background: none; border: 0; text-align: left;
+  color: var(--text-dim); font-family: inherit; font-size: 12px; font-weight: 500;
+  cursor: pointer;
+}
+.day-band + .day-row, .day-band-list + .day-band, .day-row + .day-band, .day-nownothing + .day-band {
+  border-top: 1px solid var(--border-soft);
+}
+.day-band:hover { color: var(--text); }
+.day-band-caret { display: inline-flex; font-size: 11px; color: var(--text-faint); transition: transform 160ms ease; }
+.day-band-open .day-band-caret { transform: rotate(90deg); }
+.day-band-count { font-weight: 700; color: var(--text); font-size: 13px; }
+.day-band-label { margin-left: -3px; }
+/* Pushed to the far end so the count and the hint read as two separate facts, not one phrase. */
+.day-band-hint { margin-left: auto; font-size: 10px; color: var(--text-faint); text-align: right; }
+.day-band-list { padding-bottom: 2px; }
+/* A folded day with nothing underway still has to say so — otherwise the two bands sit flush
+   against each other and read as a rendering fault rather than a genuine gap in the day. */
+.day-nownothing { padding: 12px 0 12px 14px; font-size: 12px; color: var(--text-faint); font-style: italic; }
+/* A completed anchor inside a fold reads as finished rather than just listed. */
+.day-row-done .day-body { opacity: 0.55; }
+@media (prefers-reduced-motion: reduce) { .day-band-caret { transition: none; } }
+
 /* ---------- Recipe notes ---------- */
 .recipe-meta { font-size: 11px; color: var(--text-dim); margin-bottom: 8px; font-weight: 600; }
 .recipe-ing-list { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px; }
