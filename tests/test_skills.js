@@ -186,6 +186,88 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     throw new Error('Mastery must be reversible and give the item its derived rung back: ' + JSON.stringify(mastery));
   }
 
+  // ---- 6b. The ladder is legible on the card, and "stuck" is a filter rather than a model ----
+  const legible = await page.evaluate(a => {
+    const skill = skillById(a.s);
+    const items = skill.lists[0].items;
+    // vivir is mastered from §6; give the other two a history and push one to the ease floor.
+    Object.assign(items.find(x => x.name === 'hablar'),
+      { reps: 6, ease: 2.5, interval: 8, dueIn: 3, lastPractised: shiftDate(todayStr(), -2) });
+    Object.assign(items.find(x => x.name === 'comer'),
+      { reps: 3, ease: 1.3, interval: 1, dueIn: 0, lastPractised: shiftDate(todayStr(), -1) });
+    const fresh = defaultSkillItem('nuevo');
+    skill.lists[0].items.push(fresh);
+    saveState();
+    return {
+      labels: {
+        ahead: skillDueLabel(items.find(x => x.name === 'hablar')),
+        now: skillDueLabel(items.find(x => x.name === 'comer')),
+        fresh: skillDueLabel(fresh),
+        // Built inline: §6 leaves vivir un-mastered, having toggled it both ways.
+        retired: skillDueLabel({ mastered: true, lastPractised: '2026-01-01', dueIn: 9 }),
+        one: skillDueLabel({ lastPractised: '2026-01-01', dueIn: 1 }),
+      },
+      // A never-practised item is not "fighting you" — you haven't met it.
+      stuckFlags: { hard: skillItemIsStuck(items.find(x => x.name === 'comer')),
+                    fine: skillItemIsStuck(items.find(x => x.name === 'hablar')),
+                    fresh: skillItemIsStuck(fresh),
+                    mastered: skillItemIsStuck(Object.assign({}, items.find(x => x.name === 'comer'), { mastered: true })) },
+      stuckList: stuckSkillItems(skill).map(x => x.item.name),
+      sched: renderSkillSchedule(items.find(x => x.name === 'hablar')),
+      schedFresh: renderSkillSchedule(fresh),
+    };
+  }, { s: skillId });
+  console.log('legible:', JSON.stringify({ labels: legible.labels, flags: legible.stuckFlags, stuck: legible.stuckList }));
+  if (legible.labels.ahead !== 'due in 3 sessions') throw new Error('Due should read in plain words, got ' + legible.labels.ahead);
+  if (legible.labels.one !== 'due next session') throw new Error('One session away is singular, got ' + legible.labels.one);
+  if (legible.labels.now !== 'due now') throw new Error('A counted-down item is due now, got ' + legible.labels.now);
+  if (legible.labels.fresh !== 'never practised') throw new Error('A new item has no schedule yet, got ' + legible.labels.fresh);
+  if (legible.labels.retired !== 'retired') throw new Error('A mastered item is retired, got ' + legible.labels.retired);
+  if (!legible.stuckFlags.hard) throw new Error('An item at the ease floor is stuck');
+  if (legible.stuckFlags.fine) throw new Error('A healthy item is not stuck');
+  if (legible.stuckFlags.fresh) throw new Error('A never-practised item is not fighting you — you have not met it');
+  if (legible.stuckFlags.mastered) throw new Error('A retired item cannot be stuck');
+  if (legible.stuckList.join(',') !== 'comer') throw new Error('The stuck filter should find exactly one: ' + legible.stuckList);
+  if (!/due in 3 sessions/.test(legible.sched) || !/6 reps/.test(legible.sched) || !/ease 2\.50/.test(legible.sched)) {
+    throw new Error('The schedule line should answer "why did this not come up": ' + legible.sched);
+  }
+  if (/reps|ease/.test(legible.schedFresh)) throw new Error('A never-practised item has no reps or ease worth showing');
+
+  // The badge renders on the card, and the stuck list gets its own section on PROGRESS.
+  await page.evaluate(a => { openSkill(a.s); setSkillSubtab(skillById(a.s).lists[0].id); }, { s: skillId });
+  await settle(page);
+  const cardUi = await page.evaluate(() => ({
+    stuckBadges: document.querySelectorAll('.skill-band-stuck').length,
+    schedLines: document.querySelectorAll('.skill-sched').length,
+    cards: document.querySelectorAll('.skill-item').length,
+  }));
+  console.log('card ui:', cardUi);
+  if (cardUi.stuckBadges !== 1) throw new Error('Exactly one card should carry the STUCK badge, got ' + cardUi.stuckBadges);
+  if (cardUi.schedLines !== cardUi.cards) throw new Error('Every card shows its schedule, got ' + cardUi.schedLines + ' of ' + cardUi.cards);
+
+  await page.evaluate(() => setSkillSubtab('progress'));
+  await settle(page);
+  const progressUi = await page.evaluate(() => ({
+    section: !!document.querySelector('.skill-stuck'),
+    rows: document.querySelectorAll('.skill-stuck-row').length,
+    text: document.body.innerText,
+  }));
+  console.log('progress stuck section:', { section: progressUi.section, rows: progressUi.rows });
+  if (!progressUi.section || progressUi.rows !== 1) throw new Error('PROGRESS should list what is fighting you');
+  if (!/FIGHTING YOU/.test(progressUi.text)) throw new Error('The section needs its heading');
+
+  // With nothing stuck the section is absent entirely — an empty "fighting you" panel would be a
+  // measurement where there is nothing to measure.
+  const clean = await page.evaluate(a => {
+    const skill = skillById(a.s);
+    skill.lists[0].items.forEach(it => { it.ease = 2.5; });
+    saveState(); render();
+    return true;
+  }, { s: skillId });
+  await settle(page);
+  const gone = await page.evaluate(() => !!document.querySelector('.skill-stuck'));
+  if (!clean || gone) throw new Error('Nothing stuck means no section at all');
+
   // ---- 7. Guitar is untouched and still reachable ----
   await page.evaluate(() => { closeSkill(); });
   await settle(page);

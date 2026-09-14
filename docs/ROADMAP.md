@@ -414,6 +414,27 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Skills: the ladder becomes legible (2026-09-15).** Step 3 of the "Closing the Loop" punch list.
+  The engine computes a phase, a weight, a floor, an interval, a due countdown and an ease for every
+  item; the card showed a rung badge and nothing else, so when something didn't come up in a block
+  there was no way to find out why.
+  - **A schedule line on every item card**, leading with the plain-English half because "due in 3
+    sessions" is the question people actually have: `due in 12 sessions · 7 reps · ease 2.65 ·
+    last Sep 6`. A never-practised item says only "never practised" — reps and ease it doesn't have
+    yet would be noise, not information. A mastered one says "retired".
+  - **`stuckSkillItems()` finally has a caller**, which was the condition for keeping it: code with
+    no caller either earns a surface or gets deleted. A STUCK badge on the card, and a FIGHTING YOU
+    section on PROGRESS listing every item pinned at the ease floor. `skillItemIsStuck()` was split
+    out so the badge and the list share one predicate.
+  - It lives on **PROGRESS rather than beside the practice starter**: it's a diagnosis, not something
+    to act on mid-session, and stuck items can be spread across several lists — a per-list filter
+    would hide half of them. It names them and stops, the same posture as READY TO MASTER. Absent
+    entirely when nothing is stuck, since an empty "fighting you" panel is a measurement where there
+    is nothing to measure.
+  - STUCK is deliberately **not a rung**: it's orthogonal to how far along an item is, so it gets its
+    own hue rather than a place on the ladder. A stuck EXPERT is still an expert.
+  - A never-practised item can never read as stuck — it isn't fighting you, you haven't met it.
+
 - **Skills: confirm the moves before they commit (2026-09-15).** Step 2 of the "Closing the Loop"
   punch list, and the resolution of the undo question rather than an answer to it.
   - **FINISH opens a summary; it no longer commits.** Every rating is re-tappable right up to that

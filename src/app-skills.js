@@ -349,11 +349,13 @@ function renderSkillItemList(skill, list) {
         <div class="ehead">
           <input type="text" class="skill-item-name" value="${escapeHtml(it.name)}"
                  onchange="updateSkillItem('${skill.id}','${it.id}','name',this.value)">
+          ${skillItemIsStuck(it) ? `<span class="skill-band skill-band-stuck">STUCK</span>` : ''}
           <span class="skill-band skill-band-${band.key}">${band.label}</span>
           <button class="icon-btn" style="color:var(--bad);" onclick="deleteSkillItem('${skill.id}','${it.id}')">${icon('close')}</button>
         </div>
         <input type="text" class="skill-item-detail" placeholder="A note about it — what it is, why it matters"
                value="${escapeHtml(it.detail)}" onchange="updateSkillItem('${skill.id}','${it.id}','detail',this.value)">
+        ${renderSkillSchedule(it)}
         ${band.readyToMaster && !it.mastered
           ? `<button class="btn btn-sm btn-good btn-block" style="margin-top:8px;" onclick="toggleSkillItemMastered('${skill.id}','${it.id}')">READY TO MASTER &mdash; RETIRE IT</button>`
           : it.mastered
@@ -444,6 +446,32 @@ function renderSkillPracticeLog(skill) {
       </div>`).join('') || emptyState('No sessions logged yet.')}</div>`;
 }
 
+// The stuck list, which is the whole "filter, not a model" argument made visible. An item you rate
+// AGAIN every session sits pinned at the ease floor and quietly eats your practice time, and finding
+// it is a one-line predicate over data the engine already keeps. It lives on PROGRESS rather than
+// beside the practice starter because it's a diagnosis, not a thing to act on mid-session -- and
+// because stuck items can be spread across several lists, so a per-list filter would hide half of
+// them. Nothing here is a prompt: it names them and stops, the same posture as READY TO MASTER.
+function renderStuckSkillItems(skill) {
+  const stuck = stuckSkillItems(skill);
+  if (!stuck.length) return '';
+  return `
+    <div class="subtle-label" style="margin:22px 0 8px;">FIGHTING YOU</div>
+    <div class="panel skill-stuck">
+      <div class="skill-start-note" style="margin-bottom:9px;">
+        ${stuck.length === 1 ? 'This one is' : `These ${stuck.length} are`} at the difficulty floor —
+        rated hard or lost often enough that ${stuck.length === 1 ? 'it keeps' : 'they keep'}
+        resurfacing. Worth breaking down differently rather than repeating.
+      </div>
+      <div class="stack">${stuck.map(({ list, item }) => `
+        <div class="skill-stuck-row">
+          <span class="skill-stuck-name">${escapeHtml(item.name)}</span>
+          <span class="skill-stuck-list">${escapeHtml(list.name)}</span>
+          <span class="skill-band skill-band-stuck">${skillClampEase(item.ease).toFixed(2)}</span>
+        </div>`).join('')}</div>
+    </div>`;
+}
+
 // The timeline reads the ladder rather than a separate "learned date" map -- which is also what
 // finally fixes guitar's Techniques list never appearing on its own timeline, since that list
 // simply never stamped a date. Every item is on the same footing here by construction.
@@ -470,6 +498,7 @@ function renderSkillTimeline(skill) {
         ${['new', 'learning', 'proficient', 'expert', 'mastered'].map(k =>
           `<span class="skill-legend-item"><i class="skill-bar-${k}"></i>${k} ${counts[k] || 0}</span>`).join('')}
       </div>` : ''}
+    ${renderStuckSkillItems(skill)}
     <div class="subtle-label" style="margin:22px 0 8px;">RECENTLY PRACTISED</div>
     <div class="entry-list">${dated.slice(0, 30).map(e => `
       <div class="entry-card">

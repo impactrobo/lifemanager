@@ -340,12 +340,44 @@ function buildSkillBlock(skill, minutes, today) {
 // The stuck filter. An item you rate AGAIN every session sits pinned at the ease floor and quietly
 // eats your practice time -- a signal the arithmetic produces for nothing. No model required; this
 // is also the natural hook for an "ask why I'm stuck" button later.
+//
+// Requires at least one rep, so a never-practised item can't read as stuck: it isn't fighting you,
+// you haven't met it.
+function skillItemIsStuck(item) {
+  return !!item && !item.mastered && skillClampEase(item.ease) <= SKILL_EASE_MIN && skillItemReps(item) > 0;
+}
 function stuckSkillItems(skill) {
   const out = [];
   (skill && skill.lists || []).forEach(list => (list.items || []).forEach(item => {
-    if (!item.mastered && skillClampEase(item.ease) <= SKILL_EASE_MIN && skillItemReps(item) > 0) out.push({ list, item });
+    if (skillItemIsStuck(item)) out.push({ list, item });
   }));
   return out;
+}
+
+// ---- The schedule, in words ----
+//
+// The engine computes a phase, a weight, a floor, an interval, a due countdown and an ease for every
+// item, and until now the card showed a rung badge and nothing else -- so when something didn't come
+// up in a block there was no way to find out why. This is that answer, and it leads with the plain
+// -English half because "due in 3" is the question people actually have.
+function skillDueLabel(item) {
+  if (!item || item.mastered) return 'retired';
+  if (!item.lastPractised) return 'never practised';
+  const due = Math.max(0, Math.round(Number(item.dueIn) || 0));
+  if (due <= 0) return 'due now';
+  return due === 1 ? 'due next session' : `due in ${due} sessions`;
+}
+function renderSkillSchedule(item) {
+  const reps = skillItemReps(item);
+  const ease = skillClampEase(item.ease);
+  const stuck = skillItemIsStuck(item);
+  const parts = [`<span class="skill-sched-due">${skillDueLabel(item)}</span>`];
+  if (reps) parts.push(`<span>${reps} rep${reps === 1 ? '' : 's'}</span>`);
+  // Ease is the one raw number worth exposing: it's what "this is fighting me" looks like as data,
+  // and seeing it sit at the floor is what makes the STUCK badge legible rather than mysterious.
+  if (reps) parts.push(`<span class="${stuck ? 'skill-sched-bad' : ''}">ease ${ease.toFixed(2)}</span>`);
+  if (item.lastPractised) parts.push(`<span>last ${fmtGoalDate(item.lastPractised)}</span>`);
+  return `<div class="skill-sched">${parts.join('')}</div>`;
 }
 
 // ---- Running a session ----

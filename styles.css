@@ -1178,6 +1178,26 @@ input[type="text"].skill-item-detail:focus { outline: none; color: var(--text); 
 .skill-verdict-good  { --rung: var(--good); }
 .skill-verdict-easy  { --rung: var(--accent); }
 
+/* ---------- The ladder, made legible ---------- */
+/* STUCK is not a rung -- it says an item is fighting you, which is orthogonal to how far along it
+   is. Its own hue keeps that separate: a stuck EXPERT is still an expert. */
+.skill-band-stuck { --rung: var(--bad); }
+/* The plain-English half leads, because "due in 3" is the question people actually have; the raw
+   numbers follow it for when the answer isn't enough. Wraps rather than truncating -- four short
+   facts on a 390px screen is two lines, and two legible lines beat one clipped one. */
+.skill-sched {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 3px 10px; margin-top: 7px;
+  font-family: var(--font-mono); font-size: 10px; color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+.skill-sched-due { color: var(--text-dim); font-weight: 700; }
+.skill-sched-bad { color: var(--bad); }
+
+.skill-stuck { border-color: var(--bad); }
+.skill-stuck-row { display: flex; align-items: center; gap: 9px; }
+.skill-stuck-name { flex: 1 1 auto; min-width: 0; font-weight: 650; font-size: 13px; }
+.skill-stuck-list { flex: none; font-size: 10px; color: var(--text-faint); }
+
 
 
 /* ---------- A checked-off reminder ---------- */
