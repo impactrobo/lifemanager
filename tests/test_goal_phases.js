@@ -268,7 +268,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // ---- 12. It renders, and survives a reload ----
   await seed();
-  await page.evaluate(() => { switchTab('health'); setHealthSubtab('goal'); });
+  await page.evaluate(() => { switchTab('train'); setFitnessSubtab('goal'); });
   await settle(page);
   const ui = await page.evaluate(() => ({
     cards: document.querySelectorAll('.phase-card').length,

@@ -65,7 +65,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (series[series.length - 1].date !== '2026-07-15') throw new Error('Expected the last point to be the most recent session, with the incomplete 225 set excluded from its top-set pick');
 
   // 4. COMPARE view: navigate there, select the Squat T1 metric alongside default Body Weight
-  await page.evaluate(() => { switchTab('train'); setTrainTopSubtab('progress'); setProgressSubtab('compare'); });
+  await page.evaluate(() => { switchTab('train'); setFitnessSubtab('body'); setBodySubtab('compare'); });
   await settle(page);
   const defaultSelected = await page.evaluate(() => [...VIEW.compareSelected]);
   console.log('default VIEW.compareSelected:', defaultSelected);

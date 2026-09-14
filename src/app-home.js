@@ -90,11 +90,25 @@ const EXTRA_TIME_CATEGORIES = [
   { id: 'social', label: 'SOCIAL', color: '#FF9ED8' },
   { id: 'chores', label: 'CHORES', color: '#FFB37D' },
 ];
+// Two lists, not one, because "what can this id still mean?" and "what may I pick now?" stopped
+// being the same question once sections started retiring.
+//
+// timeCategories() RESOLVES: every id that has ever been offered, so an activity tagged 'health'
+// years ago still reads back with its own label and colour. Dropping a retired id from here would
+// silently strip the tag off real logged time.
+//
+// timeCategoryChoices() OFFERS: what a <select> should show today. 'schedule' was never a category
+// (it's the container everything sits in), and 'health' stopped being one when Health & Diet merged
+// into Health & Fitness -- offering both would be two names for the same section.
+const RETIRED_TIME_CATEGORIES = ['health'];
 function timeCategories() {
   const fromSections = Object.keys(HOME_SECTION_META)
     .filter(id => id !== 'schedule')
     .map(id => ({ id, label: HOME_SECTION_META[id].label, color: HOME_SECTION_META[id].color }));
   return fromSections.concat(EXTRA_TIME_CATEGORIES);
+}
+function timeCategoryChoices() {
+  return timeCategories().filter(c => RETIRED_TIME_CATEGORIES.indexOf(c.id) < 0);
 }
 function timeCategoryMeta(id) { return timeCategories().find(c => c.id === id) || null; }
 // A <select> shared by the anchor and activity editors. Uncategorised is the default and stays a
@@ -103,7 +117,7 @@ function timeCategorySelect(current, onchange) {
   return `<label class="field"><span class="lbl">Counts as</span>
     <select onchange="${onchange}">
       <option value="" ${!current ? 'selected' : ''}>Uncategorised</option>
-      ${timeCategories().map(c => `<option value="${c.id}" ${current === c.id ? 'selected' : ''}>${escapeHtml(c.label)}</option>`).join('')}
+      ${timeCategoryChoices().map(c => `<option value="${c.id}" ${current === c.id ? 'selected' : ''}>${escapeHtml(c.label)}</option>`).join('')}
     </select>
   </label>`;
 }
@@ -465,7 +479,7 @@ function openTodayWorkout(workoutId) {
   pushNavHistory();
   resetTransientUi(); // leaves Home directly, bypassing switchTab()
   NAV.currentTab = 'train';
-  NAV.trainTopSubtab = 'workouts';
+  NAV.fitnessSubtab = 'workouts';
   if (w.type === 'cardio') openCardioLog(w.id);
   else openWorkoutLog(w.id); // auto-detects GZCL vs exercises[] shape
 }

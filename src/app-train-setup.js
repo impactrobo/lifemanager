@@ -45,7 +45,7 @@ function renderVolumeLandmarksSetup() {
   }).join('');
   return `
     <div class="subtle-label" style="margin-bottom:10px;">MEV / MAV / MRV BY MUSCLE</div>
-    <div style="font-size:11px; color:var(--text-faint); margin-bottom:12px;">Defaults come from a standard RP-style hypertrophy template — adjust to fit your own recovery capacity. These bands show up behind the bars on <b style="color:var(--text)">Exercise &rarr; Progress &rarr; Set Volume</b>.</div>
+    <div style="font-size:11px; color:var(--text-faint); margin-bottom:12px;">Defaults come from a standard RP-style hypertrophy template — adjust to fit your own recovery capacity. These bands show up behind the bars on <b style="color:var(--text)">Body &rarr; Set Volume</b>.</div>
     ${rows}`;
 }
 function updateLandmark(muscle, field, val) {
@@ -376,7 +376,8 @@ function editWorkout(id) {
   const w = getWorkout(id);
   if (!w) return;
   ensureTab('train');
-  NAV.trainTopSubtab = 'setup';
+  NAV.fitnessSubtab = 'setup';
+  NAV.setupPanel = 'workouts';
   VIEW.builderType = w.type;
   VIEW.builderSelected[w.type] = w.id;
   UI.builderStylePickerOpen = false;
@@ -1143,38 +1144,47 @@ const MEASURE_FIELDS = [
   { key: 'lCalf', label: 'L Calf', unit: 'length' },
 ];
 
-function renderHealth() {
-  if (NAV.healthSubtab === 'setup') return renderHealthSetup(); // already a full .screen with its own header — don't double-wrap
-  let body;
-  if (NAV.healthSubtab === 'goal') body = renderGoalTab();
-  else if (NAV.healthSubtab === 'specs') body = renderSpecs();
-  else if (NAV.healthSubtab === 'diet') body = renderDietSetup();
-  else body = renderLifeLongevity();
+// The shared chrome for the merged tab's simpler screens -- GOAL, DIET and LONGEVITY are just a
+// title over someone else's render function, and each used to grow its own copy of this.
+function renderFitnessScreen(body) {
   return `<div class="screen">
-    <div class="section-title">Health &amp; Diet</div>
+    <div class="section-title">Health &amp; Fitness</div>
     ${body}
   </div>`;
 }
-function setHealthSubtab(t) { NAV.healthSubtab = t; render(); }
+function setFitnessSubtab(t) { NAV.fitnessSubtab = t; resetTrainViewForSubtab(t); render(); }
 
-function renderExerciseProgress() {
-  const subnav = subNav(`
-    <button class="${NAV.progressSubtab==='bodyweight'?'active':''}" onclick="setProgressSubtab('bodyweight')">BODY WEIGHT</button>
-    <button class="${NAV.progressSubtab==='bodymeasurement'?'active':''}" onclick="setProgressSubtab('bodymeasurement')">BODY MEASUREMENT</button>
-    <button class="${NAV.progressSubtab==='volume'?'active':''}" onclick="setProgressSubtab('volume')">SET VOLUME</button>
-    <button class="${NAV.progressSubtab==='compare'?'active':''}" onclick="setProgressSubtab('compare')">COMPARE</button>
-    <button class="${NAV.progressSubtab==='pr'?'active':''}" onclick="setProgressSubtab('pr')">PR LOG</button>
-  `, { marginTop: false });
+// BODY -- what Exercise's PROGRESS and Health's SPECS used to be between them.
+//
+// The seam this closes: a weight entry was logged in Health -> Specs while its chart lived in
+// Exercise -> Progress, two tabs apart, for the same rows of the same array. WEIGHT and
+// MEASUREMENTS now each show the chart with its own entry list directly beneath it, so logging a
+// weight and seeing what it did to the trend is one screen instead of a tab switch.
+//
+// SET VOLUME / COMPARE / PR LOG carry over untouched -- they were never split, so there's nothing
+// to unify, and folding them into the other two would only make both screens longer.
+function renderBody() {
+  const tab = (key, label) =>
+    `<button class="${NAV.bodySubtab===key?'active':''}" onclick="setBodySubtab('${key}')">${label}</button>`;
+  const subnav = subNav(
+    tab('weight', 'WEIGHT') + tab('measurements', 'MEASUREMENTS') +
+    tab('volume', 'SET VOLUME') + tab('compare', 'COMPARE') + tab('pr', 'PR LOG'),
+    { marginTop: false });
   let body;
-  if (NAV.progressSubtab === 'bodyweight') body = renderBodyWeightChart();
-  else if (NAV.progressSubtab === 'bodymeasurement') body = renderBodyMeasurementChart();
-  else if (NAV.progressSubtab === 'compare') body = renderCompareView();
-  else if (NAV.progressSubtab === 'pr') body = renderPrLog();
+  if (NAV.bodySubtab === 'weight') {
+    body = renderBodyWeightChart() + `<div class="divider"></div>
+      <div class="subtle-label" style="margin-bottom:8px;">LOG</div>` + renderWeightLog();
+  } else if (NAV.bodySubtab === 'measurements') {
+    body = renderBodyMeasurementChart() + `<div class="divider"></div>
+      <div class="subtle-label" style="margin-bottom:8px;">LOG</div>` + renderMeasurements();
+  }
+  else if (NAV.bodySubtab === 'compare') body = renderCompareView();
+  else if (NAV.bodySubtab === 'pr') body = renderPrLog();
   else body = renderVolume();
   return `<div class="screen">
-    <div class="section-title">Exercise</div>
+    <div class="section-title">Health &amp; Fitness</div>
     ${subnav}
     ${body}
   </div>`;
 }
-function setProgressSubtab(t) { NAV.progressSubtab = t; render(); }
+function setBodySubtab(t) { NAV.bodySubtab = t; render(); }

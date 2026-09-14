@@ -166,7 +166,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     const w = STATE.workouts.find(x => x.id === wid);
     w.exercises.push({ id: 'x9', name: 'Some Unmatched Thing', sets: 3, repMin: 8, repMax: 12,
       targetRIR: 2, resType: 'weight', setType: 'straight', muscle: 'Chest', adjustments: [] });
-    switchTab('train'); NAV.trainTopSubtab = 'setup'; NAV.setupSubtab = 'lifts'; render();
+    switchTab('train'); NAV.fitnessSubtab = 'setup'; NAV.setupSubtab = 'lifts'; render();
   }, refs.workoutId);
   await settle(page);
   // Opening and typing have to straddle a settle(): render() defers to rAF, so the picker's input
@@ -190,7 +190,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // ---- 6. The picker: muscle first, and it never assigns by itself ----
   await page.evaluate(() => {
     STATE.workouts = []; STATE.lifts = [];
-    switchTab('train'); NAV.trainTopSubtab = 'setup'; NAV.setupSubtab = 'lifts'; render();
+    switchTab('train'); NAV.fitnessSubtab = 'setup'; NAV.setupSubtab = 'lifts'; render();
   });
   await settle(page);
   // Each step needs its own settle() for the same rAF reason.

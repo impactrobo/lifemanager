@@ -851,7 +851,7 @@ function renderExercisePhaseBody(entry) {
       </div>
       <div class="phase-cal-note">
         ${entry.state === 'current'
-          ? 'This is the plan in effect. Edit it in Train &rarr; Setup &rarr; Planner.'
+          ? 'This is the plan in effect. Edit it in Setup &rarr; Workouts &rarr; Planner.'
           : entry.state === 'future'
             ? `Takes over on ${fmtGoalDate(entry.startDate)}.`
             : 'Finished, and kept as it was — starting a new block never overwrites an old one.'}

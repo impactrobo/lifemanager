@@ -6,7 +6,12 @@ const { settle, appFiles } = require('./helpers');
 const path = require('path');
 
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
-const TABS = ['home', 'train', 'hobbies', 'health', 'notes', 'schedule', 'budget', 'setup'];
+// No 'health': Health & Diet merged into Health & Fitness, which is still the 'train' tab id.
+// Worth knowing how this test read BEFORE that entry came out — it passed, because switchTab() to
+// a tab with no render branch leaves the PREVIOUS tab's markup in #app, so "#app is non-empty" and
+// "NAV.currentTab is what I set" were both still true. It reported `health: 11993 chars`, byte for
+// byte identical to the `hobbies` line above it. Hence the identical-render guard below.
+const TABS = ['home', 'train', 'hobbies', 'notes', 'schedule', 'budget', 'setup'];
 
 // Two files declaring the same top-level `function` name is SILENT. The later script in load order
 // simply wins, the earlier one's callers quietly run the wrong body, and nothing anywhere throws —
@@ -56,19 +61,24 @@ function assertNoDuplicateGlobals() {
   if (!aesthetic) throw new Error('no data-aesthetic applied to <html> on load');
 
   // Every section renders something and sets NAV.currentTab.
+  let prevHtml = null;
   for (const tab of TABS) {
     await page.evaluate(t => switchTab(t), tab);
     await settle(page); // render() defers to rAF
-    const len = await page.evaluate(() => document.getElementById('app').innerHTML.trim().length);
+    const html = await page.evaluate(() => document.getElementById('app').innerHTML.trim());
     const current = await page.evaluate(() => NAV.currentTab);
-    console.log(`  ${tab}: #app ${len} chars, NAV.currentTab=${current}`);
-    if (len === 0) throw new Error(`#app empty after switchTab('${tab}')`);
+    console.log(`  ${tab}: #app ${html.length} chars, NAV.currentTab=${current}`);
+    if (html.length === 0) throw new Error(`#app empty after switchTab('${tab}')`);
     if (current !== tab) throw new Error(`NAV.currentTab is '${current}', expected '${tab}'`);
+    // A tab with no render branch doesn't blank #app — it leaves the last tab's markup sitting
+    // there, so "non-empty" alone can't tell a rendered tab from a dead one.
+    if (html === prevHtml) throw new Error(`switchTab('${tab}') rendered nothing — #app is byte-identical to the previous tab`);
+    prevHtml = html;
   }
 
   // Narrow-viewport tabbar must scroll, never clip buttons off-screen (regression guard —
   // see ARCHITECTURE.md > "Navigation & the bottom tabbar").
-  await page.evaluate(() => switchTab('health'));
+  await page.evaluate(() => switchTab('train'));
   await settle(page);
   const clip = await page.evaluate(() => {
     const bar = document.getElementById('tabbar');

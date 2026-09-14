@@ -92,7 +92,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   await page.evaluate(() => { document.getElementById('testTallSpacer').remove(); window.scrollTo(0, 0); });
 
   // 4. attachScrollIndicators() actually wires up a real .scroll-box — Meal Builder's food list
-  await page.evaluate(() => { switchTab('health'); setHealthSubtab('setup'); });
+  await page.evaluate(() => { switchTab('train'); setFitnessSubtab('setup'); setSetupPanel('meals'); });
   await settle(page);
   await page.evaluate(() => startNewMeal());
   await settle(page);
@@ -131,8 +131,11 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (!boxIndicatorTracks.ok) throw new Error('.scroll-box indicator drifted outside the box when scrolled: ' + JSON.stringify(boxIndicatorTracks));
   await page.evaluate(() => cancelMealDraft());
 
-  // 5. Sub-nav scroll affordances. Exercise Setup has 6 sub-tabs — it overflows a 390px phone.
-  await page.evaluate(() => { switchTab('train'); NAV.trainTopSubtab = 'setup'; render(); });
+  // 5. Sub-nav scroll affordances. Setup's WORKOUTS panel has 7 sub-tabs — it overflows a 390px
+  // phone. The panel has to be set explicitly: Setup remembers which half you were last on, and
+  // the meal-draft work just above this leaves it on MEALS, whose subnav is shorter and has no
+  // GENERAL button for 5b to click.
+  await page.evaluate(() => { switchTab('train'); NAV.fitnessSubtab = 'setup'; NAV.setupPanel = 'workouts'; render(); });
   await settle(page);
   const subnavFresh = await page.evaluate(() => {
     const w = document.querySelector('#app .subnav-wrap');
@@ -145,7 +148,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     };
   });
   console.log('sub-nav at rest (scrolled to start):', subnavFresh);
-  if (!subnavFresh.overflows) throw new Error('Exercise Setup sub-nav should overflow a 390px viewport');
+  if (!subnavFresh.overflows) throw new Error("Setup's WORKOUTS sub-nav should overflow a 390px viewport");
   if (subnavFresh.leftVisible) throw new Error('left chevron should be hidden at the start of the strip');
   if (!subnavFresh.rightVisible) throw new Error('right chevron should show when there is more strip to the right');
 
@@ -190,7 +193,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // scroll offset — _subnavScrollMemory is keyed by the strip's own text, specifically to prevent
   // a totally unrelated sub-nav that happens to land in the same structural slot from restoring a
   // stale, likely out-of-range position on first render.
-  await page.evaluate(() => { switchTab('train'); setTrainTopSubtab('progress'); });
+  await page.evaluate(() => { switchTab('train'); setFitnessSubtab('body'); });
   await settle(page);
   const otherSubnav = await page.evaluate(() => document.querySelector('#app .subnav-wrap > .subnav').scrollLeft);
   console.log("a different sub-nav (Progress) on first render:", otherSubnav);

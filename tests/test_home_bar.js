@@ -81,23 +81,36 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // not the app.
   await page.evaluate(() => switchTab('home'));
   await settle(page);
+  // Two sections are now retired this way, for different reasons: Home absorbed SCHEDULE, and
+  // Health & Fitness absorbed HEALTH & DIET. Both keep their HOME_SECTION_META entry purely so link
+  // chips can still colour themselves from it — which is the whole failure mode this guards.
   const identity = await page.evaluate(() => ({
     inDefaultLayout: defaultHomeLayout().sectionOrder.includes('schedule'),
     inMeta: !!HOME_SECTION_META.schedule,
+    healthInDefaultLayout: defaultHomeLayout().sectionOrder.includes('health'),
+    healthInMeta: !!HOME_SECTION_META.health,
     // The reason the entry has to stay: link chips colour themselves from it.
     reminderChipColor: linkColor(LINKABLE_TYPES.reminder.section),
     habitChipColor: linkColor(LINKABLE_TYPES.habit.section),
     activityChipColor: linkColor(LINKABLE_TYPES.activity.section),
+    mealChipColor: linkColor(LINKABLE_TYPES.meal.section),
+    workoutChipColor: linkColor(LINKABLE_TYPES.workout.section),
     tilesOnHome: document.querySelectorAll('.home-tile').length,
   }));
   console.log('schedule identity:', identity);
   if (identity.inDefaultLayout) throw new Error('The SCHEDULE tile should be retired from the default layout');
   if (!identity.inMeta) throw new Error('HOME_SECTION_META.schedule must survive: the link chips colour themselves from it');
+  if (identity.healthInDefaultLayout) throw new Error('The HEALTH & DIET tile should be retired — it merged into Health & Fitness');
+  if (!identity.healthInMeta) throw new Error('HOME_SECTION_META.health must survive: meal link chips colour themselves from it');
   // `var(` means linkColor() fell through to its neutral fallback rather than finding a section.
-  [['reminder', identity.reminderChipColor], ['habit', identity.habitChipColor], ['activity', identity.activityChipColor]].forEach(([k, c]) => {
+  [['reminder', identity.reminderChipColor], ['habit', identity.habitChipColor], ['activity', identity.activityChipColor],
+   ['meal', identity.mealChipColor], ['workout', identity.workoutChipColor]].forEach(([k, c]) => {
     if (!c || c.startsWith('var(')) throw new Error(`${k} link chips lost their section colour when the tile was retired (got ${c})`);
   });
-  if (identity.tilesOnHome !== 5) throw new Error(`Expected 5 section tiles, got ${identity.tilesOnHome}`);
+  // Meal and workout chips staying DIFFERENT colours is the point of keeping both entries — one
+  // tab now, but a meal and a workout are still different things to see at a glance.
+  if (identity.mealChipColor === identity.workoutChipColor) throw new Error('meal and workout chips should stay visually distinct');
+  if (identity.tilesOnHome !== 4) throw new Error(`Expected 4 section tiles, got ${identity.tilesOnHome}`);
 
   // ---- 4. Schedule is still reachable, and its own bar still says HOME ----
   // Navigate, settle, THEN read: reading inside the same evaluate gets the pre-render tabbar, which

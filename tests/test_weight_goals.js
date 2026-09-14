@@ -176,12 +176,12 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (!/\d{4}/.test(dates.nextYear)) throw new Error('A date in another year must show the year, or "Jun 6" reads as this June');
 
   // ---- 10. The screen renders, and survives a reload ----
-  await page.evaluate(() => { switchTab('health'); setHealthSubtab('goal'); });
+  await page.evaluate(() => { switchTab('train'); setFitnessSubtab('goal'); });
   await settle(page);
   const ui = await page.evaluate(() => ({
     hasCard: !!document.querySelector('.goal-bar'),
     hasRows: document.querySelectorAll('.goal-row').length,
-    tabIsGoal: NAV.healthSubtab === 'goal',
+    tabIsGoal: NAV.fitnessSubtab === 'goal',
   }));
   console.log('screen:', ui);
   if (!ui.hasCard) throw new Error('The goal screen should render a progress bar');

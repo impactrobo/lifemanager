@@ -144,18 +144,10 @@ function renderCompareBlock(list) {
 }
 
 // ---------------- WEIGHT & CALORIES ----------------
-// Consolidates the old separate Weight and Measure tabs into one SPECS tab — both are "specs
-// about your body over time", just different units, so they read better as one scrollable page
-// than two nearly-empty tabs.
-function renderSpecs() {
-  return `
-    <div class="subtle-label" style="margin-bottom:8px;">BODY WEIGHT</div>
-    ${renderWeightLog()}
-    <div class="divider"></div>
-    <div class="subtle-label" style="margin-bottom:8px;">MEASUREMENTS</div>
-    ${renderMeasurements()}
-  `;
-}
+// renderWeightLog() and renderMeasurements() used to be stacked together by a renderSpecs() under
+// Health -> Specs, with their CHARTS a whole tab away under Exercise -> Progress. The Health &
+// Fitness merge put each log directly under its own chart instead (see renderBody()), so the
+// wrapper had nothing left to wrap and went away.
 function renderWeightLog() {
   const list = [...STATE.weightLog].sort((a,b) => b.date.localeCompare(a.date));
   const addForm = UI.weightLogFormOpen ? renderWeightForm() : `<button class="btn btn-primary btn-block" onclick="toggleWeightForm()">+ ADD ENTRY</button>`;
@@ -175,7 +167,6 @@ function renderWeightLog() {
     </div>`).join('');
   return `
     <div style="margin-bottom:12px;">${addForm}</div>
-    <div style="font-size:11px; color:var(--text-faint); margin-bottom:10px;">See the trend over time on <b style="color:var(--text)">Exercise &rarr; Progress &rarr; Body Weight</b>.</div>
     <div class="entry-list">${cards || emptyState('No weight entries logged yet.')}</div>`;
 }
 function toggleWeightForm() { UI.weightLogFormOpen = !UI.weightLogFormOpen; render(); }
@@ -361,7 +352,10 @@ function drawWeightChart() {
   });
 }
 
-// ---------------- PROGRESS: chart-only views (data entry lives on the Health & Diet tab) ----------------
+// ---------------- BODY: a chart with its own log under it ----------------
+// These were chart-ONLY views while entry lived a tab away under Health & Diet -> Specs.
+// renderBody() now stacks each log directly beneath its chart, which is the seam the Health &
+// Fitness merge existed to close -- so these empty states point DOWN the page, not sideways.
 // Same three metrics the weight-log entry form can capture (weight required, body fat %/body
 // water % optional smart-scale readings) \u2014 one chart at a time via this selector, same UX
 // convention as VIEW.selectedMeasurementField's dropdown below for Body Measurements.
@@ -383,7 +377,7 @@ function renderBodyWeightChart() {
     </label>`;
   const list = STATE.weightLog.filter(e => isWeight ? e.weightLb != null : e[metric.key] != null);
   if (list.length < 2) {
-    return selector + emptyState(`Log at least 2 entries with ${metric.label} on Health & Diet \u2192 Weight & Calories to see a trend here.`);
+    return selector + emptyState(`Log at least 2 entries with ${metric.label} in the log below to see a trend here.`);
   }
   return selector + `<div class="chart-wrap"><canvas id="weightChart" height="180"></canvas></div>`;
 }
@@ -402,7 +396,7 @@ function renderBodyMeasurementChart() {
     .sort((a,b) => a.date.localeCompare(b.date));
   const chart = list.length >= 2
     ? `<div class="chart-wrap"><canvas id="measurementChart" height="180"></canvas></div>`
-    : emptyState(`Log at least 2 entries with ${field.label} on Health & Diet \u2192 Body Measurements to see a trend here.`);
+    : emptyState(`Log at least 2 entries with ${field.label} in the log below to see a trend here.`);
   return fieldSelect + chart;
 }
 let measurementChartInstance = null;
@@ -581,7 +575,7 @@ function renderCompareView() {
   return `
     <div style="font-size:11px; color:var(--text-dim); margin-bottom:8px;">Pick up to ${COMPARE_MAX_METRICS} to compare side by side. Each point is the heaviest completed set logged that session, not just the programmed target. A lift charts whatever style it was logged in; a <b style="color:var(--text)">(T1)</b>/<b style="color:var(--text)">(T2)</b> entry is that tier's slot specifically.</div>
     <div class="tag-pill-row">${chips}</div>
-    ${(liftSlots.length + lifts.length) === 0 ? `<div style="font-size:11px; color:var(--text-faint); margin:8px 0 0;">Nothing tracked yet — assign a category to a T1/T2 slot, or link an exercise to a lift under Setup &rarr; Exercise &rarr; LIFTS, then log some sets.</div>` : ''}
+    ${(liftSlots.length + lifts.length) === 0 ? `<div style="font-size:11px; color:var(--text-faint); margin:8px 0 0;">Nothing tracked yet — assign a category to a T1/T2 slot, or link an exercise to a lift under Setup &rarr; Workouts &rarr; Lifts, then log some sets.</div>` : ''}
     <div style="margin-top:14px;">${charts || emptyState('Pick at least one metric above to see its chart.')}</div>`;
 }
 function renderCompareMiniChart(id) {
@@ -705,10 +699,10 @@ function changeVolumeCycle(delta) {
   render();
 }
 
-function attachProgressHandlers() {
-  if (NAV.progressSubtab === 'bodyweight') setTimeout(drawWeightChart, 0);
-  else if (NAV.progressSubtab === 'bodymeasurement') setTimeout(drawMeasurementChart, 0);
-  else if (NAV.progressSubtab === 'compare') setTimeout(drawCompareCharts, 0);
+function attachBodyHandlers() {
+  if (NAV.bodySubtab === 'weight') setTimeout(drawWeightChart, 0);
+  else if (NAV.bodySubtab === 'measurements') setTimeout(drawMeasurementChart, 0);
+  else if (NAV.bodySubtab === 'compare') setTimeout(drawCompareCharts, 0);
 }
 function setUnits(u) {
   STATE.units = u;

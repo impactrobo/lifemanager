@@ -213,7 +213,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     STATE.exTargets = [{ id: 't1', goalId: 'e1', kind: 'repMax', liftId: 'bb-bench', weightLb: 225,
       reps: 5, distance: null, minutes: null, unit: 'mi', createdAt: 1 }];
     saveState();
-    switchTab('train'); NAV.trainTopSubtab = 'progress'; NAV.progressSubtab = 'pr'; render();
+    switchTab('train'); NAV.fitnessSubtab = 'body'; NAV.bodySubtab = 'pr'; render();
   });
   await settle(page);
   const pr = await page.evaluate(() => {
@@ -238,7 +238,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (!pr.targetBest.startsWith('215')) throw new Error('The target and the PR log must not disagree about your best');
 
   // ---- 8. Targets render on the goal, persist, and die with it ----
-  await page.evaluate(() => { switchTab('health'); setHealthSubtab('goal'); });
+  await page.evaluate(() => { switchTab('train'); setFitnessSubtab('goal'); });
   await settle(page);
   const ui = await page.evaluate(() => ({
     cards: document.querySelectorAll('.ex-target').length,

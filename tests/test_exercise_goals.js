@@ -232,7 +232,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (dayOff.tuesdayInB2) throw new Error('Tuesday is empty in block 2 — the notice must read the right week, not the global one');
 
   // ---- 9. It renders, and survives a reload ----
-  await page.evaluate(() => { switchTab('health'); setHealthSubtab('goal'); });
+  await page.evaluate(() => { switchTab('train'); setFitnessSubtab('goal'); });
   await settle(page);
   const ui = await page.evaluate(() => ({
     cards: document.querySelectorAll('.phase-card').length,

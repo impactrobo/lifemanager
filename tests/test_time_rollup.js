@@ -41,6 +41,8 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     labels: timeCategories().reduce((m, c) => { m[c.id] = c.label; return m; }, {}),
     colors: timeCategories().reduce((m, c) => { m[c.id] = c.color; return m; }, {}),
     sectionColors: Object.keys(HOME_SECTION_META).reduce((m, k) => { m[k] = HOME_SECTION_META[k].color; return m; }, {}),
+    sectionLabels: Object.keys(HOME_SECTION_META).reduce((m, k) => { m[k] = HOME_SECTION_META[k].label; return m; }, {}),
+    choices: timeCategoryChoices().map(c => c.id),
     unknown: timeCategoryMeta('nope'),
   }));
   console.log('categories:', cats.all);
@@ -53,7 +55,15 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   ['work', 'sleep', 'social', 'chores'].forEach(id => {
     if (!cats.all.includes(id)) throw new Error(`Expected the extra category ${id}`);
   });
-  if (cats.labels.train !== 'EXERCISE') throw new Error("Section categories should reuse the section's own label");
+  // Asserted against the registry rather than a hardcoded string, same as the colour check above —
+  // the claim is "it reuses the section's label", not "the label happens to be EXERCISE today".
+  if (cats.labels.train !== cats.sectionLabels.train) throw new Error("Section categories should reuse the section's own label");
+  // A retired section stays RESOLVABLE so time already tagged to it keeps its label and colour,
+  // but stops being OFFERED — 'health' and 'train' are one section now, and listing both would be
+  // two names for the same thing.
+  if (!cats.all.includes('health')) throw new Error('A retired category must still resolve, or it strips the tag off real logged time');
+  if (cats.choices.includes('health')) throw new Error('A retired category must not still be offered as a new choice');
+  if (!cats.choices.includes('train')) throw new Error('Live sections are still offerable');
   if (cats.unknown !== null) throw new Error('An unknown category id should resolve to null, not throw');
 
   // ---- 2. Hand-computed totals across a real week ----

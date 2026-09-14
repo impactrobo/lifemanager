@@ -39,7 +39,7 @@ const DIRTY = '__dirty__';
   const probe = (route) => page.evaluate(({ route, DIRTY }) => {
     const keys = Object.keys(defaultTransientUi());
     keys.forEach(k => { UI[k] = DIRTY; });           // dirty every field, whatever it is
-    if (route === 'switchTab')        { switchTab('home'); switchTab('health'); }
+    if (route === 'switchTab')        { switchTab('home'); switchTab('train'); }
     else if (route === 'goBack')      { switchTab('home'); goBack(); }
     else if (route === 'openSetup')   { openSetup('train'); }
     else if (route === 'openWorkout') { openTodayWorkout(window.__probeWorkoutId); }
@@ -73,9 +73,9 @@ const DIRTY = '__dirty__';
 
   // ---- 3. Boundary: a content draft with its own lifecycle is NOT wiped ----
   const draft = await page.evaluate(() => {
-    switchTab('health'); setHealthSubtab('setup'); startNewMeal();
+    switchTab('train'); setFitnessSubtab('setup'); setSetupPanel('meals'); startNewMeal();
     new Function('VIEW.mealBuilderDraft.name = "Half-built oats"')();
-    switchTab('home'); switchTab('health');
+    switchTab('home'); switchTab('train');
     const d = new Function('return VIEW.mealBuilderDraft')();
     cancelMealDraft();
     return d && d.name;

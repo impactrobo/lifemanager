@@ -51,7 +51,7 @@ const NUTRIENT_KEYS = ['cal', 'protein', 'carb', 'fat', 'fiber', 'sodium', 'pota
 
   // 3. Custom food: add via the inline Meal Builder form (weight-type, per-serving entry)
   const customBefore = await page.evaluate(() => STATE.diet.customFoods.length);
-  await page.evaluate(() => { switchTab('health'); setHealthSubtab('setup'); setHealthSetupSubtab('builder'); startNewMeal(); toggleCustomFoodForm(); });
+  await page.evaluate(() => { switchTab('train'); setFitnessSubtab('setup'); setSetupPanel('meals'); setHealthSetupSubtab('builder'); startNewMeal(); toggleCustomFoodForm(); });
   await settle(page);
   await page.fill('#cfName', "Test Lasagna");
   await page.selectOption('#cfCategory', 'meat');

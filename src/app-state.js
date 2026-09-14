@@ -89,7 +89,7 @@ function restTimerSettings() {
 // The FAB/widget only make sense while a specific workout log is open — resting between sets
 // of a workout that isn't currently on screen doesn't mean anything.
 function isInWorkoutLogScreen() {
-  return NAV.currentTab === 'train' && NAV.trainTopSubtab === 'workouts' && (NAV.trainView.mode === 'log' || NAV.trainView.mode === 'rpLog');
+  return NAV.currentTab === 'train' && NAV.fitnessSubtab === 'workouts' && (NAV.trainView.mode === 'log' || NAV.trainView.mode === 'rpLog');
 }
 function getAudioCtx() {
   if (!AUDIO_CTX) {
@@ -424,6 +424,9 @@ function migrateState() {
   // choice means Home -- and a save still holding it would otherwise boot to a tab with no way
   // back to Home in its bar's first slot.
   if (STATE.settings.defaultPage === 'schedule') STATE.settings.defaultPage = 'home';
+  // Health & Diet merged into Health & Fitness, whose tab id is still 'train'. Same shape as the
+  // schedule line above: the tab is gone, the saved preference shouldn't strand you on it.
+  if (STATE.settings.defaultPage === 'health') STATE.settings.defaultPage = 'train';
   if (!STATE.settings.homeLayout) STATE.settings.homeLayout = defaultHomeLayout();
   else {
     const L = STATE.settings.homeLayout, D = defaultHomeLayout();

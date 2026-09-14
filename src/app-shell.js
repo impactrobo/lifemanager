@@ -153,7 +153,7 @@ let VIEW = {
 // globals to snapshot keys and eleven keys back again -- two mirror-image lists with a renaming in
 // between, the same drift hazard resetTransientUi() had. Now one declared key list drives both.
 const NAV_SNAPSHOT_KEYS = [
-  'currentTab', 'trainTopSubtab', 'guitarSubtab', 'healthSubtab', 'setupSubtab', 'setupContext',
+  'currentTab', 'fitnessSubtab', 'guitarSubtab', 'setupPanel', 'setupSubtab', 'setupContext',
   'notesSubtab', 'scheduleSubtab', 'budgetSubtab', 'scheduleSetupSubtab', 'healthSetupSubtab',
 ];
 // Which tab to boot into. Validated rather than read straight out of settings, because this runs
@@ -161,19 +161,32 @@ const NAV_SNAPSHOT_KEYS = [
 // get a chance to fix a stale value. Migrating `defaultPage` alone therefore corrects what's
 // stored and still boots you onto the dead tab; caught exactly that way by test_home_bar.js.
 // Anything unrecognised falls back to Home instead of stranding you on a tab nothing renders.
+// 'schedule' and 'health' both keep HOME_SECTION_META entries without being real tabs any more
+// (Home absorbed Schedule; Health & Fitness absorbed Health & Diet), and the entries have to stay
+// -- LINKABLE_TYPES colours its chips from them. So neither can be trusted as a landing tab, and
+// both are named here rather than inferred.
+const DEAD_LANDING_TABS = ['schedule', 'health'];
 function initialTab() {
   const want = (STATE.settings && STATE.settings.defaultPage) || 'home';
-  return HOME_SECTION_META[want] && want !== 'schedule' ? want : 'home';
+  return HOME_SECTION_META[want] && DEAD_LANDING_TABS.indexOf(want) < 0 ? want : 'home';
 }
 let NAV = {
   currentTab: initialTab(), // Settings -> Default Page, not always Home
   /** @type {{ mode: string, workoutId?: any, cardioId?: any }} */
   trainView: { mode: 'grid', workoutId: null }, // {mode:'grid'} | {mode:'log', workoutId} | {mode:'cardioLog', cardioId}
-  trainTopSubtab: 'workouts',       // 'workouts' | 'progress' -- top-level toggle within Exercise
+  // The one subtab key for the whole Health & Fitness tab: 'goal' | 'workouts' | 'body' | 'diet' |
+  // 'longevity' | 'setup'. Replaced trainTopSubtab + healthSubtab when Exercise and Health & Diet
+  // merged -- they described a split that no longer exists.
+  fitnessSubtab: 'workouts',
   setupSubtab: 'tm',
   setupContext: 'train',
-  progressSubtab: 'bodyweight',
-  healthSubtab: 'specs',
+  // BODY's own subnav. Same five values progressSubtab carried, with the two chart views renamed
+  // for what they now are: each shows its entry list AND its chart, instead of the chart alone
+  // while the entry list sat in a different tab.
+  bodySubtab: 'weight',            // 'weight' | 'measurements' | 'volume' | 'compare' | 'pr'
+  // Which half of SETUP is showing. The two panels keep their own existing subnav state
+  // (setupSubtab / healthSetupSubtab) untouched -- only the roof over them is new.
+  setupPanel: 'workouts',          // 'workouts' | 'meals'
   guitarSubtab: 'chords',
   notesSubtab: 'write',
   scheduleSubtab: 'today',
@@ -240,7 +253,7 @@ function switchTab(tab) {
   pushNavHistory();
   resetTransientUi();
   NAV.currentTab = tab;
-  if (tab === 'train') { NAV.trainView = { mode: 'grid', workoutId: null }; NAV.trainTopSubtab = 'workouts'; }
+  if (tab === 'train') { NAV.trainView = { mode: 'grid', workoutId: null }; NAV.fitnessSubtab = 'workouts'; }
   if (tab === 'notes') {
     // Same stale-edit guard as setNotesSubtab() — a fresh visit to Notes (e.g. via the bottom tab
     // bar) shouldn't resume an edit left in progress from before you navigated away.
@@ -505,10 +518,18 @@ function renderTabbar() {
   }
   let sectionBtns = '';
   if (NAV.currentTab === 'train') {
-    sectionBtns = `
-      <button class="${NAV.trainTopSubtab==='workouts'?'active':''}" onclick="setTrainTopSubtab('workouts')"><span class="ic">${icon('exercise')}</span>WORKOUTS</button>
-      <button class="${NAV.trainTopSubtab==='progress'?'active':''}" onclick="setTrainTopSubtab('progress')"><span class="ic">${icon('progress')}</span>PROGRESS</button>
-      <button class="${NAV.trainTopSubtab==='setup'?'active':''}" onclick="setTrainTopSubtab('setup')"><span class="ic">${icon('setup')}</span>SETUP</button>`;
+    // Health & Fitness: Exercise and Health & Diet merged into one tab. Six buttons where there
+    // used to be eight across two tabs -- BODY absorbed Specs and Progress, SETUP absorbed both
+    // sections' Setup screens as panels. `.tabbar` scrolls horizontally past what fits.
+    const fb = (key, ic, label) =>
+      `<button class="${NAV.fitnessSubtab===key?'active':''}" onclick="setFitnessSubtab('${key}')"><span class="ic">${icon(ic)}</span>${label}</button>`;
+    sectionBtns =
+      fb('workouts', 'exercise', 'WORKOUTS') +
+      fb('goal', 'flag', 'GOAL') +
+      fb('body', 'progress', 'BODY') +
+      fb('diet', 'drumstick', 'DIET') +
+      fb('longevity', 'infinity', 'LONGEVITY') +
+      fb('setup', 'setup', 'SETUP');
   } else if (NAV.currentTab === 'hobbies') {
     sectionBtns = `
       <button class="${NAV.guitarSubtab==='chords'?'active':''}" onclick="setGuitarSubtab('chords')">CHORDS</button>
@@ -516,13 +537,6 @@ function renderTabbar() {
       <button class="${NAV.guitarSubtab==='tech'?'active':''}" onclick="setGuitarSubtab('tech')">TECH</button>
       <button class="${NAV.guitarSubtab==='log'?'active':''}" onclick="setGuitarSubtab('log')">LOG</button>
       <button class="${NAV.guitarSubtab==='progress'?'active':''}" onclick="setGuitarSubtab('progress')"><span class="ic">${icon('progress')}</span>PROGRESS</button>`;
-  } else if (NAV.currentTab === 'health') {
-    sectionBtns = `
-      <button class="${NAV.healthSubtab==='goal'?'active':''}" onclick="setHealthSubtab('goal')"><span class="ic">${icon('flag')}</span>GOAL</button>
-      <button class="${NAV.healthSubtab==='specs'?'active':''}" onclick="setHealthSubtab('specs')"><span class="ic">${icon('ruler')}</span>SPECS</button>
-      <button class="${NAV.healthSubtab==='diet'?'active':''}" onclick="setHealthSubtab('diet')"><span class="ic">${icon('drumstick')}</span>DIET</button>
-      <button class="${NAV.healthSubtab==='longevity'?'active':''}" onclick="setHealthSubtab('longevity')"><span class="ic">${icon('infinity')}</span>LONGEVITY</button>
-      <button class="${NAV.healthSubtab==='setup'?'active':''}" onclick="setHealthSubtab('setup')"><span class="ic">${icon('setup')}</span>SETUP</button>`;
   } else if (NAV.currentTab === 'setup') {
     // The Home/gear-icon Settings screen is the only Setup that still pops up as its own screen
     // (see openSetup()) — HOME jumps all the way out, CLOSE returns to whichever screen opened it.
@@ -556,20 +570,24 @@ function _doRender() {
   } else if (NAV.currentTab === 'schedule') {
     app.innerHTML = renderSchedule();
   } else if (NAV.currentTab === 'train') {
-    if (NAV.trainTopSubtab === 'progress') {
-      app.innerHTML = renderExerciseProgress();
-      attachProgressHandlers();
-    } else if (NAV.trainTopSubtab === 'setup') {
-      app.innerHTML = renderExerciseSetup();
+    if (NAV.fitnessSubtab === 'body') {
+      app.innerHTML = renderBody();
+      attachBodyHandlers();
+      if (NAV.bodySubtab === 'measurements' && UI.measureFormOpen) renderMeasurePhotoRow();
+    } else if (NAV.fitnessSubtab === 'setup') {
+      app.innerHTML = renderFitnessSetup();
+    } else if (NAV.fitnessSubtab === 'goal') {
+      app.innerHTML = renderFitnessScreen(renderGoalTab());
+    } else if (NAV.fitnessSubtab === 'diet') {
+      app.innerHTML = renderFitnessScreen(renderDietSetup());
+    } else if (NAV.fitnessSubtab === 'longevity') {
+      app.innerHTML = renderFitnessScreen(renderLifeLongevity());
     } else if (NAV.trainView.mode === 'grid') app.innerHTML = renderTrainGrid();
     else if (NAV.trainView.mode === 'cardioLog') app.innerHTML = renderCardioLog(NAV.trainView.cardioId);
     else if (NAV.trainView.mode === 'rpLog') app.innerHTML = renderRpWorkoutLog(NAV.trainView.workoutId);
     else { app.innerHTML = renderWorkoutLog(NAV.trainView.workoutId); attachWorkoutLogHandlers(NAV.trainView.workoutId); }
   } else if (NAV.currentTab === 'hobbies') {
     app.innerHTML = renderHobbies();
-  } else if (NAV.currentTab === 'health') {
-    app.innerHTML = renderHealth();
-    if (NAV.healthSubtab === 'specs' && UI.measureFormOpen) renderMeasurePhotoRow();
   } else if (NAV.currentTab === 'setup') {
     app.innerHTML = renderSetup();
     attachSetupHandlers();

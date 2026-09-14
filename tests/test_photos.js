@@ -51,8 +51,11 @@ const TEST_PHOTO_B64 = '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAA0JCgsKCA0LCgsODg0PEyAV
   }
   if (resizeResult.width !== 1024) throw new Error(`Expected the long edge (width, since source is wider than tall) to be exactly 1024, got ${resizeResult.width}`);
 
-  // 2. Real measurement-form flow: open the form, attach that photo via the actual file input
-  await page.evaluate(() => { switchTab('health'); setHealthSubtab('specs'); });
+  // 2. Real measurement-form flow: open the form, attach that photo via the actual file input.
+  // MEASUREMENTS, not WEIGHT: Health's old SPECS screen stacked both logs on one page, so either
+  // landing would do. BODY split them so each log sits under its own chart, and the measurement
+  // form only exists on the measurement half.
+  await page.evaluate(() => { switchTab('train'); setFitnessSubtab('body'); setBodySubtab('measurements'); });
   await page.evaluate(() => toggleMeasureForm());
   await settle(page);
   await page.setInputFiles('#measurePhotoInput', tmpPhoto);

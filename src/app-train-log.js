@@ -170,10 +170,10 @@ function renderTrainGrid() {
       ${section('warmup', warmup, 'openWorkoutLog')}
     </div>`;
 }
-function setTrainTopSubtab(t) {
-  NAV.trainTopSubtab = t;
+// Leaving WORKOUTS drops whatever log was open, so coming back lands on the grid rather than
+// resuming a half-finished session you navigated away from. setFitnessSubtab() calls through here.
+function resetTrainViewForSubtab(t) {
   if (t === 'workouts') NAV.trainView = { mode: 'grid', workoutId: null };
-  render();
 }
 
 function changeCycle(delta) {
@@ -1270,6 +1270,25 @@ function renderExerciseSetup() {
     ${body}
   </div>`;
 }
+
+// SETUP for the merged tab. Two PANELS rather than two tabs: workout configuration and meal
+// configuration are both "set up the thing you'll be doing daily", and they were only ever separate
+// screens because they lived under separate tabs.
+//
+// Neither panel's own contents change -- each still renders its existing screen, with its existing
+// subnav and its own existing subtab state (setupSubtab / healthSetupSubtab). Only the switch above
+// them is new, which is why this merge costs no churn inside either one.
+function renderFitnessSetup() {
+  const panel = NAV.setupPanel === 'meals' ? 'meals' : 'workouts';
+  const btn = (key, label) =>
+    `<button class="btn btn-sm ${panel === key ? 'btn-primary' : ''}" onclick="setSetupPanel('${key}')">${label}</button>`;
+  const switcher = `<div style="display:flex; gap:8px; margin:16px 0 4px;">${btn('workouts', 'WORKOUTS')}${btn('meals', 'MEALS')}</div>`;
+  // Both inner renderers return a complete `.screen` with their own title -- splice the switcher in
+  // just after that title rather than wrapping, so there's one header on the page, not two.
+  const inner = panel === 'meals' ? renderHealthSetup() : renderExerciseSetup();
+  return inner.replace('</div>', '</div>' + switcher);
+}
+function setSetupPanel(p) { NAV.setupPanel = p; render(); }
 // Home's own Setup: a full page (not a popup) for the app-wide Aesthetic/Accent Color choice
 // and the Data controls (backup export/import, full reset) — nothing section-specific belongs
 // here, only things that apply to the whole app.
@@ -1277,9 +1296,11 @@ function renderHomeSetup() {
   const defaultPage = STATE.settings.defaultPage || 'home';
   // No SCHEDULE entry: Home opens on the day, so "open to Schedule" and "open to Home" are the
   // same choice now.
+  // No SCHEDULE and no HEALTH & DIET: Home opens on the day, and Health & Diet merged into
+  // Health & Fitness -- a saved 'health' migrates to 'train' on load (see migrateState()).
   const pageOptions = [
-    ['home', 'HOME'], ['train', 'EXERCISE'], ['hobbies', 'HOBBIES'],
-    ['health', 'HEALTH & DIET'], ['notes', 'NOTES'], ['budget', 'FINANCIAL'],
+    ['home', 'HOME'], ['train', 'HEALTH & FITNESS'], ['hobbies', 'HOBBIES'],
+    ['notes', 'NOTES'], ['budget', 'FINANCIAL'],
   ];
   return `<div class="screen">
     <div class="section-title">Settings</div>

@@ -35,7 +35,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // 1. Add a weight entry via the real form, including the new optional fields
   await page.evaluate(() => { STATE.weightLog = []; saveState(); });
-  await page.evaluate(() => { switchTab('health'); setHealthSubtab('specs'); });
+  await page.evaluate(() => { switchTab('train'); setFitnessSubtab('body'); setBodySubtab('weight'); });
   await settle(page);
   await page.evaluate(() => toggleWeightForm());
   await page.fill('#wWeight', '180');
@@ -59,7 +59,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (JSON.stringify(trend) !== JSON.stringify([10, 15, 25])) throw new Error(`Expected [10,15,25], got ${JSON.stringify(trend)}`);
 
   // 3. Body Weight chart's metric selector: Body Fat % has < 2 points (only 1 entry so far) -> empty state
-  await page.evaluate(() => { switchTab('train'); setTrainTopSubtab('progress'); setProgressSubtab('bodyweight'); setWeightMetric('bodyFatPct'); });
+  await page.evaluate(() => { switchTab('train'); setFitnessSubtab('body'); setBodySubtab('weight'); setWeightMetric('bodyFatPct'); });
   await settle(page);
   const bfEmptyState = await page.evaluate(() => !!document.querySelector('.empty-state'));
   if (!bfEmptyState) throw new Error('Expected an empty-state with only 1 Body Fat % entry logged');
@@ -167,7 +167,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (breakdown.avgCardioPerDay + breakdown.nonExerciseTdee !== breakdown.tdee) throw new Error('Expected the two portions to sum back to the same tdee — this is a decomposition, not a new total');
 
   // The panel actually renders the breakdown line
-  await page.evaluate(() => { switchTab('health'); setHealthSubtab('diet'); });
+  await page.evaluate(() => { switchTab('train'); setFitnessSubtab('diet'); });
   await settle(page);
   const breakdownShown = await page.evaluate(() => document.body.textContent.includes('non-exercise'));
   if (!breakdownShown) throw new Error('Expected the ROLLING TDEE panel to render the cardio breakdown line');
@@ -197,7 +197,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
       }
     });
     saveState();
-    switchTab('health'); setHealthSubtab('diet');
+    switchTab('train'); setFitnessSubtab('diet');
   });
   await settle(page);
   const panelText = await page.evaluate(() => document.body.textContent);

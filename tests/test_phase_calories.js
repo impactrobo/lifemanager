@@ -211,7 +211,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     ensureDietLogState();
     NAV.dietLogDate = todayStr();
     addFoodToLog(allFoods()[0].id);
-    switchTab('health'); setHealthSubtab('diet');
+    switchTab('train'); setFitnessSubtab('diet');
   });
   await settle(page);
   const screens = await page.evaluate(() => {
@@ -242,7 +242,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     STATE.phases[1].calorieTarget = seeded - 200;
     STATE.phases[1].calorieSetOn = shiftDate(todayStr(), -12);
     saveState();
-    switchTab('health'); setHealthSubtab('goal');
+    switchTab('train'); setFitnessSubtab('goal');
   });
   await settle(page);
   const ui = await page.evaluate(() => ({

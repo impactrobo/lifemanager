@@ -13,8 +13,18 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
 // type -> the tab you must end up on. This is the contract a link chip depends on.
 const DESTINATIONS = {
-  note: 'notes', reminder: 'schedule', workout: 'train', meal: 'health',
+  note: 'notes', reminder: 'schedule', workout: 'train', meal: 'train',
   habit: 'schedule', charge: 'budget', goal: 'budget', activity: 'schedule',
+};
+// Landing on the right TAB stopped being enough to prove an entity is visible once Health & Diet
+// merged into Health & Fitness: a meal and a workout now share a tab and land on completely
+// different screens inside it. Where a type needs more than the tab to be pinned down, it says so
+// here — checked in addition to the tab, not instead of it.
+// Plain data, not predicates: this is compared inside page.evaluate(), and a function can't cross
+// that boundary. Read as `${NAV.fitnessSubtab}/${NAV.setupPanel}`.
+const SUBTAB_DESTINATIONS = {
+  workout: 'workouts/workouts',
+  meal: 'setup/meals',
 };
 
 (async () => {
@@ -55,13 +65,20 @@ const DESTINATIONS = {
   // foreign screen for six of the eight types.
   const landings = await page.evaluate((dests) => {
     const ids = { note: 'n1', reminder: 'r1', workout: 'w1', meal: 'm1', habit: 'h1', charge: 'c1', goal: 'g1', activity: 'a1' };
-    return Object.keys(dests).map(type => {
+    return Object.keys(dests.tabs).map(type => {
       switchTab('budget');
       navigateToEntity(type, ids[type]);
-      return { type, want: dests[type], got: NAV.currentTab };
+      const wantSub = dests.subs[type] || null;
+      const sawSub = `${NAV.fitnessSubtab}/${NAV.setupPanel}`;
+      return { type, want: dests.tabs[type], got: NAV.currentTab,
+               subOk: !wantSub || sawSub === wantSub, wantSub, sawSub };
     });
-  }, DESTINATIONS);
+  }, { tabs: DESTINATIONS, subs: SUBTAB_DESTINATIONS });
   landings.forEach(l => console.log(`  ${l.type} -> ${l.got}${l.got === l.want ? '' : '  WANT ' + l.want}`));
+  const wrongSub = landings.filter(l => !l.subOk);
+  if (wrongSub.length) {
+    throw new Error(`Right tab, wrong screen — the entity would still be invisible: ${wrongSub.map(l => `${l.type} wanted ${l.wantSub}, landed on ${l.sawSub}`).join('; ')}`);
+  }
   const stranded = landings.filter(l => l.got !== l.want);
   if (stranded.length) {
     throw new Error(`These types opened without navigating, so the entity would be invisible: ${stranded.map(l => `${l.type} stayed on ${l.got}`).join('; ')}`);
@@ -73,14 +90,19 @@ const DESTINATIONS = {
   const editors = await page.evaluate(() => {
     const out = {};
     switchTab('budget'); editNote('n1');    out.editNote = { tab: NAV.currentTab, editing: VIEW.noteEditId };
-    switchTab('budget'); editMeal('m1');    out.editMeal = { tab: NAV.currentTab, sub: NAV.healthSubtab };
-    switchTab('budget'); editWorkout('w1'); out.editWorkout = { tab: NAV.currentTab, sub: NAV.trainTopSubtab };
+    // Both land in the same tab AND the same subtab now — the SETUP panel is what separates them.
+    switchTab('budget'); editMeal('m1');    out.editMeal = { tab: NAV.currentTab, sub: NAV.fitnessSubtab, panel: NAV.setupPanel };
+    switchTab('budget'); editWorkout('w1'); out.editWorkout = { tab: NAV.currentTab, sub: NAV.fitnessSubtab, panel: NAV.setupPanel };
     return out;
   });
   console.log('editors called from budget:', editors);
   if (editors.editNote.tab !== 'notes' || editors.editNote.editing !== 'n1') throw new Error('editNote() must navigate to Notes AND still load the note');
-  if (editors.editMeal.tab !== 'health' || editors.editMeal.sub !== 'setup') throw new Error('editMeal() must navigate to Health setup');
-  if (editors.editWorkout.tab !== 'train' || editors.editWorkout.sub !== 'setup') throw new Error('editWorkout() must navigate to Train setup');
+  if (editors.editMeal.tab !== 'train' || editors.editMeal.sub !== 'setup' || editors.editMeal.panel !== 'meals') {
+    throw new Error(`editMeal() must land on Setup's MEALS panel, got ${editors.editMeal.sub}/${editors.editMeal.panel}`);
+  }
+  if (editors.editWorkout.tab !== 'train' || editors.editWorkout.sub !== 'setup' || editors.editWorkout.panel !== 'workouts') {
+    throw new Error(`editWorkout() must land on Setup's WORKOUTS panel, got ${editors.editWorkout.sub}/${editors.editWorkout.panel}`);
+  }
 
   // ---- 3. ensureTab() is a no-op when you're already there ----
   // switchTab() pushes Back history and wipes transient UI. An in-screen action (the pencil on a

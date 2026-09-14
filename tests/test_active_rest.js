@@ -210,7 +210,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (compare.removed !== 'Removed lift') throw new Error('A lift that no longer exists should say so, not throw');
 
   // ---- 7. It renders ----
-  await page.evaluate(() => { switchTab('train'); NAV.trainTopSubtab = 'progress'; NAV.progressSubtab = 'compare'; render(); });
+  await page.evaluate(() => { switchTab('train'); NAV.fitnessSubtab = 'body'; NAV.bodySubtab = 'compare'; render(); });
   await settle(page);
   const ui = await page.evaluate(() => ({
     chips: Array.from(document.querySelectorAll('.tag-pill')).map(b => b.textContent.trim()),
@@ -219,7 +219,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (!ui.chips.includes('Barbell Bench Press')) throw new Error('The lift should appear as a pickable metric');
   if (!ui.chips.includes('Body Weight')) throw new Error('Body weight is still there');
 
-  await page.evaluate(() => { switchTab('health'); setHealthSubtab('goal'); });
+  await page.evaluate(() => { switchTab('train'); setFitnessSubtab('goal'); });
   await settle(page);
   const card = await page.evaluate(() => {
     const txt = document.getElementById('app').innerText;

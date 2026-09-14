@@ -22,7 +22,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   await settle(page);
 
   // 1. Navigate to Health & Diet -> DIET, confirm the log starts empty for today
-  await page.evaluate(() => { switchTab('health'); setHealthSubtab('diet'); });
+  await page.evaluate(() => { switchTab('train'); setFitnessSubtab('diet'); });
   await settle(page);
   const initial = await page.evaluate(() => ({ date: NAV.dietLogDate, today: todayStr(), entries: STATE.diet.foodLog[todayStr()] }));
   console.log('NAV.dietLogDate defaults to today:', initial.date === initial.today, '| entries:', initial.entries);
