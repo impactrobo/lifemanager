@@ -385,6 +385,50 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Deloads (2026-09-14).** Step 6 of "Phases Own the Plan". Reduced volume *and* maintenance
+  calories, all of it applied at **display time** — a saved workout is never edited, so turning a
+  deload off restores the real numbers exactly rather than leaving a halved version behind.
+  - **`progressionLogFor(cycle, workoutId)` is the part with teeth.** If workout A runs in cycles
+    A1, A2, A3 and A2 is the deload, A3 must progress from A1. Four functions walk cycles and every
+    one would have been corrupted: the two backward walks (`t3HistoryBaseWeightLb`,
+    `rpExHistoryBaseWeightLb`) take the first logged weight they find, so a 50% deload weight would
+    silently become the next cycle's base **and stay there**; the two forward walks
+    (`computeStageState`, `computeT3StageState`) read reduced reps as a *failed* stage, so a deload
+    wouldn't merely fail to progress you — it would knock you back one. All four now go through one
+    choke point rather than four guards free to drift apart.
+  - **`computeRpSuggestion()` needed separate handling**, because it reads the *current* entry rather
+    than history: high RIR at deliberately reduced volume would otherwise come back as "sets felt
+    easy, add weight". AMRAP is suppressed on a deload for the same reason.
+  - **The stamp is frozen on first write, never recomputed from dates.** `log.deload` records what
+    actually happened even if the phase's boundaries move afterwards — extending a block must not
+    silently rewrite which of your past sessions counted. An unstamped log predates the feature and
+    is ordinary work; it is never retro-classified.
+  - **Both counts floor at 1.** 50% rounded down turns a 1-set exercise into 0 sets and a 1-rep
+    target into 0 — silently dropping work that "Acc Exercises: On" just promised would still be
+    performed. The only thing that removes an exercise entirely is turning accessories off.
+  - **Cutting a target never deletes logged sets.** `renderTierBlock()` used to truncate
+    unconditionally to `stageDef.sets`, which was safe while the target came only from a fixed stage
+    scheme. A deload can lower it mid-session, so it now truncates to `max(target, last logged + 1)`
+    — an honest record of a session that started full and got cut short.
+  - **T3 is the accessory tier, for free.** It's absent from the training-max config precisely
+    *because* it carries no TM, which is what makes it accessory work — so "Acc Exercises: Off" drops
+    exactly those, with no marking and no ambiguity. Every other shape is a flat `exercises[]` list
+    with no tier, and inventing one isn't worth it: deriving it from `muscle` doesn't hold up (a leg
+    extension is Quads, a cable flye is Chest — both would read as main work). The toggle has no
+    effect there; the other three scalings still apply.
+  - **Deloads are asynchronous, not only weekly.** One lift can need backing off while the others
+    carry on. Promote any single workout, *or* demote one inside a deload week to full volume —
+    progression follows for free, since `log.deload` is the only thing the choke point reads.
+  - **P-Zero (GZCL) opts out of the trailing week by default** — that program already deloads as it
+    goes, so stacking another on top would be deloading a deload. Promoting one by hand still works.
+  - **The one deliberate cross-goal effect:** a deload week overrides calories to maintenance, since
+    eating at a deficit through a deload defeats the point of taking one. With no weight goal running
+    there is simply nothing to override — `STATE.diet.tdee` already *is* maintenance, so the rule
+    reads the same in both cases and just has nothing to do in one of them.
+  - A bug caught by its own test: `phaseDeloadWindow()` checked `deloadTrailing` for truthiness,
+    but the design is **on by default** with an explicit `false` for off — so it disagreed with both
+    the toggle and the card's ON/OFF button, and no block ever got a deload.
+
 - **Exercise goals and per-block training plans (2026-09-14).** Step 5 of "Phases Own the Plan", and
   the largest of them. The second goal type had to arrive with this rather than later: a block
   carrying a plan has to belong to something, and that something is a training goal.

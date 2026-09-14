@@ -28,10 +28,14 @@
 // instead -- a plan running past the target date, or leaving weeks at the end unplanned, shows up
 // in the summary line rather than being silently allowed.
 //
-// ---- What a phase does NOT do yet ----
-// Own the calorie target (step 4) or the exercise plan (step 5). This is the timeline and the rate
-// maths only, and the app is fully usable with it: a goal alone still works, and a goal with phases
-// tells you whether the plan you wrote actually lands where you said you were going.
+// ---- What a phase owns ----
+// A weight phase owns a RATE and a CALORIE TARGET. An exercise block owns a PLAN. Each goal kind
+// therefore claims exactly one scarce resource, which is what lets both run at once with no
+// precedence rule to remember.
+//
+// The single deliberate exception is a DELOAD: it cuts training volume, which the training goal
+// owns, and also wants maintenance calories, which the weight goal owns. calorieTargetForDate()
+// makes that the top rung, because eating at a deficit through a deload defeats the point of it.
 
 const PHASE_DIRECTIONS = [
   { key: 'deficit',  label: 'Deficit',     sign: -1, verb: 'losing' },
@@ -211,6 +215,204 @@ function weekPlanWorkoutCount(plan) {
   return { workouts: n, days };
 }
 
+// ---- Deloads ----
+//
+// A deload is a training concept as much as a nutrition one: reduced volume AND maintenance
+// calories. All of it applies at DISPLAY time -- a saved workout is never edited, so turning a
+// deload off restores the real numbers exactly rather than leaving a halved version behind.
+//
+// The levers, and why these defaults: cutting SETS is the primary one and needs no new data, since
+// an exercise already carries a set count and the log grows rows to match. Cutting TARGET REPS makes
+// a deload set lighter work rather than the same set fewer times. WEIGHT is held at 100% because
+// holding load while cutting volume is the point -- but it goes down to 50% for the weeks you're
+// beaten up. ACC EXERCISES on means accessories are still performed with the other three scalings
+// applied; off drops them for the week.
+const DELOAD_STYLE_DEFAULT = { setsPct: 50, repsPct: 50, weightPct: 100, accExercises: true };
+const DELOAD_PCT_MIN = 50;
+const DELOAD_PCT_MAX = 100;
+const DELOAD_LEVERS = [
+  { key: 'setsPct', label: 'Sets' },
+  { key: 'repsPct', label: 'Target reps' },
+  { key: 'weightPct', label: 'Weight' },
+];
+
+function deloadStyleOf(phase) {
+  return Object.assign({}, DELOAD_STYLE_DEFAULT, (phase && phase.deloadStyle) || {});
+}
+
+// The trailing week of a phase. Inheriting the phase's own dates is what stops a deload drifting
+// from the block it's deloading -- extend the phase and its deload moves with it, for free, because
+// both are derived from the same lengths rather than stored separately.
+function phaseDeloadWindow(entry) {
+  // `=== false` rather than a truthiness check: last-week-deload is ON BY DEFAULT, so only an
+  // explicit false turns it off. A block created before this shipped has `undefined` here and still
+  // gets its deload -- which is what togglePhaseDeload() and the card's ON/OFF button both assume.
+  if (!entry || entry.phase.deloadTrailing === false) return null;
+  // A one-week phase would otherwise be entirely deload, which is not a block, it's a rest week.
+  if (entry.weeks < 2) return null;
+  return { from: shiftDate(entry.endDate, -6), to: entry.endDate };
+}
+function dateIsDeloadWeek(dateStr) {
+  const w = phaseDeloadWindow(phaseForDate(dateStr, 'exercise'));
+  return !!(w && dateStr >= w.from && dateStr <= w.to);
+}
+function deloadStyleForDate(dateStr) {
+  const entry = phaseForDate(dateStr, 'exercise');
+  return deloadStyleOf(entry && entry.phase);
+}
+
+// P-Zero (GZCL) opts out of the trailing week by default: that program already deloads as it goes,
+// so stacking another one on top would be deloading a deload. Promoting one by hand still works --
+// this is a default, not a prohibition.
+function workoutOptsOutOfTrailingDeload(workout) {
+  return !!(workout && workout.style === 'P-Zero (GZCL)');
+}
+
+// Whether a log counts as a deload FOR PROGRESSION -- the stamp, and only the stamp. Never the
+// dates. An unstamped log predates this feature and is ordinary work; deriving it from dates would
+// mean extending a phase silently rewrote which of your past sessions counted, which is exactly the
+// corruption this whole section exists to prevent.
+function logIsDeload(log) { return !!(log && log.deload); }
+
+// THE choke point. All four cycle walks (t3HistoryBaseWeightLb, rpExHistoryBaseWeightLb,
+// computeStageState, computeT3StageState) reach for STATE.logs[logKey(c, id)] the same way, and
+// every one of them would be corrupted by a deload:
+//
+//   - the two backward walks take the first logged weight they find, so a 50% deload weight would
+//     silently become the next cycle's base and STAY there;
+//   - the two forward walks read reduced reps as a FAILED stage, so a deload wouldn't merely fail to
+//     progress you, it would knock you back a stage and possibly trip needsReset.
+//
+// One function they all go through, rather than four guards free to drift apart. If workout A runs
+// in cycles A1, A2, A3 and A2 is the deload, A3 progresses from A1.
+function progressionLogFor(cycle, workoutId) {
+  const log = STATE.logs[logKey(cycle, workoutId)];
+  if (!log || logIsDeload(log)) return null;
+  return log;
+}
+
+// What the screen should show for a cycle's workout: the stamp if there is one, otherwise whether
+// the day it'd be logged on falls in a trailing deload week. Unlike progression, display is allowed
+// to guess ahead of the stamp -- that's how a deload week shows reduced targets before you log
+// anything into it.
+function workoutDeloadState(cycle, workoutId) {
+  const log = STATE.logs[logKey(cycle, workoutId)];
+  const workout = getWorkout(workoutId);
+  if (log && typeof log.deload === 'boolean') {
+    return { on: log.deload, style: Object.assign(deloadStyleForDate(log.date || todayStr()), log.deloadStyle || {}), source: 'log' };
+  }
+  const dateStr = (log && log.date) || todayStr();
+  const on = !workoutOptsOutOfTrailingDeload(workout) && dateIsDeloadWeek(dateStr);
+  return { on, style: deloadStyleForDate(dateStr), source: on ? 'week' : null };
+}
+
+// Freezes what actually happened, the first time anything is written into a log. Called from the set
+// writers so no separate "start session" step is needed, and so a log that was never touched never
+// acquires a misleading stamp.
+function stampDeloadOnLog(log, workoutId) {
+  if (!log || typeof log.deload === 'boolean') return;
+  const workout = getWorkout(workoutId);
+  if (workoutOptsOutOfTrailingDeload(workout)) { log.deload = false; return; }
+  log.deload = dateIsDeloadWeek(log.date || todayStr());
+}
+
+// Promote a single workout to a deload, or demote one inside a deload week to full volume. Both
+// directions, because one lift can need backing off while the others carry on -- forcing that
+// decision to the whole week is what makes it wrong. Progression follows for free: log.deload is the
+// only thing progressionLogFor() reads.
+function setWorkoutDeload(cycle, workoutId, on) {
+  const log = getLog(cycle, workoutId);
+  log.deload = !!on;
+  if (!on) delete log.deloadStyle;
+  saveState();
+  showToast(on ? 'Logged as a deload — it won’t count toward progression' : 'Back to full volume');
+  render();
+}
+function setWorkoutDeloadLever(cycle, workoutId, key, value) {
+  const log = getLog(cycle, workoutId);
+  const n = Math.round(Number(value));
+  if (!isFinite(n)) return;
+  log.deloadStyle = Object.assign({}, log.deloadStyle || {});
+  log.deloadStyle[key] = Math.max(DELOAD_PCT_MIN, Math.min(DELOAD_PCT_MAX, n));
+  saveState();
+  render();
+}
+function toggleWorkoutDeloadAccessories(cycle, workoutId) {
+  const log = getLog(cycle, workoutId);
+  const cur = workoutDeloadState(cycle, workoutId).style;
+  log.deloadStyle = Object.assign({}, log.deloadStyle || {}, { accExercises: !cur.accExercises });
+  saveState();
+  render();
+}
+
+// ---- Applying a style ----
+//
+// Both counts floor at 1. 50% rounded down turns a 1-set exercise into 0 sets and a 1-rep target
+// into 0 -- silently dropping work that "Acc Exercises: On" just promised would still be performed.
+// The only thing that removes an exercise entirely is turning accessories off.
+function deloadScaleCount(n, pct) {
+  const v = Number(n);
+  if (!isFinite(v) || v <= 0) return v;
+  return Math.max(1, Math.floor(v * (Number(pct) || 100) / 100));
+}
+function deloadScaleWeightLb(lb, pct) {
+  const v = Number(lb);
+  if (!isFinite(v)) return lb;
+  return v * (Number(pct) || 100) / 100;
+}
+
+// What counts as an accessory depends on the workout's shape, and one half is free: in P-Zero the
+// TIER already says so. T3 is the accessory tier -- it's absent from the training-max config
+// precisely BECAUSE it carries no TM, which is what makes it accessory work. All T3 = accessory, no
+// marking and no ambiguity.
+//
+// Every other shape (RP-Style, Free Entry, Mobility, Warmup) is a flat exercises[] list with no
+// tier, and inventing one isn't worth it: deriving it from `muscle` doesn't hold up (a leg extension
+// is Quads, a cable flye is Chest -- both would read as main work), and a hand-marked flag is upkeep
+// for something you settle in the moment. The toggle simply has no effect on these; the sets, reps
+// and weight scalings still apply, and skipping something stays a decision you make while logging.
+function deloadDropsEntry(isT3, style) {
+  return !!isT3 && !style.accExercises;
+}
+
+// The deload control, shown on the workout log screen beside its date and notes -- where you already
+// are when you decide. Works before you start and after you've finished.
+function renderWorkoutDeloadControl(cycle, workoutId) {
+  const dl = workoutDeloadState(cycle, workoutId);
+  const st = dl.style;
+  if (!dl.on) {
+    return `
+      <div class="deload-bar">
+        <div class="deload-bar-head">
+          <span>Full volume${dl.source === null && dateIsDeloadWeek(todayStr()) ? ' · this is a deload week' : ''}</span>
+          <button class="btn btn-sm" onclick="setWorkoutDeload(${cycle},'${workoutId}',true)">MAKE IT A DELOAD</button>
+        </div>
+      </div>`;
+  }
+  return `
+    <div class="deload-bar deload-bar-on">
+      <div class="deload-bar-head">
+        <span><span class="deload-flag">DELOAD</span> ${dl.source === 'week' ? 'trailing week of this block' : 'set on this workout'}</span>
+        <button class="btn btn-sm" onclick="setWorkoutDeload(${cycle},'${workoutId}',false)">FULL VOLUME</button>
+      </div>
+      <div class="deload-levers">
+        ${DELOAD_LEVERS.map(l => `
+          <label class="field"><span class="lbl">${l.label} %</span>
+            <input type="number" min="${DELOAD_PCT_MIN}" max="${DELOAD_PCT_MAX}" step="5" value="${st[l.key]}"
+                   onchange="setWorkoutDeloadLever(${cycle},'${workoutId}','${l.key}',this.value)"></label>`).join('')}
+      </div>
+      <button class="btn btn-sm" style="margin-top:8px;" onclick="toggleWorkoutDeloadAccessories(${cycle},'${workoutId}')">
+        ACC EXERCISES: ${st.accExercises ? 'ON' : 'OFF'}
+      </button>
+      <div class="phase-cal-note">
+        ${st.accExercises
+          ? 'Accessories still performed, with the same scalings applied. In P-Zero that means all T3.'
+          : 'Accessories dropped this week. In P-Zero that means all T3; other workout shapes carry no tier, so nothing is removed automatically.'}
+        This session won’t count toward progression.
+      </div>
+    </div>`;
+}
+
 // ---- Calories ----
 //
 // A rate converts to calories by arithmetic: lb/week x 3500 / 7 = kcal/day, so -1.0 lb/wk IS
@@ -247,6 +449,20 @@ function phaseCalorieSeed(entry) {
 // because eating at a deficit through a deload defeats the point of taking one. The order below is
 // already the order it will keep.
 function calorieTargetForDate(dateStr) {
+  // The one deliberate cross-goal effect in the whole design. A deload cuts training volume, which
+  // the TRAINING goal owns -- but it also wants maintenance calories, which the WEIGHT goal owns.
+  // Eating at a deficit through a deload defeats the point of taking one, so for its duration the
+  // deficit is suspended and resumes after.
+  //
+  // With no weight goal running there is simply nothing to override: STATE.diet.tdee already IS
+  // maintenance. The rule reads the same in both cases, it just has nothing to do in one of them.
+  if (dateIsDeloadWeek(dateStr)) {
+    const rolling = rollingTdeeEstimate();
+    const maintenance = rolling ? rolling.estimate : STATE.diet.tdee;
+    if (maintenance) {
+      return { calories: Math.round(maintenance), source: 'deload', label: 'deload week', entry: null };
+    }
+  }
   const entry = phaseForDate(dateStr, 'weight');
   if (entry && entry.phase.calorieTarget != null) {
     return { calories: Math.round(entry.phase.calorieTarget), source: 'phase', label: entry.phase.label, entry };
@@ -329,6 +545,31 @@ function addExercisePhase(goal) {
   });
   saveState();
   render();
+}
+
+function togglePhaseDeload(id) {
+  const p = (STATE.phases || []).find(x => x.id === id);
+  if (!p) return;
+  // Stored as an explicit false rather than deleted, so "on by default" and "deliberately off" stay
+  // distinguishable -- a block created before this shipped should still get a trailing deload.
+  p.deloadTrailing = p.deloadTrailing === false;
+  saveState(); render();
+}
+function updatePhaseDeloadLever(id, key, value) {
+  const p = (STATE.phases || []).find(x => x.id === id);
+  if (!p) return;
+  const n = Math.round(Number(value));
+  if (!isFinite(n)) return;
+  p.deloadStyle = Object.assign({}, deloadStyleOf(p));
+  p.deloadStyle[key] = Math.max(DELOAD_PCT_MIN, Math.min(DELOAD_PCT_MAX, n));
+  saveState(); render();
+}
+function togglePhaseDeloadAccessories(id) {
+  const p = (STATE.phases || []).find(x => x.id === id);
+  if (!p) return;
+  p.deloadStyle = Object.assign({}, deloadStyleOf(p));
+  p.deloadStyle.accExercises = !p.deloadStyle.accExercises;
+  saveState(); render();
 }
 
 function seedPhaseCalorieTarget(id) {
@@ -486,6 +727,28 @@ function renderExercisePhaseBody(entry) {
           <span class="goal-row-v">${n.workouts ? `${n.workouts} workout${n.workouts === 1 ? '' : 's'}` : 'empty'}</span>
           <span class="goal-row-x">${n.workouts ? `across ${n.days} day${n.days === 1 ? '' : 's'} a week` : 'nothing assigned to any day yet'}</span>
         </div>
+      </div>
+      <div class="deload-bar" style="margin-top:11px;">
+        <div class="deload-bar-head">
+          <span>Last week deload</span>
+          <button class="btn btn-sm ${p.deloadTrailing === false ? '' : 'btn-primary'}"
+                  onclick="togglePhaseDeload('${p.id}')">${p.deloadTrailing === false ? 'OFF' : 'ON'}</button>
+        </div>
+        ${p.deloadTrailing === false ? '' : `
+          <div class="deload-levers">
+            ${DELOAD_LEVERS.map(l => `
+              <label class="field"><span class="lbl">${l.label} %</span>
+                <input type="number" min="${DELOAD_PCT_MIN}" max="${DELOAD_PCT_MAX}" step="5" value="${deloadStyleOf(p)[l.key]}"
+                       onchange="updatePhaseDeloadLever('${p.id}','${l.key}',this.value)"></label>`).join('')}
+          </div>
+          <button class="btn btn-sm" style="margin-top:8px;" onclick="togglePhaseDeloadAccessories('${p.id}')">
+            ACC EXERCISES: ${deloadStyleOf(p).accExercises ? 'ON' : 'OFF'}
+          </button>
+          <div class="phase-cal-note">
+            ${entry.weeks < 2
+              ? 'A one-week block has no trailing week to deload — that would just be a rest week.'
+              : `${fmtGoalDate(shiftDate(entry.endDate, -6))} &ndash; ${fmtGoalDate(entry.endDate)}, and calories go to maintenance for it. P-Zero workouts opt out by default — that program already deloads as it goes.`}
+          </div>`}
       </div>
       <div class="phase-cal-note">
         ${entry.state === 'current'

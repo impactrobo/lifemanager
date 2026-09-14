@@ -293,7 +293,8 @@ function updateCardioLogNotes(cardioId, val) {
 // against the exercise's target RIR, rather than an AMRAP-set rep count.
 function rpExHistoryBaseWeightLb(workoutId, exId, targetCycle) {
   for (let c = targetCycle - 1; c >= 1; c--) {
-    const log = STATE.logs[logKey(c, workoutId)];
+    // Same trap as t3HistoryBaseWeightLb: a deload weight would become the base and stay there.
+    const log = progressionLogFor(c, workoutId);
     const entry = log && log.entries[exId];
     if (entry && entry.sets && entry.sets[0] && entry.sets[0].weight !== '' && entry.sets[0].weight !== undefined) {
       return entry.sets[0].weight;
@@ -309,7 +310,10 @@ function rpExEffectiveWeightLb(workoutId, ex, cycle) {
   adjustments.forEach(a => { if (a.fromCycle <= cycle) total += a.deltaLb; });
   return total;
 }
-function computeRpSuggestion(entry, ex) {
+function computeRpSuggestion(entry, ex, isDeload) {
+  // A deload reads the CURRENT entry, not history, so progressionLogFor() can't protect it: high RIR
+  // at deliberately reduced volume would otherwise come back as "sets felt easy, add weight".
+  if (isDeload) return { eligible: false, missed: false, note: 'Deload — no suggestion from a week you meant to take easy.' };
   const logged = entry.sets.filter(s => s.reps !== '' && s.reps !== undefined);
   if (logged.length === 0) return { eligible: false, missed: false, note: 'Log your sets (reps + RIR) to get a suggestion.' };
   const withRir = logged.filter(s => s.rir !== '' && s.rir !== undefined && s.rir !== null);
@@ -331,9 +335,18 @@ function renderRpExerciseBlock(workout, cycle, log, ex) {
   if (!log.entries[entryKey]) log.entries[entryKey] = { sets: [], applied: false, appliedDeltaLb: null, appliedAdjustmentId: null };
   const entry = log.entries[entryKey];
   if (entry.applied === undefined) entry.applied = false;
-  while (entry.sets.length < ex.sets) entry.sets.push({ weight: '', reps: '', rir: '' });
+  // A deload scales the TARGETS this block shows and never the saved workout, so turning it off
+  // brings the real numbers back exactly. Both counts floor at 1 -- see deloadScaleCount().
+  const dl = workoutDeloadState(cycle, workout.id);
+  const tSets = dl.on ? deloadScaleCount(ex.sets, dl.style.setsPct) : ex.sets;
+  const tRepMin = dl.on ? deloadScaleCount(ex.repMin, dl.style.repsPct) : ex.repMin;
+  const tRepMax = dl.on ? deloadScaleCount(ex.repMax, dl.style.repsPct) : ex.repMax;
+  // Rows only ever GROW to match the target, so cutting it mid-session never deletes a set you
+  // already did -- an honest record of a session that started full and got cut short.
+  while (entry.sets.length < tSets) entry.sets.push({ weight: '', reps: '', rir: '' });
 
-  const effectiveLb = rpExEffectiveWeightLb(workout.id, ex, cycle);
+  const baseLb = rpExEffectiveWeightLb(workout.id, ex, cycle);
+  const effectiveLb = (dl.on && baseLb !== null) ? deloadScaleWeightLb(baseLb, dl.style.weightPct) : baseLb;
   const needsSeed = effectiveLb === null;
   if (needsSeed) {
     const anchorW = entry.sets[0] ? entry.sets[0].weight : '';
@@ -382,7 +395,7 @@ function renderRpExerciseBlock(workout, cycle, log, ex) {
     </div>`;
   }).join('');
 
-  const sugg = computeRpSuggestion(entry, ex);
+  const sugg = computeRpSuggestion(entry, ex, dl.on);
   const displayedDelta = entry.applied ? entry.appliedDeltaLb : null;
 
   return `
@@ -396,7 +409,8 @@ function renderRpExerciseBlock(workout, cycle, log, ex) {
       <div class="tier-body">
         ${needsSeed && !isBand && !isBW
           ? `<div class="target-line" style="color:var(--reset-text); font-weight:600;">First time logging this — enter your working weight for Set 1; the rest will match it.</div>`
-          : `<div class="target-line">Target: <span class="tv">${ex.sets}&times;${ex.repMin}-${ex.repMax}</span> @ RIR ${fmt(ex.targetRIR,1)}</div>`}
+          : `<div class="target-line">Target: <span class="tv">${tSets}&times;${tRepMin}-${tRepMax}</span> @ RIR ${fmt(ex.targetRIR,1)}${
+              dl.on ? ` <span class="deload-flag">DELOAD</span> <span style="color:var(--text-faint); font-weight:500;">was ${ex.sets}&times;${ex.repMin}-${ex.repMax}</span>` : ''}</div>`}
         <div class="set-row-rp" style="margin-bottom:8px; opacity:.6;">
           <div></div><div style="font-size:10px;color:var(--text-faint); font-weight:700;">WEIGHT</div><div style="font-size:10px;color:var(--text-faint); font-weight:700;">REPS</div><div style="font-size:10px;color:var(--text-faint); font-weight:700;">RIR</div><div></div>
         </div>
@@ -460,6 +474,7 @@ function renderRpWorkoutLog(workoutId) {
       </div>
       <div class="section-title" style="margin-top:6px;">${escapeHtml(workout.name)}</div>
       <div class="subtle-label">WEEK ${cycle} &middot; ${log.date || 'not dated'}</div>
+      ${renderWorkoutDeloadControl(cycle, workoutId)}
       <label class="field" style="margin-top:10px;">
         <span class="lbl">Date</span>
         <input type="date" value="${log.date || todayStr()}" onchange="updateRpLogDate('${workoutId}', this.value)">
@@ -476,6 +491,9 @@ function renderRpWorkoutLog(workoutId) {
 }
 function updateRpSet(workoutId, exId, idx, field, value) {
   const log = getRpLog(STATE.currentCycle, workoutId);
+  // Stamped the first time anything is written, which freezes what actually happened. Deriving it
+  // from dates later would mean extending a phase silently rewrote which past sessions counted.
+  stampDeloadOnLog(log, workoutId);
   const entry = log.entries[exId];
   if (!entry.sets[idx]) entry.sets[idx] = { weight: '', reps: '', rir: '' };
   const workout = getRpWorkout(workoutId);
@@ -580,6 +598,11 @@ function renderSingleExerciseBlock(workout, cycle, log, key) {
     return renderTierBlock(workout, cycle, log, key, workout[key].categoryId);
   }
   if (key.indexOf('t3_') === 0) {
+    // T3 IS the accessory tier -- it's absent from the training-max config precisely because it
+    // carries no TM, which is what makes it accessory work. So "Acc Exercises: Off" drops exactly
+    // these, with no marking and no ambiguity anywhere else.
+    const dl = workoutDeloadState(cycle, workout.id);
+    if (dl.on && deloadDropsEntry(true, dl.style)) return '';
     const idx = parseInt(key.split('_')[1], 10);
     return renderT3Block(workout, cycle, log, idx, workout.t3[idx].name);
   }
@@ -624,6 +647,7 @@ function renderWorkoutLog(workoutId) {
       </div>
       <div class="section-title" style="margin-top:6px;">${escapeHtml(workout.name)}</div>
       <div class="subtle-label">WEEK ${cycle} &middot; ${todayOrDate(log)}</div>
+      ${renderWorkoutDeloadControl(cycle, workoutId)}
       <label class="field" style="margin-top:10px;">
         <span class="lbl">Date</span>
         <input type="date" id="logDate" value="${log.date || todayStr()}" onchange="updateLogDate('${workoutId}', this.value)">
@@ -652,11 +676,22 @@ function renderTierBlock(workout, cycle, log, tierKey, categoryId) {
   entry.stage = stageIdx; // stashed for reference/display only — computeStageState is authoritative
   if (entry.applied === undefined) entry.applied = false;
   const stageDef = scheme.stages[stageIdx];
-  const targetLb = targetWeightLb(tierKey, categoryId, cycle);
+  const baseTargetLb = targetWeightLb(tierKey, categoryId, cycle);
+  // Display-time only: the stage scheme and the training max are never edited, so turning the
+  // deload off restores these exactly. Both counts floor at 1 -- see deloadScaleCount().
+  const dl = workoutDeloadState(cycle, workout.id);
+  const tSets = dl.on ? deloadScaleCount(stageDef.sets, dl.style.setsPct) : stageDef.sets;
+  const tReps = dl.on ? deloadScaleCount(stageDef.reps, dl.style.repsPct) : stageDef.reps;
+  const targetLb = dl.on ? deloadScaleWeightLb(baseTargetLb, dl.style.weightPct) : baseTargetLb;
 
-  // ensure sets array length matches stageDef.sets
-  while (entry.sets.length < stageDef.sets) entry.sets.push({ weight: '', reps: '' });
-  entry.sets = entry.sets.slice(0, stageDef.sets);
+  // ensure sets array length matches the target
+  while (entry.sets.length < tSets) entry.sets.push({ weight: '', reps: '' });
+  // Never below what's already logged. The unconditional slice was safe while the target came only
+  // from a fixed stage scheme; a deload can lower it mid-session, and cutting the target must not
+  // delete a set you actually did.
+  let lastLogged = -1;
+  entry.sets.forEach((s, i) => { if (s.reps !== '' && s.reps !== undefined) lastLogged = i; });
+  entry.sets = entry.sets.slice(0, Math.max(tSets, lastLogged + 1));
 
   if (needsReset) {
     // Sets 2+ always mirror Set 1's weight in the actual data, not just on screen
@@ -669,9 +704,11 @@ function renderTierBlock(workout, cycle, log, tierKey, categoryId) {
   const resetAnchorLb = needsReset ? entry.sets[0].weight : null;
 
   const setsHtml = entry.sets.map((s, i) => {
-    const isLast = i === stageDef.sets - 1;
-    const isAmrap = stageDef.amrapLast && isLast;
-    const targetReps = stageDef.reps;
+    const isLast = i === tSets - 1;
+    // No AMRAP on a deload: an all-out set is the opposite of the week's intent, and its extra reps
+    // would feed amrapSuggestionLb() a number earned at reduced volume.
+    const isAmrap = stageDef.amrapLast && isLast && !dl.on;
+    const targetReps = tReps;
     const isResetAnchor = needsReset && i === 0;
     const isResetMirror = needsReset && i > 0;
 
@@ -728,7 +765,8 @@ function renderTierBlock(workout, cycle, log, tierKey, categoryId) {
       <div class="tier-body">
         ${needsReset
           ? `<div class="target-line" style="color:var(--reset-text); font-weight:600;">Reset triggered — missed Stage 3 last time. Enter a fresh working weight for Set 1; the rest will match it. Back to Stage 1: ${stageDef.sets}&times;${stageDef.reps}${stageDef.amrapLast ? ' (last set AMRAP)' : ''}</div>`
-          : `<div class="target-line">Target: <span class="tv">${fmtWeight(targetLb)} ${weightUnitLabel()}</span> &middot; ${stageDef.sets}&times;${stageDef.reps}${stageDef.amrapLast ? ' (last set AMRAP)' : ''}${stageDef.testNote ? ' &mdash; ' + stageDef.testNote : ''}</div>`
+          : `<div class="target-line">Target: <span class="tv">${fmtWeight(targetLb)} ${weightUnitLabel()}</span> &middot; ${tSets}&times;${tReps}${(stageDef.amrapLast && !dl.on) ? ' (last set AMRAP)' : ''}${stageDef.testNote ? ' &mdash; ' + stageDef.testNote : ''}${
+              dl.on ? ` <span class="deload-flag">DELOAD</span> <span style="color:var(--text-faint); font-weight:500;">was ${fmtWeight(baseTargetLb)} &middot; ${stageDef.sets}&times;${stageDef.reps}</span>` : ''}</div>`
         }
         <div class="set-row" style="margin-bottom:8px; opacity:.6;">
           <div></div><div style="font-size:10px;color:var(--text-faint); font-weight:700;">WEIGHT</div><div style="font-size:10px;color:var(--text-faint); font-weight:700;">REPS</div><div></div>
@@ -791,7 +829,8 @@ function computeT3StageState(workoutId, entryKey, targetCycle) {
   let needsReset = false;
   for (let c = 1; c < targetCycle; c++) {
     needsReset = false;
-    const log = STATE.logs[logKey(c, workoutId)];
+    // Same trap as computeStageState, on the T3 stage ladder: reduced work would read as a failure.
+    const log = progressionLogFor(c, workoutId);
     const entry = log && log.entries[entryKey];
     const hasData = entry && entry.sets && entry.sets.some(s => s.reps !== '' && s.reps !== undefined);
     if (!hasData) continue;
@@ -819,9 +858,15 @@ function renderT3Block(workout, cycle, log, idx, name) {
   if (entry.applied === undefined) entry.applied = false;
 
   const { stage: t3StageIdx, needsReset: stageNeedsReset } = computeT3StageState(workout.id, entryKey, cycle);
-  const stageTarget = T3_STAGE_TARGETS[t3StageIdx];
-  const effectiveLb = t3EffectiveWeightLb(workout, idx, entryKey, cycle);
-  const needsSeed = effectiveLb === null || stageNeedsReset;
+  // An accessory that's still being performed gets the same three scalings as anything else. T3 has
+  // no `sets` field -- its four straight sets plus myoreps are the shape of the ladder itself -- so
+  // the sets lever has nothing to act on here and the rep target carries the volume cut.
+  const dl = workoutDeloadState(cycle, workout.id);
+  const baseStageTarget = T3_STAGE_TARGETS[t3StageIdx];
+  const stageTarget = dl.on ? deloadScaleCount(baseStageTarget, dl.style.repsPct) : baseStageTarget;
+  const baseEffectiveLb = t3EffectiveWeightLb(workout, idx, entryKey, cycle);
+  const effectiveLb = (dl.on && baseEffectiveLb !== null) ? deloadScaleWeightLb(baseEffectiveLb, dl.style.weightPct) : baseEffectiveLb;
+  const needsSeed = baseEffectiveLb === null || stageNeedsReset;
 
   if (needsSeed) {
     // mirror sets 2+ to set 1's weight, same pattern as the T1/T2 stage-3 reset
@@ -928,7 +973,8 @@ function renderT3Block(workout, cycle, log, idx, name) {
         <div class="plate-row">${plates}</div>
       </div>
       <div class="tier-body">
-        ${needsSeed ? `<div class="target-line" style="color:var(--reset-text); font-weight:600;">${stageNeedsReset ? 'Reset triggered — needed myoreps at Stage 3 last time. Enter a fresh working weight for Set 1; the rest will match it. Back to Stage 1.' : 'First time logging this — enter your working weight for Set 1; the rest will match it.'}</div>` : `<div class="target-line">Target: <span class="tv">${stageTarget}</span> total reps (Stage ${t3StageIdx + 1})</div>`}
+        ${needsSeed ? `<div class="target-line" style="color:var(--reset-text); font-weight:600;">${stageNeedsReset ? 'Reset triggered — needed myoreps at Stage 3 last time. Enter a fresh working weight for Set 1; the rest will match it. Back to Stage 1.' : 'First time logging this — enter your working weight for Set 1; the rest will match it.'}</div>` : `<div class="target-line">Target: <span class="tv">${stageTarget}</span> total reps (Stage ${t3StageIdx + 1})${
+              dl.on ? ` <span class="deload-flag">DELOAD</span> <span style="color:var(--text-faint); font-weight:500;">was ${baseStageTarget}</span>` : ''}</div>`}
         <div class="set-row" style="margin-bottom:8px; opacity:.6;">
           <div></div><div style="font-size:10px;color:var(--text-faint); font-weight:700;">WEIGHT</div><div style="font-size:10px;color:var(--text-faint); font-weight:700;">REPS</div><div></div>
         </div>
@@ -1052,6 +1098,7 @@ function repeatLastSet(workoutId, entryKey) {
 // ---- event handlers for train tab ----
 function updateSet(workoutId, entryKey, idx, field, value) {
   const log = getLog(STATE.currentCycle, workoutId);
+  stampDeloadOnLog(log, workoutId);
   const entry = log.entries[entryKey];
   if (!entry.sets[idx]) entry.sets[idx] = { weight: '', reps: '' };
   let justFilledReps = false;

@@ -906,7 +906,10 @@ function computeStageState(workoutId, entryKey, targetCycle) {
   let needsReset = false;
   for (let c = 1; c < targetCycle; c++) {
     needsReset = false;
-    const log = STATE.logs[logKey(c, workoutId)];
+    // progressionLogFor(), not STATE.logs directly: a deload's reduced reps would satisfy
+    // `reps < stageDef.reps` and read as a FAILED stage, knocking you back rather than merely
+    // failing to advance you. See its comment in app-phases.js.
+    const log = progressionLogFor(c, workoutId);
     const entry = log && log.entries[entryKey];
     const hasData = entry && entry.sets && entry.sets.some(s => s.reps !== '' && s.reps !== undefined);
     if (!hasData) continue; // week wasn't logged — stage carries forward unchanged
@@ -929,7 +932,9 @@ function computeStageState(workoutId, entryKey, targetCycle) {
 // Returns null if it's never been logged before (i.e. needs the seed/reset UI).
 function t3HistoryBaseWeightLb(workoutId, entryKey, targetCycle) {
   for (let c = targetCycle - 1; c >= 1; c--) {
-    const log = STATE.logs[logKey(c, workoutId)];
+    // A deload weight would otherwise be the first one this walk finds, silently becoming the next
+    // cycle's base and staying there.
+    const log = progressionLogFor(c, workoutId);
     const entry = log && log.entries[entryKey];
     if (entry && entry.sets && entry.sets[0] && entry.sets[0].weight !== '' && entry.sets[0].weight !== undefined) {
       return entry.sets[0].weight;

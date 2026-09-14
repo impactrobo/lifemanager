@@ -56,7 +56,12 @@ STATE = {
     }, ...
   ],
   mesoWorkouts: [],       // MESO1 program's own parallel workout-slot list (built lazily when MESO1 chosen)
-  logs: {},               // key `${cycle}_${workoutId}` -> { date, notes, complete,
+  // Logs gain an optional `deload` boolean, STAMPED on first write and never recomputed from dates
+  // -- it records what actually happened even if the phase's boundaries move afterwards.
+  // progressionLogFor(cycle, id) is the one choke point that reads it; all four cycle walks go
+  // through it, so a deload can never become a progression base or read as a failed stage.
+  // An optional `deloadStyle` overrides the phase's for that one session.
+  logs: {},               // key `${cycle}_${workoutId}` -> { date, notes, complete, deload?, deloadStyle?,
                            //   entries: { [entryKey]: { sets: [{weight,reps}...], applied, appliedDeltaLb, appliedAdjustmentId } } }
   mesoLogs: {},            // key `${cycle}_${mesoWorkoutId}` -> same shape, for MESO1 program logs
   cardioWorkouts: [],      // dynamic slots, parallel structure to `workouts` but for cardio
@@ -97,6 +102,9 @@ STATE = {
       exercisePlan,                    // { 0..6: [{id, workoutId}] }. Seeded as a deep COPY of the
                                        // plan in effect where the block starts -- NEVER a shared
                                        // reference, or editing the new block rewrites the old one
+      deloadTrailing,                  // undefined|true = last week is a deload; false = off. Applies
+                                       // at DISPLAY time only; the saved workout is never edited
+      deloadStyle,                     // { setsPct, repsPct, weightPct (50-100), accExercises }
       createdAt },
     ...                                // migrateState() drops any phase whose goal is gone
   ],

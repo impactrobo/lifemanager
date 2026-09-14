@@ -214,6 +214,10 @@ interface GoalPhase {
    *  whatever plan was in effect where the block starts, never a shared reference -- aliasing it
    *  would make editing the new block silently rewrite the old one. */
   exercisePlan?: { [weekday: number]: { id: string; workoutId: string | null }[] };
+  /** Exercise blocks: trailing-week deload. ON by default, so `false` means deliberately off and
+   *  `undefined` means a block that predates the feature -- which still gets one. */
+  deloadTrailing?: boolean;
+  deloadStyle?: DeloadStyle;
   /** What to eat during this phase. Seeded from the rolling TDEE with the phase's rate applied, then
    *  editable. While set, it takes over from STATE.diet.tdee as what the Diet log compares against --
    *  calorieTargetForDate() is the only thing that decides which wins. */
@@ -222,6 +226,15 @@ interface GoalPhase {
    *  counts from here, so declining an offer isn't re-asked tomorrow. */
   calorieSetOn: string | null;
   createdAt: number;
+}
+
+/** The four volume levers a deload pulls. Percentages are 50-100; both counts floor at 1 when
+ *  applied, so nothing is silently dropped -- only accExercises: false removes work. */
+interface DeloadStyle {
+  setsPct: number;
+  repsPct: number;
+  weightPct: number;
+  accExercises: boolean;
 }
 
 interface RecurringIncome {

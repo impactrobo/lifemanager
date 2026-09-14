@@ -888,6 +888,25 @@ input[type="text"].phase-label {
 }
 .planner-scope-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 
+/* ---------- Deload ---------- */
+/* Everything a deload does is display-time: the saved workout is never edited, so the flag exists to
+   make that visible. It sits beside the target it changed, with the original alongside it, because
+   a halved number with no explanation reads as a bug. */
+.deload-flag {
+  font-size: 9px; font-weight: 700; letter-spacing: 0.08em;
+  padding: 1px 5px; border-radius: 3px; background: var(--warn); color: var(--bg);
+}
+.deload-bar {
+  margin-top: 10px; padding: 10px 12px;
+  background: var(--surface2); border: 1px solid var(--border-soft); border-radius: var(--radius);
+  font-size: 12px; color: var(--text-dim);
+}
+.deload-bar-on { border-color: var(--warn); }
+.deload-bar-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.deload-levers { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+.deload-levers .field { margin-bottom: 0; }
+.deload-levers input { font-size: 14px; }
+
 .phase-sum {
   margin-top: 10px; padding: 10px 13px;
   background: var(--surface2); border: 1px solid var(--border-soft); border-radius: var(--radius);
