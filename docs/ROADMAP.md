@@ -56,6 +56,36 @@ These are **not** requested features — they're natural extensions given the cu
 app, logged here so they're not lost, not so they get built unprompted. Confirm with the person
 before starting any of these.
 
+- **"Best Shape of Your Life" scope check (2026-09-14)** — for someone overweight, untrained,
+  motivation-sensitive, with a longevity focus (biomarkers, supplementation) across health, money
+  and personal development. Full scope published as an artifact; ranked by leverage, not size:
+  1. **Weekly review** (M) — process metrics reflected back: workouts done vs planned, habits kept,
+     water/steps/sleep target days hit, PRs set. The single highest-leverage item — every ingredient
+     already exists in `STATE`, nothing assembles it. Outcome metrics (the scale) demotivate someone
+     who struggles with motivation; process metrics ("did you show up") motivate. This is also the
+     surface most of the items below would land on.
+  2. **Chart sleep &amp; steps, add RHR/BP chips** (S) — sleep hours, sleep quality and steps are
+     already logged daily via `LOG_FIELDS` and go straight into a hole: `WEIGHT_METRICS` charts only
+     weight/BF%/body water. Cheapest win in the whole scope.
+  3. **Lab biomarkers** (M) — the actual missing piece for a longevity focus. No sparse, dated,
+     ranged panel exists anywhere (lipids/ApoB, HbA1c, hs-CRP, vitamin D, ferritin, etc.) — a
+     different data shape from the daily log, its own BODY subtab.
+  4. **Editable, dosed supplement stack + adherence** (M) — `SUPPLEMENTS` is a hardcoded list of 7,
+     not editable, no dosing, no trend. Link a supplement to the lab marker it's meant to move and
+     the budget line it costs.
+  5. **Cost of the meal plan vs the Groceries budget** (M) — where money and health meet; optional
+     price on foods, same shape as nutrition.
+  6. **Beginner on-ramp template + "bad-day" mode** (S–M) — a shipped first-block template
+     (walking + 2 full-body sessions + mobility) the way C25K already proves works for cardio; and an
+     unplanned-skip path distinct from a deload/active-rest, so silently skipping isn't how a block
+     dies.
+  7. **Skills, generalised** (L) — Hobbies is guitar, and only guitar, hardcoded to
+     `STATE.life.guitar`. A generic Skill (practice log + optional ladder + a target with no
+     projection, same shape as an exercise target) makes guitar the first of many rather than the
+     only one.
+  Deliberately **not** proposed: points, badges, streak-shaming — the app instruments the plan and
+  doesn't second-guess the person, and gamification would be a different product.
+
 - ~~Home becomes the calendar's own Day view~~ — **shipped 2026-09-13** as "Home Becomes Today",
   see Recently Shipped. The version that actually got built dropped the customisation question
   this entry raised rather than answering it: Home's day content (RIGHT NOW/WORKOUTS/HABITS) is no
