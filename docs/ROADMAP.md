@@ -92,24 +92,6 @@ before starting any of these.
   longer independently rearrangeable, on the view that a fixed daily rhythm needs less tinkering
   than six independent sections did. The section tile grid stayed drag/hide-able.
 
-- **Codebase survey findings not acted on (2026-09-13)** — from the same investigation whose
-  three fixes are under Recently Shipped. Ranked; all confirmed, none urgent:
-  - ~~~82 module-level mutable globals holding all UI state~~ — **done 2026-09-13**, see Recently
-    Shipped. 82 bare `let`s became 21, of which three are the new state objects; the 18 that
-    remain are deliberate.
-  - ~~`updateAllTMs()` running on every render of the Training Maxes screen~~ — **fixed
-    2026-09-13**, and it was hiding a real data-loss bug; see Recently Shipped.
-  - ~~Rot-prone literal-count test assertions~~ — **addressed 2026-09-13**, and the original
-    finding was **overstated**: it claimed nine assertions "of the shape that rotted twice", having
-    pattern-matched the syntax `length !== N` rather than the actual failure mode. The shape that
-    rotted was *a count of app structure the test doesn't control*, and only **two** fit
-    (`test_agenda`'s 7 = `AGENDA_DAYS`, `test_recurring_reminders`' 7 = seed +
-    `RECURRENCE_HORIZON.monthly`). Both now read the constant. Two more were tightened for other
-    reasons; the remaining six are counts the test's own fixture creates (3 contributions it
-    logged, 3 photos it attached, 7 days in a week) and were deliberately left — changing them
-    would be busywork that makes them less readable.
-  - ~~Inline `padStart(2,'0')` date-format duplicates~~ — **fixed 2026-09-13**, see Recently
-    Shipped.
 - **Scheduling build-out — agreed 2026-09-12, step 1 of 4 shipped.** Came from a review of what
   this app's scheduling lacked next to general calendar apps. The person picked four areas and
   approved this dependency order; steps 2-4 are **agreed work, not speculative ideas**, but still
@@ -1177,7 +1159,10 @@ on an architecture split + a large wave of Maximalist aesthetics.
     rows by name rather than by total (a total says nothing about *which* six, and breaks if the
     band gains a group), and `test_activity_overlaps` checks an exact array, matching the two
     sibling assertions beside it.
-- **Codebase survey — three fixes landed, the rest recorded below under Ideas (2026-09-13).** A
+- **Codebase survey — all seven findings landed (2026-09-13).** Three fixed immediately here;
+  the other four (`updateAllTMs()`, the date-key dedup, the test-assertion audit, the globals
+  consolidation) landed the same day as their own entries elsewhere in this changelog — see
+  "Survey item 6" and "Survey items 4, 5 and 7". A
   full investigation of `app.js` (11,270 lines, 706 functions, 46 test files) for bugs,
   limitations and refactorable code. Clean bill of health on several fronts worth knowing: **0
   dead functions** (checked against markup, `sw.js`, the reminder worker, every FX module, and
