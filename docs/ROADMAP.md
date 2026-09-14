@@ -119,10 +119,9 @@ before starting any of these.
   moment when a Savings Goal completes was floated too, but explicitly deferred — the person wants
   it to feel custom per aesthetic rather than one generic animation, which is real design work of
   its own.)
-- **Exercise:** a personal-record (PR) log/timeline distinct from the per-workout history — the
-  app tracks training maxes (`tmLb`) but there's no dedicated "here's every time you hit a new
-  best" view. Distinct from Progress -> COMPARE's lift-history charts (see Recently Shipped),
-  which trend the actual top-set weight over time but don't call out a new-PR moment specifically.
+- ~~**Exercise:** a personal-record (PR) log/timeline~~ — **shipped 2026-09-14** as part of
+  "Phases Own the Plan" step 8, see Recently Shipped. `bestForLift()` backs both it and exercise
+  targets, so the two can never disagree about what your best is.
 - **Health & Diet:** a way to log incidental cardio calories from a wearable import rather than
   typing them in. (The weight-trend trailing average idea shipped 2026-09-12 — see Recently
   Shipped.)
