@@ -586,7 +586,120 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (!wipCopy.overLoud) throw new Error('Going over should turn the read-out to the warning colour');
   if (wipCopy.underLoud) throw new Error('Under the ceiling it stays quiet');
 
-  // ---- 10. Nothing reads the scheduling fields raw ----
+  // ---- 10. The focus timer is voluntary, and blocks nothing ----
+  //
+  // The alternative — trap you on one item until its minutes run out — is textbook BLOCKED
+  // practice, which Shea & Morgan (1979) found beats random practice during a session and loses to
+  // it on retention and transfer. The block builder interleaves on purpose, so a lock would quietly
+  // undo the thing the design is built on. These assertions pin "voluntary" so it can't drift.
+  const timer = await page.evaluate(() => {
+    STATE.skills = []; STATE.skillSession = null;
+    const s = defaultSkill('T');
+    const l = defaultSkillList('L', false);
+    ['one', 'two'].forEach(n => {
+      const it = defaultSkillItem(n);
+      Object.assign(it, { reps: 2, ease: 2.5, interval: 1, dueIn: 0, lastPractised: shiftDate(todayStr(), -1) });
+      l.items.push(it);
+    });
+    s.lists = [l]; STATE.skills = [s];
+    switchTab('hobbies'); openSkill(s.id);
+    STATE.skillSession = buildSkillBlock(s, 20, todayStr());
+    const [a, b] = STATE.skillSession.items;
+    const fresh = { ends: a.timerEndsAt, spent: a.spentSec };
+
+    startSkillItemTimer(a.itemId);
+    const running = {
+      onA: !!a.timerEndsAt,
+      // An END TIME, not a counter: ~10 minutes of wall clock ahead of now.
+      aheadSec: Math.round((a.timerEndsAt - Date.now()) / 1000),
+      left: skillTimerRemaining(a),
+      // Nothing is locked: every rating on every card is still live, including other items'.
+      canRateOther: (() => { rateSkillSessionItem(b.itemId, 'good'); return b.rating === 'good'; })(),
+      canRateRunning: (() => { rateSkillSessionItem(a.itemId, 'hard'); return a.rating === 'hard'; })(),
+    };
+
+    // Starting a second timer moves it rather than running two, and banks what the first used.
+    // Wind A's end time back two minutes first — the whole test runs inside one millisecond
+    // otherwise, so nothing would have elapsed to bank and the assertion would prove nothing.
+    a.timerEndsAt -= 120 * 1000;
+    startSkillItemTimer(b.itemId);
+    const moved = { onA: !!a.timerEndsAt, onB: !!b.timerEndsAt, bankedA: a.spentSec };
+
+    b.timerEndsAt -= 45 * 1000;
+    stopSkillItemTimer();
+    const stopped = { onB: !!b.timerEndsAt, bankedB: b.spentSec };
+    return { fresh, running, moved, stopped,
+             clock: [fmtSkillClock(0), fmtSkillClock(59), fmtSkillClock(600), fmtSkillClock(605)] };
+  });
+  await settle(page);
+  console.log('timer:', JSON.stringify(timer));
+  if (timer.fresh.ends !== null || timer.fresh.spent !== 0) throw new Error('A fresh block has no timer running and nothing banked');
+  if (!timer.running.onA) throw new Error('Tapping the minutes should start that item’s countdown');
+  if (Math.abs(timer.running.aheadSec - 600) > 3) throw new Error('A 10-minute allocation should end ~600s from now, got ' + timer.running.aheadSec);
+  if (!timer.running.canRateOther) throw new Error('A running timer must not lock out other items — that would be blocked practice');
+  if (!timer.running.canRateRunning) throw new Error('The running item stays rateable mid-timer');
+  if (timer.moved.onA || !timer.moved.onB) throw new Error('One timer at a time: starting another moves it');
+  if (Math.abs(timer.moved.bankedA - 120) > 3) throw new Error('Moving the timer banks the two minutes the first item used, got ' + timer.moved.bankedA);
+  if (timer.stopped.onB) throw new Error('Stopping clears the countdown');
+  if (Math.abs(timer.stopped.bankedB - 45) > 3) throw new Error('Stopping banks the elapsed time, got ' + timer.stopped.bankedB);
+  if (timer.clock.join('|') !== '0:00|0:59|10:00|10:05') throw new Error('Clock formatting: ' + timer.clock.join('|'));
+
+  // Wall-clock, not a counter — so a backgrounded phone (where setInterval is throttled or
+  // suspended) comes back with the right number instead of a drifted one.
+  const backgrounded = await page.evaluate(() => {
+    const e = STATE.skillSession.items[0];
+    e.spentSec = 0;
+    e.timerEndsAt = Date.now() + 90 * 1000;
+    const before = skillTimerRemaining(e);
+    e.timerEndsAt = Date.now() - 5 * 1000;   // as if it elapsed while the tab slept
+    return { before, after: skillTimerRemaining(e) };
+  });
+  console.log('backgrounded:', backgrounded);
+  if (backgrounded.before !== 90) throw new Error('Remaining is derived from the end time, got ' + backgrounded.before);
+  if (backgrounded.after !== 0) throw new Error('An elapsed timer floors at zero rather than going negative');
+
+  // The card renders the control, and the running state is the one that takes the accent.
+  const timerUi = await page.evaluate(() => {
+    const e = STATE.skillSession.items[0];
+    e.timerEndsAt = null; e.spentSec = 0;
+    const idle = renderSkillItemTimer(e);
+    e.timerEndsAt = Date.now() + 300 * 1000;
+    const on = renderSkillItemTimer(e);
+    e.timerEndsAt = null; e.spentSec = 360;
+    const done = renderSkillItemTimer(e);
+    return { idle, on, done };
+  });
+  if (!/startSkillItemTimer/.test(timerUi.idle)) throw new Error('At rest the control starts the timer');
+  if (!/skill-run-timer-on/.test(timerUi.on) || !/stopSkillItemTimer/.test(timerUi.on)) throw new Error('Running, it stops it and takes the accent');
+  if (!/id="skillTimer_/.test(timerUi.on)) throw new Error('The running clock needs its id — the tick patches that element rather than re-rendering');
+  if (!/6m done/.test(timerUi.done) || !/skill-run-timer-done/.test(timerUi.done)) throw new Error('Banked time replaces the plan: ' + timerUi.done);
+
+  // Extending mid-item must not reset a running clock — it's exactly when you'd take the offer.
+  const survives = await page.evaluate(() => {
+    STATE.skills = []; STATE.skillSession = null;
+    const s = defaultSkill('X');
+    const l = defaultSkillList('L', false);
+    [1, 2, 3, 4, 5].forEach(i => {
+      const it = defaultSkillItem('i' + i);
+      Object.assign(it, { reps: 1, ease: 2.5, interval: 1, dueIn: 0, lastPractised: shiftDate(todayStr(), -1) });
+      l.items.push(it);
+    });
+    s.lists = [l]; STATE.skills = [s];
+    STATE.skillSession = buildSkillBlock(s, 15, todayStr());
+    const id = STATE.skillSession.items[0].itemId;
+    startSkillItemTimer(id);
+    STATE.skillSession.items[0].spentSec = 120;
+    const endsBefore = STATE.skillSession.items[0].timerEndsAt;
+    extendSkillSession(STATE.skillSession.overflow.shortfall);
+    const after = STATE.skillSession.items.find(x => x.itemId === id);
+    return { endsBefore, endsAfter: after.timerEndsAt, spent: after.spentSec };
+  });
+  await settle(page);
+  console.log('timer survives extend:', survives);
+  if (survives.endsAfter !== survives.endsBefore) throw new Error('Extending must not reset a running timer');
+  if (survives.spent !== 120) throw new Error('Banked time must survive the rebuild too, got ' + survives.spent);
+
+  // ---- 11. Nothing reads the scheduling fields raw ----
   const src = appSource();
   const helpers = src.replace(/function skillClampEase[\s\S]*?\n}/, '').replace(/function skillItemReps[\s\S]*?\n}/, '');
   if (/\bitem\.ease \+ /.test(helpers)) throw new Error('Ease must move through applySkillRating(), which clamps');

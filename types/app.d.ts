@@ -296,6 +296,13 @@ interface SkillSessionEntry {
   isNew: boolean;
   stale: boolean;
   rating: string | null;
+  /** The focus timer: when this item's countdown ends, or null when nothing is running. An END
+   *  TIME rather than a counter, so it survives a backgrounded phone -- which for a ten-minute
+   *  timer is the normal case, not the edge case. */
+  timerEndsAt: number | null;
+  /** Seconds actually banked on this item. The first record of what a block COST rather than
+   *  what it planned -- and a record only, never a requirement. */
+  spentSec: number;
 }
 
 interface SkillSession {

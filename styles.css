@@ -1113,7 +1113,19 @@ input[type="text"].skill-item-detail:focus { outline: none; color: var(--text); 
 
 .skill-run-head { padding: 11px 13px; margin-bottom: 0; }
 .skill-run-name { flex: 1 1 auto; min-width: 0; font-size: 15px; font-weight: 650; }
-.skill-run-mins { flex: none; font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; }
+/* The allocated minutes, as the control that runs them. It always looked tappable; now it is.
+   Deliberately quiet at rest -- it's an offer to focus, not an instruction, and four rating
+   buttons below it already have first claim on the card's attention. */
+.skill-run-timer {
+  flex: none; min-width: 52px; padding: 4px 9px; cursor: pointer;
+  background: var(--surface2); border: 1px solid var(--border-soft); border-radius: var(--radius);
+  color: var(--text-dim); font-family: var(--font-mono); font-size: 13px; font-weight: 700;
+  font-variant-numeric: tabular-nums; letter-spacing: -0.01em;
+}
+/* Running is the one state that earns the accent: it's the only thing on the screen that's
+   changing by itself, so it should be the thing your eye returns to. */
+.skill-run-timer-on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.skill-run-timer-done { border-color: var(--good); color: var(--good); }
 .skill-run-detail { font-size: 12px; color: var(--text-dim); margin: -2px 0 8px; }
 /* A rated card recedes rather than vanishing: the block is also the record of what you just did,
    and a list that empties as you work gives you nothing to look back at mid-session. */

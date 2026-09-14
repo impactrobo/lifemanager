@@ -447,11 +447,29 @@ on an architecture split + a large wave of Maximalist aesthetics.
     "about 60 min of any session until they graduate" is the same fact in the unit you'd decide in.
     The line is omitted entirely when Phase A is empty -- a zero there would read as a measurement
     rather than an absence.
-  - **Noted, not built: the per-item minutes are advisory.** The runner has no active item, no
-    sequence and no timer; `6m` on a card is a plan the app never observes. A per-item countdown is
-    cheap (the rest timer already exists, with sound, vibration and a floating widget) but it is a
-    different posture -- a timer that nags mid-practice, rather than a plan you follow -- so it is a
-    deliberate non-decision rather than an oversight.
+  - **A voluntary focus timer on each item.** The per-item minutes were a plan the app never
+    observed; tapping them now runs a countdown that chimes, and banks the elapsed time -- the first
+    record of what a block actually COST rather than what it planned.
+    - **Deliberately not a lock**, which was the original proposal. Trapping you on one item until
+      its minutes run out is textbook BLOCKED practice, and Shea & Morgan (1979) -- already
+      load-bearing here -- found blocked beats random practice *during* a session and loses to it on
+      retention and transfer, most strongly for related tasks in one class, which is exactly what an
+      item list is. The block builder interleaves on purpose; a lock would quietly undo that. A lock
+      also can't create attention, only refuse to record something, while reliably obstructing an
+      item that needs three minutes today, cramping hands, and A/B-ing two items against each other.
+    - Guadagnoli & Lee's challenge point framework (2004) is the honest counter -- genuine novices
+      can be overwhelmed by interleaving and do benefit from more blocking early. Noted rather than
+      built, and if it is ever acted on it should be phase-dependent (blocking for reps 1-2, the
+      cognitive stage) rather than global. The model already encodes that distinction.
+    - **Stored as an END TIME, not a counter.** A ten-minute timer will be backgrounded -- the normal
+      case, not the edge case -- and `setInterval` is throttled or suspended while a phone sleeps, so
+      a decrementing counter drifts exactly when it matters. The rest timer counts down and gets away
+      with it only because it runs for ninety seconds.
+    - Ticks by patching its own element once a second (`paintSkillTimer()`), never `render()`, which
+      replaces `#app`'s innerHTML wholesale and at 1Hz would rebuild the block and drop focus out of
+      the notes field mid-typing. Started/stopped from `_doRender()`, same shape as the subnav
+      affordances. Survives `extendSkillSession()`, since mid-item is exactly when you'd take that
+      offer.
 
 - **Skills: the practice session and the ladder (2026-09-15).** Step 2 of 6. New file
   `src/app-skill-session.js` — block building, the two-dial taper, the WIP limit, weighted time

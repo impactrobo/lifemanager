@@ -314,6 +314,8 @@ function buildSkillBlock(skill, minutes, today) {
     items: admitted.map((c, i) => ({
       itemId: c.item.id, listId: c.list.id, minutes: alloc[i],
       isNew: c.isNew, stale: c.stale, rating: null,
+      // The focus timer's state, per item. Both stay null/0 unless you actually run one.
+      timerEndsAt: null, spentSec: 0,
     })),
     deferredIds: deferred.map(c => c.item.id),
     // Routine trimming just happens and says so afterwards; only a real shortfall earns a line
@@ -438,16 +440,114 @@ function dropFromSkillSession(skill, ids) {
   if (!session.items.length) STATE.skillSession = null;
   return before - session.items.length - session.deferredIds.length;
 }
+// ---- The focus timer ----
+//
+// VOLUNTARY, and that's the design rather than an unfinished version of a lock. The obvious
+// alternative -- trap you on one item until its minutes run out -- is textbook BLOCKED practice,
+// and Shea & Morgan (1979) is the direct finding against it: blocked practice beats random practice
+// during the session and loses to it on retention and transfer, most strongly for related tasks in
+// one class, which is exactly what an item list is. The block builder interleaves on purpose; a
+// lock would quietly undo that.
+//
+// It also couldn't work. A lock can't create attention, it can only refuse to record something --
+// while reliably getting in the way of an item that needs three minutes today, of hands cramping on
+// a barre chord, and of A/B-ing two items against each other, which for most skills IS the practice
+// that matters. So: a countdown you start, that chimes, and that blocks nothing. Same posture as
+// the WIP soft cap and a goal that never auto-completes.
+//
+// Stored as an END TIME, not a counter. A ten-minute timer WILL be backgrounded -- that's the
+// normal case, not the edge case -- and setInterval is throttled or suspended while a phone sleeps,
+// so a decrementing counter drifts exactly when it matters. With an end time the tick is only a
+// display refresh: close the app, come back, and the number is still right. (The rest timer counts
+// down instead, and gets away with it only because it runs for ninety seconds.)
+let SKILL_TIMER_HANDLE = null;
+
+function skillTimerEntry() {
+  const s = activeSkillSession();
+  return s ? (s.items.find(x => x.timerEndsAt) || null) : null;
+}
+function skillTimerRemaining(entry) {
+  if (!entry || !entry.timerEndsAt) return 0;
+  return Math.max(0, Math.round((entry.timerEndsAt - Date.now()) / 1000));
+}
+function skillPlannedSec(entry) { return Math.max(1, Math.round(Number(entry && entry.minutes) || 1)) * 60; }
+function fmtSkillClock(sec) {
+  return `${Math.floor(sec / 60)}:${String(Math.max(0, sec) % 60).padStart(2, '0')}`;
+}
+
+// One item at a time -- the focus framing, without the lock. Starting a second timer just moves it,
+// banking whatever the first one used rather than throwing it away.
+function startSkillItemTimer(itemId) {
+  const session = activeSkillSession();
+  const entry = session && session.items.find(x => x.itemId === itemId);
+  if (!entry) return;
+  stopSkillItemTimer(true);
+  entry.timerEndsAt = Date.now() + skillPlannedSec(entry) * 1000;
+  playRestBeep(false);   // also unlocks audio on this user gesture, so the chime can fire later
+  saveState(); render();
+}
+// `quiet` when we're only moving the timer to another item rather than you stopping it.
+function stopSkillItemTimer(quiet) {
+  const session = activeSkillSession();
+  if (!session) return;
+  session.items.forEach(entry => {
+    if (!entry.timerEndsAt) return;
+    entry.spentSec = Math.round(Number(entry.spentSec) || 0) + (skillPlannedSec(entry) - skillTimerRemaining(entry));
+    entry.timerEndsAt = null;
+  });
+  if (!quiet) { saveState(); render(); }
+}
+// Called from _doRender() after the runner's markup exists, the same way the subnav affordances are.
+function syncSkillTimer() {
+  const entry = skillTimerEntry();
+  if (!entry) {
+    if (SKILL_TIMER_HANDLE) { clearInterval(SKILL_TIMER_HANDLE); SKILL_TIMER_HANDLE = null; }
+    return;
+  }
+  if (!SKILL_TIMER_HANDLE) SKILL_TIMER_HANDLE = setInterval(skillTimerTick, 1000);
+  paintSkillTimer(entry);
+}
+function skillTimerTick() {
+  const entry = skillTimerEntry();
+  if (!entry) { clearInterval(SKILL_TIMER_HANDLE); SKILL_TIMER_HANDLE = null; return; }
+  if (skillTimerRemaining(entry) > 0) { paintSkillTimer(entry); return; }
+  // Time's up: bank the full planned minutes, chime, and leave the card exactly where it is.
+  // Nothing advances on its own, because deciding you want two more minutes on something is a
+  // legitimate thing to want and the app has no business ending it for you.
+  entry.spentSec = Math.round(Number(entry.spentSec) || 0) + skillPlannedSec(entry);
+  entry.timerEndsAt = null;
+  clearInterval(SKILL_TIMER_HANDLE); SKILL_TIMER_HANDLE = null;
+  playRestBeep(true); vibrateRest();
+  showToast('Time on that one — rate it, or keep going');
+  saveState(); render();
+}
+// Patch the one element rather than calling render(): render() replaces #app's innerHTML wholesale,
+// so doing it at 1Hz would rebuild the entire block every second and drop focus out of the notes
+// field while you were typing in it.
+function paintSkillTimer(entry) {
+  const el = document.getElementById('skillTimer_' + entry.itemId);
+  if (el) el.textContent = fmtSkillClock(skillTimerRemaining(entry));
+}
+
 // The overflow offer: extend the block in place rather than abandoning and rebuilding, so nothing
 // already rated is lost.
 function extendSkillSession(extraMinutes) {
   const session = activeSkillSession();
   const skill = session && skillById(session.skillId);
   if (!skill) return;
+  // Everything you've already done carries across -- the ratings, and now the timer state too. A
+  // running clock surviving the rebuild matters most: extending is something you'd reach for
+  // mid-item, and having it silently reset would punish you for taking the offer.
   const kept = {};
-  session.items.forEach(x => { if (x.rating) kept[x.itemId] = x.rating; });
+  session.items.forEach(x => { kept[x.itemId] = { rating: x.rating, timerEndsAt: x.timerEndsAt, spentSec: x.spentSec }; });
   const block = buildSkillBlock(skill, session.minutes + Math.max(1, Math.round(extraMinutes || 0)), session.date);
-  block.items.forEach(x => { if (kept[x.itemId]) x.rating = kept[x.itemId]; });
+  block.items.forEach(x => {
+    const was = kept[x.itemId];
+    if (!was) return;
+    x.rating = was.rating || null;
+    x.timerEndsAt = was.timerEndsAt || null;
+    x.spentSec = Math.round(Number(was.spentSec) || 0);
+  });
   STATE.skillSession = block;
   saveState(); render();
 }
@@ -491,6 +591,22 @@ function renderSkillSessionStarter(skill) {
     </div>`;
 }
 
+// The allocated minutes, as the control that runs them. It was always a tappable-looking number
+// that did nothing; now tapping it does the obvious thing. A banked figure replaces it afterwards,
+// which is the first time the app has any record of what a block ACTUALLY cost rather than what it
+// planned -- and it stays a record, never a requirement.
+function renderSkillItemTimer(entry) {
+  const left = skillTimerRemaining(entry);
+  if (entry.timerEndsAt) {
+    return `<button class="skill-run-timer skill-run-timer-on" onclick="stopSkillItemTimer()" title="Stop">
+      <span id="skillTimer_${entry.itemId}">${fmtSkillClock(left)}</span></button>`;
+  }
+  const spent = Math.round(Number(entry.spentSec) || 0);
+  const label = spent >= 30 ? `${Math.max(1, Math.round(spent / 60))}m done` : `${entry.minutes}m`;
+  return `<button class="skill-run-timer ${spent >= 30 ? 'skill-run-timer-done' : ''}"
+    onclick="startSkillItemTimer('${entry.itemId}')" title="Start ${entry.minutes} minutes">${label}</button>`;
+}
+
 function renderSkillSession(skill, session) {
   const done = session.items.filter(x => x.rating).length;
   const cards = session.items.map(entry => {
@@ -506,7 +622,7 @@ function renderSkillSession(skill, session) {
         <div class="ehead">
           <div class="skill-run-name">${escapeHtml(it.name)}</div>
           ${tag}
-          <span class="skill-run-mins mono">${entry.minutes}m</span>
+          ${renderSkillItemTimer(entry)}
         </div>
         ${it.detail ? `<div class="skill-run-detail">${escapeHtml(it.detail)}</div>` : ''}
         <div class="skill-rate">${SKILL_RATINGS.map(r => `

@@ -624,6 +624,10 @@ function _doRender() {
     else { app.innerHTML = renderWorkoutLog(NAV.trainView.workoutId); attachWorkoutLogHandlers(NAV.trainView.workoutId); }
   } else if (NAV.currentTab === 'hobbies') {
     app.innerHTML = renderHobbies();
+    // The practice timer patches its own element once a second rather than re-rendering. This
+    // starts/stops that interval now the markup it writes into exists — same shape as
+    // attachSubnavScrollAffordances() below.
+    syncSkillTimer();
   } else if (NAV.currentTab === 'setup') {
     app.innerHTML = renderSetup();
     attachSetupHandlers();
