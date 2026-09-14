@@ -574,6 +574,10 @@ const LOG_FIELDS = {
   sleepQual: { group: 'am', label: 'Quality',  unit: () => '1-5' },
   // Checked on waking, same moment as sleep -- AM, not PM.
   restingHR: { group: 'am', label: 'Rest HR',  unit: () => 'bpm', step: '1' },
+  // Two numbers behind one chip, which water already does: it reads 1250/2000 off a pair of
+  // values and nobody blinks. Same shape here, so `bloodPressure` is one FIELD with two stored
+  // parts rather than two fields that have to be kept in step.
+  bloodPressure: { group: 'am', label: 'BP', unit: () => 'mmHg' },
   calories:  { group: 'pm', label: 'Calories', unit: () => 'kcal', step: '1' },
   water:     { group: 'pm', label: 'Water',    unit: () => waterUnitLabel() },
   steps:     { group: 'pm', label: 'Steps',    unit: () => 'steps', step: '1' },
@@ -589,6 +593,10 @@ function logFieldValue(field) {
     case 'sleepLen':  return log.sleepHours != null ? log.sleepHours : null;
     case 'sleepQual': return log.sleepQuality != null ? log.sleepQuality : null;
     case 'restingHR': return log.restingHR != null ? log.restingHR : null;
+    // The one field that isn't a scalar. A reading is the PAIR -- a lone systolic isn't a blood
+    // pressure -- so it's null until both halves are there, and callers get an object or nothing.
+    case 'bloodPressure': return (log.bpSystolic != null && log.bpDiastolic != null)
+      ? { systolic: log.bpSystolic, diastolic: log.bpDiastolic } : null;
     case 'water':     return log.waterMl != null ? log.waterMl : null;
     case 'steps':     return log.steps != null ? log.steps : null;
     default:          return null;
@@ -600,6 +608,9 @@ function logFieldDisplay(field) {
   const v = logFieldValue(field);
   if (field === 'water') return `${fmtWater(v || 0)}/${fmtWater(waterTargetMl())}`;
   if (v == null) return '&mdash;';
+  // Reads 120/80, the way a blood pressure is written and said out loud. Water's a/b chip is the
+  // precedent; unlike water there's no meaningful zero, so an unlogged day is a dash, not "0/0".
+  if (field === 'bloodPressure') return `${v.systolic}/${v.diastolic}`;
   if (field === 'weight') return fmt(v, 1);
   if (field === 'sleepLen') return fmt(v, 1) + 'h';
   if (field === 'sleepQual') return v + '/5';
@@ -727,7 +738,9 @@ function logChip(field) {
     : LOG_FIELDS[field].label;
   const dot = colorVal
     ? `<i class="log-chip-dot ${waterColorIsStale() ? 'log-chip-dot-stale' : ''}" style="background:${waterColorHex(colorVal)};" title="Colour ${colorVal} &middot; ${waterColorAge()}"></i>` : '';
-  return `<button class="log-chip ${logged ? 'log-chip-set' : ''} ${field === 'water' ? 'log-chip-wide' : ''}" onclick="${onclick}">
+  // Both a/b chips take the narrower value font -- "120/80" needs the same room "1250/2000" does.
+  const wide = field === 'water' || field === 'bloodPressure';
+  return `<button class="log-chip ${logged ? 'log-chip-set' : ''} ${wide ? 'log-chip-wide' : ''}" onclick="${onclick}">
     <span class="log-chip-label">${label}</span>
     <span class="log-chip-value">${logFieldDisplay(field)}${field === 'water' ? '<i class="log-chip-plus">+</i>' : ''}${dot}</span>
   </button>`;
@@ -737,7 +750,7 @@ function renderLogStrip(group, fields) {
     <div class="subtle-label" style="margin:18px 0 8px;">LOG &middot; ${group.toUpperCase()}</div>
     <div class="log-strip">${fields.map(logChip).join('')}</div>`;
 }
-function renderHomeAmLogBox() { return renderLogStrip('am', ['weight', 'sleepLen', 'sleepQual', 'restingHR']); }
+function renderHomeAmLogBox() { return renderLogStrip('am', ['weight', 'sleepLen', 'sleepQual', 'restingHR', 'bloodPressure']); }
 function renderHomePmLogBox() { return renderLogStrip('pm', ['calories', 'water', 'steps']); }
 
 function openLogPopup(group, focus) { UI.logPopup = { group, focus }; render(); }
@@ -769,6 +782,15 @@ function saveLogPopup() {
   if (fields.includes('sleepLen')) setOrClear(log, 'sleepHours', vals.sleepLen);
   if (fields.includes('sleepQual')) setOrClear(log, 'sleepQuality', vals.sleepQual);
   if (fields.includes('restingHR')) setOrClear(log, 'restingHR', vals.restingHR);
+  // Its two inputs have their own ids, so they aren't in `vals` -- read them directly. Either half
+  // blank clears BOTH, because a reading is the pair and a stored half would render as "120/" and
+  // count as a data point the chart can't plot.
+  if (fields.includes('bloodPressure')) {
+    const sys = inputVal('log_bpSystolic'), dia = inputVal('log_bpDiastolic');
+    const both = sys !== '' && dia !== '';
+    setOrClear(log, 'bpSystolic', both ? sys : '');
+    setOrClear(log, 'bpDiastolic', both ? dia : '');
+  }
   if (fields.includes('steps')) setOrClear(log, 'steps', vals.steps);
   // The weight entry is only created if there's something to put in it -- browsing the sheet and
   // closing it must not leave an empty row in weightLog that the TDEE window then counts.
@@ -858,6 +880,18 @@ function renderLogPopup() {
           ? `Showing <b>${cur}</b> of 8 &middot; set ${waterColorAge()}.${waterColorIsStale() ? ' <b class="log-color-stale">Worth a fresh look.</b>' : ' Stays until you change it.'}`
           : 'Lighter is more hydrated. Tap a shade to set your marker &mdash; it stays until you change it.'}</div>
         ${renderWaterColorInsight()}`;
+    }
+    if (f === 'bloodPressure') {
+      // Two inputs, one row, in the order they're spoken. Either left blank clears the reading --
+      // half a blood pressure isn't a partial record of one, it's not a reading at all.
+      return `
+        <div class="log-sheet-row">
+          <span class="log-sheet-label">BP</span>
+          <input type="number" id="log_bpSystolic" step="1" value="${v ? v.systolic : ''}" inputmode="numeric" placeholder="120">
+          <span class="log-sheet-unit">/</span>
+          <input type="number" id="log_bpDiastolic" step="1" value="${v ? v.diastolic : ''}" inputmode="numeric" placeholder="80">
+          <span class="log-sheet-unit">mmHg</span>
+        </div>`;
     }
     if (f === 'sleepQual') {
       const opts = [1, 2, 3, 4, 5].map(n => {

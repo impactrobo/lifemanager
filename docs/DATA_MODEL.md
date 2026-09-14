@@ -201,6 +201,9 @@ STATE = {
     dailyLog: {},          // date -> { [anchorId]: true,          (fixed daily habit completion)
                            //           sleepHours, sleepQuality,  // AM quick-log chips
                            //           restingHR,                 // bpm; AM, added 2026-09-15
+                           //           bpSystolic, bpDiastolic,   // mmHg; written and cleared
+                           //                                      // TOGETHER -- half a reading
+                           //                                      // is not a reading
                            //           steps, waterMl }            // PM quick-log chips
                            // Sparse and freeform -- see LOG_FIELDS in app-home.js for the whole set
                            // and setOrClear() for how a field is written/cleared. All of these plus

@@ -305,14 +305,20 @@ function drawWeightChart() {
   const metric = WEIGHT_METRICS.find(m => m.key === VIEW.selectedWeightMetric) || WEIGHT_METRICS[0];
   const list = metricSeries(metric);
   if (weightChartInstance) { weightChartInstance.destroy(); }
-  const trend = trailingAverage(list, WEIGHT_TREND_WINDOW_DAYS);
   const styles = getComputedStyle(document.documentElement);
   const unitSuffix = metric.suffix();
-  weightChartInstance = new Chart(canvas.getContext('2d'), {
-    type: 'line',
-    data: {
-      labels: list.map(e => e.date.slice(5)),
-      datasets: [
+  // A multi-part metric draws one line per part and skips the trailing average; a scalar one draws
+  // its line plus that average. Both end up as a plain datasets array, so nothing below here cares.
+  const datasets = metric.parts
+    ? metric.parts.map(p => ({
+        label: p.label,
+        data: metricSeries(metric, p.get).map(e => Number(fmt(e.value, 1))),
+        borderColor: styles.getPropertyValue(p.color).trim(),
+        backgroundColor: 'transparent',
+        tension: 0.25,
+        pointRadius: 3,
+      }))
+    : [
         {
           label: metric.label,
           data: list.map(e => Number(fmt(e.value, 1))),
@@ -323,7 +329,7 @@ function drawWeightChart() {
         },
         {
           label: `${WEIGHT_TREND_WINDOW_DAYS}-day average`,
-          data: trend.map(v => Number(fmt(v, 1))),
+          data: trailingAverage(list, WEIGHT_TREND_WINDOW_DAYS).map(v => Number(fmt(v, 1))),
           borderColor: styles.getPropertyValue('--good').trim(),
           backgroundColor: 'transparent',
           borderDash: [5, 4],
@@ -331,7 +337,12 @@ function drawWeightChart() {
           pointRadius: 0,
           borderWidth: 2,
         },
-      ]
+      ];
+  weightChartInstance = new Chart(canvas.getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: list.map(e => e.date.slice(5)),
+      datasets,
     },
     options: {
       responsive: true,
@@ -379,21 +390,39 @@ const WEIGHT_METRICS = [
     has: l => l.steps != null, get: l => l.steps, suffix: () => '' },
   { key: 'restingHR', label: 'Resting Heart Rate', source: 'dailyLog',
     has: l => l.restingHR != null, get: l => l.restingHR, suffix: () => ' bpm' },
+  // The one metric that isn't a scalar. `parts` is what makes that work without every other metric
+  // growing a special case: a metric with parts draws one line per part and no trailing average,
+  // because two lines plus two averages is four lines saying very little. Everything else here is
+  // unchanged -- `has`/`get` still exist so the length checks and the empty state need no branch.
+  //
+  // A day counts only when BOTH halves were recorded: a lone systolic isn't a blood pressure, and
+  // plotting one line's point with a gap in the other would be drawing a reading nobody took.
+  { key: 'bloodPressure', label: 'Blood Pressure', source: 'dailyLog',
+    has: l => l.bpSystolic != null && l.bpDiastolic != null,
+    get: l => l.bpSystolic, suffix: () => ' mmHg',
+    parts: [
+      { label: 'Systolic', get: l => l.bpSystolic, color: '--accent' },
+      { label: 'Diastolic', get: l => l.bpDiastolic, color: '--good' },
+    ] },
 ];
 // The one place either source turns into the {date, value} list every chart/trailingAverage() call
 // already expects. weightLog is an array of dated entries; dailyLog is an object keyed BY date, so
 // it needs Object.keys() first -- everything downstream of this is source-agnostic.
-function metricSeries(metric) {
+// `get` overrides the metric's own reader, which is how a multi-part metric pulls a second line out
+// of the SAME days -- the date list is chosen once by metric.has(), so every part is guaranteed to
+// line up with the shared x-axis rather than each filtering its own way and silently desyncing.
+function metricSeries(metric, get) {
+  const read = get || metric.get;
   if (metric.source === 'dailyLog') {
     return Object.keys(STATE.life.dailyLog)
       .filter(d => metric.has(STATE.life.dailyLog[d]))
       .sort()
-      .map(d => ({ date: d, value: metric.get(STATE.life.dailyLog[d]) }));
+      .map(d => ({ date: d, value: read(STATE.life.dailyLog[d]) }));
   }
   return STATE.weightLog
     .filter(metric.has)
     .sort((a, b) => a.date.localeCompare(b.date))
-    .map(e => ({ date: e.date, value: metric.get(e) }));
+    .map(e => ({ date: e.date, value: read(e) }));
 }
 function setWeightMetric(m) { VIEW.selectedWeightMetric = m; render(); }
 function renderBodyWeightChart() {

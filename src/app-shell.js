@@ -641,7 +641,10 @@ function _doRender() {
   // The sheet opens focused on whichever chip was tapped, which can only happen after the markup
   // above is in the DOM.
   if (UI.logPopup && UI.logPopup.focus) {
-    const f = document.getElementById('log_' + UI.logPopup.focus);
+    // Blood pressure is the one field whose row has two inputs rather than one, so `log_<field>`
+    // doesn't exist for it -- tapping its chip should land on the number you say first.
+    const focusId = UI.logPopup.focus === 'bloodPressure' ? 'log_bpSystolic' : 'log_' + UI.logPopup.focus;
+    const f = document.getElementById(focusId);
     if (f) f.focus();
   }
   const tabbarEl = document.getElementById('tabbar');
