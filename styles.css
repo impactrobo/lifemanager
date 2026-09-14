@@ -1239,6 +1239,62 @@ textarea.skill-item-detail + .skill-sched { margin-top: 0; }
 .skill-target-bar { height: 6px; border-radius: 3px; background: var(--surface2); overflow: hidden; margin-bottom: 6px; }
 .skill-target-fill { height: 100%; background: var(--accent); }
 
+/* ---------- Lab panels ---------- */
+/* A reading is a name, a number and -- only when it falls outside the reference interval you set --
+   a flag. Deliberately three states and not a colour scale: the app records results, it does not
+   grade them, and a gradient from green to red would be a verdict in everything but words. */
+.lab-readings { display: grid; gap: 4px; margin-top: 2px; }
+.lab-reading {
+  display: flex; align-items: baseline; gap: 8px;
+  padding: 5px 8px; border-radius: var(--radius);
+  background: var(--surface2); border-left: 3px solid var(--border);
+}
+.lab-reading-name { flex: 1 1 auto; min-width: 0; font-size: 12px; }
+.lab-reading-val { flex: none; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.lab-unit { font-style: normal; font-size: 9px; color: var(--text-faint); margin-left: 3px; }
+/* Meeting your own stricter target takes the accent, not a green tick -- it's worth seeing, not
+   congratulating. Outside the reference interval is the only thing that raises its voice. */
+.lab-on-target { border-left-color: var(--good); }
+.lab-out { border-left-color: var(--bad); }
+.lab-out .lab-reading-val { color: var(--bad); }
+.lab-flag {
+  flex: none; font-family: var(--font-mono); font-size: 8px; font-weight: 700;
+  letter-spacing: 0.06em; color: var(--bad);
+  background: color-mix(in srgb, var(--bad) 14%, var(--surface)); padding: 1px 5px; border-radius: 3px;
+}
+/* A reading whose marker was deleted: shown, unranged, visibly lesser. It stays because the delete
+   confirm said it would, not because it is still meaningful. */
+.lab-orphan { opacity: 0.55; border-left-style: dashed; }
+.lab-count { flex: none; font-size: 10px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.lab-note { font-size: 11px; color: var(--text-dim); margin-top: 7px; line-height: 1.5; }
+/* Said once, at the foot of the screen, and never repeated on a card. */
+.lab-disclaimer {
+  margin-top: 18px; padding: 12px 14px; border-radius: var(--radius);
+  background: var(--surface2); border: 1px solid var(--border-soft);
+  font-size: 10px; line-height: 1.6; color: var(--text-faint);
+}
+/* .ehead's flex layout is scoped to `.entry-card .ehead`, and a lab card IS an entry card, so this
+   one needs nothing of its own -- noted because the last five components each did. */
+
+/* The ranges editor. Two rows of two bounds per marker, and an empty box means "no bound on that
+   side" -- which is also how you clear an override and fall back to the shipped default. */
+.lab-range-row { padding: 9px 0; border-bottom: 1px solid var(--border-soft); }
+.lab-range-row:last-of-type { border-bottom: 0; }
+.lab-range-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.lab-range-name { flex: 1 1 auto; min-width: 0; font-size: 12px; font-weight: 650; }
+/* Says a number is yours rather than mine, so a shipped default you deliberately kept and one you
+   changed are never confused. */
+.lab-range-edited {
+  flex: none; font-family: var(--font-mono); font-size: 8px; font-weight: 700; letter-spacing: 0.06em;
+  color: var(--accent); background: var(--accent-soft); padding: 1px 5px; border-radius: 3px;
+}
+.lab-range-grid { display: grid; grid-template-columns: auto 1fr auto 1fr; gap: 5px 7px; align-items: center; }
+.lab-range-k { font-size: 10px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.05em; }
+.lab-range-dash { font-size: 10px; color: var(--text-faint); }
+input[type="number"].lab-range-in {
+  width: 100%; padding: 5px 7px; font-size: 12px; font-variant-numeric: tabular-nums;
+}
+
 /* A template is a starting point, so it reads as a choice rather than a submit: two lines, left
    aligned, and never the primary button next to CREATE. */
 .skill-template { display: block; text-align: left; padding: 10px 12px; margin-bottom: 6px; }

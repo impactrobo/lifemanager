@@ -77,6 +77,21 @@ STATE = {
     ...
   ],
   weightLog: [ { id, date, weightLb, calories, cardioCalories }, ... ],
+  labs: [                  // lab panels. Sparse and dated, the same shape `measurements` uses: a
+    { id, date, notes,     // marker that draw didn't include simply isn't a key
+      values: { [markerKey]: number } },
+    ...
+  ],
+  labSettings: {
+    extended,              // show the fuller marker list in the entry form
+    sort: 'group'|'alpha',
+    // Per-marker overrides of the SHIPPED ranges, stored sparsely -- an untouched marker has no
+    // entry here at all, so a changed default in a later release still reaches anyone who never
+    // edited it, and clearing a box restores the default rather than meaning "no bound".
+    ranges: { [markerKey]: { ref?: {low?,high?}, target?: {low?,high?}, unit? } },
+    custom: [ LabMarker ],  // your own markers; start unbounded, since the app has no default to
+  },                        // offer for something it has never heard of
+
   goals: [                 // at most ONE un-archived goal per `kind`; the UI refuses to create a second
     { id, kind: 'weight'|'exercise', name, startDate, targetDate,
       startWeightLb, targetWeightLb,   // WEIGHT goals only; canonical lb, like weightLog. An exercise

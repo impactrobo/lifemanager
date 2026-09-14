@@ -797,6 +797,10 @@ function defaultState() {
     logs: {},          // key `${cycle}_${workoutId}` -> {date, entries:{}, notes, complete} — every workout type shares this
     measurements: [],  // [{id,date,fields:{...cm/kg canonical},photos}] — photos is an array of resized data-URI JPEGs
     weightLog: [],     // [{id,date,weightLb,calories,cardioCalories}]
+    // Lab panels: sparse dated results, same shape as `measurements`. Ranges and the marker
+    // catalogue live in labSettings below -- see src/app-labs.js.
+    labs: [],
+    labSettings: { extended: false, sort: 'group', ranges: {}, custom: [] },
     cardioWorkouts: [], // legacy — only ever populated pre-migration, see migrateState()
     cardioLogs: {},      // legacy — folded into `logs` on migration
     // Weekday assignment for saved workouts (any type), Sun=0..Sat=6 — matches the Meal Plan

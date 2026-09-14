@@ -5,14 +5,14 @@ Local-first via localStorage. No bundler / no build step to deploy. Read this be
 any change.
 
 The app ships as `index.html` (a ~100-line shell), `styles.css` (base + component styles + the
-twelve inline aesthetics), and **`src/app-*.js` — 25 ordered classic `<script>`s** holding all
+twelve inline aesthetics), and **`src/app-*.js` — 26 ordered classic `<script>`s** holding all
 application logic (~12.5k lines). They are NOT modules: top-level `function`s stay global so the
 inline `onclick=` handlers keep working. There is still no compile step — everything is served
 as-is.
 
 **What load order does and doesn't constrain.** A function in any file may call a function in any
 other, in either direction: `function` declarations are hoisted and global, and every call happens
-long after all 25 files have loaded. What order *does* constrain is anything that runs *while a
+long after all 26 files have loaded. What order *does* constrain is anything that runs *while a
 file is being evaluated* — a `const` initializer, an `addEventListener` registration — since that
 can only reach what earlier files already defined. Two consequences worth knowing:
 
@@ -279,7 +279,7 @@ contract — old saves gain new defaults, keep their data).
 
 Canonical tests didn't exist as committed files before this repo — they only ever lived inside
 temporary chat sandboxes and were lost between sessions, so building this suite out was genuinely
-new work, not a restore. `npm test` is currently **75/75 test files passing** (`run_all.js`
+new work, not a restore. `npm test` is currently **76/76 test files passing** (`run_all.js`
 auto-discovers every `test_*.js` in `tests/`, so this number moves — trust its own summary line
 over any count written here). Run the full suite before any publish, and add a new `test_*.js`
 whenever a new feature area is added, so this stays complete rather than drifting back toward the

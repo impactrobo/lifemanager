@@ -1204,7 +1204,7 @@ function renderBody() {
   const tab = (key, label) =>
     `<button class="${NAV.bodySubtab===key?'active':''}" onclick="setBodySubtab('${key}')">${label}</button>`;
   const subnav = subNav(
-    tab('weight', 'WEIGHT') + tab('measurements', 'MEASUREMENTS') +
+    tab('weight', 'WEIGHT') + tab('measurements', 'MEASUREMENTS') + tab('labs', 'LABS') +
     tab('volume', 'SET VOLUME') + tab('compare', 'COMPARE') + tab('pr', 'PR LOG'),
     { marginTop: false });
   let body;
@@ -1215,6 +1215,7 @@ function renderBody() {
     body = renderBodyMeasurementChart() + `<div class="divider"></div>
       <div class="subtle-label" style="margin-bottom:8px;">LOG</div>` + renderMeasurements();
   }
+  else if (NAV.bodySubtab === 'labs') body = renderLabPanels();
   else if (NAV.bodySubtab === 'compare') body = renderCompareView();
   else if (NAV.bodySubtab === 'pr') body = renderPrLog();
   else body = renderVolume();

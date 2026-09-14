@@ -41,6 +41,8 @@ function loadState() {
       skills: parsed.skills || [],
       skillSession: parsed.skillSession || null,
       skillTargets: parsed.skillTargets || [],
+      labs: parsed.labs || [],
+      labSettings: Object.assign({ extended: false, sort: 'group', ranges: {}, custom: [] }, parsed.labSettings || {}),
       cardioWorkouts: parsed.cardioWorkouts || [],
       cardioLogs: parsed.cardioLogs || {},
       notes: parsed.notes || [],
@@ -389,6 +391,14 @@ function migrateState() {
   if (!Array.isArray(STATE.exTargets)) STATE.exTargets = [];
   if (!Array.isArray(STATE.skills)) STATE.skills = [];
   if (!Array.isArray(STATE.skillTargets)) STATE.skillTargets = [];
+  if (!Array.isArray(STATE.labs)) STATE.labs = [];
+  // Every sub-field guarded individually: a save from before any one of them existed would
+  // otherwise reach setLabRange()/labSettings() with a hole in it.
+  if (!STATE.labSettings || typeof STATE.labSettings !== 'object') STATE.labSettings = {};
+  if (typeof STATE.labSettings.extended !== 'boolean') STATE.labSettings.extended = false;
+  if (STATE.labSettings.sort !== 'alpha') STATE.labSettings.sort = 'group';
+  if (!STATE.labSettings.ranges || typeof STATE.labSettings.ranges !== 'object') STATE.labSettings.ranges = {};
+  if (!Array.isArray(STATE.labSettings.custom)) STATE.labSettings.custom = [];
   // A target pointing at a skill that's gone would render a row nothing can satisfy.
   STATE.skillTargets = STATE.skillTargets.filter(t => STATE.skills.some(s => s.id === t.skillId));
   // A malformed skill would break every weekday read through it; normalise once on load

@@ -369,6 +369,44 @@ interface SkillTarget {
   reachedOn: string | null;
 }
 
+/** One bound of a lab range. null on a side means unbounded there -- ApoB has a ceiling and no
+ *  floor worth stating, HDL the reverse. */
+interface LabBound { low: number | null; high: number | null; }
+
+/** A marker in the catalogue. `ref` is the lab's own reference interval; `target` is the stricter
+ *  figure for someone optimising rather than screening. Both ship as EDITABLE defaults -- reference
+ *  intervals vary by lab, assay, sex and age, and what counts as optimal varies by whose guidance
+ *  you follow. See src/app-labs.js on the line this feature does not cross. */
+interface LabMarker {
+  key: string;
+  label: string;
+  unit: string;
+  group: string;
+  /** Shown by default; the rest appear behind MORE MARKERS -- or once you've logged one. */
+  core: boolean;
+  ref: LabBound;
+  target: LabBound;
+}
+
+/** A dated draw. Sparse by nature: a marker that panel didn't include simply isn't a key, the same
+ *  shape STATE.measurements uses for its fields. */
+interface LabPanel {
+  id: string;
+  date: string;
+  notes: string;
+  values: { [markerKey: string]: number };
+}
+
+interface LabSettings {
+  /** Show the fuller marker list in the entry form. */
+  extended: boolean;
+  sort: 'group' | 'alpha';
+  /** Per-marker overrides of the shipped ranges, stored SPARSELY -- an untouched marker has no
+   *  entry, so a changed default in a later release still reaches anyone who never edited it. */
+  ranges: { [markerKey: string]: { ref?: Partial<LabBound>; target?: Partial<LabBound>; unit?: string } };
+  custom: LabMarker[];
+}
+
 interface DeloadStyle {
   setsPct: number;
   repsPct: number;
@@ -644,6 +682,8 @@ interface AppState {
   skills: Skill[];
   skillSession: SkillSession | null;
   skillTargets: SkillTarget[];
+  labs: LabPanel[];
+  labSettings: LabSettings;
   logs: Record<string, any>;
   measurements: MeasurementEntry[];
   weightLog: WeightLogEntry[];

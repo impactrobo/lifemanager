@@ -82,6 +82,8 @@ function defaultTransientUi() {
     skillFormOpen: false,
     skillLogFormOpen: false,
     skillTargetFormOpen: false,
+    labFormOpen: false,
+    labRangesOpen: false,
     // The AM/PM quick-log sheet: { group: 'am'|'pm', focus: <field id> } or null. Lives in UI so
     // navigating away closes it, same as every other transient panel.
     logPopup: null,
@@ -195,7 +197,7 @@ let NAV = {
   // BODY's own subnav. Same five values progressSubtab carried, with the two chart views renamed
   // for what they now are: each shows its entry list AND its chart, instead of the chart alone
   // while the entry list sat in a different tab.
-  bodySubtab: 'weight',            // 'weight' | 'measurements' | 'volume' | 'compare' | 'pr'
+  bodySubtab: 'weight',            // 'weight' | 'measurements' | 'labs' | 'volume' | 'compare' | 'pr'
   // Which half of SETUP is showing. The two panels keep their own existing subnav state
   // (setupSubtab / healthSetupSubtab) untouched -- only the roof over them is new.
   setupPanel: 'workouts',          // 'workouts' | 'meals'
