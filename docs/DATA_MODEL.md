@@ -102,9 +102,9 @@ STATE = {
     ...        // measured SINCE the goal started; the lifetime best shows alongside as context.
                // No projection: strength and cardio move in steps and stalls
   ],
-  skills: [                // anything you're learning. Guitar becomes the first one at the
-    { id, name, color, archived, createdAt,   // migration step; until then STATE.life.guitar
-      lists: [                                // still holds it, untouched, and the two coexist
+  skills: [                // anything you're learning. Guitar became the first one on 2026-09-15;
+    { id, name, color, archived, createdAt,   // STATE.life.guitar is kept as the fallback rather
+      lists: [                                // than deleted -- see src/app-skill-templates.js
         { id, name,
           tiered,          // group items under TIER headings, or render one flat run
           items: [
@@ -184,8 +184,12 @@ STATE = {
     periodic: [ { id, label, cadenceDays, cadenceLabel } ],             // seeded from DEFAULT_PERIODIC_ANCHORS
     schedules: [ { id, name, days: [0-6], wakeStart, wakeEnd, bedStart, bedEnd,
                     activities: [{id, start, end, title, description}] } ],  // Schedule -> Setup -> Schedule Builder
-    guitar: { chordStatus: {}, songStatus: {}, techStatus: {},          // Hobbies (currently guitar-only)
-              practiceLog: [], chordLearnedDate: {}, songLearnedDate: {} },  // status: 0 none / 1 learning / 2 learned
+    // RETIRED 2026-09-15. Guitar became the first real Skill (STATE.skills). This is read ONCE by
+    // migrateGuitarToSkill() and then left alone -- the screens went, the data stays, so a mapping
+    // that turns out wrong can be redone against the original. Nothing writes these maps any more.
+    guitar: { chordStatus: {}, songStatus: {}, techStatus: {},          // status: 0 none / 1 learning / 2 learned,
+              practiceLog: [], chordLearnedDate: {}, songLearnedDate: {},  // all keyed by ARRAY INDEX into the
+              migratedToSkill },   // stamped once, so the carry-across can never run twice
     skinCycleStart: null | dateString,   // 4-night skincare rotation start (Longevity)
     supplementLog: {},                    // date -> { [suppName]: true }
   },

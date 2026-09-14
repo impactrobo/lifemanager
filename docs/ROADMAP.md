@@ -96,11 +96,10 @@ before starting any of these.
      (walking + 2 full-body sessions + mobility) the way C25K already proves works for cardio; and an
      unplanned-skip path distinct from a deload/active-rest, so silently skipping isn't how a block
      dies.
-  7. ~~**Skills, generalised**~~ — scoped as "Skills Own the Ladder", **steps 1–2 of 6 shipped
-     2026-09-15** (see Recently Shipped). Remaining: 3. guitar becomes a real skill via
-     `SKILL_TEMPLATES`, its index-keyed progress migrated across, and the old screens +
-     `NAV.guitarSubtab` retire; 4. per-skill time categories; 5. skill targets; 6. practice on the
-     weekday plan (last, because it's the only one that reshapes a primitive other features read).
+  7. ~~**Skills, generalised**~~ — scoped as "Skills Own the Ladder", **steps 1–3 of 6 shipped
+     2026-09-15**, plus the four-step "Closing the Loop" punch list between 2 and 3 (see Recently
+     Shipped). Remaining: 4. per-skill time categories; 5. skill targets; 6. practice on the weekday
+     plan (last, because it's the only one that reshapes a primitive other features read).
   Deliberately **not** proposed: points, badges, streak-shaming — the app instruments the plan and
   doesn't second-guess the person, and gamification would be a different product.
 
@@ -413,6 +412,40 @@ on an architecture split + a large wave of Maximalist aesthetics.
   pattern.
 
 ### Feature changes
+
+- **Guitar becomes a real skill (2026-09-15).** Step 3 of "Skills Own the Ladder". New file
+  `src/app-skill-templates.js`: `SKILL_TEMPLATES`, the create-from-template flow, and the one-time
+  carry-across. The three hardcoded catalogue screens, `NAV.guitarSubtab`, `setGuitarSubtab()` and
+  the five-button guitar strip in the tabbar all retire here — 187 lines out of `app-hobbies.js`,
+  which is now the Longevity screen and nothing else.
+  - **The index mapping was read once and never again.** `g.chordStatus[3]` meant "whatever sits 4th
+    in `GUITAR_CHORDS` today", with three status maps and two date maps and nothing guarding any of
+    it. This was the last moment that correspondence was provably correct, since the catalogues
+    hadn't changed since launch. After the walk, items carry their own ids and the parallel
+    structure is gone for good.
+  - **"Learned" maps to PROFICIENT, not EXPERT**, and that's the judgment call worth defending. The
+    ladder defines PROFICIENT as "can do it, still needs attention" and EXPERT as "reliable, out of
+    every session". The old model had no rating, no interval and no ease — nothing in it could tell
+    "played it right once" from "have it cold" — so it cannot support a claim about reliability.
+    PROFICIENT is the highest rung the old data honestly reaches, and one clean session lifts it.
+    The test pins this, because it's exactly the kind of thing a later refactor would "fix" upward.
+  - **Everything carried across is due at once.** The mapping is a guess; one honest rating is data.
+    `lastPractised` takes the recorded learned date where there is one, which means a chord learned
+    eight months ago correctly reads as STALE straight away — that falls out of the model rather
+    than needing a rule. Techniques had no date map at all (the old bug that kept them off their own
+    timeline) and join the rest on the migration date.
+  - **`STATE.life.guitar` is NOT deleted.** The screens retire; the data stays exactly where it was,
+    so a mapping that turns out wrong can be redone against the original rather than reconstructed.
+    A `migratedToSkill` stamp makes it run once — set even when there's nothing to carry, so someone
+    who starts guitar *after* this ships isn't migrated out from under their real Skill later.
+  - **A fresh install gets no Guitar skill it never asked for.** Only a save with actual progress is
+    migrated; everyone else finds the template under "+ ADD SKILL".
+  - Two things the screenshot pass caught: `detail2` had been stored since day one and rendered
+    nowhere (it holds a chord's "Open minor" and a song's genre), and the detail field was an
+    `<input>`, which silently clipped the migrated descriptions — the old guitar screen wrapped them,
+    so that was a regression on exactly the content being migrated. It's a two-row textarea now, with
+    `field-sizing: content` as progressive enhancement rather than measuring `scrollHeight` per item
+    on every render, which would be 39 forced reflows on a migrated guitar list.
 
 - **Skills: practice is visible before you open a skill (2026-09-15).** Step 4 of "Closing the
   Loop", and the last of it. The finding that prompted it: **no file outside the two skill files

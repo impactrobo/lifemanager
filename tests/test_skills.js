@@ -1,4 +1,4 @@
-// test_skills.js — the Skill model: durable identity, a derived ladder, and guitar untouched.
+// test_skills.js — the Skill model: durable identity, a derived ladder, and a legible schedule.
 //
 // Three properties carry step 1 of "Skills Own the Ladder".
 //
@@ -13,9 +13,9 @@
 // interval and the rung follows it straight back down with no bookkeeping anywhere. `mastered` is
 // the one stored rung, because it's a claim a person makes rather than something the app observes.
 //
-// GUITAR STILL WORKS. Skills ship BESIDE the legacy screens, not over them. Until the migration
-// step, STATE.life.guitar is untouched and its screens are reachable — a half-built replacement
-// must never be the reason a working feature disappears.
+// GUITAR IS GONE FROM HERE. It shipped beside the legacy screens rather than over them, and then
+// became a real Skill on 2026-09-15 — see test_skill_migration.js. What this file still asserts
+// is that the screens retired and STATE.life.guitar did not: the data stays as the fallback.
 const { chromium } = require('playwright');
 const { settle, appSource } = require('./helpers');
 const path = require('path');
@@ -321,39 +321,26 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   await page.evaluate(() => { STATE.skills = window._savedSkills; saveState(); render(); });
   await settle(page);
 
-  // ---- 7. Guitar is untouched and still reachable ----
+  // ---- 7. The legacy guitar screens are gone; the data they used is not ----
+  // Guitar became a real Skill on 2026-09-15 (see test_skill_migration.js). The three hardcoded
+  // catalogue screens retired with it, and so did the sentinel value on NAV.skillId and the
+  // five-button strip in the tabbar. STATE.life.guitar is deliberately LEFT BEHIND rather than
+  // deleted, so a mapping that turns out wrong can be redone against the original.
   await page.evaluate(() => { closeSkill(); });
   await settle(page);
   const listScreen = await page.evaluate(() => ({
     rows: [...document.querySelectorAll('.skill-row-name')].map(r => r.innerText.trim()),
     legacy: !!document.querySelector('.skill-row-legacy'),
+    barButtons: document.querySelectorAll('.tabbar button').length,
+    original: !!(STATE.life && STATE.life.guitar && STATE.life.guitar.chordStatus
+                 && Array.isArray(STATE.life.guitar.practiceLog)),
   }));
   console.log('skill list:', listScreen);
-  if (!listScreen.legacy) throw new Error('Guitar needs a row until it is migrated');
-  // The row now carries its waiting-work flag inline after the name, so match the prefix.
+  if (listScreen.legacy) throw new Error('The NOT YET MIGRATED row should have retired with the screens');
+  // The row carries its waiting-work flag inline after the name, so match the prefix.
   if (!listScreen.rows.some(r => r.startsWith('Spanish'))) throw new Error('The created skill should be listed: ' + listScreen.rows);
-
-  await page.evaluate(() => openLegacyGuitar());
-  await settle(page);
-  const guitar = await page.evaluate(() => ({
-    sentinel: NAV.skillId === LEGACY_GUITAR_ID,
-    bar: document.querySelector('.tabbar').innerText.replace(/\s+/g, ' ').trim(),
-    // Its own strip already fills the six the bar holds, so the way back is in-screen instead.
-    barButtons: document.querySelectorAll('.tabbar button').length,
-    inScreenBack: [...document.querySelectorAll('.screen .btn')].some(b => /SKILLS/.test(b.innerText)),
-    chords: document.body.innerText.includes(GUITAR_CHORDS[0].chord),
-    // chordStatus is a plain object keyed by ARRAY INDEX into GUITAR_CHORDS — the shape the Skill
-    // model exists to replace. It stays exactly as it is until the migration step reads it across.
-    stateIntact: !!(STATE.life && STATE.life.guitar && STATE.life.guitar.chordStatus
-                    && Array.isArray(STATE.life.guitar.practiceLog)),
-  }));
-  console.log('legacy guitar:', guitar);
-  if (!guitar.sentinel) throw new Error('The legacy screens are one sentinel value on NAV.skillId, not a second flag');
-  if (!/CHORDS/.test(guitar.bar)) throw new Error('The legacy guitar strip should be back: ' + guitar.bar);
-  if (guitar.barButtons > 6) throw new Error('Skills must not push the guitar tabbar past six buttons, got ' + guitar.barButtons);
-  if (!guitar.inScreenBack) throw new Error('The legacy screens need an in-screen way back to the skill list');
-  if (!guitar.chords) throw new Error('The guitar screens must still render their own catalogue');
-  if (!guitar.stateIntact) throw new Error('STATE.life.guitar must be untouched until the migration step');
+  if (listScreen.barButtons > 6) throw new Error('The tabbar stays within its six, got ' + listScreen.barButtons);
+  if (!listScreen.original) throw new Error('STATE.life.guitar is kept as the fallback, not deleted');
 
   // Leaving and re-entering Hobbies lands on the list, like every other tab's front page.
   await page.evaluate(() => { switchTab('home'); switchTab('hobbies'); });

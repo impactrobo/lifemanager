@@ -91,7 +91,6 @@ function defaultTransientUi() {
     macroCalcOpen: false,
     measureFormOpen: false,
     weightLogFormOpen: false,
-    guitarLogFormOpen: false,
     builderStylePickerOpen: false,
     autofillPickerOpen: false,
     noteTagPaletteOpen: null,
@@ -155,7 +154,7 @@ let VIEW = {
 // globals to snapshot keys and eleven keys back again -- two mirror-image lists with a renaming in
 // between, the same drift hazard resetTransientUi() had. Now one declared key list drives both.
 const NAV_SNAPSHOT_KEYS = [
-  'currentTab', 'fitnessSubtab', 'guitarSubtab', 'skillId', 'skillSubtab', 'setupPanel', 'setupSubtab', 'setupContext',
+  'currentTab', 'fitnessSubtab', 'skillId', 'skillSubtab', 'setupPanel', 'setupSubtab', 'setupContext',
   'notesSubtab', 'scheduleSubtab', 'budgetSubtab', 'scheduleSetupSubtab', 'healthSetupSubtab',
 ];
 // Which tab to boot into. Validated rather than read straight out of settings, because this runs
@@ -199,7 +198,6 @@ let NAV = {
   // Which half of SETUP is showing. The two panels keep their own existing subnav state
   // (setupSubtab / healthSetupSubtab) untouched -- only the roof over them is new.
   setupPanel: 'workouts',          // 'workouts' | 'meals'
-  guitarSubtab: 'chords',
   // Which skill is open (null = the list), and which of its subtabs: 'log' | 'progress' | a
   // list id. Not persisted -- NAV never is.
   skillId: null,
@@ -563,16 +561,11 @@ function renderTabbar() {
     // legacy screens' own bar and retires with them at the migration step.
     // A skill's own lists deliberately do NOT come here: there can be any number of them, and
     // `.subnav` is the strip with the scroll-chevron affordances while `.tabbar` is the one with a
-    // logged overflow bug. Variable-width content goes in the strip built to handle it.
-    if (!NAV.skillId) sectionBtns = '';                    // the skill list: HOME is enough
-    else if (NAV.skillId !== LEGACY_GUITAR_ID) {
-      sectionBtns = `<button onclick="closeSkill()"><span class="ic">${icon('hobbies')}</span>SKILLS</button>`;
-    } else sectionBtns = `
-      <button class="${NAV.guitarSubtab==='chords'?'active':''}" onclick="setGuitarSubtab('chords')">CHORDS</button>
-      <button class="${NAV.guitarSubtab==='songs'?'active':''}" onclick="setGuitarSubtab('songs')">SONGS</button>
-      <button class="${NAV.guitarSubtab==='tech'?'active':''}" onclick="setGuitarSubtab('tech')">TECH</button>
-      <button class="${NAV.guitarSubtab==='log'?'active':''}" onclick="setGuitarSubtab('log')">LOG</button>
-      <button class="${NAV.guitarSubtab==='progress'?'active':''}" onclick="setGuitarSubtab('progress')"><span class="ic">${icon('progress')}</span>PROGRESS</button>`;
+    // logged overflow bug. Variable-width content goes in the strip built to handle it. So this
+    // bar is one button or none -- which is also what retired the old five-button guitar strip.
+    sectionBtns = NAV.skillId
+      ? `<button onclick="closeSkill()"><span class="ic">${icon('hobbies')}</span>SKILLS</button>`
+      : '';   // the skill list: HOME is enough
   } else if (NAV.currentTab === 'setup') {
     // The Home/gear-icon Settings screen is the only Setup that still pops up as its own screen
     // (see openSetup()) — HOME jumps all the way out, CLOSE returns to whichever screen opened it.

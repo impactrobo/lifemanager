@@ -225,16 +225,9 @@ function deleteSkillPractice(skillId, entryId) {
 }
 
 // ---- Navigation ----
-//
-// NAV.skillId carries three states rather than needing a second flag beside it:
-//   null                -> the skill list
-//   LEGACY_GUITAR_ID    -> the old hardcoded guitar screens, until the migration step
-//   anything else       -> that skill
-// A separate "is legacy guitar open" boolean would be a second source of truth for one question,
-// and the two would eventually disagree.
-const LEGACY_GUITAR_ID = '__legacy_guitar__';
+// NAV.skillId is null for the skill list, or the id of the skill that's open. It briefly carried
+// a third state -- a sentinel for the legacy guitar screens -- which retired with them.
 function openSkill(id) { NAV.skillId = id; NAV.skillSubtab = 'log'; render(); }
-function openLegacyGuitar() { NAV.skillId = LEGACY_GUITAR_ID; setGuitarSubtab('chords'); }
 function closeSkill() { NAV.skillId = null; render(); }
 function setSkillSubtab(t) { NAV.skillSubtab = t; render(); }
 
@@ -298,34 +291,17 @@ function renderSkillList() {
           might want Vocabulary and Grammar; a kitchen might want Recipes and Knife skills.
         </div>
         <button class="btn btn-primary btn-block" onclick="createSkill()">CREATE</button>
+        <div class="subtle-label" style="margin:16px 0 8px;">OR START FROM A TEMPLATE</div>
+        ${SKILL_TEMPLATES.map(t => `
+          <button class="btn btn-block skill-template" onclick="createSkillFromTemplate('${t.key}')">
+            <span class="skill-template-name">${escapeHtml(t.name)}</span>
+            <span class="skill-template-blurb">${escapeHtml(t.blurb)}</span>
+          </button>`).join('')}
       </div>` : ''}
     ${rows ? `<div class="skill-list">${rows}</div>`
-           : emptyState('No skills yet. Add one for anything you’re building — an instrument, a language, a craft.')}
-    ${renderLegacyGuitarRow()}`;
+           : emptyState('No skills yet. Add one for anything you’re building — an instrument, a language, a craft.')}`;
 }
 
-// Guitar still lives in its own hardcoded screens until the migration step. Rather than hide it
-// behind a half-built feature, it gets a row here that opens the existing views unchanged -- so
-// nothing regresses while the new shape is proven beside it.
-function renderLegacyGuitarRow() {
-  const g = STATE.life && STATE.life.guitar;
-  if (!g) return '';
-  const logged = (g.practiceLog || []).length;
-  return `
-    <div class="subtle-label" style="margin:22px 0 8px;">NOT YET MIGRATED</div>
-    <button class="skill-row skill-row-legacy" onclick="openLegacyGuitar()">
-      <div class="skill-row-main">
-        <div class="skill-row-name">Guitar</div>
-        <div class="skill-row-sub">${GUITAR_CHORDS.length + GUITAR_SONGS.length + GUITAR_TECHNIQUES.length} items · ${logged} session${logged === 1 ? '' : 's'}</div>
-      </div>
-      <span class="pill" style="background:var(--surface2); color:var(--text-dim);">LEGACY</span>
-      <span class="skill-row-chev">${icon('chevronRight')}</span>
-    </button>
-    <div style="font-size:11px; color:var(--text-faint); margin-top:6px; line-height:1.5;">
-      Still on its original screens. It becomes a real skill — with its progress carried across — in
-      the next step.
-    </div>`;
-}
 
 function renderOneSkill(skill) {
   const tab = (key, label) =>
@@ -366,8 +342,9 @@ function renderSkillItemList(skill, list) {
           <span class="skill-band skill-band-${band.key}">${band.label}</span>
           <button class="icon-btn" style="color:var(--bad);" onclick="deleteSkillItem('${skill.id}','${it.id}')">${icon('close')}</button>
         </div>
-        <input type="text" class="skill-item-detail" placeholder="A note about it — what it is, why it matters"
-               value="${escapeHtml(it.detail)}" onchange="updateSkillItem('${skill.id}','${it.id}','detail',this.value)">
+        ${it.detail2 ? `<div class="skill-item-kind">${escapeHtml(it.detail2)}</div>` : ''}
+        <textarea class="skill-item-detail" rows="2" placeholder="A note about it — what it is, why it matters"
+                  onchange="updateSkillItem('${skill.id}','${it.id}','detail',this.value)">${escapeHtml(it.detail)}</textarea>
         ${renderSkillSchedule(it)}
         ${band.readyToMaster && !it.mastered
           ? `<button class="btn btn-sm btn-good btn-block" style="margin-top:8px;" onclick="toggleSkillItemMastered('${skill.id}','${it.id}')">READY TO MASTER &mdash; RETIRE IT</button>`

@@ -605,6 +605,9 @@ function migrateState() {
   if (!Array.isArray(STATE.life.guitar.practiceLog)) STATE.life.guitar.practiceLog = [];
   if (!STATE.life.guitar.chordLearnedDate) STATE.life.guitar.chordLearnedDate = {};
   if (!STATE.life.guitar.songLearnedDate) STATE.life.guitar.songLearnedDate = {};
+  // One time, and only for a save that actually has guitar progress. See
+  // src/app-skill-templates.js for how the three states map onto the ladder, and why not higher.
+  migrateGuitarToSkill();
   if (STATE.life.skinCycleStart === undefined) STATE.life.skinCycleStart = null;
   if (!STATE.life.supplementLog) STATE.life.supplementLog = {};
   if (!Array.isArray(STATE.life.anchors)) STATE.life.anchors = DEFAULT_DAILY_ANCHORS.map(a => Object.assign({}, a));

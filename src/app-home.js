@@ -14,17 +14,11 @@ function daysSince(dateStr) {
   return Math.floor((b.getTime() - a.getTime()) / 86400000);
 }
 function renderHobbies() {
-  // Skills is the screen now; guitar stays reachable from its list until the migration step moves
-  // it in for real. One field carries all three states -- null is the list, the sentinel is the
-  // legacy screens, any other value is that skill -- so there's no second flag to fall out of sync.
-  // The legacy screens get their way back HERE rather than as a seventh bottom-bar button: their
-  // own five-button strip already fills that bar, and `.tabbar` has a logged overflow bug past six.
-  // It retires with them at the migration step.
-  const legacy = NAV.skillId === LEGACY_GUITAR_ID;
+  // Skills IS the screen. Guitar became one of them at the migration step -- see
+  // migrateGuitarToSkill() -- and the three hardcoded catalogue screens retired with it.
   return `<div class="screen">
     <div class="section-title">Hobbies</div>
-    ${legacy ? `<button class="btn btn-ghost btn-sm" style="margin-bottom:6px;" onclick="closeSkill()">&#8249; SKILLS</button>` : ''}
-    ${legacy ? renderLifeGuitar() : renderSkillsTab()}
+    ${renderSkillsTab()}
   </div>`;
 }
 

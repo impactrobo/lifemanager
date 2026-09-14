@@ -1038,11 +1038,23 @@ input[type="text"].skill-item-name {
   color: var(--text); font-family: var(--font-body); font-size: 14px; font-weight: 650;
 }
 input[type="text"].skill-item-name:focus { outline: none; border-bottom-color: var(--accent); }
-input[type="text"].skill-item-detail {
-  width: 100%; padding: 2px 0; background: none; border: none;
+/* A textarea rather than an input, because the descriptions that came across with the guitar
+   migration run to a full sentence and an <input> silently clips them -- the old guitar screen
+   wrapped this text, so an input here would have been a regression on migrated content. Two rows
+   holds almost all of them; anything longer scrolls in place. `textarea.x` is (0,1,1), which
+   beats the base `textarea` rule's min-height. */
+textarea.skill-item-detail {
+  width: 100%; padding: 2px 0; background: none; border: none; resize: none;
+  min-height: 0; line-height: 1.35; overflow-y: auto;
   color: var(--text-dim); font-family: var(--font-body); font-size: 12px;
 }
-input[type="text"].skill-item-detail:focus { outline: none; color: var(--text); }
+textarea.skill-item-detail:focus { outline: none; color: var(--text); }
+/* Where it's supported this sizes to the actual text, so a one-line note stops reserving a
+   second row. Progressive enhancement on purpose -- the alternative is measuring scrollHeight
+   per item after every render, which is 39 forced reflows on a migrated guitar list. Everywhere
+   else the two rows stand and the rule below keeps the leftover line from compounding. */
+textarea.skill-item-detail { field-sizing: content; }
+textarea.skill-item-detail + .skill-sched { margin-top: 0; }
 
 /* The rung is ONE custom property, not a colour repeated per component. The stripe down the card's
    edge and the badge in its header both read `--rung`, so adding a rung means one line here rather
@@ -1210,6 +1222,15 @@ input[type="text"].skill-item-detail:focus { outline: none; color: var(--text); 
    the session counter can't notice on its own. */
 .skill-row-flag-stale { background: color-mix(in srgb, var(--warn) 16%, var(--surface)); color: var(--warn); }
 .skill-row-flag-stuck { background: color-mix(in srgb, var(--bad) 14%, var(--surface)); color: var(--bad); }
+
+/* A template is a starting point, so it reads as a choice rather than a submit: two lines, left
+   aligned, and never the primary button next to CREATE. */
+.skill-template { display: block; text-align: left; padding: 10px 12px; margin-bottom: 6px; }
+.skill-template-name { display: block; font-weight: 700; font-size: 13px; }
+.skill-template-blurb { display: block; font-size: 11px; color: var(--text-faint); font-weight: 400; margin-top: 2px; }
+/* detail2 held a category from day one (a chord's "Open minor", a song's genre) and nothing ever
+   rendered it. It's a subtitle, not a note, so it sits above the editable detail line. */
+.skill-item-kind { font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-faint); margin: -2px 0 4px; }
 
 
 
