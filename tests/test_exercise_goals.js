@@ -56,7 +56,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   const eff = await page.evaluate(() => {
     const t = todayStr();
     const s = phaseSchedule(activeExerciseGoal());
-    const at = (d) => { const e = exercisePlanInEffect(d); return { src: e.source, label: e.label, n: weekPlanWorkoutCount(e.plan).workouts }; };
+    const at = (d) => { const e = exercisePlanInEffect(d); return { src: e.source, label: e.label, n: weekPlanCount(e.plan).workouts }; };
     return {
       beforeAnyBlock: at(shiftDate(s[0].startDate, -10)),
       firstDayOfBlock1: at(s[0].startDate),
@@ -81,8 +81,8 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     const globalBefore = JSON.stringify(STATE.exercisePlan);
     addPhase('e1');                                  // seeded from block 2, which is in effect today
     const fresh = STATE.phases[2];
-    const seededFrom = weekPlanWorkoutCount(STATE.phases[1].exercisePlan);
-    const seededTo = weekPlanWorkoutCount(fresh.exercisePlan);
+    const seededFrom = weekPlanCount(STATE.phases[1].exercisePlan);
+    const seededTo = weekPlanCount(fresh.exercisePlan);
     // Now scribble on the new block and check nothing else moved.
     fresh.exercisePlan[0].push(planEntry('workout', STATE.workouts[0].id));
     fresh.exercisePlan[1] = [];
@@ -253,7 +253,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   await settle(page);
   const persisted = await page.evaluate(() => ({
     blocks: STATE.phases.length,
-    plans: STATE.phases.map(p => weekPlanWorkoutCount(p.exercisePlan).workouts),
+    plans: STATE.phases.map(p => weekPlanCount(p.exercisePlan).workouts),
     effLabel: exercisePlanInEffect(todayStr()).label,
   }));
   console.log('after reload:', persisted);

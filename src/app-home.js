@@ -513,6 +513,12 @@ function dayModel(dateStr) {
     // which training block covers it. With no blocks this is still STATE.exercisePlan.
     workouts: isDayOff ? [] : (activeExercisePlan(dateStr)[weekday] || [])
       .filter(e => e.kind === 'workout' && e.refId).map(e => getWorkout(e.refId)).filter(Boolean),
+    // Practice is its OWN list rather than being folded in with workouts: the two open different
+    // screens, are done in different ways, and a guitar session on a training day isn't a workout.
+    practice: isDayOff ? [] : (activeExercisePlan(dateStr)[weekday] || [])
+      .filter(e => e.kind === 'skill' && e.refId)
+      .map(e => { const skill = skillById(e.refId); return skill ? { skill, minutes: e.minutes || null } : null; })
+      .filter(Boolean),
     meals: isDayOff ? [] : (STATE.diet.mealPlan[weekday] || [])
       .filter(e => e.mealId).map(e => STATE.diet.meals.find(m => m.id === e.mealId)).filter(Boolean),
     habits: (STATE.life.habits || []).filter(h => habitIsActiveOn(h, dateStr)),
@@ -529,6 +535,18 @@ function getTodayWeightEntry(create) {
     STATE.weightLog.push(e);
   }
   return e;
+}
+// Opens the skill on its LOG tab, where the practice starter is -- it does NOT start a block.
+// Starting one commits a minutes budget and builds a block around it, which is more than a
+// single tap from a day card should do on your behalf. The starter pre-fills from the plan.
+function openTodayPractice(skillId) {
+  if (!skillById(skillId)) return;
+  pushNavHistory();
+  resetTransientUi();
+  NAV.currentTab = 'hobbies';
+  NAV.skillId = skillId;
+  NAV.skillSubtab = 'log';
+  render();
 }
 function openTodayWorkout(workoutId) {
   const w = getWorkout(workoutId);

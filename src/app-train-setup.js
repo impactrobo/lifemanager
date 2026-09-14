@@ -412,15 +412,30 @@ function removePlanWorkoutSlot(day, entryId) {
   delete VIEW.exPlanExpanded[entryId];
   saveState(); render();
 }
-function setPlanWorkoutSlotWorkout(day, entryId, workoutId) {
+// The <select> carries "kind:id", not a bare id: a workout id and a skill id are both uids and
+// nothing about either says which list it came from.
+function setPlanEntryRef(day, entryId, value) {
   const entry = (plannerPlan()[day] || []).find(e => e.id === entryId);
   if (!entry) return;
-  entry.kind = 'workout';
-  entry.refId = workoutId || null;
+  const sep = (value || '').indexOf(':');
+  const kind = sep > 0 ? value.slice(0, sep) : '';
+  const refId = sep > 0 ? value.slice(sep + 1) : '';
+  entry.kind = PLAN_ENTRY_KINDS.indexOf(kind) >= 0 ? kind : 'workout';
+  entry.refId = refId || null;
+  // Minutes belong to a skill and mean nothing on a workout, so switching kinds drops them
+  // rather than leaving a number attached to something that can't use it.
+  if (entry.kind !== 'skill') entry.minutes = null;
+  saveState(); render();
+}
+function setPlanEntryMinutes(day, entryId, value) {
+  const entry = (plannerPlan()[day] || []).find(e => e.id === entryId);
+  if (!entry) return;
+  const m = Math.round(Number(value) || 0);
+  entry.minutes = m > 0 ? m : null;   // empty means "let the starter suggest one"
   saveState(); render();
 }
 function copyDayWorkoutPlan(day) {
-  const entries = (plannerPlan()[day] || []).map(e => ({ kind: e.kind, refId: e.refId }));
+  const entries = (plannerPlan()[day] || []).map(e => ({ kind: e.kind, refId: e.refId, minutes: e.minutes }));
   VIEW.exPlanClipboard = { day, entries };
   showToast(MEAL_PLAN_DAY_LABELS[day] + "'s workout plan copied");
   render();
@@ -428,7 +443,7 @@ function copyDayWorkoutPlan(day) {
 function pasteDayWorkoutPlan(day) {
   if (!VIEW.exPlanClipboard) return;
   const doPaste = () => {
-    plannerPlan()[day] = VIEW.exPlanClipboard.entries.map(e => planEntry(e.kind, e.refId));
+    plannerPlan()[day] = VIEW.exPlanClipboard.entries.map(e => planEntry(e.kind, e.refId, e.minutes));
     saveState();
     showToast('Pasted into ' + MEAL_PLAN_DAY_LABELS[day]);
     render();
@@ -499,25 +514,46 @@ function renderExercisePlanDay(day) {
     <div class="stack" style="margin-bottom:${entries.length ? '10px' : '0'};">
       ${entries.map(e => renderPlanWorkoutEntry(day, e)).join('')}
     </div>
-    <button class="btn btn-sm" onclick="addPlanWorkoutSlot(${day})">+ ADD WORKOUT</button>
+    <button class="btn btn-sm" onclick="addPlanWorkoutSlot(${day})">+ ADD TO THIS DAY</button>
   </div>`;
 }
 function renderPlanWorkoutEntry(day, entry) {
   if (!entry.refId) {
     return `<div class="panel" style="background:var(--surface2);">
       <div class="field-row" style="align-items:flex-end;">
-        <label class="field" style="flex:2; margin-bottom:0;"><span class="lbl">Select a workout</span>
-          <select onchange="setPlanWorkoutSlotWorkout(${day},'${entry.id}',this.value)">
+        <label class="field" style="flex:2; margin-bottom:0;"><span class="lbl">Workout or practice</span>
+          <select onchange="setPlanEntryRef(${day},'${entry.id}',this.value)">
             <option value="">Choose…</option>
             ${['weights','cardio','mobility','warmup'].map(type => {
               const list = workoutsByType(type);
               if (!list.length) return '';
-              return `<optgroup label="${WORKOUT_TYPE_LABELS[type]}">${list.map(w => `<option value="${w.id}">${escapeHtml(w.name)}</option>`).join('')}</optgroup>`;
+              return `<optgroup label="${WORKOUT_TYPE_LABELS[type]}">${list.map(w => `<option value="workout:${w.id}">${escapeHtml(w.name)}</option>`).join('')}</optgroup>`;
             }).join('')}
+            ${activeSkills().length ? `<optgroup label="Practice">${activeSkills().map(s => `<option value="skill:${s.id}">${escapeHtml(s.name)}</option>`).join('')}</optgroup>` : ''}
           </select>
         </label>
         <button class="icon-btn" style="color:var(--bad);" onclick="removePlanWorkoutSlot(${day},'${entry.id}')" title="Remove">${icon('close')}</button>
       </div>
+    </div>`;
+  }
+  if (entry.kind === 'skill') {
+    const skill = skillById(entry.refId);
+    // An ARCHIVED skill still renders rather than vanishing. Archiving keeps it resolvable on
+    // purpose (its logged hours depend on that), and silently dropping a Tuesday you'd committed to
+    // would be the app deciding something it should only report.
+    if (!skill) return renderPlanWorkoutEntry(day, Object.assign({}, entry, { refId: null }));
+    return `<div class="panel">
+      <div class="row">
+        <div style="display:flex; align-items:center; gap:6px; min-width:0;">
+          <span style="font-size:14px; font-weight:700;">${escapeHtml(skill.name)}</span>
+          <span style="font-size:10px; color:var(--text-faint); text-transform:uppercase;">Practice</span>
+          ${skill.archived ? `<span class="skill-band skill-band-new">ARCHIVED</span>` : ''}
+        </div>
+        <label class="field" style="flex:0 0 96px; margin-bottom:0;"><span class="lbl">Minutes</span>
+          <input type="number" min="5" step="5" value="${entry.minutes || ''}" placeholder="auto"
+                 onchange="setPlanEntryMinutes(${day},'${entry.id}',this.value)"></label>
+      </div>
+      <button class="btn btn-sm btn-ghost" style="margin-top:10px; color:var(--bad);" onclick="removePlanWorkoutSlot(${day},'${entry.id}')">&minus; REMOVE</button>
     </div>`;
   }
   const w = getWorkout(entry.refId);

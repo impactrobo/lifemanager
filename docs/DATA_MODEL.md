@@ -174,7 +174,9 @@ STATE = {
       calorieSetOn,                    // null | 'YYYY-MM-DD'. When you last set/accepted/declined a
                                        // target; the weekly drift re-check counts from here
       // -- exercise blocks (kind: 'exercise') carry a plan instead of the four fields above --
-      exercisePlan,                    // { 0..6: [{id, kind, refId}] }. Seeded as a deep COPY of the
+      exercisePlan,                    // { 0..6: [{id, kind, refId, minutes}] }. kind is 'workout'
+                                       // or 'skill'; minutes only means anything on a skill.
+                                       // Seeded as a deep COPY of the
                                        // plan in effect where the block starts -- NEVER a shared
                                        // reference, or editing the new block rewrites the old one
       deloadTrailing,                  // undefined|true = last week is a deload; false = off. Applies

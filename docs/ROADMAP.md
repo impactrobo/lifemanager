@@ -96,14 +96,11 @@ before starting any of these.
      (walking + 2 full-body sessions + mobility) the way C25K already proves works for cardio; and an
      unplanned-skip path distinct from a deload/active-rest, so silently skipping isn't how a block
      dies.
-  7. ~~**Skills, generalised**~~ — scoped as "Skills Own the Ladder", **steps 1–5 of 6 shipped
+  7. ~~**Skills, generalised**~~ — scoped as "Skills Own the Ladder", **all 6 steps shipped
      2026-09-15**, plus the four-step "Closing the Loop" punch list between 2 and 3 (see Recently
-     Shipped). Remaining: **6. practice on the weekday plan** — the biggest and last, because it's
-     the only one that reshapes a primitive other features read. It needs the plan entry generalised
-     from `{id, workoutId}` to `{id, kind:'workout'|'skill', refId}`, which touches
-     `exercisePlanInEffect()`, `dayModel()`, the Planner UI, and the per-block plan copying phases
-     do. Everything else in the scope is done, so the Skill model is settled before the plan has to
-     reference it — which was the whole reason for leaving it last.
+     Shipped). One optional tail remains: `exercisePlan` is now a misnomer, since it holds practice
+     entries too. The UI already says "Planner" rather than "Exercise plan", so the leak is internal
+     — whether it's worth a second migration to rename is a judgment call, not a defect.
   Deliberately **not** proposed: points, badges, streak-shaming — the app instruments the plan and
   doesn't second-guess the person, and gamification would be a different product.
 
@@ -416,6 +413,40 @@ on an architecture split + a large wave of Maximalist aesthetics.
   pattern.
 
 ### Feature changes
+
+- **Practice on the weekday plan (2026-09-15).** Step 6 of "Skills Own the Ladder" — the last, and
+  the only one that reshaped a primitive other features read. Shipped in two commits: the shape
+  alone, then the feature.
+  - **Step 1, the conversion, deliberately alone.** `{id, workoutId}` → `{id, kind, refId}` across
+    the global plan and every block's private copy, with the suite expected to pass untouched.
+    Eight test files broke, and all eight were fixtures writing the old shape straight into
+    `STATE.exercisePlan` *after* load — bypassing the migration. They go through `planEntry()` now.
+    The grep also missed a site: `deleteWorkout()` filters plan entries, in `app-state.js` rather
+    than any of the four files the survey named. Sixteen touch points, not fifteen.
+  - **`exercisePlanInEffect()` needed no change at all** — the 200 lines of phase, active-rest,
+    deload and carried-plan resolution. It decides *which* plan governs a date and never opens an
+    entry. That was most of the feared blast radius, and it wasn't real.
+  - **Why not a second nullable `skillId`:** half the edits and no migration, but two nullable fields
+    where exactly one is ever set *is* a discriminated union with the rule living in a comment. That
+    shape is what the Skill model spent a fortnight removing; it doesn't come back to save an
+    afternoon. `migrateWeekPlanEntries()` is the only function allowed to know the old field name,
+    and the test asserts `e.workoutId` appears there and nowhere else.
+  - **Step 2, the feature.** A `kind: 'skill'` entry with optional `minutes`, because a workout
+    carries its own content while the block builder can't pick anything without a budget. The
+    Planner picker gained a Practice group and now returns `"kind:id"` (a workout id and a skill id
+    are both uids; nothing about either says which list it came from). Switching an entry's kind
+    drops minutes rather than leaving a number on something that can't use it.
+  - **`dayModel()` gains its own `practice` list** rather than folding skills in with workouts: the
+    two open different screens and are done differently. Tapping opens the skill's practice starter
+    and does NOT start a block — starting one commits a budget and builds around it, which is more
+    than one tap from a day card should do. The starter *looks up* the planned minutes rather than
+    being handed them, so the number is right however you arrived and there's no transient
+    "where did you come from" state to keep in step.
+  - **`weekPlanWorkoutCount()` became `weekPlanCount()`**, counting workouts and practice separately:
+    a training block reporting a guitar session as training volume would be wrong.
+  - **An archived skill still renders on the plan**, marked as archived. Archiving keeps it
+    resolvable on purpose, and silently dropping a day you'd committed to would be the app deciding
+    rather than reporting — one of the three questions the scope left open, answered that way.
 
 - **Skill targets (2026-09-15).** Step 5 of "Skills Own the Ladder", and the last before the weekday
   plan. New file `src/app-skill-targets.js`, new `STATE.skillTargets`, a TARGETS subtab.

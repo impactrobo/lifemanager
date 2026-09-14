@@ -90,13 +90,13 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   const plans = await page.evaluate(() => {
     const b2 = phaseSchedule(activeExerciseGoal())[1];
     const w = phaseActiveRestWindow(b2);
-    const at = (d) => { const e = exercisePlanInEffect(d); return { src: e.source, label: e.label, n: weekPlanWorkoutCount(e.plan).workouts }; };
+    const at = (d) => { const e = exercisePlanInEffect(d); return { src: e.source, label: e.label, n: weekPlanCount(e.plan).workouts }; };
     return {
       light: at(shiftDate(w.from, 8)),
       restDeload: at(w.from),
       afterTheRest: at(shiftDate(w.to, 1)),
-      previousBlock: weekPlanWorkoutCount(STATE.phases[2].exercisePlan).workouts,
-      ownBlock: weekPlanWorkoutCount(STATE.phases[3].exercisePlan).workouts,
+      previousBlock: weekPlanCount(STATE.phases[2].exercisePlan).workouts,
+      ownBlock: weekPlanCount(STATE.phases[3].exercisePlan).workouts,
     };
   });
   console.log('plans through active rest:', plans);

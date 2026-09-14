@@ -191,6 +191,7 @@ function renderDayUntimedItems(dateStr) {
   const day = dayModel(dateStr);
   const isToday = day.isToday;
   const planned = day.workouts;   // already empty on a day off — see dayModel()
+  const practice = day.practice;  // likewise
   const meals = day.meals;
   const habits = day.habits;      // habits are NOT paused by a day off
   const charges = day.charges;    // due dates are NOT paused by a day off either — see chargesDueOn()
@@ -199,10 +200,10 @@ function renderDayUntimedItems(dateStr) {
   const ex = day.exception;
   const pausedNotice = day.isDayOff && hasWeekdayPlan(day.weekday, day.dateStr)
     ? `<div class="panel" style="margin-top:14px;">
-        <div style="font-size:12px; color:var(--text-dim);">Planned workouts and meals are paused for this day${ex.label ? ` (${escapeHtml(ex.label)})` : ''}. Habits carry on.</div>
+        <div style="font-size:12px; color:var(--text-dim);">Planned workouts, practice and meals are paused for this day${ex.label ? ` (${escapeHtml(ex.label)})` : ''}. Habits carry on.</div>
       </div>`
     : '';
-  if (!planned.length && !meals.length && !habits.length && !charges.length) return pausedNotice;
+  if (!planned.length && !practice.length && !meals.length && !habits.length && !charges.length) return pausedNotice;
 
   const loggedIds = workoutIdsLoggedOn(dateStr);
   const group = (label, color, body) => `
@@ -216,6 +217,17 @@ function renderDayUntimedItems(dateStr) {
     return `<div class="day-extra-row" onclick="openTodayWorkout('${w.id}')" style="cursor:pointer;">
       <span class="day-extra-name">${escapeHtml(w.name)}</span>
       <span class="day-extra-meta">${escapeHtml(WORKOUT_TYPE_LABELS[w.type] || 'Workout')}${done ? ' &middot; logged' : ''}</span>
+      ${done ? `<span class="hit-mark hit" style="flex-shrink:0;">${icon('check')}</span>` : ''}
+    </div>`;
+  }).join(''));
+
+  // Its own group, in the skill's own colour -- the same one its time-rollup bar uses, so a
+  // planned Tuesday and the hours it produced read as the same thing in two places.
+  const practiceHtml = !practice.length ? '' : group('PLANNED PRACTICE', sectionColor('hobbies'), practice.map(p => {
+    const done = (p.skill.practiceLog || []).some(e => e.date === dateStr);
+    return `<div class="day-extra-row" onclick="openTodayPractice('${p.skill.id}')" style="cursor:pointer;">
+      <span class="day-extra-name">${escapeHtml(p.skill.name)}</span>
+      <span class="day-extra-meta">${p.minutes ? p.minutes + ' min' : 'Practice'}${done ? ' &middot; logged' : ''}</span>
       ${done ? `<span class="hit-mark hit" style="flex-shrink:0;">${icon('check')}</span>` : ''}
     </div>`;
   }).join(''));
@@ -249,7 +261,7 @@ function renderDayUntimedItems(dateStr) {
 
   return `${pausedNotice}
     <div class="subtle-label" style="margin:16px 0 8px;">ALSO ${isToday ? 'TODAY' : 'THIS DAY'}</div>
-    <div class="panel">${workoutsHtml}${mealsHtml}${habitsHtml}${chargesHtml}</div>`;
+    <div class="panel">${workoutsHtml}${practiceHtml}${mealsHtml}${habitsHtml}${chargesHtml}</div>`;
 }
 // Is there anything for a day off to actually pause? dayModel() has already emptied the lists by
 // the time a caller sees them, so the notice has to ask the template directly -- otherwise a day

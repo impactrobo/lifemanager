@@ -127,14 +127,14 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     const wd = new Date().getDay();
     STATE.exercisePlan = EMPTY_WEEK_PLAN();
     STATE.exercisePlan[wd] = [planEntry('workout', w.id)];
-    STATE.life.exceptions = [];
+    STATE.life.scheduleExceptions = [];
     saveState();
     const model = dayModel(todayStr());
     const copied = copyWeekPlan(STATE.exercisePlan);
     return {
       dayModelWorkouts: model.workouts.map(x => x.id),
       hasPlan: hasWeekdayPlan(wd, todayStr()),
-      count: weekPlanWorkoutCount(STATE.exercisePlan),
+      count: weekPlanCount(STATE.exercisePlan),
       // A copy must be a COPY: sharing the object would make editing a new block rewrite the old one.
       copiedRef: copied[wd][0].refId,
       copiedKind: copied[wd][0].kind,
@@ -145,7 +145,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   console.log('consumers:', JSON.stringify(consumers));
   if (consumers.dayModelWorkouts.join(',') !== consumers.wid) throw new Error('dayModel() resolves the entry: ' + JSON.stringify(consumers));
   if (!consumers.hasPlan) throw new Error('hasWeekdayPlan() sees it');
-  if (consumers.count.workouts !== 1 || consumers.count.days !== 1) throw new Error('weekPlanWorkoutCount(): ' + JSON.stringify(consumers.count));
+  if (consumers.count.workouts !== 1 || consumers.count.days !== 1) throw new Error('weekPlanCount(): ' + JSON.stringify(consumers.count));
   if (consumers.copiedRef !== consumers.wid || consumers.copiedKind !== 'workout') throw new Error('copyWeekPlan() carries both fields');
   if (!consumers.freshId) throw new Error('A copied entry gets a NEW id — a shared one would alias two blocks');
 
@@ -178,6 +178,123 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     throw new Error('The migration should still reference workoutId — it is the one thing that converts it');
   }
 
+  // ---- 6. A skill on the plan ----
+  // The point of the whole shape change. A practice entry references a skill and, optionally, a
+  // length -- a workout carries its own content, but the block builder can't pick anything for a
+  // skill without a budget, which is why the starter asks for one.
+  const onPlan = await page.evaluate(() => {
+    STATE.skills = []; STATE.skillTargets = []; STATE.skillSession = null;
+    STATE.goals = []; STATE.phases = []; STATE.life.scheduleExceptions = [];
+    const skill = registerSkill(defaultSkill('Guitar'));
+    const l = defaultSkillList('Chords', false);
+    const it = defaultSkillItem('Em');
+    Object.assign(it, { reps: 2, interval: 1, dueIn: 0, lastPractised: shiftDate(todayStr(), -1) });
+    l.items = [it];
+    skill.lists = [l];
+    const wd = new Date().getDay();
+    STATE.workouts = STATE.workouts.filter(w => w.id !== 'wPlanTest');
+    STATE.workouts.push({ id: 'wPlanTest', name: 'Plan Test', type: 'weights', t3: [] });
+    STATE.exercisePlan = EMPTY_WEEK_PLAN();
+    STATE.exercisePlan[wd] = [planEntry('workout', 'wPlanTest'), planEntry('skill', skill.id, 25)];
+    saveState();
+    const model = dayModel(todayStr());
+    return {
+      skillId: skill.id, wd,
+      workouts: model.workouts.map(w => w.id),
+      practice: model.practice.map(p => ({ name: p.skill.name, minutes: p.minutes })),
+      count: weekPlanCount(STATE.exercisePlan),
+      // The starter reads the plan rather than being handed a number.
+      plannedMins: plannedPracticeMinutes(skill.id),
+      noPlanMins: plannedPracticeMinutes('nope'),
+      starter: renderSkillSessionStarter(skill),
+    };
+  });
+  console.log('on plan:', JSON.stringify({ workouts: onPlan.workouts, practice: onPlan.practice, count: onPlan.count }));
+  // Two lists, not one: the two open different screens and are done in different ways.
+  if (onPlan.workouts.join(',') !== 'wPlanTest') throw new Error('The workout entry still resolves: ' + onPlan.workouts);
+  if (onPlan.practice.length !== 1 || onPlan.practice[0].name !== 'Guitar') throw new Error('The skill entry resolves separately: ' + JSON.stringify(onPlan.practice));
+  if (onPlan.practice[0].minutes !== 25) throw new Error('...carrying its minutes, got ' + onPlan.practice[0].minutes);
+  // A training block must not report a guitar session as training volume.
+  if (onPlan.count.workouts !== 1 || onPlan.count.practice !== 1 || onPlan.count.days !== 1) {
+    throw new Error('Workouts and practice are counted separately: ' + JSON.stringify(onPlan.count));
+  }
+  if (onPlan.plannedMins !== 25) throw new Error('The starter looks the minutes up from the plan, got ' + onPlan.plannedMins);
+  if (onPlan.noPlanMins !== null) throw new Error('A skill not on today\u2019s plan has no planned minutes');
+  if (!/value="25" id="skillSessionMinutes"/.test(onPlan.starter)) throw new Error('...and pre-fills with it');
+  if (!/25 minutes on today/.test(onPlan.starter)) throw new Error('...and says where the number came from');
+
+  // A day off pauses practice exactly as it pauses workouts.
+  const dayOff = await page.evaluate(() => {
+    // A day off is a scheduleException with no scheduleId -- see isDayOff in dayModel().
+    STATE.life.scheduleExceptions = [{ id: 'x', startDate: todayStr(), endDate: todayStr(),
+                                      scheduleId: null, skipAnchors: false, label: 'Rest', createdAt: 1 }];
+    const model = dayModel(todayStr());
+    STATE.life.scheduleExceptions = [];
+    return { workouts: model.workouts.length, practice: model.practice.length };
+  });
+  console.log('day off:', dayOff);
+  if (dayOff.workouts !== 0 || dayOff.practice !== 0) throw new Error('A day off pauses both: ' + JSON.stringify(dayOff));
+
+  // The Planner offers skills, round-trips the "kind:id" value, and keeps minutes with the kind.
+  const planner = await page.evaluate(a => {
+    VIEW.plannerDate = null;
+    const entry = STATE.exercisePlan[a.wd][1];
+    const picker = renderPlanWorkoutEntry(a.wd, planEntry('workout', null));
+    const filled = renderPlanWorkoutEntry(a.wd, entry);
+    // Switching a skill entry to a workout must drop minutes -- they mean nothing on a workout.
+    setPlanEntryRef(a.wd, entry.id, 'workout:wPlanTest');
+    const afterSwitch = { kind: entry.kind, refId: entry.refId, minutes: entry.minutes };
+    setPlanEntryRef(a.wd, entry.id, 'skill:' + a.skillId);
+    setPlanEntryMinutes(a.wd, entry.id, '40');
+    const afterBack = { kind: entry.kind, refId: entry.refId, minutes: entry.minutes };
+    setPlanEntryMinutes(a.wd, entry.id, '');
+    const cleared = entry.minutes;
+    // Junk in the select can't produce a kind that isn't real.
+    setPlanEntryRef(a.wd, entry.id, 'nonsense:xyz');
+    const junk = entry.kind;
+    setPlanEntryRef(a.wd, entry.id, 'skill:' + a.skillId);
+    setPlanEntryMinutes(a.wd, entry.id, '25');
+    return { offersSkills: /value="skill:/.test(picker), offersWorkouts: /value="workout:/.test(picker),
+             filledIsPractice: /Practice/.test(filled) && /value="25"/.test(filled),
+             afterSwitch, afterBack, cleared, junk };
+  }, onPlan);
+  console.log('planner:', JSON.stringify(planner));
+  if (!planner.offersSkills || !planner.offersWorkouts) throw new Error('The picker offers both kinds');
+  if (!planner.filledIsPractice) throw new Error('A filled skill row shows its minutes');
+  if (planner.afterSwitch.kind !== 'workout' || planner.afterSwitch.minutes !== null) {
+    throw new Error('Switching to a workout drops minutes: ' + JSON.stringify(planner.afterSwitch));
+  }
+  if (planner.afterBack.kind !== 'skill' || planner.afterBack.minutes !== 40) throw new Error('...and back again sets them');
+  if (planner.cleared !== null) throw new Error('An empty minutes box means "let the starter suggest one"');
+  if (planner.junk !== 'workout') throw new Error('An unknown kind falls back rather than being stored');
+
+  // Copy/paste carries the kind AND the minutes.
+  const clip = await page.evaluate(a => {
+    copyDayWorkoutPlan(a.wd);
+    const target = (a.wd + 3) % 7;
+    STATE.exercisePlan[target] = [];
+    pasteDayWorkoutPlan(target);
+    return STATE.exercisePlan[target].map(e => ({ kind: e.kind, refId: e.refId, minutes: e.minutes }));
+  }, onPlan);
+  console.log('pasted:', JSON.stringify(clip));
+  if (clip.length !== 2) throw new Error('Both entries paste');
+  const pastedSkill = clip.find(e => e.kind === 'skill');
+  if (!pastedSkill || pastedSkill.minutes !== 25) throw new Error('A pasted practice keeps its minutes: ' + JSON.stringify(clip));
+
+  // An ARCHIVED skill still renders on the plan. Archiving keeps it resolvable on purpose, and
+  // silently dropping a day you committed to would be the app deciding rather than reporting.
+  const archived = await page.evaluate(a => {
+    archiveSkill(a.skillId);
+    const row = renderPlanWorkoutEntry(a.wd, STATE.exercisePlan[a.wd].find(e => e.kind === 'skill'));
+    const model = dayModel(todayStr());
+    unarchiveSkill(a.skillId);
+    return { renders: /Guitar/.test(row), flagged: /ARCHIVED/.test(row), stillOnDay: model.practice.length };
+  }, onPlan);
+  console.log('archived on plan:', archived);
+  if (!archived.renders || !archived.flagged) throw new Error('An archived skill renders, marked as such: ' + JSON.stringify(archived));
+  if (archived.stillOnDay !== 1) throw new Error('...and still shows on the day, rather than vanishing');
+
+  await page.evaluate(() => { STATE.skills = []; STATE.skillSession = null; saveState(); });
   await page.evaluate(() => { STATE.phases = []; STATE.goals = []; saveState(); });
   await browser.close();
   if (errors.length > 0) { console.log('ERRORS:', errors); process.exit(1); }

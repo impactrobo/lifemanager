@@ -169,9 +169,16 @@ function phaseActualRate(entry) {
 // but two nullable fields where exactly one is ever set IS a discriminated union, with the rule
 // living in a comment instead of in the data. That shape is what the Skill model spent a fortnight
 // removing elsewhere; it doesn't get reintroduced here to save an afternoon.
-const PLAN_ENTRY_KINDS = ['workout'];
+const PLAN_ENTRY_KINDS = ['workout', 'skill'];
 const EMPTY_WEEK_PLAN = () => ({ 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] });
-function planEntry(kind, refId) { return { id: uid(), kind: kind || 'workout', refId: refId || null }; }
+// `minutes` is meaningful only for a skill. A workout carries its own content -- the plan says
+// WHICH workout and the workout says what to do -- but the block builder can't pick anything for
+// a skill without a budget, which is why the practice starter asks for one. Optional, so a plan
+// can say "a short Tuesday, a long Thursday" without forcing that call on every entry.
+function planEntry(kind, refId, minutes) {
+  const m = Math.round(Number(minutes) || 0);
+  return { id: uid(), kind: kind || 'workout', refId: refId || null, minutes: m > 0 ? m : null };
+}
 // The one-time conversion, and the only place that knows the old shape. Idempotent: an entry
 // that already has a `kind` is left exactly as it is, so this can run on every load forever.
 function migrateWeekPlanEntries(plan) {
@@ -180,7 +187,7 @@ function migrateWeekPlanEntries(plan) {
     if (!Array.isArray(plan[d])) continue;
     plan[d] = plan[d].map(e => (e && e.kind)
       ? e
-      : { id: (e && e.id) || uid(), kind: 'workout', refId: (e && e.workoutId) || null });
+      : { id: (e && e.id) || uid(), kind: 'workout', refId: (e && e.workoutId) || null, minutes: null });
   }
 }
 
@@ -235,18 +242,23 @@ function activeExercisePlan(dateStr) { return exercisePlanInEffect(dateStr).plan
 function copyWeekPlan(plan) {
   const out = EMPTY_WEEK_PLAN();
   for (let d = 0; d <= 6; d++) {
-    out[d] = ((plan && plan[d]) || []).map(e => ({ id: uid(), kind: e.kind || 'workout', refId: e.refId || null }));
+    out[d] = ((plan && plan[d]) || []).map(e => ({ id: uid(), kind: e.kind || 'workout',
+                                                   refId: e.refId || null, minutes: e.minutes || null }));
   }
   return out;
 }
-function weekPlanWorkoutCount(plan) {
-  let n = 0, days = 0;
+// Workouts and practice counted SEPARATELY. Rolling them together would have a training block
+// report a guitar session as training volume, which it isn't -- and this summary line is the one
+// place someone reads a block's shape at a glance.
+function weekPlanCount(plan) {
+  let workouts = 0, practice = 0, days = 0;
   for (let d = 0; d <= 6; d++) {
-    const filled = ((plan && plan[d]) || []).filter(e => e.refId).length;
-    n += filled;
-    if (filled) days++;
+    const filled = ((plan && plan[d]) || []).filter(e => e.refId);
+    workouts += filled.filter(e => e.kind !== 'skill').length;
+    practice += filled.filter(e => e.kind === 'skill').length;
+    if (filled.length) days++;
   }
-  return { workouts: n, days };
+  return { workouts, practice, days };
 }
 
 // ---- Deloads ----
@@ -817,7 +829,7 @@ function renderPhaseCard(entry) {
 // points at the one editor, which follows whichever plan is in effect.
 function renderExercisePhaseBody(entry) {
   const p = entry.phase;
-  const n = weekPlanWorkoutCount(p.exercisePlan);
+  const n = weekPlanCount(p.exercisePlan);
   return `
       <div class="phase-controls phase-controls-1">
         <label class="field"><span class="lbl">Weeks</span>
@@ -827,8 +839,11 @@ function renderExercisePhaseBody(entry) {
       <div class="goal-rows">
         <div class="goal-row">
           <span class="goal-row-k">Plan</span>
-          <span class="goal-row-v">${n.workouts ? `${n.workouts} workout${n.workouts === 1 ? '' : 's'}` : 'empty'}</span>
-          <span class="goal-row-x">${n.workouts ? `across ${n.days} day${n.days === 1 ? '' : 's'} a week` : 'nothing assigned to any day yet'}</span>
+          <span class="goal-row-v">${n.workouts || n.practice
+            ? [n.workouts ? `${n.workouts} workout${n.workouts === 1 ? '' : 's'}` : '',
+               n.practice ? `${n.practice} practice` : ''].filter(Boolean).join(' · ')
+            : 'empty'}</span>
+          <span class="goal-row-x">${n.workouts || n.practice ? `across ${n.days} day${n.days === 1 ? '' : 's'} a week` : 'nothing assigned to any day yet'}</span>
         </div>
       </div>
       <div class="deload-bar" style="margin-top:11px;">

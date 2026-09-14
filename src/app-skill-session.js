@@ -647,13 +647,27 @@ function extendSkillSession(extraMinutes) {
 // The runner lives on the skill's LOG subtab, replacing the log while a session is open: a block in
 // progress is the only thing you want on screen at that moment, and a second place to find it would
 // just be a second place to lose it.
+// What today's weekday plan says this skill is worth, if anything. Looked up rather than passed
+// in: the number is then right however you arrived at this screen, and there's no transient
+// "where did you come from" state to keep in step with the plan it was copied out of.
+function plannedPracticeMinutes(skillId, dateStr) {
+  const d = dateStr || todayStr();
+  const weekday = new Date(d + 'T00:00:00').getDay();
+  const entry = (activeExercisePlan(d)[weekday] || [])
+    .find(e => e.kind === 'skill' && e.refId === skillId && e.minutes);
+  return entry ? entry.minutes : null;
+}
+
 function renderSkillSessionStarter(skill) {
   const wip = skillWipStatus(skill);
   const due = skillSessionCandidates(skill, todayStr());
+  const planned = plannedPracticeMinutes(skill.id);
   const need = due.reduce((sum, c) => sum + skillItemFloorMinutes(c.item), 0);
   const over = need > SKILL_SESSION_MAX_SUGGEST;
   const suggest = Math.min(SKILL_SESSION_MAX_SUGGEST, Math.max(5, Math.ceil(need / 5) * 5));
-  const note = !due.length
+  const note = planned
+    ? `${planned} minutes on today’s plan${due.length ? `, ${due.length} item${due.length === 1 ? '' : 's'} ready` : ' — nothing is due, so the block takes the closest items'}.`
+    : !due.length
     ? 'Nothing is due — everything is ahead of schedule. Practise anyway and the block takes the closest items.'
     : over
       ? `${due.length} items ready — more than an hour's worth, so some will wait. About an hour is the most that pays for itself in one sitting.`
@@ -675,7 +689,7 @@ function renderSkillSessionStarter(skill) {
       <div class="skill-start-note">${note}</div>
       ${standing}
       <div class="skill-add-row" style="padding:0; margin-top:10px;">
-        <input type="number" min="5" step="5" value="${due.length ? suggest : 30}" id="skillSessionMinutes" placeholder="Minutes">
+        <input type="number" min="5" step="5" value="${planned || (due.length ? suggest : 30)}" id="skillSessionMinutes" placeholder="Minutes">
         <button class="btn btn-primary" onclick="startSkillSession('${skill.id}')">START</button>
       </div>
     </div>`;
