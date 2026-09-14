@@ -206,6 +206,25 @@ function toggleLabForm() {
   UI.labPasteOpen = false;
   VIEW.labPasteDraft = null;
   VIEW.labPasteReport = null;
+  VIEW.labEditing = null;
+  render();
+}
+// Correcting a panel used to mean deleting it and retyping every number. That was survivable while
+// entry was slow and manual; now that a paste fills fifteen markers at once, one mistyped digit
+// costing the whole panel is the sharpest edge left in the feature.
+//
+// The edit reuses the add form rather than building a second one -- same markers, same ranges, same
+// paste box (you might be fixing a panel you typed by hand). The only difference is where it lands.
+function editLabPanel(id) {
+  const p = labPanelById(id);
+  if (!p) return;
+  VIEW.labEditing = id;
+  UI.labFormOpen = true;
+  UI.labRangesOpen = false;
+  UI.labPasteOpen = false;
+  VIEW.labPasteDraft = null;
+  VIEW.labPasteReport = null;
+  window.scrollTo(0, 0);   // the form opens at the top; the card you tapped can be far down the list
   render();
 }
 function setLabSort(mode) {
@@ -217,23 +236,50 @@ function toggleLabExtended() {
   saveState(); render();
 }
 function saveLabPanel() {
+  const editing = VIEW.labEditing ? labPanelById(VIEW.labEditing) : null;
   const date = inputVal('labDate') || todayStr();
   const values = {};
+  // A panel can hold a reading whose custom marker has since been DELETED. Those have no field in
+  // the form, so rebuilding `values` from the form alone would drop them on save -- silently
+  // destroying the data deleteCustomLabMarker()'s confirm promised would stay. Carried across
+  // untouched instead. Only reachable while editing; a new panel has no prior values to lose.
+  if (editing) {
+    const offered = {};
+    offeredLabMarkers().forEach(m => { offered[m.key] = true; });
+    Object.keys(editing.values || {}).forEach(k => {
+      if (!offered[k]) values[k] = editing.values[k];
+    });
+  }
+  // Rebuilt from scratch rather than merged, so clearing a field on an edit actually REMOVES that
+  // reading. A merge would make a mistyped extra marker impossible to take back off the panel.
   offeredLabMarkers().forEach(m => {
     const raw = inputVal('lab_' + m.key);
     if (raw !== '' && raw != null && isFinite(Number(raw))) values[m.key] = Number(raw);
   });
   // A panel with no readings is a date and nothing else -- it would sit in the list saying nothing
-  // and count as a draw that happened.
-  if (!Object.keys(values).length) { showToast('Enter at least one result'); return; }
+  // and count as a draw that happened. Same rule on an edit: emptying a panel is a delete, and
+  // there's a delete button for that which asks first.
+  if (!Object.keys(values).length) {
+    showToast(editing ? 'A panel needs at least one result — delete it instead' : 'Enter at least one result');
+    return;
+  }
   if (!Array.isArray(STATE.labs)) STATE.labs = [];
-  STATE.labs.push({ id: uid(), date, notes: inputVal('labNotes') || '', values });
+  if (editing) {
+    // Mutated in place so the id survives: an edit is the same draw with a number corrected, and
+    // anything that comes to reference a panel later must not find it replaced by a stranger.
+    editing.date = date;
+    editing.notes = inputVal('labNotes') || '';
+    editing.values = values;
+  } else {
+    STATE.labs.push({ id: uid(), date, notes: inputVal('labNotes') || '', values });
+  }
   UI.labFormOpen = false;
   UI.labPasteOpen = false;
   VIEW.labPasteDraft = null;
   VIEW.labPasteReport = null;
+  VIEW.labEditing = null;
   saveState();
-  showToast('Panel saved');
+  showToast(editing ? 'Panel updated' : 'Panel saved');
   render();
 }
 function deleteLabPanel(id) {
@@ -317,29 +363,36 @@ function renderLabSortBar() {
 function renderLabForm() {
   const groups = labMarkersForDisplay();
   const draft = (VIEW.labPasteDraft || {});
+  const editing = VIEW.labEditing ? labPanelById(VIEW.labEditing) : null;
+  const prior = (editing && editing.values) || {};
   const rows = groups.map(g => `
     ${g.label ? `<div class="subtle-label" style="margin:14px 0 8px;">${g.label}</div>` : ''}
     <div class="grid2">
       ${g.markers.map(m => {
         const r = labRange(m.key);
+        // A pasted value beats a stored one -- pasting INTO an edit is how you replace a panel you
+        // typed by hand with the real report. Only the paste gets the accent border: that marks
+        // "machine-read, check me", which a number you entered yourself last March is not.
         const filled = draft[m.key] !== undefined;
+        const val = filled ? draft[m.key] : prior[m.key];
         return `
         <label class="field">
           <span class="lbl">${escapeHtml(m.label)}${r.unit ? ` <i class="lab-unit">${escapeHtml(r.unit)}</i>` : ''}</span>
           <input type="number" step="any" id="lab_${m.key}" inputmode="decimal" placeholder="${labBoundHint(r)}"
-                 class="${filled ? 'lab-filled' : ''}"${filled ? ` value="${draft[m.key]}"` : ''}>
+                 class="${filled ? 'lab-filled' : ''}"${val !== undefined ? ` value="${val}"` : ''}>
         </label>`;
       }).join('')}
     </div>`).join('');
   return `
     <div class="panel">
-      <label class="field"><span class="lbl">Date drawn</span><input type="date" id="labDate" value="${todayStr()}"></label>
+      ${editing ? `<div class="lab-editing-head">Editing the panel drawn ${fmtGoalDate(editing.date)}. Clearing a box removes that reading.</div>` : ''}
+      <label class="field"><span class="lbl">Date drawn</span><input type="date" id="labDate" value="${editing ? editing.date : todayStr()}"></label>
       ${renderLabPasteBox()}
       ${renderLabSortBar()}
       ${rows}
       <label class="field" style="margin-top:14px;"><span class="lbl">Notes</span>
-        <textarea id="labNotes" placeholder="Fasted? Which lab? Anything worth remembering."></textarea></label>
-      <button class="btn btn-primary btn-block" onclick="saveLabPanel()">SAVE PANEL</button>
+        <textarea id="labNotes" placeholder="Fasted? Which lab? Anything worth remembering.">${editing ? escapeHtml(editing.notes || '') : ''}</textarea></label>
+      <button class="btn btn-primary btn-block" onclick="saveLabPanel()">${editing ? 'SAVE CHANGES' : 'SAVE PANEL'}</button>
       <button class="btn btn-block" style="margin-top:8px;" onclick="toggleLabForm()">CANCEL</button>
     </div>`;
 }
@@ -390,12 +443,16 @@ function renderLabPanels() {
       </div>`;
   const cards = list.map(p => {
     const keys = Object.keys(p.values || {});
+    // The card being edited is marked, because the form opens at the top of a screen its own card
+    // may be several scrolls below -- without this, which panel is under the knife is a guess.
+    const isEditing = VIEW.labEditing === p.id;
     return `
-      <div class="entry-card">
+      <div class="entry-card${isEditing ? ' lab-card-editing' : ''}">
         <div class="ehead">
           <div class="edate">${p.date}</div>
-          <span class="lab-count">${keys.length} marker${keys.length === 1 ? '' : 's'}</span>
-          <button class="icon-btn" onclick="deleteLabPanel('${p.id}')">${icon('close')}</button>
+          <span class="lab-count">${isEditing ? 'EDITING' : `${keys.length} marker${keys.length === 1 ? '' : 's'}`}</span>
+          <button class="icon-btn" onclick="editLabPanel('${p.id}')" aria-label="Edit this panel">${icon('pencil')}</button>
+          <button class="icon-btn" onclick="deleteLabPanel('${p.id}')" aria-label="Delete this panel">${icon('close')}</button>
         </div>
         <div class="lab-readings">${keys.map(k => renderLabReading(k, p.values[k])).join('')}</div>
         ${p.notes ? `<div class="lab-note">${escapeHtml(p.notes)}</div>` : ''}

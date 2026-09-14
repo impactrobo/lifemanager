@@ -2169,3 +2169,19 @@ input[type="number"].lab-filled {
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 8%, var(--surface));
 }
+
+/* ---- Editing a saved panel ---- */
+.lab-editing-head {
+  font-size: 11px; line-height: 1.45; color: var(--text-dim);
+  border-left: 3px solid var(--accent); background: var(--surface2);
+  border-radius: var(--radius); padding: 8px 10px; margin-bottom: 12px;
+}
+/* The form is at the top of the screen and its card can be several scrolls down, so the card says
+   which one is under the knife. A ::before stripe rather than a border, for the reason the --rung
+   tinting learned: aesthetics restate .entry-card's border-color at a specificity this can't beat. */
+.lab-card-editing { position: relative; }
+.lab-card-editing::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  background: var(--accent); border-radius: var(--radius) 0 0 var(--radius);
+}
+.lab-card-editing .lab-count { color: var(--accent); font-weight: 700; }

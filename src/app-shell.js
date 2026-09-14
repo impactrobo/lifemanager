@@ -134,6 +134,7 @@ let VIEW = {
   measureDraftPhotos: [],            // draft photos on an unsaved measurement
   labPasteDraft: null,               // {markerKey: number} parsed out of a pasted report, unsaved
   labPasteReport: null,              // {matched, unmatched} counts from that parse
+  labEditing: null,                  // id of the panel the lab form is editing; null = adding a new one
   selectedWeightMetric: 'weight',
   selectedMeasurementField: 'weight',
   notesSelectedTag: 'general',       // tag for a new note; saveNote() puts this back to 'general'

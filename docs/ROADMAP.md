@@ -73,6 +73,35 @@ before starting any of these.
     on a real device before assuming which of the two is actually happening.
 
 
+- **Lab comparison — agreed direction, not yet built (2026-09-15).** Discussed and settled on a
+  shape; recorded here so the reasoning isn't re-derived. **Marker-first, not panel-first.** The
+  obvious move is to copy `renderCompareBlock()` (pick date A, pick date B, show deltas), and it's
+  the wrong shape for labs: panels are *sparse and irregular* — March was a full panel, September
+  was lipids only, the urgent-care draw was a CBC — so two arbitrary dates routinely share four
+  markers out of thirty. The measurements compare already needs a "no overlapping fields" fallback;
+  labs would live in it. A marker's own history is dense even when panels are sparse, and
+  "is my ApoB coming down?" is the question people actually ask.
+  1. **Ghost dots on the existing bar** (next up). `labBarZones()` already returns `pct(v)` mapping
+     a value to a position on the track, so prior readings plot on the bar that's *already there* —
+     no new chart, no second coordinate system, no Chart.js. Agreed shape: **up to 4 dots, opacity
+     stepping down ~25% per step by age**, newest solid. You watch the reading walk across the zones.
+     Since WHERE YOU STAND already lists every marker, scrolling it gives you the whole picture at
+     once. Works from the *second draw ever*, which matters at 2–4 draws a year.
+     - Known limitation, accepted: dots carry no time axis — two readings a week apart and two years
+       apart render identically. The date labels and (2) are where that gets addressed.
+  2. **Pick a date range and a set of markers, then see how they all moved over that period,
+     regardless of when each was actually measured** (longer term, wants mock-ups first). The last
+     clause is the whole design: it compares *first reading in range vs last reading in range, per
+     marker*, which is what dissolves the sparsity problem — no two markers need share a draw date.
+  3. A banded time-series chart stays last. At 2–4 draws a year it says nothing for a long while,
+     and "a line with bands behind it" is close to what the position bar already is.
+  - **The directionality question, and the line that keeps it honest:** a delta needs to know which
+    way is good — −14 on ApoB is progress, −14 on HDL is not — and this feature has refused to
+    interpret results from the start. Resolution: colour by **movement relative to the bands you
+    set**, never by raw sign. "Moved into your target range" is arithmetic against a number you
+    typed yourself, not the app's opinion, and it's what `inTarget`/`inRef` already do on a single
+    reading. A marker with no bounds stated gets a plain uncoloured number, same as it gets no bar.
+
 - **Claude-assisted lab entry, if the paste-parser proves insufficient (2026-09-15).** The parser
   now shipping reads pasted *text*. It cannot read a photo of a printout or a PDF, and it will miss
   formats nobody anticipated. A model would handle both. Deliberately deferred until the parser has
@@ -459,7 +488,28 @@ on an architecture split + a large wave of Maximalist aesthetics.
   - Two bugs the tests caught, both mine: `labStatus()` returned a truthy object for a marker the
     catalogue has never heard of, and deleting a custom marker made its past readings vanish from
     the card — while the delete confirm promised they would stay. They fall back to the raw key now.
-  - **Still open:** a time-series chart with the same bands behind it, once several draws exist.
+  - **Still open:** comparison — see "Lab comparison, agreed direction" under Ideas worth
+    considering for the shape that was settled on and why a panel-vs-panel compare isn't it.
+
+- **Editing a saved lab panel (2026-09-15).** There was no edit path at all — correcting one digit
+  meant deleting the panel and retyping every number in it. Survivable while entry was slow and
+  manual; the moment a paste could fill fifteen markers at once, one typo costing the whole panel
+  became the sharpest edge in the feature, and it got fixed ahead of comparison because of it.
+  - Reuses the add form rather than building a second one (`VIEW.labEditing` holds the panel id, the
+    same `VIEW.<x>Editing` convention `scheduleBuilderEditing` set). Same markers, same ranges, same
+    paste box — pasting *into* an edit is how you replace a hand-typed panel with the real report.
+  - **`values` is rebuilt from the form, not merged into.** That's what makes clearing a box remove
+    a reading; a merge would leave a mistyped extra marker impossible to take back off the panel.
+  - **Two ways that rebuild could destroy data, both handled:**
+    - A panel can hold a reading whose custom marker was later **deleted**. Those have no field in
+      the form, so a rebuild drops them on save — silently contradicting exactly what
+      `deleteCustomLabMarker()`'s confirm promises ("those readings stay but lose their label").
+      They're carried across untouched now, and a test pins it.
+    - Emptying every box is refused rather than treated as a delete. There's a delete button for
+      that and it asks first.
+  - The id survives the edit — an edit is the same draw with a number corrected, not a replacement.
+  - A stored value deliberately does **not** get the accent border a pasted one gets: that border
+    means "machine-read, check me", which a number you typed yourself last March is not.
 
 - **Pasting a lab report (2026-09-15).** Bulk entry was the real friction left in labs: a report is
   routinely fifteen numbers, and typing fifteen numbers into fifteen boxes is where the feature

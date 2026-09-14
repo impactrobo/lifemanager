@@ -35,7 +35,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     STATE.labs = [];
     STATE.labSettings = { extended: false, sort: 'group', ranges: {}, custom: [] };
     UI.labFormOpen = false; UI.labRangesOpen = false; UI.labPasteOpen = false;
-    VIEW.labPasteDraft = null; VIEW.labPasteReport = null;
+    VIEW.labPasteDraft = null; VIEW.labPasteReport = null; VIEW.labEditing = null;
     saveState();
   });
   await reset();
@@ -579,6 +579,120 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (extended.saved !== 19) throw new Error('...and therefore saves, got ' + extended.saved);
   if (extended.afterCancel !== null) throw new Error('Cancelling the form drops the draft');
   if (extended.panels !== 1) throw new Error('...without saving anything, got ' + extended.panels + ' panels');
+
+  // ---- 11. Editing a saved panel ----
+  // Correcting a panel used to mean deleting it and retyping every number. Both halves of this
+  // section are really about NOT losing data: an edit rebuilds `values` from the form, and anything
+  // the form doesn't render is one save away from gone.
+  await reset();
+  await page.evaluate(() => {
+    STATE.labs = [
+      { id: 'p1', date: '2026-03-14', notes: 'Fasted 12h', values: { apoB: 96, hdl: 58, ldl: 102 } },
+      { id: 'p2', date: '2026-09-02', notes: '', values: { apoB: 88 } },
+    ];
+    switchTab('train'); setFitnessSubtab('body'); NAV.bodySubtab = 'labs';
+    editLabPanel('p1');
+  });
+  await settle(page);
+  const opened = await page.evaluate(() => ({
+    editing: VIEW.labEditing,
+    formOpen: UI.labFormOpen,
+    date: document.getElementById('labDate').value,
+    notes: document.getElementById('labNotes').value,
+    apoB: document.getElementById('lab_apoB').value,
+    hdl: document.getElementById('lab_hdl').value,
+    // A stored value is NOT flagged as parsed -- that border means "machine-read, check me", which
+    // a number you typed yourself last March is not.
+    flagged: document.getElementById('lab_apoB').classList.contains('lab-filled'),
+    // A marker this panel didn't measure stays empty rather than showing the other panel's number.
+    trig: document.getElementById('lab_trig').value,
+    saveLabel: [...document.querySelectorAll('.btn-primary')].some(b => b.textContent.trim() === 'SAVE CHANGES'),
+    marked: !!document.querySelector('.lab-card-editing'),
+  }));
+  console.log('edit form opened:', JSON.stringify(opened));
+  if (opened.editing !== 'p1' || !opened.formOpen) throw new Error('Edit opens the form onto that panel: ' + JSON.stringify(opened));
+  if (opened.date !== '2026-03-14') throw new Error('...on ITS date, not today, got ' + opened.date);
+  if (opened.notes !== 'Fasted 12h') throw new Error('...with its notes, got ' + JSON.stringify(opened.notes));
+  if (opened.apoB !== '96' || opened.hdl !== '58') throw new Error('...and its readings: ' + JSON.stringify(opened));
+  if (opened.flagged) throw new Error('A stored value must not wear the parsed-from-paste border');
+  if (opened.trig !== '') throw new Error('A marker this draw did not include stays empty, got ' + opened.trig);
+  if (!opened.saveLabel) throw new Error('The button says SAVE CHANGES, not SAVE PANEL');
+  if (!opened.marked) throw new Error('The card being edited is marked -- the form is at the top and its card can be far below');
+
+  // Correct one number, blank another, and change the date.
+  await page.fill('#lab_apoB', '91');
+  await page.fill('#lab_ldl', '');
+  await page.fill('#labDate', '2026-03-15');
+  const edited = await page.evaluate(() => {
+    saveLabPanel();
+    const p = allLabPanels().find(x => x.id === 'p1');
+    return {
+      count: allLabPanels().length,          // an edit must not ADD a panel
+      sameId: !!p,                           // ...and must not replace it with a stranger
+      values: JSON.parse(JSON.stringify(p.values)),
+      date: p.date,
+      other: allLabPanels().find(x => x.id === 'p2').values.apoB,
+      closed: !UI.labFormOpen,
+      cleared: VIEW.labEditing,
+    };
+  });
+  console.log('after edit:', JSON.stringify(edited));
+  if (edited.count !== 2) throw new Error('An edit updates in place, it does not append: ' + edited.count + ' panels');
+  if (!edited.sameId) throw new Error('The id survives -- an edit is the same draw with a number corrected');
+  if (edited.values.apoB !== 91) throw new Error('The corrected number is stored, got ' + edited.values.apoB);
+  if (edited.values.hdl !== 58) throw new Error('An untouched reading is left alone, got ' + edited.values.hdl);
+  // Rebuilt rather than merged: a merge would make a mistyped extra marker impossible to take back off.
+  if ('ldl' in edited.values) throw new Error('Clearing a box REMOVES that reading, got ' + JSON.stringify(edited.values));
+  if (edited.date !== '2026-03-15') throw new Error('The date is editable too, got ' + edited.date);
+  if (edited.other !== 88) throw new Error('Another panel is untouched, got ' + edited.other);
+  if (!edited.closed || edited.cleared !== null) throw new Error('Saving closes the form and clears the edit target');
+
+  // Emptying a panel is a delete, and there is a delete button for that which asks first.
+  await page.evaluate(() => editLabPanel('p2'));
+  await settle(page);
+  await page.fill('#lab_apoB', '');
+  const emptied = await page.evaluate(() => {
+    saveLabPanel();
+    return { panels: allLabPanels().length, stillOpen: UI.labFormOpen, value: allLabPanels().find(x => x.id === 'p2').values.apoB };
+  });
+  console.log('emptied panel refused:', JSON.stringify(emptied));
+  if (emptied.panels !== 2 || emptied.value !== 88) throw new Error('Emptying every box does not silently delete the panel: ' + JSON.stringify(emptied));
+  if (!emptied.stillOpen) throw new Error('...the form stays open so the refusal is visible');
+
+  // Cancelling discards the edit entirely.
+  await page.evaluate(() => { toggleLabForm(); editLabPanel('p1'); });
+  await settle(page);
+  await page.fill('#lab_apoB', '999');
+  const cancelled = await page.evaluate(() => {
+    toggleLabForm();
+    return { value: allLabPanels().find(x => x.id === 'p1').values.apoB, editing: VIEW.labEditing };
+  });
+  console.log('cancelled edit:', JSON.stringify(cancelled));
+  if (cancelled.value !== 91) throw new Error('Cancelling writes nothing, got ' + cancelled.value);
+  if (cancelled.editing !== null) throw new Error('...and drops the edit target');
+
+  // ---- 11b. An edit must not eat an orphaned reading ----
+  // deleteCustomLabMarker()'s confirm promises past readings stay, just unlabelled. Those have no
+  // field in the form, so rebuilding `values` from the form alone deletes them on the next save --
+  // silently, and exactly contradicting what the person was told.
+  await reset();
+  await page.evaluate(() => {
+    STATE.labs = [{ id: 'p3', date: '2026-03-14', notes: '', values: { apoB: 96, gone: 41 } }];
+    editLabPanel('p3');
+  });
+  await settle(page);
+  const orphanRendered = await page.evaluate(() => !!document.getElementById('lab_gone'));
+  await page.fill('#lab_apoB', '92');
+  const orphan = await page.evaluate(() => {
+    saveLabPanel();
+    const p = allLabPanels()[0];
+    return { values: JSON.parse(JSON.stringify(p.values)), rendered: false };
+  });
+  orphan.rendered = orphanRendered;
+  console.log('orphaned reading through an edit:', JSON.stringify(orphan));
+  if (orphan.rendered) throw new Error('fixture: a deleted marker is meant to have no field in the form');
+  if (orphan.values.apoB !== 92) throw new Error('The edit still applies, got ' + orphan.values.apoB);
+  if (orphan.values.gone !== 41) throw new Error('A reading with no marker left SURVIVES the edit -- the delete confirm promised it would');
 
   await page.evaluate(() => {
     STATE.labs = [];
