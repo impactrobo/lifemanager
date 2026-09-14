@@ -114,8 +114,12 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     // Not "is this label absent" — the coming band's hint legitimately NAMES the next block.
     // The question is whether either band rendered a list of rows at all.
     lists: document.querySelectorAll('.day-band-list').length,
-    passedHidden: !/Passed 4/.test(document.getElementById('app').innerHTML),
-    comingHidden: !/Coming 3/.test(document.getElementById('app').innerHTML),
+    // Scoped to the rendered ROWS, not a substring search of the whole innerHTML. A folded block's
+    // name legitimately appears elsewhere on the page: run this near midnight and the fixture
+    // squeezes everything into the same few minutes, so the visible "now" row carries a clash chip
+    // reading title="Overlaps Passed 0, … Passed 4". The old check matched that and failed at
+    // 00:41 while the fold itself was working perfectly — it was asserting on the wrong surface.
+    rowText: Array.from(document.querySelectorAll('.day-row')).map(r => r.textContent),
     bandText: Array.from(document.querySelectorAll('.day-band')).map(b => b.textContent.replace(/\s+/g, ' ').trim()),
   }));
   console.log('folded:', folded);
@@ -125,7 +129,8 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // Not rendered at all, rather than rendered-and-hidden: a CSS-hidden band still bloats the DOM
   // and is still found by every querySelector in the app.
   if (folded.lists !== 0) throw new Error('A closed band must render no row list at all');
-  if (!folded.passedHidden || !folded.comingHidden) throw new Error('A closed band must not render its rows into the DOM');
+  const foldedIn = folded.rowText.filter(t => /Passed \d|Coming \d/.test(t));
+  if (foldedIn.length) throw new Error('A closed band must not render its rows into the DOM: ' + foldedIn.join(' | '));
 
   // ---- 3. The bands say something useful while still closed ----
   console.log('band labels:', folded.bandText);

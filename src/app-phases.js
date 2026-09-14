@@ -144,6 +144,68 @@ function phaseActualRate(entry) {
   return weightTrendRateBetween(entry.startDate, until);
 }
 
+// ---- Calories ----
+//
+// A rate converts to calories by arithmetic: lb/week x 3500 / 7 = kcal/day, so -1.0 lb/wk IS
+// -500 kcal/day. 3500 is the conventional figure for a pound of fat and it's an approximation --
+// what keeps the result honest is that it's applied to the ROLLING TDEE, which is measured from
+// your own weight trend against what you actually ate rather than guessed from a formula.
+const CAL_PER_LB = 3500;
+// The drift problem: as you lose weight your TDEE falls, so holding the same deficit means eating
+// less over time. The app re-reads it weekly rather than moving the number under you day to day,
+// and only speaks up when the change is bigger than the noise in the estimate itself. Below this a
+// new figure would be a nag, not information.
+const PHASE_CALORIE_DRIFT_MIN = 50;
+const PHASE_CALORIE_RECHECK_DAYS = 7;
+
+// What this phase's rate works out to in calories, against the rolling TDEE as it stands now.
+// Null when there isn't enough logged to estimate a TDEE at all -- the same "not yet" posture as
+// the rest of this feature, since a target seeded from a guess is worse than no target.
+function phaseCalorieSeed(entry) {
+  const rolling = rollingTdeeEstimate();
+  if (!rolling) return null;
+  const deltaPerDay = Math.round(entry.plannedLbPerWeek * CAL_PER_LB / 7);
+  return {
+    tdee: rolling.estimate,
+    deltaPerDay,
+    target: rolling.estimate + deltaPerDay,
+    weeksUsed: rolling.weeksUsed,
+  };
+}
+
+// THE choke point for "what am I eating against on this day?". Everything that compares calories
+// reads through here so the answer can never differ between two screens.
+//
+// Step 6 adds a rung above the phase target: a deload or active-rest week overrides to maintenance,
+// because eating at a deficit through a deload defeats the point of taking one. The order below is
+// already the order it will keep.
+function calorieTargetForDate(dateStr) {
+  const entry = phaseForDate(dateStr, 'weight');
+  if (entry && entry.phase.calorieTarget != null) {
+    return { calories: Math.round(entry.phase.calorieTarget), source: 'phase', label: entry.phase.label, entry };
+  }
+  // No phase, or a phase nobody set a target on: STATE.diet.tdee is maintenance, which is the right
+  // thing to compare against when nothing has claimed the number.
+  if (STATE.diet.tdee) return { calories: Math.round(STATE.diet.tdee), source: 'tdee', label: 'TDEE', entry: null };
+  return null;
+}
+
+// Has the target drifted far enough, and long enough ago, to be worth re-offering? Returns null far
+// more often than not, which is the point -- this must never feel like the app pestering you to
+// eat less every time you weigh yourself.
+function phaseCalorieDrift(entry) {
+  const p = entry.phase;
+  // Only the phase you're actually in. A future phase can't have drifted yet, and a past one is
+  // history -- rewriting what it told you to eat after the fact would be rewriting the record.
+  if (entry.state !== 'current' || p.calorieTarget == null) return null;
+  if (p.calorieSetOn && daysBetween(p.calorieSetOn, todayStr()) < PHASE_CALORIE_RECHECK_DAYS) return null;
+  const seed = phaseCalorieSeed(entry);
+  if (!seed) return null;
+  const diff = seed.target - p.calorieTarget;
+  if (Math.abs(diff) < PHASE_CALORIE_DRIFT_MIN) return null;
+  return { suggested: seed.target, stored: Math.round(p.calorieTarget), diff, tdee: seed.tdee, weeksUsed: seed.weeksUsed };
+}
+
 // ---- Mutations ----
 
 // A new phase is seeded to CLOSE THE GAP rather than arrive blank: it takes the weeks the plan
@@ -172,8 +234,49 @@ function addPhase(goalId) {
     weeks,
     direction: pct === 0 ? 'maintain' : r < 0 ? 'deficit' : 'surplus',
     ratePctPerWeek: pct,
+    // Left unset rather than seeded here: a calorie target is a number you'll eat against every day
+    // for weeks, so it gets an explicit "use this" the same way the TDEE estimate does. Adding a
+    // phase shouldn't quietly change what you're eating.
+    calorieTarget: null,
+    calorieSetOn: null,
     createdAt: Date.now(),
   });
+  saveState();
+  render();
+}
+
+function seedPhaseCalorieTarget(id) {
+  const p = (STATE.phases || []).find(x => x.id === id);
+  if (!p) return;
+  const entry = phaseSchedule((STATE.goals || []).find(g => g.id === p.goalId)).find(s => s.phase.id === id);
+  const seed = entry && phaseCalorieSeed(entry);
+  if (!seed) { showToast('Not enough logged yet to estimate a TDEE'); return; }
+  p.calorieTarget = seed.target;
+  p.calorieSetOn = todayStr();
+  saveState();
+  showToast(`Target set to ${seed.target} cal/day`);
+  render();
+}
+
+function updatePhaseCalorieTarget(id, value) {
+  const p = (STATE.phases || []).find(x => x.id === id);
+  if (!p) return;
+  const n = Math.round(Number(value));
+  p.calorieTarget = (value === '' || !isFinite(n) || n <= 0) ? null : n;
+  // Stamped on every deliberate edit, so the weekly re-check counts from when YOU last decided --
+  // not from when the app last offered.
+  p.calorieSetOn = p.calorieTarget == null ? null : todayStr();
+  saveState();
+  render();
+}
+
+// "Keep mine." Resets the weekly clock without changing the number, so the same offer doesn't
+// reappear tomorrow -- declining is an answer, and an app that asks again immediately isn't
+// listening.
+function dismissPhaseCalorieDrift(id) {
+  const p = (STATE.phases || []).find(x => x.id === id);
+  if (!p) return;
+  p.calorieSetOn = todayStr();
   saveState();
   render();
 }
@@ -299,6 +402,8 @@ function renderPhaseCard(entry) {
         </div>`}
       </div>
 
+      ${renderPhaseCalories(entry)}
+
       <div class="phase-actions">
         <button class="btn btn-sm" onclick="extendPhase('${p.id}',1)" title="Everything after this moves out a week; your pace is left alone">+1 WK</button>
         <button class="btn btn-sm" onclick="extendPhase('${p.id}',-1)">&minus;1 WK</button>
@@ -307,6 +412,40 @@ function renderPhaseCard(entry) {
         <button class="btn btn-sm btn-danger" onclick="deletePhase('${p.id}')">DELETE</button>
       </div>
     </div>`;
+}
+
+// The calorie target: what the phase's rate actually asks you to eat. Editable, because the seed is
+// an estimate and you're allowed to disagree with it, and because a phase can run flat maintenance
+// at a number the arithmetic wouldn't have picked.
+function renderPhaseCalories(entry) {
+  const p = entry.phase;
+  const seed = phaseCalorieSeed(entry);
+  const drift = phaseCalorieDrift(entry);
+  const set = p.calorieTarget != null;
+  return `
+    <div class="phase-cal">
+      <label class="field"><span class="lbl">Calories/day</span>
+        <input type="number" step="10" min="0" inputmode="numeric"
+               value="${set ? Math.round(p.calorieTarget) : ''}" placeholder="not set"
+               onchange="updatePhaseCalorieTarget('${p.id}',this.value)"></label>
+      <button class="btn btn-sm" onclick="seedPhaseCalorieTarget('${p.id}')" ${seed ? '' : 'disabled'}>
+        ${set ? 'RE-SEED' : 'FROM TDEE'}
+      </button>
+    </div>
+    <div class="phase-cal-note">
+      ${seed
+        ? `${seed.tdee} cal rolling TDEE ${seed.deltaPerDay < 0 ? '&minus;' : '+'} ${Math.abs(seed.deltaPerDay)} for this phase's rate = <b style="color:var(--text)">${seed.target}</b>`
+        : 'Needs about two weeks of weights and calories logged before a TDEE can be estimated.'}
+    </div>
+    ${drift ? `
+      <div class="phase-drift">
+        <div class="sugtext">Your TDEE has moved &mdash; ${seed.weeksUsed} weeks of data now says ${drift.diff < 0 ? 'less' : 'more'}</div>
+        <div class="sugval">${drift.stored} &rarr; ${drift.suggested} cal</div>
+        <div class="phase-drift-actions">
+          <button class="btn btn-good btn-sm" onclick="updatePhaseCalorieTarget('${p.id}',${drift.suggested})">USE THIS</button>
+          <button class="btn btn-ghost btn-sm" onclick="dismissPhaseCalorieDrift('${p.id}')">KEEP MINE</button>
+        </div>
+      </div>` : ''}`;
 }
 
 // The line that makes the phases worth writing down: what they add up to, against what you asked

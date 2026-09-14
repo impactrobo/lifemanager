@@ -855,6 +855,27 @@ input[type="text"].phase-label {
 
 .phase-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 11px; }
 
+/* The calorie target sits on its own row rather than as a fourth control column -- it's the one
+   number here you'll act on every day, and a 4-up grid on a phone would squeeze all four. */
+.phase-cal { display: flex; gap: 8px; align-items: flex-end; margin-top: 11px; }
+.phase-cal .field { margin-bottom: 0; flex: 1 1 auto; min-width: 0; }
+.phase-cal input { font-size: 14px; }
+.phase-cal .btn { flex: none; }
+.phase-cal-note { font-size: 11px; color: var(--text-faint); line-height: 1.5; margin-top: 5px; }
+
+/* Stacked, not .suggestion-box's side-by-side: two buttons in a column beside the text wrapped
+   "USE THIS" and "KEEP MINE" onto two lines each at phone width. Same offer, room to read it. */
+.phase-drift {
+  margin-top: 9px; padding: 10px 11px;
+  background: var(--accent-soft); border: 1px solid var(--accent); border-radius: var(--radius);
+}
+.phase-drift-actions { display: flex; gap: 8px; margin-top: 9px; }
+.phase-drift-actions .btn { flex: 1 1 0; }
+
+/* Says WHICH target a figure came from. Per-phase targets mean the number you eat against lives in
+   two places depending on the day, so every screen showing one names its source. */
+.cal-source { font-size: 11px; color: var(--text-faint); line-height: 1.5; margin-top: 4px; }
+
 .phase-sum {
   margin-top: 10px; padding: 10px 13px;
   background: var(--surface2); border: 1px solid var(--border-soft); border-radius: var(--radius);

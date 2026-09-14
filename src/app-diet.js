@@ -536,6 +536,10 @@ function renderDietLog() {
   ensureDietLogState();
   const entries = dietLogEntriesFor(NAV.dietLogDate);
   const totals = computeMealTotals(entries);
+  // Per-day, not global: an active phase's calorie target takes over from STATE.diet.tdee, and this
+  // screen can be paged back into days a different phase covered. calorieTargetForDate() in
+  // app-phases.js is the only place that decides which number wins.
+  const calTarget = calorieTargetForDate(NAV.dietLogDate);
   const d = new Date(NAV.dietLogDate + 'T00:00:00');
   const label = d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
   const isToday = NAV.dietLogDate === todayStr();
@@ -567,7 +571,10 @@ function renderDietLog() {
     ${entries.length ? `
       <div class="panel">
         <div class="subtle-label" style="margin-bottom:8px;">TOTALS FOR THIS DAY</div>
-        <div class="row"><span style="font-size:13px;color:var(--text-dim)">Calories</span><span class="mono" style="font-weight:700">${Math.round(totals.cal)}${STATE.diet.tdee ? ` / ${STATE.diet.tdee}` : ''}</span></div>
+        <div class="row"><span style="font-size:13px;color:var(--text-dim)">Calories</span><span class="mono" style="font-weight:700">${Math.round(totals.cal)}${calTarget ? ` / ${calTarget.calories}` : ''}</span></div>
+        ${calTarget ? `<div class="cal-source">${calTarget.source === 'phase'
+          ? `target from phase &ldquo;${escapeHtml(calTarget.label)}&rdquo;`
+          : `target from your TDEE &mdash; no phase target covers this day`}</div>` : ''}
         <div class="row"><span style="font-size:13px;color:var(--text-dim)">Protein (g)</span><span class="mono" style="font-weight:700">${roundMacro(totals.protein)}${STATE.diet.proteinG ? ` / ${STATE.diet.proteinG}` : ''}</span></div>
         <div class="row"><span style="font-size:13px;color:var(--text-dim)">Carbs (g)</span><span class="mono" style="font-weight:700">${roundMacro(totals.carb)}${STATE.diet.carbG ? ` / ${STATE.diet.carbG}` : ''}</span></div>
         <div class="row"><span style="font-size:13px;color:var(--text-dim)">Fat (g)</span><span class="mono" style="font-weight:700">${roundMacro(totals.fat)}${STATE.diet.fatG ? ` / ${STATE.diet.fatG}` : ''}</span></div>
@@ -980,6 +987,16 @@ function renderDietSetup() {
         <input type="number" value="${STATE.diet.tdee ?? ''}" onchange="updateTDEE(this.value)">
       </label>
       <div style="font-size:11px; color:var(--text-faint); margin-top:4px;">Your estimated Total Daily Energy Expenditure — used as a reference point for diet planning.</div>
+      ${(() => {
+        // Naming which number is actually in effect. Per-phase targets mean the figure you're
+        // eating against lives in two places depending on context, so the screen that ISN'T
+        // currently winning has to say so — otherwise this field silently reads as the target
+        // while the Diet log compares against something else entirely.
+        const t = calorieTargetForDate(todayStr());
+        return t && t.source === 'phase'
+          ? `<div class="cal-source" style="margin-top:6px;">Not what today is compared against — phase &ldquo;${escapeHtml(t.label)}&rdquo; sets <b style="color:var(--text)">${t.calories} cal/day</b>. Health &amp; Diet &rarr; GOAL to change it.</div>`
+          : '';
+      })()}
       <button class="btn btn-ghost btn-sm" style="margin-top:10px;" onclick="toggleTDEECalc()">${UI.tdeeCalcOpen ? 'HIDE' : 'OPEN'} CALCULATOR</button>
     </div>
     ${calcPanel}

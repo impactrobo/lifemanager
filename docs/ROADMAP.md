@@ -385,6 +385,41 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **The calorie loop: per-phase targets and weekly TDEE drift (2026-09-14).** Step 4 of "Phases Own
+  the Plan", and the point at which the rolling TDEE earns its keep.
+  - **A rate converts to calories by arithmetic** — lb/week x 3500 / 7 = kcal/day, so -1.0 lb/wk *is*
+    -500 kcal/day. What keeps it honest is that the delta is applied to the **rolling TDEE**, measured
+    from your own weight trend against what you actually ate, rather than to a formula's guess.
+  - **`calorieTargetForDate(date)` is the only thing that decides which number wins.** Order: the
+    phase covering that date, then `STATE.diet.tdee`, then nothing. It's per-DAY, not global, because
+    the Diet log pages backwards into days a different phase covered. Step 6 adds one rung above it —
+    a deload week overriding to maintenance — and the order is already the order it will keep.
+  - **Both screens name their source.** Per-phase targets mean the number you're eating against lives
+    in two places depending on the day, so the Diet log says *"target from phase 'Push to race'"* and
+    the TDEE field says *"Not what today is compared against"* when a phase has taken over. Without
+    that, the TDEE field silently reads as the target while the log compares against something else.
+  - **It never moves on its own.** As you lose weight your TDEE falls, so a fixed deficit quietly
+    means eating less over time. The app re-reads weekly (`PHASE_CALORIE_RECHECK_DAYS`) and only
+    speaks up past `PHASE_CALORIE_DRIFT_MIN` (50 cal) — below that a new figure is inside the
+    estimate's own error and would be a nag. **Accepting and declining are both answers:** "KEEP MINE"
+    resets the weekly clock without changing the number, so a declined offer isn't re-asked tomorrow.
+  - **Only the current phase is ever re-offered.** A future phase can't have drifted; a past one is
+    history, and rewriting what it told you to eat after the fact would be rewriting the record.
+  - **Seeding refuses rather than guesses.** With no rolling estimate there's no seed and the button
+    says why — the same "not yet" posture as the rest of the feature.
+  - **Adding a phase leaves the target unset.** A calorie number you'll eat against daily for weeks
+    gets an explicit "use this", the same as the TDEE estimate; adding a phase shouldn't quietly
+    change what you're eating.
+  - One CSS call: the drift offer doesn't reuse `.suggestion-box` — two buttons in a column beside
+    its text wrapped "USE THIS" and "KEEP MINE" onto two lines each at phone width.
+
+- **Fixed a time-of-day flake in `test_day_fold.js` (2026-09-14).** It asserted a folded block's name
+  was absent from the whole `#app` innerHTML. Run near midnight, the fixture squeezes every block
+  into the same few minutes, so the *visible* "now" row legitimately carries a clash chip reading
+  `title="Overlaps Passed 0, … Passed 4"` — and the test failed at 00:41 while the fold itself worked
+  perfectly. Now scoped to the text of rendered `.day-row` elements. Asserting on the wrong surface,
+  not a real regression.
+
 - **Phases: the blocks a goal is actually run in (2026-09-13).** Step 3 of "Phases Own the Plan",
   in `src/app-phases.js`. Name, length, direction and rate per phase, shown under the active goal.
   Still no calorie authority (step 4) and no plan ownership (step 5) — this is the timeline and the

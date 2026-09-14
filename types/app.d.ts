@@ -204,6 +204,13 @@ interface GoalPhase {
   weeks: number;
   direction: 'deficit' | 'maintain' | 'surplus';
   ratePctPerWeek: number;
+  /** What to eat during this phase. Seeded from the rolling TDEE with the phase's rate applied, then
+   *  editable. While set, it takes over from STATE.diet.tdee as what the Diet log compares against --
+   *  calorieTargetForDate() is the only thing that decides which wins. */
+  calorieTarget: number | null;
+  /** When the target was last deliberately set, accepted or declined. The weekly drift re-check
+   *  counts from here, so declining an offer isn't re-asked tomorrow. */
+  calorieSetOn: string | null;
   createdAt: number;
 }
 

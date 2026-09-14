@@ -84,6 +84,10 @@ STATE = {
                                        // goal.startDate, never stored -- see src/app-phases.js
       direction: 'deficit'|'maintain'|'surplus',  // carries the sign
       ratePctPerWeek,                  // unsigned magnitude, %bw/wk, rounded to 2dp
+      calorieTarget,                   // null | number. While set, beats STATE.diet.tdee as what the
+                                       // Diet log compares against -- see calorieTargetForDate()
+      calorieSetOn,                    // null | 'YYYY-MM-DD'. When you last set/accepted/declined a
+                                       // target; the weekly drift re-check counts from here
       createdAt },
     ...                                // migrateState() drops any phase whose goal is gone
   ],
