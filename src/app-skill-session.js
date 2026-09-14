@@ -183,6 +183,24 @@ function skillWipStatus(skill) {
   return { inPhaseA, fresh, limit: SKILL_WIP_LIMIT, free: Math.max(0, SKILL_WIP_LIMIT - inPhaseA), over: inPhaseA > SKILL_WIP_LIMIT };
 }
 
+// What Phase A costs EVERY session, rather than what today's due list costs once.
+//
+// These are two genuinely different numbers and the difference is the whole point of the WIP limit.
+// A Phase B item due today is a one-off: practise it and it goes away for three sessions, or eight,
+// or twenty. A Phase A item comes back every single session by design -- that's the density the
+// cognitive stage wants -- so its floor is a STANDING commitment, not a one-off cost.
+//
+// Which makes this the figure that tells you what being over the ceiling actually costs. "Learning
+// 12 of 5" is a fact you can shrug at; "about 60 minutes of every session until some graduate" is
+// the same fact in the unit you'd make a decision in.
+function skillStandingMinutes(skill) {
+  let mins = 0;
+  (skill && skill.lists || []).forEach(l => (l.items || []).forEach(it => {
+    if (!it.mastered && skillItemPhase(it) === 'A') mins += skillItemFloorMinutes(it);
+  }));
+  return mins;
+}
+
 function skillItemIsStale(item, today) {
   // Retired means retired: a net that quietly re-caught mastered items would make the word mean
   // nothing. Never-practised isn't stale either -- it's new, and has its own admission rule.
@@ -450,6 +468,14 @@ function renderSkillSessionStarter(skill) {
     : over
       ? `${due.length} items ready — more than an hour's worth, so some will wait. About an hour is the most that pays for itself in one sitting.`
       : `${due.length} item${due.length === 1 ? '' : 's'} ready, about ${suggest} minutes to fit them all.`;
+  // The standing cost, in the same unit, tied to the word the badge uses. Only when there is one --
+  // a skill with nothing in Phase A has no recurring commitment to report, and a zero would read as
+  // a measurement rather than an absence.
+  const load = skillStandingMinutes(skill);
+  const standing = load ? `
+      <div class="skill-start-note skill-standing ${wip.over ? 'skill-standing-over' : ''}" style="margin-top:5px;">
+        Learning items come back every session — about <b>${load} min</b> of any session, until they graduate.
+      </div>` : '';
   return `
     <div class="panel skill-start">
       <div class="row" style="margin-bottom:10px;">
@@ -457,6 +483,7 @@ function renderSkillSessionStarter(skill) {
         <span class="skill-wip ${wip.over ? 'skill-wip-over' : ''}">Learning ${wip.inPhaseA} of ${wip.limit}</span>
       </div>
       <div class="skill-start-note">${note}</div>
+      ${standing}
       <div class="skill-add-row" style="padding:0; margin-top:10px;">
         <input type="number" min="5" step="5" value="${due.length ? suggest : 30}" id="skillSessionMinutes" placeholder="Minutes">
         <button class="btn btn-primary" onclick="startSkillSession('${skill.id}')">START</button>

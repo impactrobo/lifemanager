@@ -1104,6 +1104,12 @@ input[type="text"].skill-item-detail:focus { outline: none; color: var(--text); 
   color: var(--text-faint); font-variant-numeric: tabular-nums;
 }
 .skill-wip-over { color: var(--bad); }
+/* The standing cost sits under the one-off one and only raises its voice when the ceiling is
+   actually exceeded -- at which point it stops being background information and becomes the
+   explanation for the red number above it. */
+.skill-standing b { color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.skill-standing-over { color: var(--text-dim); }
+.skill-standing-over b { color: var(--bad); }
 
 .skill-run-head { padding: 11px 13px; margin-bottom: 0; }
 .skill-run-name { flex: 1 1 auto; min-width: 0; font-size: 15px; font-weight: 650; }

@@ -438,6 +438,20 @@ on an architecture split + a large wave of Maximalist aesthetics.
     bounds the session. Past that the panel says some will wait, which is what deferral is for,
     rather than naming a number that would make the practice worse. A suggestion only: the input is
     never capped, because the app doesn't overrule you about your own practice.
+  - **Two time figures, because they mean different things.** The one above is today's: what the due
+    list costs once. The second is the STANDING cost -- `skillStandingMinutes()`, the floors of
+    everything in Phase A. A Phase B item due today is a one-off (practise it and it's gone for
+    three sessions, or eight, or twenty); a Phase A item comes back every single session by design,
+    which is the density the cognitive stage wants. So its floor is a recurring commitment, and that
+    is what being over the ceiling actually costs. "Learning 12 of 5" is a fact you can shrug at;
+    "about 60 min of any session until they graduate" is the same fact in the unit you'd decide in.
+    The line is omitted entirely when Phase A is empty -- a zero there would read as a measurement
+    rather than an absence.
+  - **Noted, not built: the per-item minutes are advisory.** The runner has no active item, no
+    sequence and no timer; `6m` on a card is a plan the app never observes. A per-item countdown is
+    cheap (the rest timer already exists, with sound, vibration and a floating widget) but it is a
+    different posture -- a timer that nags mid-practice, rather than a plan you follow -- so it is a
+    deliberate non-decision rather than an oversight.
 
 - **Skills: the practice session and the ladder (2026-09-15).** Step 2 of 6. New file
   `src/app-skill-session.js` — block building, the two-dial taper, the WIP limit, weighted time

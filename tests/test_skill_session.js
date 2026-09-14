@@ -523,6 +523,45 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (/about \d+ minutes to fit them all/.test(nudge.twenty.html)) throw new Error('Past the cap it must not name an impossible total');
   if (nudge.empty.suggest !== 30) throw new Error('With nothing due it falls back to a plain 30, got ' + nudge.empty.suggest);
 
+  // The STANDING cost is a different number from the one-off, and the difference is the point of
+  // the WIP limit: a Phase B item due today goes away for three sessions once practised, while a
+  // Phase A item comes back every single session by design.
+  const standing = await page.evaluate(() => {
+    const mk = (spec) => {
+      STATE.skills = []; STATE.skillSession = null;
+      const s = defaultSkill('S');
+      const l = defaultSkillList('L', false);
+      spec.forEach((o, i) => {
+        const it = defaultSkillItem('i' + i);
+        Object.assign(it, { reps: o.reps, ease: 2.5, interval: o.reps > SKILL_PHASE_A_REPS ? 8 : 1,
+                            dueIn: 0, lastPractised: shiftDate(todayStr(), -1), mastered: !!o.mastered });
+        l.items.push(it);
+      });
+      s.lists = [l]; STATE.skills = [s];
+      return s;
+    };
+    const r = skill => ({ load: skillStandingMinutes(skill), html: renderSkillSessionStarter(skill) });
+    return {
+      // Three early Phase A items: 5 + 5 + 5 = 15 every session.
+      three: r(mk([{ reps: 1 }, { reps: 2 }, { reps: 2 }])),
+      // Mixed: 5 (reps 1) + 3 (reps 4) = 8. The Phase B item is due TODAY but costs nothing standing.
+      mixed: r(mk([{ reps: 1 }, { reps: 4 }, { reps: 6 }])),
+      // Nothing in Phase A at all: no recurring commitment to report.
+      none: r(mk([{ reps: 6 }, { reps: 7 }])),
+      // A mastered item is retired, so it can't be a standing cost either.
+      retired: r(mk([{ reps: 2 }, { reps: 2, mastered: true }])),
+    };
+  });
+  console.log('standing cost:', { three: standing.three.load, mixed: standing.mixed.load,
+                                  none: standing.none.load, retired: standing.retired.load });
+  if (standing.three.load !== 15) throw new Error('Three early Phase A items cost 15 min every session, got ' + standing.three.load);
+  if (standing.mixed.load !== 8) throw new Error('Only Phase A is a standing cost — the due Phase B item is a one-off. Got ' + standing.mixed.load);
+  if (standing.none.load !== 0) throw new Error('Nothing in Phase A is no recurring commitment, got ' + standing.none.load);
+  if (standing.retired.load !== 5) throw new Error('A mastered item is retired and cannot be a standing cost, got ' + standing.retired.load);
+  if (!/about <b>15 min<\/b> of any session/.test(standing.three.html)) throw new Error('The panel should name the standing figure');
+  // A zero would read as a measurement rather than an absence, so the line simply isn't emitted.
+  if (/come back every session/.test(standing.none.html)) throw new Error('With nothing in Phase A the standing line should not appear at all');
+
   // The read-out reads as a label, and only goes loud once genuinely over.
   const wipCopy = await page.evaluate(() => {
     const over = (() => {
