@@ -93,6 +93,15 @@ STATE = {
     ...                            // releases with no migration. A lift is PURE IDENTITY: no tiers,
   ],                               // no training max, no program. It outlives any plan using it,
                                    // which is why targets/PRs hang off liftId and not exercise ids
+  exTargets: [             // an exercise goal's named ambitions -- its progress IS its targets
+    { id, goalId, kind: '1rm'|'repMax'|'cardioTime'|'cardioVolume',
+      liftId, weightLb, reps,          // lift targets; 245x3 does NOT satisfy 225x5 (no e1RM, so a
+                                       // set must meet or exceed BOTH numbers)
+      distance, minutes, unit,         // cardio targets; a run is a run, so no lift to resolve
+      createdAt },
+    ...        // measured SINCE the goal started; the lifetime best shows alongside as context.
+               // No projection: strength and cardio move in steps and stalls
+  ],
   phases: [                // a goal's blocks, IN ORDER -- array position is the phase order
     { id, goalId, kind: 'weight', label,
       weeks,                           // the LENGTH. Start dates are DERIVED by running sum from

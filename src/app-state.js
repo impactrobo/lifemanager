@@ -37,6 +37,7 @@ function loadState() {
       goals: parsed.goals || [],
       phases: parsed.phases || [],
       lifts: parsed.lifts || [],
+      exTargets: parsed.exTargets || [],
       cardioWorkouts: parsed.cardioWorkouts || [],
       cardioLogs: parsed.cardioLogs || {},
       notes: parsed.notes || [],
@@ -382,6 +383,9 @@ function migrateState() {
   if (!Array.isArray(STATE.goals)) STATE.goals = [];
   if (!Array.isArray(STATE.phases)) STATE.phases = [];
   if (!Array.isArray(STATE.lifts)) STATE.lifts = [];
+  if (!Array.isArray(STATE.exTargets)) STATE.exTargets = [];
+  // A target whose goal is gone can never render; same reasoning as orphan phases.
+  STATE.exTargets = STATE.exTargets.filter(t => STATE.goals.some(g => g.id === t.goalId));
   // A phase whose goal is gone can never render or be reached, but it would keep being saved
   // and would silently reappear if an id were ever reused. Dropping them here is cheaper than
   // a guard at every read.

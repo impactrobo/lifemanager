@@ -939,6 +939,30 @@ input[type="text"].phase-label {
 .lift-row-name { font-weight: 600; min-width: 0; }
 .lift-row-short { font-size: 10px; color: var(--text-faint); font-family: var(--font-mono); flex: none; }
 .lift-add { border-top: 1px solid var(--border-soft); margin-top: 10px; }
+/* `.ehead`'s flex layout is scoped to `.entry-card .ehead`, so anything else using that class has to
+   declare its own -- without this the delete button drops onto its own line under a full-width
+   select. Third time this has bitten (see .phase-card .ehead above). */
+.ex-target .ehead { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.ex-target .ehead select { min-width: 0; }
+
+/* A reached target turns green and stays -- monotonic by nature, and nothing un-achieves it. */
+.ex-target-hit { border-color: var(--good); }
+.ex-target-hit-text { color: var(--good); }
+.ex-target-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 4px; }
+.ex-target-fields .field { margin-bottom: 0; }
+.ex-target-fields input { font-size: 14px; }
+
+/* The PR log: one cell per rep threshold, because "225 on the bar" and "225 for five" are different
+   achievements and a single number can't show both. */
+.pr-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(72px, 1fr)); gap: 6px; }
+.pr-cell {
+  padding: 7px 8px; border-radius: var(--radius);
+  background: var(--surface2); border: 1px solid var(--border-soft); text-align: center;
+}
+.pr-reps { font-size: 9px; font-weight: 700; letter-spacing: 0.06em; color: var(--text-faint); }
+.pr-weight { font-size: 16px; font-weight: 700; margin: 2px 0; font-variant-numeric: tabular-nums; }
+.pr-date { font-size: 9px; color: var(--text-faint); }
+
 .lift-muscle-chip {
   font-size: 9px; font-weight: 700; color: #1a1a1a;
   padding: 2px 7px; border-radius: 10px; flex: none;

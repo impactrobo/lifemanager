@@ -1163,11 +1163,13 @@ function renderExerciseProgress() {
     <button class="${NAV.progressSubtab==='bodymeasurement'?'active':''}" onclick="setProgressSubtab('bodymeasurement')">BODY MEASUREMENT</button>
     <button class="${NAV.progressSubtab==='volume'?'active':''}" onclick="setProgressSubtab('volume')">SET VOLUME</button>
     <button class="${NAV.progressSubtab==='compare'?'active':''}" onclick="setProgressSubtab('compare')">COMPARE</button>
+    <button class="${NAV.progressSubtab==='pr'?'active':''}" onclick="setProgressSubtab('pr')">PR LOG</button>
   `, { marginTop: false });
   let body;
   if (NAV.progressSubtab === 'bodyweight') body = renderBodyWeightChart();
   else if (NAV.progressSubtab === 'bodymeasurement') body = renderBodyMeasurementChart();
   else if (NAV.progressSubtab === 'compare') body = renderCompareView();
+  else if (NAV.progressSubtab === 'pr') body = renderPrLog();
   else body = renderVolume();
   return `<div class="screen">
     <div class="section-title">Exercise</div>

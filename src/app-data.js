@@ -780,6 +780,7 @@ function defaultState() {
     // Lifts you ADDED. The shipped LIFT_LIBRARY is never copied in here -- allLifts()
     // concatenates them, so the shipped list can grow between releases with no migration.
     lifts: [],
+    exTargets: [],
     logs: {},          // key `${cycle}_${workoutId}` -> {date, entries:{}, notes, complete} — every workout type shares this
     measurements: [],  // [{id,date,fields:{...cm/kg canonical},photos}] — photos is an array of resized data-URI JPEGs
     weightLog: [],     // [{id,date,weightLb,calories,cardioCalories}]

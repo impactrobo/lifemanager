@@ -242,6 +242,22 @@ interface Lift {
   muscle: string | null;
 }
 
+/** A named ambition for a lift or for cardio. Three of the four are personal bests -- monotonic,
+ *  achieved the moment you touch them. 'cardioVolume' is cumulative and window-bounded: meaningful
+ *  only inside its goal, always climbing, reset by the next one. */
+interface ExerciseTarget {
+  id: string;
+  goalId: string;
+  kind: '1rm' | 'repMax' | 'cardioTime' | 'cardioVolume';
+  liftId: string | null;
+  weightLb: number | null;
+  reps: number;
+  distance: number | null;
+  minutes: number | null;
+  unit: string;
+  createdAt: number;
+}
+
 interface DeloadStyle {
   setsPct: number;
   repsPct: number;
@@ -513,6 +529,7 @@ interface AppState {
   phases: GoalPhase[];
   /** Lifts ADDED by hand. The shipped library is concatenated at read time, never copied here. */
   lifts: Lift[];
+  exTargets: ExerciseTarget[];
   logs: Record<string, any>;
   measurements: MeasurementEntry[];
   weightLog: WeightLogEntry[];

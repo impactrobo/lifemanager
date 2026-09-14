@@ -385,6 +385,42 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Exercise targets, and the PR log (2026-09-14).** Step 8 of "Phases Own the Plan". A training
+  goal has no weight target, so **its progress IS its targets** — this is the piece that makes the
+  second goal type mean something.
+  - **`bestForLift(liftId, since)` is shared by both halves.** "Exercise PR log" sat on the backlog
+    unbuilt, and it's this feature from the other side: a PR log asks *when did I hit a new best?*, a
+    target asks *how far am I from a best I've named?* Building it once is why they can never
+    disagree about what your best is. `liftIdForLogEntry()` does the real work — mapping a log entry
+    back to a lift differs by workout shape (GZCL tier → category's `liftId`, `t3_<i>` → that slot's,
+    a flat entry key IS the exercise id), and one walk beats four call sites re-deriving it.
+  - **Deload sets are never personal bests.** The same reasoning `progressionLogFor()` exists for,
+    applied to a different question: reduced work on purpose can't be a best any more than it can be
+    a progression base.
+  - **Three deliberate limits**, all load-bearing:
+    - **245 × 3 does not satisfy 225 × 5.** Forced by ruling out e1RM — with no formula you can't
+      compare across rep ranges, so a set must meet or exceed *both* numbers. Conservative, and never
+      wrong in the direction that matters.
+    - **No projection.** Weight loss is roughly linear against a deficit, which is what makes
+      projecting it defensible; strength and cardio move in steps and stalls, so a straight line
+      would be confidently wrong most of the time — worse than silent. Current, target, gap.
+    - **Measured since the goal started.** A goal is about what you do during it, so a 250 from two
+      years ago doesn't complete one today. The **lifetime best sits alongside as context** — useful
+      precisely when the goal *is* getting back to something.
+  - **1RM and Rep Max stay two named types** rather than one `weight × reps` field: "I want 225 on
+    the bar" and "I want to own 225 for five" are different ambitions, and the vocabulary is already
+    the app's — `TEST_CONV_MAP` has carried 1RM/5RM/10RM for training-max work all along. A 1RM's
+    read-out shows the weight only; printing reps there would blur the distinction the split exists
+    to keep.
+  - **Three of the four are personal bests** — monotonic, achieved the moment you touch them. **Total
+    distance is cumulative and window-bounded**: meaningful only inside its goal, always climbing,
+    reset by the next one.
+  - **A cardio time reads the lowest minutes on any session that actually covered the distance.** A
+    run that fell short can't stand in for it however fast it was.
+  - Third time `.ehead` has bitten: its flex layout is scoped to `.entry-card .ehead`, so the target
+    card's delete button dropped onto its own line until it declared its own. Now asserted in the
+    test rather than just fixed.
+
 - **The lift library (2026-09-14).** Step 7 of "Phases Own the Plan", in `src/app-lifts.js`, and the
   prerequisite for everything below it — the piece that finally gives the app one durable way to
   name a lift.

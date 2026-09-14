@@ -373,6 +373,9 @@ function onPickLift(token, liftId) {
     assignLiftRef({ kind: 'exercise', workoutId: parts[1], id: parts[2] }, liftId);
   } else if (kind === 't3') {
     assignLiftRef({ kind: 't3', workoutId: parts[1], id: parts[2] }, liftId);
+  } else if (kind === 'extarget') {
+    const t = (STATE.exTargets || []).find(x => x.id === parts[1]);
+    if (t) t.liftId = liftId;
   } else if (kind === 'review') {
     assignLiftRef({ kind: parts[1], id: parts[2], workoutId: parts[3] || null }, liftId);
   }
@@ -428,4 +431,368 @@ function renderLiftReview() {
         }).join('')}
       </div>`
       : emptyState('Every exercise is linked to a lift. Nothing to review.')}`;
+}
+
+// ---- bestForLift(): the resolver targets and the PR log both needed ----
+//
+// "Exercise PR log" sat on the backlog unbuilt, and it is this feature seen from the other side: a
+// PR log asks "when did I hit a new best?", a target asks "how far am I from a best I've named?"
+// Both need the same missing thing, so it's built once.
+//
+// Mapping a LOG ENTRY back to a lift is the whole job, and it differs by workout shape:
+//   GZCL T1/T2  entry key is the tier -> workout[tier].categoryId -> that category's liftId
+//   GZCL T3     entry key is 't3_<i>' -> workout.t3[i].liftId
+//   flat list   entry key IS the exercise id -> that exercise's liftId
+// Walking every log once and asking each entry which lift it was is cheaper, and far less fragile,
+// than four call sites each re-deriving it.
+function liftIdForLogEntry(workout, entryKey) {
+  if (!workout) return null;
+  if (entryKey.indexOf('t3_') === 0) {
+    const slot = (workout.t3 || [])[Number(entryKey.split('_')[1])];
+    return (slot && slot.liftId) || null;
+  }
+  if (entryKey === 't1' || entryKey === 'ultra' || entryKey === 't2a' || entryKey === 't2b' || entryKey === 't2c') {
+    const tier = workout[entryKey === 'ultra' ? 't1' : entryKey];
+    const cat = tier && tier.categoryId ? getCategory(tier.categoryId) : null;
+    return (cat && cat.liftId) || null;
+  }
+  const ex = (workout.exercises || []).find(e => e.id === entryKey);
+  return (ex && ex.liftId) || null;
+}
+
+// Every set ever logged for a lift, newest first. `since` bounds it -- a goal is about what you do
+// DURING it, so a 225 from two years ago doesn't complete one set today.
+//
+// Deload sets are excluded. They're deliberately reduced work, so counting one toward a personal
+// best would be as wrong as letting it become a progression base -- the same reasoning
+// progressionLogFor() exists for, applied to a different question.
+function liftSetHistory(liftId, since) {
+  if (!liftId) return [];
+  const out = [];
+  Object.keys(STATE.logs).forEach(k => {
+    const log = STATE.logs[k];
+    if (!log || !log.date || logIsDeload(log)) return;
+    if (since && log.date < since) return;
+    const workoutId = k.slice(k.indexOf('_') + 1);
+    const workout = getWorkout(workoutId);
+    if (!workout) return;
+    Object.keys(log.entries || {}).forEach(entryKey => {
+      if (liftIdForLogEntry(workout, entryKey) !== liftId) return;
+      (log.entries[entryKey].sets || []).forEach(s => {
+        const weightLb = Number(s.weight), reps = Number(s.reps);
+        if (!isFinite(weightLb) || !isFinite(reps) || weightLb <= 0 || reps <= 0) return;
+        out.push({ date: log.date, weightLb, reps, workoutId, workoutName: workout.name });
+      });
+    });
+  });
+  return out.sort((a, b) => b.date.localeCompare(a.date));
+}
+
+// The best set for a lift, by two different definitions of "best" -- because "I want 225 on the bar"
+// and "I want to own 225 for five" are different ambitions, and one number can't answer both.
+//
+// `heaviest` is the top weight at any rep count. `bestAtReps(n)` is the top weight moved for AT
+// LEAST n reps, which is what a rep-max target needs.
+function bestForLift(liftId, since) {
+  const sets = liftSetHistory(liftId, since);
+  if (!sets.length) return null;
+  let heaviest = null, mostReps = null;
+  sets.forEach(s => {
+    if (!heaviest || s.weightLb > heaviest.weightLb) heaviest = s;
+    if (!mostReps || s.reps > mostReps.reps) mostReps = s;
+  });
+  return {
+    sets,
+    heaviest,
+    mostReps,
+    lastDate: sets[0].date,
+    sessions: new Set(sets.map(s => s.date)).size,
+    // The heaviest set that also hit at least `reps`. Null when nothing has.
+    bestAtReps: (reps) => sets.reduce((best, s) =>
+      (s.reps >= reps && (!best || s.weightLb > best.weightLb)) ? s : best, null),
+  };
+}
+
+// Cardio has no identity problem to solve -- a run is a run -- so these read every cardio log rather
+// than resolving a lift. Interval-style cardio tracks rounds, not distance, and simply contributes
+// nothing here.
+function cardioSessionsInRange(since, until) {
+  const out = [];
+  const cardioIds = new Set(workoutsByType('cardio').map(w => w.id));
+  Object.keys(STATE.logs).forEach(k => {
+    const workoutId = k.slice(k.indexOf('_') + 1);
+    if (!cardioIds.has(workoutId)) return;
+    const log = STATE.logs[k];
+    if (!log || !log.date) return;
+    if (since && log.date < since) return;
+    if (until && log.date > until) return;
+    out.push({
+      date: log.date, workoutId,
+      minutes: Number(log.actualMinutes) || 0,
+      distance: Number(log.actualDistance) || 0,
+      unit: (getWorkout(workoutId) || {}).targetDistanceUnit || 'mi',
+    });
+  });
+  return out.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+// ---- Exercise targets ----
+//
+// Four types. 1RM and Rep Max borrow vocabulary the app already speaks -- TEST_CONV_MAP has carried
+// 1RM/5RM/10RM for training-max work all along. Keeping them as two NAMED types rather than one
+// weight x reps field is what makes the intent legible.
+//
+// Three of the four are personal bests: monotonic, achieved the moment you touch them. Total volume
+// is cumulative and window-bounded -- meaningful only inside the goal, always climbing, reset by the
+// next one. Worth not rendering all four as the same bar.
+const EX_TARGET_TYPES = [
+  { key: '1rm', label: '1RM', needs: ['lift', 'weight'], cumulative: false },
+  { key: 'repMax', label: 'Rep max', needs: ['lift', 'weight', 'reps'], cumulative: false },
+  { key: 'cardioTime', label: 'Time for a distance', needs: ['distance', 'minutes'], cumulative: false },
+  { key: 'cardioVolume', label: 'Total distance', needs: ['distance'], cumulative: true },
+];
+function exTargetType(key) { return EX_TARGET_TYPES.find(t => t.key === key) || EX_TARGET_TYPES[0]; }
+
+function exerciseTargets(goalId) { return (STATE.exTargets || []).filter(t => t.goalId === goalId); }
+
+// Where a target stands: current, target, gap. Deliberately NO projection -- weight loss is roughly
+// linear against a deficit, which is what makes projecting it defensible, but strength and cardio
+// move in steps and stalls. A straight line through them would be confidently wrong most of the
+// time, and that is worse than saying nothing.
+function exTargetProgress(target, goal) {
+  const since = goal ? goal.startDate : null;
+  const type = exTargetType(target.kind);
+  const out = { target, type, since, reached: false, current: null, currentLabel: '—', targetLabel: '', gapLabel: null, lifetime: null, pct: 0 };
+
+  if (type.key === '1rm' || type.key === 'repMax') {
+    const want = Number(target.weightLb) || 0;
+    const reps = type.key === 'repMax' ? (Number(target.reps) || 1) : 1;
+    out.targetLabel = `${fmt(lbToDisplay(want), 1)} ${weightUnitLabel()}${type.key === 'repMax' ? ` × ${reps}` : ''}`;
+    const best = bestForLift(target.liftId, since);
+    const hit = best && best.bestAtReps(reps);
+    // 245 x 3 does NOT satisfy 225 x 5. Forced by ruling out e1RM: with no formula you can't compare
+    // across rep ranges, so a set must meet or exceed BOTH numbers. Conservative, and never wrong in
+    // the direction that matters.
+    if (hit) {
+      out.current = hit.weightLb;
+      // A 1RM target asks "is that weight on the bar?", so the rep count isn't part of the answer --
+      // printing it would read as a rep max and blur the distinction the two types exist to keep.
+      out.currentLabel = type.key === '1rm'
+        ? `${fmt(lbToDisplay(hit.weightLb), 1)} ${weightUnitLabel()}`
+        : `${fmt(lbToDisplay(hit.weightLb), 1)} ${weightUnitLabel()} × ${hit.reps}`;
+      out.reached = hit.weightLb >= want;
+      out.pct = Math.max(0, Math.min(100, (hit.weightLb / want) * 100));
+      if (!out.reached) out.gapLabel = `${fmt(lbToDisplay(want - hit.weightLb), 1)} ${weightUnitLabel()} to go`;
+      out.currentDate = hit.date;
+    } else {
+      out.currentLabel = best ? `nothing at × ${reps} yet` : 'not logged yet';
+    }
+    // The lifetime best sits alongside as context -- useful precisely when the goal IS getting back
+    // to something you've done before.
+    const life = bestForLift(target.liftId, null);
+    const lifeHit = life && life.bestAtReps(reps);
+    if (lifeHit && (!hit || lifeHit.weightLb > hit.weightLb)) {
+      out.lifetime = `${fmt(lbToDisplay(lifeHit.weightLb), 1)} ${weightUnitLabel()} × ${lifeHit.reps} on ${fmtGoalDate(lifeHit.date)}`;
+    }
+    return out;
+  }
+
+  if (type.key === 'cardioTime') {
+    const dist = Number(target.distance) || 0;
+    const mins = Number(target.minutes) || 0;
+    out.targetLabel = `${fmt(dist, 2)} ${target.unit || 'mi'} in ${fmtMinutes(mins)}`;
+    // Lowest minutes on ANY session that actually covered the distance. A session that fell short
+    // can't count however fast it was.
+    const qualifying = cardioSessionsInRange(since, null).filter(s => s.distance >= dist && s.minutes > 0);
+    if (qualifying.length) {
+      const best = qualifying.reduce((b, s) => (!b || s.minutes < b.minutes) ? s : b, null);
+      out.current = best.minutes;
+      out.currentLabel = fmtMinutes(best.minutes);
+      out.reached = best.minutes <= mins;
+      out.pct = Math.max(0, Math.min(100, (mins / best.minutes) * 100));
+      if (!out.reached) out.gapLabel = `${fmtMinutes(best.minutes - mins)} faster to go`;
+      out.currentDate = best.date;
+    } else {
+      out.currentLabel = `nothing at ${fmt(dist, 2)} ${target.unit || 'mi'} yet`;
+    }
+    return out;
+  }
+
+  // Total distance: cumulative and window-bounded. It only means anything inside the goal's dates,
+  // always climbs, and the next goal starts it over.
+  const want = Number(target.distance) || 0;
+  out.targetLabel = `${fmt(want, 1)} ${target.unit || 'mi'}`;
+  const sessions = cardioSessionsInRange(since, goal ? goal.targetDate : null);
+  const total = sessions.reduce((s, x) => s + x.distance, 0);
+  out.current = total;
+  out.currentLabel = `${fmt(total, 1)} ${target.unit || 'mi'}`;
+  out.reached = total >= want;
+  out.pct = want > 0 ? Math.max(0, Math.min(100, (total / want) * 100)) : 0;
+  if (!out.reached) out.gapLabel = `${fmt(want - total, 1)} ${target.unit || 'mi'} to go`;
+  out.sessionCount = sessions.length;
+  return out;
+}
+
+function fmtMinutes(mins) {
+  const m = Math.floor(Math.abs(mins));
+  const s = Math.round((Math.abs(mins) - m) * 60);
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+// ---- Mutations ----
+function addExerciseTarget(goalId) {
+  if (!Array.isArray(STATE.exTargets)) STATE.exTargets = [];
+  STATE.exTargets.push({
+    id: uid(), goalId, kind: '1rm',
+    liftId: null, weightLb: null, reps: 5,
+    distance: null, minutes: null, unit: 'mi',
+    createdAt: Date.now(),
+  });
+  saveState();
+  render();
+}
+function updateExTargetField(id, field, value) {
+  const t = (STATE.exTargets || []).find(x => x.id === id);
+  if (!t) return;
+  if (field === 'kind') { if (EX_TARGET_TYPES.some(x => x.key === value)) t.kind = value; }
+  else if (field === 'weight') { const n = Number(value); t.weightLb = n > 0 ? displayToLb(n) : null; }
+  else if (field === 'reps') { const n = Math.round(Number(value)); t.reps = n > 0 ? n : 1; }
+  else if (field === 'distance') { const n = Number(value); t.distance = n > 0 ? n : null; }
+  else if (field === 'minutes') { const n = Number(value); t.minutes = n > 0 ? n : null; }
+  else if (field === 'unit') { t.unit = value || 'mi'; }
+  saveState();
+  render();
+}
+function deleteExerciseTarget(id) {
+  STATE.exTargets = (STATE.exTargets || []).filter(x => x.id !== id);
+  saveState();
+  render();
+}
+
+// ---- Screen ----
+function renderExerciseTargets(goal) {
+  const targets = exerciseTargets(goal.id);
+  return `
+    <div class="row" style="margin:22px 0 8px;">
+      <div class="subtle-label" style="margin-bottom:0;">TARGETS</div>
+      <button class="btn btn-sm" onclick="addExerciseTarget('${goal.id}')">+ ADD TARGET</button>
+    </div>
+    ${targets.length
+      ? `<div class="stack">${targets.map(t => renderExTargetCard(t, goal)).join('')}</div>`
+      : emptyState('No targets yet. A training goal’s progress IS its targets — a lift and a number, or a distance and a time.')}`;
+}
+
+function renderExTargetCard(t, goal) {
+  const p = exTargetProgress(t, goal);
+  const type = p.type;
+  const lift = liftById(t.liftId);
+  const needsLift = type.needs.indexOf('lift') >= 0;
+  return `
+    <div class="panel ex-target ${p.reached ? 'ex-target-hit' : ''}">
+      <div class="ehead">
+        <select style="flex:1; font-weight:600;" onchange="updateExTargetField('${t.id}','kind',this.value)">
+          ${EX_TARGET_TYPES.map(x => `<option value="${x.key}"${x.key === t.kind ? ' selected' : ''}>${x.label}</option>`).join('')}
+        </select>
+        <button class="icon-btn" style="color:var(--bad);" onclick="deleteExerciseTarget('${t.id}')">${icon('close')}</button>
+      </div>
+
+      ${needsLift ? renderLiftLink(`extarget:${t.id}`, t.liftId) : ''}
+      <div class="ex-target-fields">
+        ${type.needs.indexOf('weight') >= 0 ? `
+          <label class="field"><span class="lbl">Weight (${weightUnitLabel()})</span>
+            <input type="number" step="0.5" min="0" inputmode="decimal" value="${t.weightLb != null ? fmt(lbToDisplay(t.weightLb), 1) : ''}"
+                   onchange="updateExTargetField('${t.id}','weight',this.value)"></label>` : ''}
+        ${type.needs.indexOf('reps') >= 0 ? `
+          <label class="field"><span class="lbl">Reps</span>
+            <input type="number" step="1" min="1" value="${t.reps || ''}"
+                   onchange="updateExTargetField('${t.id}','reps',this.value)"></label>` : ''}
+        ${type.needs.indexOf('distance') >= 0 ? `
+          <label class="field"><span class="lbl">Distance</span>
+            <input type="number" step="0.1" min="0" inputmode="decimal" value="${t.distance ?? ''}"
+                   onchange="updateExTargetField('${t.id}','distance',this.value)"></label>` : ''}
+        ${type.needs.indexOf('minutes') >= 0 ? `
+          <label class="field"><span class="lbl">Minutes</span>
+            <input type="number" step="0.1" min="0" inputmode="decimal" value="${t.minutes ?? ''}"
+                   onchange="updateExTargetField('${t.id}','minutes',this.value)"></label>` : ''}
+      </div>
+
+      ${needsLift && !lift
+        ? `<div class="phase-cal-note">Pick a lift and this starts reading your logs for it.</div>`
+        : `
+        <div class="goal-bar" title="${fmt(p.pct, 0)}%">
+          <div class="goal-bar-fill" style="width:${fmt(p.pct, 0)}%; ${p.reached ? 'background:var(--good);' : ''}"></div>
+        </div>
+        <div class="goal-rows">
+          <div class="goal-row">
+            <span class="goal-row-k">Target</span>
+            <span class="goal-row-v mono">${p.targetLabel}</span>
+            <span class="goal-row-x">${type.cumulative ? `since ${fmtGoalDate(goal.startDate)}` : 'best since the goal started'}</span>
+          </div>
+          <div class="goal-row">
+            <span class="goal-row-k">${type.cumulative ? 'So far' : 'Best'}</span>
+            <span class="goal-row-v mono ${p.reached ? 'ex-target-hit-text' : ''}">${p.currentLabel}</span>
+            <span class="goal-row-x">${p.reached
+              ? 'reached'
+              : p.gapLabel || (type.cumulative ? '' : 'no qualifying set yet')}</span>
+          </div>
+          ${p.lifetime ? `
+            <div class="goal-row">
+              <span class="goal-row-k">Lifetime</span>
+              <span class="goal-row-v mono" style="color:var(--text-dim);">${p.lifetime}</span>
+              <span class="goal-row-x">before this goal — context, not progress</span>
+            </div>` : ''}
+        </div>`}
+    </div>`;
+}
+
+// ---- The PR log ----
+//
+// The same resolver, asked the other question. Every lift you've ever logged, with its heaviest set
+// and its best at a few common rep counts -- which is exactly what a rep-max target reads, so the
+// two can never disagree about what your best is.
+function renderPrLog() {
+  const seen = new Map();
+  Object.keys(STATE.logs).forEach(k => {
+    const workout = getWorkout(k.slice(k.indexOf('_') + 1));
+    if (!workout) return;
+    Object.keys(STATE.logs[k].entries || {}).forEach(entryKey => {
+      const id = liftIdForLogEntry(workout, entryKey);
+      if (id) seen.set(id, true);
+    });
+  });
+  const rows = Array.from(seen.keys())
+    .map(id => ({ lift: liftById(id), best: bestForLift(id, null) }))
+    .filter(r => r.lift && r.best)
+    .sort((a, b) => b.best.lastDate.localeCompare(a.best.lastDate));
+  if (!rows.length) {
+    return emptyState('No PRs yet. Link your exercises to lifts in Setup → Exercise → LIFTS, then log some sets — a PR needs a durable name to hang off.');
+  }
+  return `
+    <div style="font-size:11px; color:var(--text-dim); margin:14px 0; line-height:1.6;">
+      Read from the same resolver your targets use, so the two can never disagree about what your best
+      is. Deload sets are excluded — reduced work on purpose isn’t a personal best.
+    </div>
+    <div class="stack">
+      ${rows.map(r => {
+        const reps = [1, 3, 5, 10].map(n => ({ n, set: r.best.bestAtReps(n) })).filter(x => x.set);
+        return `
+          <div class="panel">
+            <div class="ehead">
+              <div style="font-weight:700; font-size:14px;">${escapeHtml(r.lift.name)}</div>
+              ${r.lift.muscle ? `<span class="lift-muscle-chip" style="background:${muscleColor(r.lift.muscle) || 'var(--surface2)'};">${r.lift.muscle}</span>` : ''}
+            </div>
+            <div style="font-size:11px; color:var(--text-faint); margin-bottom:8px;">
+              ${r.best.sessions} session${r.best.sessions === 1 ? '' : 's'} · last ${fmtGoalDate(r.best.lastDate)}
+            </div>
+            <div class="pr-grid">
+              ${reps.map(x => `
+                <div class="pr-cell">
+                  <div class="pr-reps">${x.n} rep${x.n === 1 ? '' : 's'}+</div>
+                  <div class="pr-weight mono">${fmt(lbToDisplay(x.set.weightLb), 1)}</div>
+                  <div class="pr-date">${fmtGoalDate(x.set.date)}</div>
+                </div>`).join('')}
+            </div>
+          </div>`;
+      }).join('')}
+    </div>`;
 }

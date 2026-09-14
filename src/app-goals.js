@@ -10,13 +10,16 @@
 //
 // ---- The shape ----
 // A goal holds the destination and the deadline; the required rate is derived from them. Phases
-// (not built yet) will hold how hard you're pushing at any given moment. Keeping those at two
-// levels is what stops the usual fight where a date field and a rate field overwrite each other.
+// (app-phases.js) hold how hard you're pushing at any given moment. Keeping those at two levels is
+// what stops the usual fight where a date field and a rate field overwrite each other.
 //
-// `kind` is 'weight' today and will gain 'exercise' -- an exercise goal owns training the way a
-// weight goal owns calories. At most ONE of each is ever active: two concurrent training goals
-// would promise something the body can't deliver, since added cardio cuts into what you can
-// recover from in the weight room.
+// Two kinds. A WEIGHT goal owns the calorie target and has a pace, a projection and a rate band. An
+// EXERCISE goal owns training and has none of those -- its progress is its targets (app-lifts.js),
+// because strength and cardio move in steps and stalls rather than roughly linearly against a
+// deficit, so projecting them would be confidently wrong most of the time.
+//
+// At most ONE of each kind is ever active. Two concurrent training goals would promise something
+// the body can't deliver, since added cardio cuts into what you can recover from in the weight room.
 
 // Percent of bodyweight per week is the unit because what a rate *means* changes as you descend:
 // 1%/wk is 2.3 lb at 232 lb and 1.9 lb at 190 lb. These are the figures commonly cited in
@@ -280,6 +283,7 @@ function deleteGoal(id) {
     STATE.goals = (STATE.goals || []).filter(x => x.id !== id);
     // Phases are meaningless without the goal whose start date they're measured from.
     STATE.phases = (STATE.phases || []).filter(p => p.goalId !== id);
+    STATE.exTargets = (STATE.exTargets || []).filter(t => t.goalId !== id);
     saveState(); render();
   });
 }
@@ -340,9 +344,10 @@ function renderActiveExerciseGoal(goal) {
       <div style="font-size:11px; color:var(--text-faint); margin-top:8px; line-height:1.5;">
         No pace or projection here on purpose. Weight loss is roughly linear against a deficit, which is
         what makes projecting it defensible; strength and cardio move in steps and stalls, so a straight
-        line through them would be confidently wrong most of the time.
+        line through them would be confidently wrong most of the time. Its progress is its targets.
       </div>
     </div>
+    ${renderExerciseTargets(goal)}
     ${renderPhases(goal)}`;
 }
 
