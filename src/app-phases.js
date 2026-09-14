@@ -174,6 +174,20 @@ const EMPTY_WEEK_PLAN = () => ({ 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: []
 // stop working because a date passed, so it simply continues and the Planner says that it's doing so
 // rather than silently reverting you to a global plan you last touched months ago.
 function exercisePlanInEffect(dateStr) {
+  // Active rest comes first, because during it the block's OWN plan is not what you're running.
+  const rest = activeRestKindForDate(dateStr);
+  if (rest === 'light') {
+    // No plan at all, not a heavily reduced one. Light activity is the absence of a workout, and
+    // anything you do log is an ordinary cardio session -- already how a walk gets recorded.
+    return { plan: EMPTY_WEEK_PLAN(), source: 'activeRest', label: 'light activity', entry: phaseForDate(dateStr, 'exercise') };
+  }
+  if (rest === 'deload') {
+    // Week 1 deloads the OUTGOING plan -- you re-sensitise from what you were actually doing, not
+    // from the block that hasn't started in earnest yet. Resolved as "the day before this block".
+    const entry = phaseForDate(dateStr, 'exercise');
+    const outgoing = exercisePlanInEffect(shiftDate(entry.startDate, -1));
+    return { plan: outgoing.plan, source: 'activeRestDeload', label: outgoing.label || 'your previous plan', entry };
+  }
   let best = null;
   for (const g of (STATE.goals || [])) {
     if (g.kind !== 'exercise') continue;
@@ -252,9 +266,63 @@ function phaseDeloadWindow(entry) {
   if (entry.weeks < 2) return null;
   return { from: shiftDate(entry.endDate, -6), to: entry.endDate };
 }
+// ---- Active rest ----
+//
+// Active rest is not a light workout; it's the ABSENCE of one. Walking, an easy bike or hike, a
+// non-competitive kickabout -- nothing that counts as a workout, nothing that raises a sweat. So the
+// light-activity part carries no exercise plan AT ALL rather than a heavily reduced one: the plan is
+// empty, calories sit at maintenance, and anything you do logs as an ordinary cardio session, which
+// is already how a walk would be recorded.
+//
+// It leads a block rather than trailing it, its length is yours to set, and it isn't uniform:
+// WEEK 1 IS A REAL DELOAD -- the phase's Deload Style applied to the OUTGOING plan -- and the
+// remaining weeks are light activity. That ordering is the point. Re-sensitising to hypertrophy
+// needs a genuine deload first; dropping straight to nothing skips the step that does the work.
+function phaseActiveRestWindow(entry) {
+  const n = Math.max(0, Math.round(Number(entry && entry.phase.activeRestWeeks) || 0));
+  if (!n) return null;
+  // Never the whole block -- a block that is entirely active rest is a rest period, not a block.
+  const weeks = Math.min(n, Math.max(0, entry.weeks - 1));
+  if (!weeks) return null;
+  return { from: entry.startDate, to: shiftDate(entry.startDate, weeks * 7 - 1), weeks };
+}
+
+// Which half of an active-rest span a date falls in, or null. 'deload' is week 1, 'light' the rest.
+function activeRestKindForDate(dateStr) {
+  const entry = phaseForDate(dateStr, 'exercise');
+  const w = phaseActiveRestWindow(entry);
+  if (!w || dateStr < w.from || dateStr > w.to) return null;
+  return dateStr <= shiftDate(w.from, 6) ? 'deload' : 'light';
+}
+
 function dateIsDeloadWeek(dateStr) {
+  // Week 1 of an active rest is a standard deload, so it answers yes here too -- the scaling, the
+  // progression exclusion and the maintenance calories are all the same thing.
+  if (activeRestKindForDate(dateStr) === 'deload') return true;
   const w = phaseDeloadWindow(phaseForDate(dateStr, 'exercise'));
   return !!(w && dateStr >= w.from && dateStr <= w.to);
+}
+
+// The whole active-rest span eats at maintenance, not just its deload week. Light activity is a
+// planned break from training, and running a deficit through one wastes it the same way.
+function dateIsMaintenanceWeek(dateStr) {
+  return dateIsDeloadWeek(dateStr) || activeRestKindForDate(dateStr) === 'light';
+}
+
+// ---- Phase boundaries, for the charts ----
+//
+// Every phase start inside a window, both goal kinds, so a chart can divide a year of weight data
+// into the blocks it was actually produced by. Much more meaningful once several phases exist, which
+// is why this is the last thing built rather than the first.
+function phaseBoundaryMarks(fromDate, toDate) {
+  const marks = [];
+  (STATE.goals || []).forEach(g => {
+    phaseSchedule(g).forEach(s => {
+      if (s.startDate < fromDate || s.startDate > toDate) return;
+      marks.push({ date: s.startDate, label: s.phase.label, kind: g.kind });
+    });
+  });
+  return marks.sort((a, b) => a.date.localeCompare(b.date));
 }
 function deloadStyleForDate(dateStr) {
   const entry = phaseForDate(dateStr, 'exercise');
@@ -456,11 +524,17 @@ function calorieTargetForDate(dateStr) {
   //
   // With no weight goal running there is simply nothing to override: STATE.diet.tdee already IS
   // maintenance. The rule reads the same in both cases, it just has nothing to do in one of them.
-  if (dateIsDeloadWeek(dateStr)) {
+  if (dateIsMaintenanceWeek(dateStr)) {
     const rolling = rollingTdeeEstimate();
     const maintenance = rolling ? rolling.estimate : STATE.diet.tdee;
     if (maintenance) {
-      return { calories: Math.round(maintenance), source: 'deload', label: 'deload week', entry: null };
+      const rest = activeRestKindForDate(dateStr);
+      return {
+        calories: Math.round(maintenance),
+        source: 'deload',
+        label: rest === 'light' ? 'active rest' : rest === 'deload' ? 'active rest · deload week' : 'deload week',
+        entry: null,
+      };
     }
   }
   const entry = phaseForDate(dateStr, 'weight');
@@ -545,6 +619,15 @@ function addExercisePhase(goal) {
   });
   saveState();
   render();
+}
+
+function setPhaseActiveRest(id, delta) {
+  const p = (STATE.phases || []).find(x => x.id === id);
+  if (!p) return;
+  const weeks = Math.max(0, Math.round(Number(p.activeRestWeeks) || 0) + delta);
+  // Capped below the block's own length: a block that is entirely active rest isn't a block.
+  p.activeRestWeeks = Math.min(weeks, Math.max(0, (Number(p.weeks) || 1) - 1));
+  saveState(); render();
 }
 
 function togglePhaseDeload(id) {
@@ -729,6 +812,22 @@ function renderExercisePhaseBody(entry) {
         </div>
       </div>
       <div class="deload-bar" style="margin-top:11px;">
+        <div class="deload-bar-head">
+          <span>Leading active rest</span>
+          <span style="display:flex; gap:6px; align-items:center;">
+            <button class="btn btn-sm" onclick="setPhaseActiveRest('${p.id}',-1)">&minus;</button>
+            <b style="color:var(--text); min-width:52px; text-align:center;">${Math.max(0, Number(p.activeRestWeeks) || 0)} wk</b>
+            <button class="btn btn-sm" onclick="setPhaseActiveRest('${p.id}',1)">+</button>
+          </span>
+        </div>
+        <div class="phase-cal-note">
+          ${(Number(p.activeRestWeeks) || 0) > 0
+            ? `Week 1 is a real deload of whatever you were running before this block; the rest is light activity with no plan at all. Calories sit at maintenance throughout.`
+            : `Walking, an easy bike, a kickabout — the absence of a workout, not a light one. Week 1 would be a genuine deload first: dropping straight to nothing skips the step that re-sensitises you.`}
+        </div>
+      </div>
+
+      <div class="deload-bar" style="margin-top:8px;">
         <div class="deload-bar-head">
           <span>Last week deload</span>
           <button class="btn btn-sm ${p.deloadTrailing === false ? '' : 'btn-primary'}"

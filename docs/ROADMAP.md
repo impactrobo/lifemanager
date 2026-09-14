@@ -385,6 +385,36 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Active rest, phase lines on the charts, and COMPARE on the lift library (2026-09-14).** Steps
+  9-11 — the last three of "Phases Own the Plan", all small. **The scope is now fully built.**
+  - **Active rest is not a light workout — it's the absence of one.** Walking, an easy bike, a
+    kickabout: nothing that counts as a workout, nothing that raises a sweat. So the light-activity
+    weeks carry **no exercise plan at all** rather than a heavily reduced one, and anything you do
+    logs as an ordinary cardio session — already how a walk gets recorded.
+  - **It leads a block, its length is yours, and it isn't uniform.** Week 1 is a *genuine deload of
+    the outgoing plan* — you re-sensitise from what you were actually doing, not from the block that
+    hasn't started in earnest yet — with the remaining weeks light. That ordering is the point:
+    dropping straight to nothing skips the step that does the work. Capped below the block's own
+    length, because a block that is entirely active rest isn't a block.
+  - **The whole span eats at maintenance**, not just its deload week. `dateIsMaintenanceWeek()` is
+    the rung `calorieTargetForDate()` reads; running a deficit through light activity wastes it the
+    same way it wastes a deload.
+  - **Nothing warns about accumulated volume**, and that's deliberate. Overreaching late in a
+    hypertrophy block is the *plan* — you push past sustainable volume precisely because a deload and
+    active rest are coming. The app instruments the plan; it doesn't second-guess it.
+  - **Phase lines on the charts** (`phaseBoundaryPlugin`), on body weight, body measurement and every
+    COMPARE chart. These use a **category** x-axis, not a time scale, so a boundary is mapped to an
+    index and snapped to the first logged point at or after it — a block can start on a day you
+    didn't weigh in. Labels stagger onto two rows by goal kind, since the two timelines are
+    independent and regularly start on the same day, and any label that would collide is skipped.
+  - **COMPARE now reads the lift library**, which makes RP-style exercises and T3 accessories
+    chartable for the first time — the picker could only ever see T1/T2 category slots. Added
+    *alongside* the existing category+tier options rather than replacing them, deviating from the
+    scope: "Bench as a T1" and "Bench as a T2" are genuinely different slots with different loads,
+    and collapsing them would lose a distinction someone deliberately set up. `liftTopSetSeries()`
+    is built on the same resolver as the targets and the PR log — three readers, one definition of
+    "your best", so a deload set is excluded from all three.
+
 - **Exercise targets, and the PR log (2026-09-14).** Step 8 of "Phases Own the Plan". A training
   goal has no weight target, so **its progress IS its targets** — this is the piece that makes the
   second goal type mean something.

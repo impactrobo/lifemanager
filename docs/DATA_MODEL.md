@@ -119,6 +119,8 @@ STATE = {
       deloadTrailing,                  // undefined|true = last week is a deload; false = off. Applies
                                        // at DISPLAY time only; the saved workout is never edited
       deloadStyle,                     // { setsPct, repsPct, weightPct (50-100), accExercises }
+      activeRestWeeks,                 // LEADING weeks of active rest. Week 1 = a real deload of the
+                                       // OUTGOING plan; later weeks carry no plan at all
       createdAt },
     ...                                // migrateState() drops any phase whose goal is gone
   ],

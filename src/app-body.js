@@ -243,6 +243,71 @@ function trailingAverage(sortedEntries, windowDays) {
 }
 const WEIGHT_TREND_WINDOW_DAYS = 7;
 let weightChartInstance = null;
+// ---------------- Phase boundaries on the charts ----------------
+//
+// A year of weight data is much easier to read when you can see which block produced which stretch
+// of it -- "that plateau was the diet break" rather than an unexplained flat spot. Much more
+// meaningful once several phases exist, which is why it's built last rather than first.
+//
+// Every chart here uses a CATEGORY x-axis (labels are 'MM-DD' strings), not a time scale, so a
+// boundary can't be placed by date value -- it has to be mapped to an index in the label array. The
+// dates are handed in through the plugin's own options for exactly that reason; reading them back
+// out of the labels would mean re-parsing a display string.
+const phaseBoundaryPlugin = {
+  id: 'phaseBoundaries',
+  afterDatasetsDraw(chart, args, opts) {
+    const dates = opts && opts.dates;
+    if (!dates || dates.length < 2) return;
+    const marks = phaseBoundaryMarks(dates[0], dates[dates.length - 1]);
+    if (!marks.length) return;
+    const styles = getComputedStyle(document.documentElement);
+    const x = chart.scales.x, y = chart.scales.y;
+    const ctx = chart.ctx;
+    ctx.save();
+    // Two rows, one per goal kind, matching the line colours. Weight phases and training blocks run
+    // on independent timelines and regularly start on the same day, so a single row would guarantee
+    // a collision on exactly the dates that matter most.
+    const rowBottom = { weight: 0, exercise: 0 };
+    marks.forEach(m => {
+      // The first point at or after the boundary. A block can start on a day you didn't weigh in,
+      // so snapping to the next logged point is the honest placement -- the alternative is a line
+      // floating between ticks on an axis that has no room for it.
+      const idx = dates.findIndex(d => d >= m.date);
+      if (idx < 0) return;
+      const px = x.getPixelForValue(idx);
+      ctx.beginPath();
+      ctx.setLineDash([3, 3]);
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = styles.getPropertyValue(m.kind === 'weight' ? '--accent' : '--good').trim();
+      ctx.globalAlpha = 0.55;
+      ctx.moveTo(px, y.top);
+      ctx.lineTo(px, y.bottom);
+      ctx.stroke();
+      // A label is drawn only if it fits AND doesn't run into the previous one on its own row. A
+      // chart of overlapping names is worse than a chart of unexplained lines, and on a phone the
+      // blocks are often closer together than their names are wide.
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 0.85;
+      ctx.fillStyle = styles.getPropertyValue('--text-faint').trim();
+      ctx.font = '9px system-ui, sans-serif';
+      const label = m.label.length > 14 ? m.label.slice(0, 13) + '…' : m.label;
+      const w = ctx.measureText(label).width;
+      const row = m.kind === 'exercise' ? 1 : 0;
+      const key = m.kind === 'exercise' ? 'exercise' : 'weight';
+      if (px + 3 >= rowBottom[key] && px + 3 + w < x.right) {
+        ctx.fillText(label, px + 3, y.top + 9 + row * 11);
+        rowBottom[key] = px + 3 + w + 6;
+      }
+    });
+    ctx.restore();
+  },
+};
+
+// The dates a chart's points sit on, in the same order as its labels -- the plugin's only input.
+function phaseBoundaryOpts(series) {
+  return { dates: series.map(p => p.date) };
+}
+
 function drawWeightChart() {
   const canvas = document.getElementById('weightChart');
   if (!canvas || typeof Chart === 'undefined') return;
@@ -283,12 +348,16 @@ function drawWeightChart() {
     },
     options: {
       responsive: true,
-      plugins: { legend: { display: true, labels: { color: styles.getPropertyValue('--text-dim').trim(), font: { size: 10 }, boxWidth: 12 } } },
+      plugins: {
+        legend: { display: true, labels: { color: styles.getPropertyValue('--text-dim').trim(), font: { size: 10 }, boxWidth: 12 } },
+        phaseBoundaries: phaseBoundaryOpts(list),
+      },
       scales: {
         x: { ticks: { color: styles.getPropertyValue('--text-faint').trim(), font: {size: 10} }, grid: { color: styles.getPropertyValue('--border-soft').trim() } },
         y: { ticks: { color: styles.getPropertyValue('--text-faint').trim(), font: {size: 10}, callback: v => v + unitSuffix }, grid: { color: styles.getPropertyValue('--border-soft').trim() } },
       }
-    }
+    },
+    plugins: [phaseBoundaryPlugin],
   });
 }
 
@@ -363,12 +432,13 @@ function drawMeasurementChart() {
     },
     options: {
       responsive: true,
-      plugins: { legend: { display: false } },
+      plugins: { legend: { display: false }, phaseBoundaries: phaseBoundaryOpts(list) },
       scales: {
         x: { ticks: { color: styles.getPropertyValue('--text-faint').trim(), font: {size: 10} }, grid: { color: styles.getPropertyValue('--border-soft').trim() } },
         y: { ticks: { color: styles.getPropertyValue('--text-faint').trim(), font: {size: 10}, callback: v => v + ' ' + unitLabel }, grid: { color: styles.getPropertyValue('--border-soft').trim() } },
       }
-    }
+    },
+    plugins: [phaseBoundaryPlugin],
   });
 }
 
@@ -380,6 +450,40 @@ function emptyState(msg) {
 // Every (categoryId, tierKey) combo actually assigned to an enabled T1/T2 slot on some "weights"
 // workout, deduped — the picker list for the COMPARE view below. T3 accessories are deliberately
 // excluded: they have no Training Max concept to anchor a "lift" against, unlike T1/T2.
+// Every lift with logged sets, as a COMPARE option. This is the piece that makes RP-STYLE LIFTS
+// CHARTABLE FOR THE FIRST TIME -- trackedLiftSlots() below can only see T1/T2 category slots, so a
+// flat-list exercise or a T3 accessory has never been chartable however long you'd logged it.
+//
+// Added ALONGSIDE the category+tier options rather than replacing them. The scope said to point
+// liftHistorySeries() at liftId instead of categoryId, but "Bench as a T1" and "Bench as a T2" are
+// genuinely different slots with different loads, and collapsing them would lose a distinction
+// someone deliberately set up. Both views now exist and neither costs the other anything.
+function trackedLifts() {
+  const seen = new Set();
+  Object.keys(STATE.logs).forEach(k => {
+    const workout = getWorkout(k.slice(k.indexOf('_') + 1));
+    if (!workout) return;
+    Object.keys(STATE.logs[k].entries || {}).forEach(entryKey => {
+      const id = liftIdForLogEntry(workout, entryKey);
+      if (id) seen.add(id);
+    });
+  });
+  return [...seen].map(id => liftById(id)).filter(Boolean).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// One point per session: the heaviest completed set that day. Same shape as liftHistorySeries() so
+// the chart code can't tell them apart, and built on the same resolver the targets and PR log use --
+// three readers, one definition of "your best".
+function liftTopSetSeries(liftId) {
+  const byDate = new Map();
+  liftSetHistory(liftId, null).forEach(s => {
+    if (!byDate.has(s.date) || s.weightLb > byDate.get(s.date)) byDate.set(s.date, s.weightLb);
+  });
+  return [...byDate.entries()]
+    .map(([date, weightLb]) => ({ date, weightLb }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
 function trackedLiftSlots() {
   const seen = new Map();
   workoutsByType('weights').forEach(w => {
@@ -426,8 +530,13 @@ function liftHistorySeries(categoryId, tierKey) {
   return points;
 }
 function compareMetricId(categoryId, tierKey) { return `lift:${categoryId}:${tierKey}`; }
+function liftMetricId(liftId) { return `liftid:${liftId}`; }
 function compareMetricLabel(id) {
   if (id === 'bodyweight') return 'Body Weight';
+  if (id.indexOf('liftid:') === 0) {
+    const lift = liftById(id.slice(7));
+    return lift ? lift.name : 'Removed lift';
+  }
   const [, categoryId, tierKey] = id.split(':');
   const cat = getCategory(categoryId);
   return cat ? `${cat.name} (${tierKeyToField(tierKey)})` : 'Removed lift';
@@ -436,6 +545,7 @@ function compareMetricSeries(id) {
   if (id === 'bodyweight') {
     return [...STATE.weightLog].sort((a, b) => a.date.localeCompare(b.date)).map(e => ({ date: e.date, weightLb: e.weightLb }));
   }
+  if (id.indexOf('liftid:') === 0) return liftTopSetSeries(id.slice(7));
   const [, categoryId, tierKey] = id.split(':');
   return liftHistorySeries(categoryId, tierKey);
 }
@@ -457,18 +567,21 @@ function toggleCompareMetric(id) {
 // CDN allowlist).
 function renderCompareView() {
   const liftSlots = trackedLiftSlots();
+  const lifts = trackedLifts();
+  const chip = (id, label) =>
+    `<button class="tag-pill ${VIEW.compareSelected.includes(id)?'active':''}" onclick="toggleCompareMetric('${id}')">${escapeHtml(label)}</button>`;
   const chips = [
-    `<button class="tag-pill ${VIEW.compareSelected.includes('bodyweight')?'active':''}" onclick="toggleCompareMetric('bodyweight')">Body Weight</button>`,
-    ...liftSlots.map(s => {
-      const id = compareMetricId(s.categoryId, s.tierKey);
-      return `<button class="tag-pill ${VIEW.compareSelected.includes(id)?'active':''}" onclick="toggleCompareMetric('${id}')">${escapeHtml(s.label)}</button>`;
-    }),
+    chip('bodyweight', 'Body Weight'),
+    ...liftSlots.map(s => chip(compareMetricId(s.categoryId, s.tierKey), s.label)),
+    // Lifts, from the library. Anything you've logged appears here regardless of workout style, so
+    // RP-style exercises and T3 accessories are chartable for the first time.
+    ...lifts.map(l => chip(liftMetricId(l.id), l.name)),
   ].join('');
   const charts = VIEW.compareSelected.map(renderCompareMiniChart).join('');
   return `
-    <div style="font-size:11px; color:var(--text-dim); margin-bottom:8px;">Pick up to ${COMPARE_MAX_METRICS} to compare side by side — body weight and any lift with a Training Max tier (T1/T2) assigned in Setup &rarr; Workout Builder. Each point is the heaviest completed set logged that session, not just the programmed target.</div>
+    <div style="font-size:11px; color:var(--text-dim); margin-bottom:8px;">Pick up to ${COMPARE_MAX_METRICS} to compare side by side. Each point is the heaviest completed set logged that session, not just the programmed target. A lift charts whatever style it was logged in; a <b style="color:var(--text)">(T1)</b>/<b style="color:var(--text)">(T2)</b> entry is that tier's slot specifically.</div>
     <div class="tag-pill-row">${chips}</div>
-    ${liftSlots.length === 0 ? `<div style="font-size:11px; color:var(--text-faint); margin:8px 0 0;">No lifts tracked yet — assign a category to a T1/T2 slot under Setup &rarr; Workout Builder to see it here.</div>` : ''}
+    ${(liftSlots.length + lifts.length) === 0 ? `<div style="font-size:11px; color:var(--text-faint); margin:8px 0 0;">Nothing tracked yet — assign a category to a T1/T2 slot, or link an exercise to a lift under Setup &rarr; Exercise &rarr; LIFTS, then log some sets.</div>` : ''}
     <div style="margin-top:14px;">${charts || emptyState('Pick at least one metric above to see its chart.')}</div>`;
 }
 function renderCompareMiniChart(id) {
@@ -513,12 +626,13 @@ function drawCompareCharts() {
       },
       options: {
         responsive: true,
-        plugins: { legend: { display: false } },
+        plugins: { legend: { display: false }, phaseBoundaries: phaseBoundaryOpts(series) },
         scales: {
           x: { ticks: { color: styles.getPropertyValue('--text-faint').trim(), font: {size: 10} }, grid: { color: styles.getPropertyValue('--border-soft').trim() } },
           y: { ticks: { color: styles.getPropertyValue('--text-faint').trim(), font: {size: 10}, callback: v => v + ' ' + weightUnitLabel() }, grid: { color: styles.getPropertyValue('--border-soft').trim() } },
         }
-      }
+      },
+      plugins: [phaseBoundaryPlugin],
     });
   });
 }

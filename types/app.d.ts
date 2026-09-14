@@ -218,6 +218,10 @@ interface GoalPhase {
    *  `undefined` means a block that predates the feature -- which still gets one. */
   deloadTrailing?: boolean;
   deloadStyle?: DeloadStyle;
+  /** Exercise blocks: LEADING weeks of active rest. Week 1 is a real deload of the outgoing plan;
+   *  the rest carry no plan at all, because active rest is the absence of a workout rather than a
+   *  light one. Capped below the block's own length. */
+  activeRestWeeks?: number;
   /** What to eat during this phase. Seeded from the rolling TDEE with the phase's rate applied, then
    *  editable. While set, it takes over from STATE.diet.tdee as what the Diet log compares against --
    *  calorieTargetForDate() is the only thing that decides which wins. */
