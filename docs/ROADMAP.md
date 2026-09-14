@@ -414,6 +414,31 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Skills: nothing lies, nothing is lost (2026-09-15).** Step 1 of the "Closing the Loop" punch
+  list, which audited what steps 1-2 actually shipped. Three defects, all in one seam -- what
+  happens when the world changes underneath a block that's open on screen.
+  - **The finish toast counted taps, not applications.** `finishSkillSession()` reported
+    `rated.length` while the loop below it skipped any item deleted mid-session, so it could claim
+    three items rated when it moved two -- and wrote those ids into the practice-log entry, leaving
+    a dangling reference. It now reports what actually moved.
+  - **Deleting an item, list or skill ignored the open session.** Nothing crashed: the runner
+    rendered an empty string where the card had been, so you got a silent hole you couldn't explain.
+    `dropFromSkillSession()` removes the entries, recomputes the overflow offer (its numbers were
+    the floors of items that no longer exist), clears the session if nothing is left, and says so.
+  - **`extendSkillSession()` had a button and no test** -- the one path that rebuilds a block while
+    ratings already sit on it, and so the one place a rating could silently vanish. Now covered.
+  - **The WIP read-out earns its keep.** Decided rather than assumed: exceeding the limit stays
+    unscolded, because adding items can't trip it (a new item is reps 0; the limit counts Phase A)
+    and the only route past five is several Phase B items lapsing at once -- not something you
+    chose. Instead the read-out reads "Learning 8 of 5" in the warning colour and the panel names
+    the figure that makes it actionable: the summed floors of everything due, i.e. what it would
+    actually take. **Capped at one hour**, and not arbitrarily -- Baddeley & Longman (1978), the
+    study the two-dial taper already rests on, found one hour a day the most efficient per hour
+    invested, with longer massed sessions retaining worse. The same finding that spaces the items
+    bounds the session. Past that the panel says some will wait, which is what deferral is for,
+    rather than naming a number that would make the practice worse. A suggestion only: the input is
+    never capped, because the app doesn't overrule you about your own practice.
+
 - **Skills: the practice session and the ladder (2026-09-15).** Step 2 of 6. New file
   `src/app-skill-session.js` — block building, the two-dial taper, the WIP limit, weighted time
   allocation, AGAIN/HARD/GOOD/EASY, and the session runner. `tests/test_skill_session.js` asserts a

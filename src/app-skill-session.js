@@ -61,6 +61,12 @@ const SKILL_NEW_PER_SESSION = 2;
 // Below this many minutes of shortfall, deferring is a routine trim that just happens and says so
 // afterwards. At or above it, the block carries an offer to extend -- a line, never a modal.
 const SKILL_OVERFLOW_ASK_MIN = 10;
+// The longest session the starter will ever suggest, and the cap is not arbitrary. Baddeley &
+// Longman (1978) -- the postal-worker keyboard study the two-dial taper already rests on -- found
+// one hour a day the most efficient per hour invested, with longer massed sessions retaining
+// WORSE. The same finding that spaces the items bounds the session. It is only ever a SUGGESTION:
+// the input is never capped, because the app doesn't overrule you about your own practice.
+const SKILL_SESSION_MAX_SUGGEST = 60;
 
 // SM-2-shaped. `reps` walks the table in the header; ease moves by these deltas and clamps.
 //
@@ -355,12 +361,17 @@ function finishSkillSession() {
   const rated = session.items.filter(x => x.rating);
   if (!rated.length) { showToast('Rate at least one item, or abandon the session'); return; }
 
-  const ratedIds = {};
+  // `rated` is what you TAPPED; `applied` is what actually moved. They differ when an item was
+  // deleted mid-session, and reporting the first would have the toast claim three items rated when
+  // it moved two -- and put a dangling id in the log entry. dropFromSkillSession() below makes that
+  // rare, but the count that gets reported is the one that's true either way.
+  const ratedIds = {}, applied = [];
   rated.forEach(entry => {
     const found = skillItemById(skill, entry.itemId);
     if (!found) return;
     applySkillRating(found.item, entry.rating, session.date);
     ratedIds[entry.itemId] = true;
+    applied.push(entry);
   });
   // Every OTHER item in the skill ticks one session closer to due. That countdown is what makes
   // `dueIn` mean "sessions away" rather than "a number someone wrote down once".
@@ -377,12 +388,37 @@ function finishSkillSession() {
   skill.practiceLog.push({
     id: uid(), date: session.date, minutes: session.minutes,
     notes: inputVal('skillSessionNotes') || '',
-    itemIds: rated.map(x => x.itemId),
+    itemIds: applied.map(x => x.itemId),
   });
   STATE.skillSession = null;
   saveState();
-  showToast(`Session logged — ${rated.length} item${rated.length === 1 ? '' : 's'} rated`);
+  showToast(`Session logged — ${applied.length} item${applied.length === 1 ? '' : 's'} rated`);
   render();
+}
+
+// Deleting an item, a list or a whole skill can happen while a block is open on screen. Without
+// this the runner renders an empty string where a card was -- a silent hole you can't explain --
+// and the finish path skips it while still counting it. Drop it from the block instead.
+//
+// Returns how many entries went, so the caller can say so rather than leaving you to notice.
+function dropFromSkillSession(skill, ids) {
+  const session = activeSkillSession();
+  if (!session || !skill || session.skillId !== skill.id) return 0;
+  const gone = {};
+  (ids || []).forEach(id => { gone[id] = true; });
+  const before = session.items.length + (session.deferredIds || []).length;
+  session.items = session.items.filter(x => !gone[x.itemId]);
+  session.deferredIds = (session.deferredIds || []).filter(id => !gone[id]);
+  // The offer's numbers were the floors of items that no longer exist, so recompute rather than
+  // keep asking for minutes nobody owes any more.
+  const shortfall = session.deferredIds.reduce((sum, id) => {
+    const found = skillItemById(skill, id);
+    return sum + (found ? skillItemFloorMinutes(found.item) : 0);
+  }, 0);
+  session.overflow = shortfall >= SKILL_OVERFLOW_ASK_MIN ? { shortfall, count: session.deferredIds.length } : null;
+  // A block with nothing left in it isn't a shorter session, it's an empty screen.
+  if (!session.items.length) STATE.skillSession = null;
+  return before - session.items.length - session.deferredIds.length;
 }
 // The overflow offer: extend the block in place rather than abandoning and rebuilding, so nothing
 // already rated is lost.
@@ -405,19 +441,24 @@ function extendSkillSession(extraMinutes) {
 // just be a second place to lose it.
 function renderSkillSessionStarter(skill) {
   const wip = skillWipStatus(skill);
-  const ready = buildSkillBlock(skill, 30, todayStr());
-  const nothing = !ready.items.length;
+  const due = skillSessionCandidates(skill, todayStr());
+  const need = due.reduce((sum, c) => sum + skillItemFloorMinutes(c.item), 0);
+  const over = need > SKILL_SESSION_MAX_SUGGEST;
+  const suggest = Math.min(SKILL_SESSION_MAX_SUGGEST, Math.max(5, Math.ceil(need / 5) * 5));
+  const note = !due.length
+    ? 'Nothing is due — everything is ahead of schedule. Practise anyway and the block takes the closest items.'
+    : over
+      ? `${due.length} items ready — more than an hour's worth, so some will wait. About an hour is the most that pays for itself in one sitting.`
+      : `${due.length} item${due.length === 1 ? '' : 's'} ready, about ${suggest} minutes to fit them all.`;
   return `
     <div class="panel skill-start">
       <div class="row" style="margin-bottom:10px;">
         <div class="skill-start-title">PRACTICE SESSION</div>
-        <span class="skill-wip ${wip.over ? 'skill-wip-over' : ''}">${wip.inPhaseA} of ${wip.limit} learning slots</span>
+        <span class="skill-wip ${wip.over ? 'skill-wip-over' : ''}">Learning ${wip.inPhaseA} of ${wip.limit}</span>
       </div>
-      ${nothing
-        ? `<div class="skill-start-note">Nothing is due — everything is ahead of schedule. Practise anyway and the block will pick the closest items.</div>`
-        : `<div class="skill-start-note">${ready.items.length} item${ready.items.length === 1 ? '' : 's'} ready. You give it minutes; it picks what gets them.</div>`}
+      <div class="skill-start-note">${note}</div>
       <div class="skill-add-row" style="padding:0; margin-top:10px;">
-        <input type="number" min="5" step="5" value="30" id="skillSessionMinutes" placeholder="Minutes">
+        <input type="number" min="5" step="5" value="${due.length ? suggest : 30}" id="skillSessionMinutes" placeholder="Minutes">
         <button class="btn btn-primary" onclick="startSkillSession('${skill.id}')">START</button>
       </div>
     </div>`;

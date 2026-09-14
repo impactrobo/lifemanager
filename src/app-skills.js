@@ -118,6 +118,9 @@ function deleteSkill(id) {
   showConfirm(`Delete “${s.name}”? Its lists and practice history go with it.`, () => {
     STATE.skills = allSkills().filter(x => x.id !== id);
     if (NAV.skillId === id) NAV.skillId = null;
+    // The session goes with the skill. loadState() drops an orphan on the next boot anyway, but
+    // leaving one live until then means the runner is on screen with nothing behind it.
+    if (STATE.skillSession && STATE.skillSession.skillId === id) STATE.skillSession = null;
     saveState(); render();
   });
 }
@@ -148,8 +151,11 @@ function deleteSkillList(skillId, listId) {
   const l = skillListById(s, listId);
   if (!s || !l) return;
   showConfirm(`Delete the “${l.name}” list and its ${(l.items || []).length} items?`, () => {
+    const ids = (l.items || []).map(x => x.id);
     s.lists = s.lists.filter(x => x.id !== listId);
     if (NAV.skillSubtab === listId) NAV.skillSubtab = 'log';
+    const dropped = dropFromSkillSession(s, ids);
+    if (dropped) showToast(`${dropped} item${dropped === 1 ? '' : 's'} removed from the block in progress`);
     saveState(); render();
   });
 }
@@ -178,6 +184,7 @@ function deleteSkillItem(skillId, itemId) {
   const found = skillItemById(s, itemId);
   if (!found) return;
   found.list.items = found.list.items.filter(x => x.id !== itemId);
+  if (dropFromSkillSession(s, [itemId])) showToast('Removed from the block in progress too');
   saveState(); render();
 }
 // The one rung you claim rather than earn. Reversible, for the day you find out you were wrong.

@@ -376,7 +376,178 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   console.log('orphaned session:', orphan);
   if (orphan !== null) throw new Error('A session pointing at a deleted skill must be dropped on load');
 
-  // ---- 7. Nothing reads the scheduling fields raw ----
+  // ---- 7. The world changing under an open session ----
+  //
+  // Deleting an item, a list or a skill can happen while a block is on screen. Before this was
+  // handled the runner rendered an empty string where a card had been — a silent hole — and the
+  // finish path skipped the item while the toast still counted it.
+  const underfoot = await page.evaluate(() => {
+    STATE.skills = []; STATE.skillSession = null;
+    const s = defaultSkill('S');
+    const keep = defaultSkillList('Keep', false);
+    const doomed = defaultSkillList('Doomed', false);
+    const prac = it => Object.assign(it, { reps: 2, ease: 2.5, interval: 1, dueIn: 0, lastPractised: shiftDate(todayStr(), -1) });
+    ['a', 'b', 'c'].forEach(n => keep.items.push(prac(defaultSkillItem(n))));
+    ['x', 'y'].forEach(n => doomed.items.push(prac(defaultSkillItem(n))));
+    s.lists = [keep, doomed];
+    STATE.skills = [s];
+    STATE.skillSession = buildSkillBlock(s, 60, todayStr());
+    const started = STATE.skillSession.items.length;
+
+    // One item, rated, then deleted: the block loses it AND the rating goes with it.
+    const victim = keep.items[0];
+    rateSkillSessionItem(victim.id, 'good');
+    deleteSkillItem(s.id, victim.id);
+    const afterItem = {
+      n: STATE.skillSession.items.length,
+      stillThere: STATE.skillSession.items.some(x => x.itemId === victim.id),
+    };
+
+    // A whole list, in one go.
+    deleteSkillList(s.id, doomed.id);
+    confirmYes();   // deleteSkillList() goes through showConfirm()
+    const afterList = STATE.skillSession ? STATE.skillSession.items.length : 0;
+
+    return { started, afterItem, afterList };
+  });
+  console.log('deleted underfoot:', JSON.stringify(underfoot));
+  if (underfoot.started !== 5) throw new Error('Five due items should all fit 60 minutes, got ' + underfoot.started);
+  if (underfoot.afterItem.stillThere) throw new Error('A deleted item must leave the block in progress');
+  if (underfoot.afterItem.n !== 4) throw new Error('Deleting one item drops exactly one entry, got ' + underfoot.afterItem.n);
+  if (underfoot.afterList !== 2) throw new Error('Deleting a two-item list drops both entries, got ' + underfoot.afterList);
+
+  // The count that gets reported is what MOVED, not what you tapped.
+  const honest = await page.evaluate(() => {
+    const s = skillById(STATE.skillSession.skillId);
+    STATE.skillSession.items.forEach(x => rateSkillSessionItem(x.itemId, 'good'));
+    const tapped = STATE.skillSession.items.length;
+    finishSkillSession();
+    const entry = s.practiceLog[s.practiceLog.length - 1];
+    return { tapped, logged: entry.itemIds.length, allResolve: entry.itemIds.every(id => !!skillItemById(s, id)) };
+  });
+  console.log('honest count:', honest);
+  if (honest.logged !== honest.tapped) throw new Error('Everything tapped should have applied here');
+  if (!honest.allResolve) throw new Error('The log entry must never hold an id that no longer exists');
+
+  // Deleting the skill takes its session with it, immediately — not just on the next boot.
+  const withSkill = await page.evaluate(() => {
+    const s = skillById(STATE.skills[0].id);
+    STATE.skillSession = buildSkillBlock(s, 30, todayStr());
+    const had = !!STATE.skillSession;
+    deleteSkill(s.id);
+    confirmYes();   // deleteSkill() goes through showConfirm()
+    return { had, now: STATE.skillSession };
+  });
+  console.log('skill deleted:', withSkill);
+  if (!withSkill.had || withSkill.now !== null) throw new Error('Deleting a skill must clear its open session at once');
+
+  // ---- 8. Extending an oversubscribed block keeps every rating ----
+  // The one path that rebuilds a block while ratings already sit on it, and so the one place a
+  // rating could silently vanish.
+  const extended = await page.evaluate(() => {
+    STATE.skills = []; STATE.skillSession = null;
+    const s = defaultSkill('E');
+    const l = defaultSkillList('L', false);
+    // Five early-Phase-A items: floors of 5 each, so 15 minutes holds three.
+    [1, 2, 3, 4, 5].forEach(i => {
+      const it = defaultSkillItem('i' + i);
+      Object.assign(it, { reps: 1, ease: 2.5, interval: 1, dueIn: 0, lastPractised: shiftDate(todayStr(), -1) });
+      l.items.push(it);
+    });
+    s.lists = [l];
+    STATE.skills = [s];
+    STATE.skillSession = buildSkillBlock(s, 15, todayStr());
+    const before = {
+      n: STATE.skillSession.items.length,
+      deferred: STATE.skillSession.deferredIds.length,
+      overflow: STATE.skillSession.overflow && STATE.skillSession.overflow.shortfall,
+    };
+    const firstId = STATE.skillSession.items[0].itemId;
+    const secondId = STATE.skillSession.items[1].itemId;
+    rateSkillSessionItem(firstId, 'easy');
+    rateSkillSessionItem(secondId, 'again');
+    extendSkillSession(STATE.skillSession.overflow.shortfall);
+    const find = id => STATE.skillSession.items.find(x => x.itemId === id);
+    return {
+      before,
+      after: { n: STATE.skillSession.items.length, minutes: STATE.skillSession.minutes,
+               total: STATE.skillSession.items.reduce((a, x) => a + x.minutes, 0),
+               deferred: STATE.skillSession.deferredIds.length },
+      kept: { first: find(firstId) && find(firstId).rating, second: find(secondId) && find(secondId).rating },
+    };
+  });
+  console.log('extended:', JSON.stringify(extended));
+  if (extended.before.n !== 3 || extended.before.deferred !== 2) throw new Error('15 minutes holds three 5-minute floors: ' + JSON.stringify(extended.before));
+  if (extended.after.n !== 5) throw new Error('Extending by the shortfall should admit everything, got ' + extended.after.n);
+  if (extended.after.deferred !== 0) throw new Error('Nothing should still be deferred after covering the shortfall');
+  if (extended.after.total !== extended.after.minutes) throw new Error('The extended block still spends exactly its budget');
+  if (extended.kept.first !== 'easy' || extended.kept.second !== 'again') {
+    throw new Error('Extending must carry every existing rating across: ' + JSON.stringify(extended.kept));
+  }
+
+  // ---- 9. The starter names the number rather than giving advice ----
+  const nudge = await page.evaluate(() => {
+    const mk = (n, reps) => {
+      STATE.skills = []; STATE.skillSession = null;
+      const s = defaultSkill('N');
+      const l = defaultSkillList('L', false);
+      for (let i = 0; i < n; i++) {
+        const it = defaultSkillItem('i' + i);
+        Object.assign(it, { reps, ease: 2.5, interval: 1, dueIn: 0, lastPractised: shiftDate(todayStr(), -1) });
+        l.items.push(it);
+      }
+      s.lists = [l]; STATE.skills = [s];
+      return s;
+    };
+    const read = skill => {
+      const html = renderSkillSessionStarter(skill);
+      const m = html.match(/value="(\d+)" id="skillSessionMinutes"/);
+      return { html, suggest: m && Number(m[1]) };
+    };
+    return {
+      // Four early Phase A items: floors of 5 each = 20 minutes.
+      four: read(mk(4, 1)),
+      // Twenty of them: 100 minutes of floor, well past the hour.
+      twenty: read(mk(20, 1)),
+      empty: read(mk(0, 1)),
+      cap: SKILL_SESSION_MAX_SUGGEST,
+    };
+  });
+  console.log('nudge:', { four: nudge.four.suggest, twenty: nudge.twenty.suggest, empty: nudge.empty.suggest });
+  if (nudge.four.suggest !== 20) throw new Error('Four 5-minute floors should suggest 20 minutes, got ' + nudge.four.suggest);
+  if (!/about 20 minutes/.test(nudge.four.html)) throw new Error('The panel should name the figure, not give advice');
+  // Past an hour the honest answer is that some will wait — which is what deferral is for — rather
+  // than a number that would make the practice worse. Baddeley & Longman is the reason for the cap.
+  if (nudge.twenty.suggest !== nudge.cap) throw new Error('The suggestion caps at an hour, got ' + nudge.twenty.suggest);
+  if (!/some will wait/.test(nudge.twenty.html)) throw new Error('Past the cap it should say some will wait');
+  if (/about \d+ minutes to fit them all/.test(nudge.twenty.html)) throw new Error('Past the cap it must not name an impossible total');
+  if (nudge.empty.suggest !== 30) throw new Error('With nothing due it falls back to a plain 30, got ' + nudge.empty.suggest);
+
+  // The read-out reads as a label, and only goes loud once genuinely over.
+  const wipCopy = await page.evaluate(() => {
+    const over = (() => {
+      const s = defaultSkill('W');
+      const l = defaultSkillList('L', false);
+      for (let i = 0; i < 8; i++) { const it = defaultSkillItem('i' + i); it.reps = 2; l.items.push(it); }
+      s.lists = [l]; STATE.skills = [s]; STATE.skillSession = null;
+      return renderSkillSessionStarter(s);
+    })();
+    const under = (() => {
+      const s = defaultSkill('W');
+      const l = defaultSkillList('L', false);
+      for (let i = 0; i < 3; i++) { const it = defaultSkillItem('i' + i); it.reps = 2; l.items.push(it); }
+      s.lists = [l]; STATE.skills = [s];
+      return renderSkillSessionStarter(s);
+    })();
+    return { over: /Learning 8 of 5/.test(over), overLoud: /skill-wip-over/.test(over),
+             under: /Learning 3 of 5/.test(under), underLoud: /skill-wip-over/.test(under) };
+  });
+  console.log('wip copy:', wipCopy);
+  if (!wipCopy.over || !wipCopy.under) throw new Error('The read-out should read "Learning n of 5": ' + JSON.stringify(wipCopy));
+  if (!wipCopy.overLoud) throw new Error('Going over should turn the read-out to the warning colour');
+  if (wipCopy.underLoud) throw new Error('Under the ceiling it stays quiet');
+
+  // ---- 10. Nothing reads the scheduling fields raw ----
   const src = appSource();
   const helpers = src.replace(/function skillClampEase[\s\S]*?\n}/, '').replace(/function skillItemReps[\s\S]*?\n}/, '');
   if (/\bitem\.ease \+ /.test(helpers)) throw new Error('Ease must move through applySkillRating(), which clamps');
