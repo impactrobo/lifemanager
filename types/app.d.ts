@@ -303,6 +303,9 @@ interface SkillSessionEntry {
   /** Seconds actually banked on this item. The first record of what a block COST rather than
    *  what it planned -- and a record only, never a requirement. */
   spentSec: number;
+  /** Mastery taken in the summary screen, applied at commit so nothing happens before you
+   *  confirm. */
+  master: boolean;
 }
 
 interface SkillSession {
@@ -314,6 +317,9 @@ interface SkillSession {
   deferredIds: string[];
   /** Only set when the shortfall is real rather than a routine trim. */
   overflow: { shortfall: number; count: number } | null;
+  /** In the pre-commit summary. A mode of the session, so a reload mid-review resumes there. */
+  reviewing: boolean;
+  notes: string;
 }
 
 interface SkillList {
@@ -331,7 +337,13 @@ interface Skill {
   archived: boolean;
   createdAt: number;
   lists: SkillList[];
-  practiceLog: { id: string; date: string; minutes: number; notes: string; itemIds: string[] }[];
+  practiceLog: {
+    id: string; date: string; minutes: number; notes: string;
+    /** What the session did, as ONE structure -- not a list of ids beside a map of ratings
+     *  beside a map of minutes. The parallel shape is the exact failure the Skill model exists
+     *  to avoid. Empty for entries logged by hand. */
+    moves: { itemId: string; rating: string; spentSec: number }[];
+  }[];
 }
 
 interface DeloadStyle {

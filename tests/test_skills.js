@@ -121,9 +121,9 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // ---- 4. Practice log, and the minutes rollup both read-outs share ----
   await page.evaluate(a => {
     const s = skillById(a.s);
-    s.practiceLog.push({ id: 'p1', date: todayStr(), minutes: 30, notes: '', itemIds: [] });
-    s.practiceLog.push({ id: 'p2', date: shiftDate(todayStr(), -2), minutes: 45, notes: '', itemIds: [] });
-    s.practiceLog.push({ id: 'p3', date: shiftDate(todayStr(), -60), minutes: 120, notes: '', itemIds: [] });
+    s.practiceLog.push({ id: 'p1', date: todayStr(), minutes: 30, notes: '', moves: [] });
+    s.practiceLog.push({ id: 'p2', date: shiftDate(todayStr(), -2), minutes: 45, notes: '', moves: [] });
+    s.practiceLog.push({ id: 'p3', date: shiftDate(todayStr(), -60), minutes: 120, notes: '', moves: [] });
     saveState();
   }, { s: skillId });
   const mins = await page.evaluate(a => ({

@@ -122,17 +122,28 @@ STATE = {
           ] },             // INDEX into a shipped constant, so reordering one item silently moved
         ...                // every status after it. Same reasoning as lifts.
       ],
-      practiceLog: [ { id, date, minutes, notes, itemIds }, ... ] },  // itemIds: which items the
-    ...                                                   // session actually rated
+      practiceLog: [                     // what a session DID, as one structure -- not a list of
+        { id, date, minutes, notes,     // ids beside a map of ratings beside a map of minutes.
+          moves: [ { itemId,            // A parallel shape here would be the same failure the
+                     rating,            // Skill model exists to avoid. Empty for hand-logged
+                     spentSec } ] },    // entries -- they moved nothing.
+        ...
+      ] },
   ],
   skillSession: null | {   // the practice block you are in the MIDDLE of. In STATE, not UI: a
     skillId, date,         // session spans real minutes at a guitar or a desk, and a reload or a
     minutes,               // backgrounded phone must not lose it. One at a time.
     items: [ { itemId, listId, minutes, isNew, stale,
-               rating } ], // 'again'|'hard'|'good'|'easy'|null -- held HERE until the session is
-                           // finished, so a mis-tap is one more tap rather than an interval to unpick
+               rating,     // 'again'|'hard'|'good'|'easy'|null -- held HERE until you CONFIRM, so
+                           // a mis-tap is one more tap rather than an interval to unpick
+               timerEndsAt,// the focus timer's end time (not a counter -- survives backgrounding)
+               spentSec,   // what the timer actually banked. 0 when you never ran one
+               master } ], // mastery taken in the summary, applied at commit
     deferredIds,           // cut to fit; they get their deferrals bump when the session finishes
     overflow,              // null | { shortfall, count } -- only when it's a real shortfall, not a trim
+    reviewing,             // in the pre-commit summary. A MODE of the session, so a reload mid-
+                           // review comes back where you left off
+    notes,                 // carried between the block and the summary, which both show the field
   },
   phases: [                // a goal's blocks, IN ORDER -- array position is the phase order
     { id, goalId, kind: 'weight', label,

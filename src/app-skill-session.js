@@ -142,8 +142,10 @@ function skillNextIntervalFrom(prevInterval, ease, newReps, ratingKey) {
 // not need to be taught from scratch. The cost is that "again" no longer drops an item to NEW --
 // landing in LEARNING is the more honest reading anyway.
 //
-// Mutates the item and returns what it looked like before, so a caller can show the move.
-function applySkillRating(item, ratingKey, dateStr) {
+// PURE: what the item would become, without touching it. The summary screen previews from this and
+// the commit path applies it, so the two can never disagree -- two implementations of the same
+// table would drift, and the drift would be invisible until it had already moved your intervals.
+function nextSkillItemState(item, ratingKey, dateStr) {
   const r = skillRating(ratingKey);
   if (!item || !r) return null;
   const before = { reps: skillItemReps(item), ease: skillClampEase(item.ease), interval: Math.max(0, Number(item.interval) || 0) };
@@ -162,13 +164,18 @@ function applySkillRating(item, ratingKey, dateStr) {
   else if (r.key === 'good') reps = before.reps + 1;
   else reps = before.reps + 2;                       // easy skips a rung, straight past part of the taper
 
-  item.ease = ease;
-  item.reps = reps;
-  item.interval = skillNextIntervalFrom(before.interval, ease, reps, r.key);
-  item.dueIn = item.interval;
-  item.lastPractised = dateStr || todayStr();
-  item.deferrals = 0;
-  return before;
+  const interval = skillNextIntervalFrom(before.interval, ease, reps, r.key);
+  return {
+    before,
+    after: { reps, ease, interval, dueIn: interval, lastPractised: dateStr || todayStr(), deferrals: 0 },
+  };
+}
+// The thin mutating wrapper. Returns the `before` snapshot, as it always has.
+function applySkillRating(item, ratingKey, dateStr) {
+  const move = nextSkillItemState(item, ratingKey, dateStr);
+  if (!move) return null;
+  Object.assign(item, move.after);
+  return move.before;
 }
 
 // ---- The WIP read-out ----
@@ -311,11 +318,17 @@ function buildSkillBlock(skill, minutes, today) {
     skillId: skill.id,
     date: t,
     minutes: budget,
+    // Set by FINISH, cleared by BACK. The summary is a MODE of the session rather than a
+    // separate thing, so a reload mid-review comes back where you left off.
+    reviewing: false,
+    notes: '',
     items: admitted.map((c, i) => ({
       itemId: c.item.id, listId: c.list.id, minutes: alloc[i],
       isNew: c.isNew, stale: c.stale, rating: null,
       // The focus timer's state, per item. Both stay null/0 unless you actually run one.
       timerEndsAt: null, spentSec: 0,
+      // Mastery taken in the summary, applied at commit.
+      master: false,
     })),
     deferredIds: deferred.map(c => c.item.id),
     // Routine trimming just happens and says so afterwards; only a real shortfall earns a line
@@ -374,6 +387,44 @@ function rateSkillSessionItem(itemId, ratingKey) {
   entry.rating = entry.rating === ratingKey ? null : ratingKey;
   saveState(); render();
 }
+// FINISH opens the summary; it does not commit. Everything up to this point has been reversible --
+// any rating can be re-tapped at any time -- and this is the last moment that's true, so it's the
+// moment to show what you're about to do. Catching a mis-tap here costs a tap; catching it
+// afterwards would need an undo that turns the practice log into a transaction journal.
+function reviewSkillSession() {
+  const session = activeSkillSession();
+  if (!session) return;
+  if (!session.items.some(x => x.rating)) { showToast('Rate at least one item, or abandon the session'); return; }
+  // The notes field exists on both screens, so carry what's in it across. render() replaces the
+  // markup wholesale, and anything typed but unread would simply be gone.
+  captureSkillSessionNotes();
+  session.reviewing = true;
+  saveState(); render();
+}
+function backToSkillSession() {
+  const session = activeSkillSession();
+  if (!session) return;
+  captureSkillSessionNotes();
+  session.reviewing = false;
+  saveState(); render();
+}
+function captureSkillSessionNotes() {
+  const session = activeSkillSession();
+  if (!session) return;
+  const el = document.getElementById('skillSessionNotes');
+  if (el) session.notes = el.value || '';
+}
+// Offered in the summary because that's where you earn it -- crossing interval 20 happens mid-block,
+// and the item list is three screens away. Recorded as an INTENT and applied at commit with
+// everything else, so the summary stays a place where nothing has happened yet.
+function toggleSkillSessionMaster(itemId) {
+  const session = activeSkillSession();
+  const entry = session && session.items.find(x => x.itemId === itemId);
+  if (!entry) return;
+  entry.master = !entry.master;
+  saveState(); render();
+}
+
 function finishSkillSession() {
   const session = activeSkillSession();
   if (!session) return;
@@ -390,6 +441,8 @@ function finishSkillSession() {
     const found = skillItemById(skill, entry.itemId);
     if (!found) return;
     applySkillRating(found.item, entry.rating, session.date);
+    // The mastery intent taken in the summary, applied here with everything else.
+    if (entry.master) found.item.mastered = true;
     ratedIds[entry.itemId] = true;
     applied.push(entry);
   });
@@ -407,8 +460,12 @@ function finishSkillSession() {
 
   skill.practiceLog.push({
     id: uid(), date: session.date, minutes: session.minutes,
-    notes: inputVal('skillSessionNotes') || '',
-    itemIds: applied.map(x => x.itemId),
+    notes: inputVal('skillSessionNotes') || session.notes || '',
+    // ONE structure, not a list of ids beside a map of ratings beside a map of minutes. The parallel
+    // shape is the exact failure the Skill model exists to avoid, and a log entry is no more immune
+    // to it than the guitar catalogues were. `spentSec` is whatever the focus timer actually banked
+    // -- the first record of what a block COST rather than what it planned, and 0 when no timer ran.
+    moves: applied.map(x => ({ itemId: x.itemId, rating: x.rating, spentSec: Math.round(Number(x.spentSec) || 0) })),
   });
   STATE.skillSession = null;
   saveState();
@@ -607,7 +664,77 @@ function renderSkillItemTimer(entry) {
     onclick="startSkillItemTimer('${entry.itemId}')" title="Start ${entry.minutes} minutes">${label}</button>`;
 }
 
+// Where a rating lands on the ladder, in both directions. Rank alone isn't enough: two ratings can
+// leave an item in the same band and still move it (reps 1 -> 2 is LEARNING either side), so the
+// interval breaks the tie and "unchanged" means genuinely unchanged.
+const SKILL_BAND_ORDER = ['new', 'learning', 'proficient', 'expert', 'mastered'];
+function skillMoveDirection(before, after) {
+  const rb = SKILL_BAND_ORDER.indexOf(before.key), ra = SKILL_BAND_ORDER.indexOf(after.key);
+  if (ra !== rb) return ra > rb ? 'up' : 'down';
+  if (after.interval > before.interval) return 'up';
+  if (after.interval < before.interval) return 'down';
+  return 'flat';
+}
+function skillDuePhrase(interval) {
+  if (interval <= 0) return 'not scheduled';
+  return interval === 1 ? 'every session' : `every ${interval} sessions`;
+}
+
+function renderSkillSessionSummary(skill, session) {
+  const rated = session.items.filter(x => x.rating);
+  const rows = rated.map(entry => {
+    const found = skillItemById(skill, entry.itemId);
+    if (!found) return '';
+    const it = found.item;
+    const move = nextSkillItemState(it, entry.rating, session.date);
+    const beforeBand = skillItemBand(it);
+    const afterBand = skillItemBand({ interval: move.after.interval, mastered: false });
+    const dir = skillMoveDirection(
+      { key: beforeBand.key, interval: move.before.interval },
+      { key: afterBand.key, interval: move.after.interval });
+    const r = skillRating(entry.rating);
+    const sameBand = beforeBand.key === afterBand.key;
+    const offer = move.after.interval >= SKILL_MASTER_AT && !it.mastered;
+    return `
+      <div class="panel skill-move skill-move-${dir}">
+        <div class="ehead">
+          <div class="skill-run-name">${escapeHtml(it.name)}</div>
+          <span class="skill-band skill-verdict-${r.key}">${r.label}</span>
+        </div>
+        <div class="skill-move-line">
+          ${sameBand
+            ? `<span class="skill-band skill-band-${afterBand.key}">${afterBand.label}</span>`
+            : `<span class="skill-band skill-band-${beforeBand.key}">${beforeBand.label}</span>
+               <span class="skill-move-arrow">&rarr;</span>
+               <span class="skill-band skill-band-${afterBand.key}">${afterBand.label}</span>`}
+          <span class="skill-move-due">${dir === 'flat' ? 'unchanged' : skillDuePhrase(move.after.interval)}</span>
+        </div>
+        ${offer ? `
+          <button class="btn btn-sm btn-block ${entry.master ? 'btn-good' : ''}" style="margin-top:9px;"
+                  onclick="toggleSkillSessionMaster('${entry.itemId}')">
+            ${entry.master ? '&check; RETIRING IT — TAP TO KEEP PRACTISING' : 'READY TO MASTER — RETIRE IT?'}
+          </button>` : ''}
+      </div>`;
+  }).join('');
+
+  const skipped = session.items.length - rated.length;
+  return `
+    <div class="panel skill-run-head">
+      <div class="skill-start-title">BEFORE YOU COMMIT</div>
+      <div class="skill-start-note" style="margin-top:2px;">
+        ${rated.length} item${rated.length === 1 ? '' : 's'} will move${skipped ? `, ${skipped} left unrated` : ''}.
+        Nothing has happened yet.
+      </div>
+    </div>
+    <div class="stack" style="margin-top:10px;">${rows}</div>
+    <label class="field" style="margin-top:14px;"><span class="lbl">Notes</span>
+      <textarea id="skillSessionNotes" placeholder="What did you work on?">${escapeHtml(session.notes || '')}</textarea></label>
+    <button class="btn btn-primary btn-block" onclick="finishSkillSession()">CONFIRM &amp; LOG</button>
+    <button class="btn btn-block" style="margin-top:8px;" onclick="backToSkillSession()">&#8249; BACK TO THE BLOCK</button>`;
+}
+
 function renderSkillSession(skill, session) {
+  if (session.reviewing) return renderSkillSessionSummary(skill, session);
   const done = session.items.filter(x => x.rating).length;
   const cards = session.items.map(entry => {
     const found = skillItemById(skill, entry.itemId);
@@ -658,6 +785,6 @@ function renderSkillSession(skill, session) {
     <div class="stack" style="margin-top:10px;">${cards}</div>
     ${overflow}
     <label class="field" style="margin-top:14px;"><span class="lbl">Notes</span>
-      <textarea id="skillSessionNotes" placeholder="What did you work on?"></textarea></label>
-    <button class="btn btn-primary btn-block" onclick="finishSkillSession()">FINISH SESSION</button>`;
+      <textarea id="skillSessionNotes" placeholder="What did you work on?">${escapeHtml(session.notes || '')}</textarea></label>
+    <button class="btn btn-primary btn-block" onclick="reviewSkillSession()">FINISH SESSION</button>`;
 }

@@ -414,6 +414,42 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Skills: confirm the moves before they commit (2026-09-15).** Step 2 of the "Closing the Loop"
+  punch list, and the resolution of the undo question rather than an answer to it.
+  - **FINISH opens a summary; it no longer commits.** Every rating is re-tappable right up to that
+    point, so it's the last moment nothing has happened — which makes it the moment to show what
+    you're about to do. One row per rated item: `EXPERT → LEARNING · every session`, a stripe down
+    the edge (green for a rung gained, red for one lost, neutral for one repeated), the verdict
+    chip, and BACK / CONFIRM & LOG.
+  - **This replaces undo, and is strictly better than it.** A wrong rating is caught at the moment
+    it would do damage rather than repaired after, and nothing has to be unwound because nothing has
+    yet happened. Undo would have turned the practice log into a transaction journal. (The premise
+    that prompted it was also wrong: a mis-tapped FINISH is *self-healing* — unrated items sit at
+    `dueIn: 0` and the countdown floors at zero, so they're simply still due next session.)
+  - **`nextSkillItemState()` is pure; `applySkillRating()` is now a thin mutating wrapper.** The
+    summary previews from it and the commit applies it, so the two can never disagree. Two
+    implementations of the same table would drift, and the drift would be invisible until it had
+    already moved someone's intervals.
+  - **Mastery is offered where you earn it.** You cross interval 20 mid-block; offering it only in
+    the item list meant offering it three screens from the session that earned it. Recorded as an
+    INTENT on the block and applied at commit, so the summary stays a place where nothing has
+    happened yet.
+  - **The log entry records what the session DID, as one structure.** `itemIds` becomes
+    `moves: [{itemId, rating, spentSec}]` — a list of ids beside a map of ratings beside a map of
+    minutes is the same parallel shape the Skill model exists to avoid, and a log entry is no more
+    immune to it. `spentSec` comes from the focus timer, so this is also the first record of what a
+    block cost rather than what it planned. `itemIds` had no readers in app code, so nothing was
+    kept for compatibility's sake.
+  - Direction needs both rank AND interval: two ratings can leave an item in the same band and still
+    move it (reps 1 → 2 is LEARNING either side), so "unchanged" means genuinely unchanged. And a
+    never-practised item rated AGAIN still reads as a gain — NEW → LEARNING is entering the ladder,
+    not falling down it.
+  - **Fifth time for the `.ehead` trap** (see `.phase-card`, `.ex-target`, `.skill-item`): its flex
+    layout is scoped to `.entry-card .ehead`, so the verdict chip dropped onto its own line until
+    `.skill-move .ehead` declared its own. Also caught in the same screenshot pass: the verdict chip
+    was coloured by the item's *band*, so two GOOD chips rendered differently depending on the rung
+    underneath them. It's coloured by the rating now, matching the four buttons in the runner.
+
 - **Skills: nothing lies, nothing is lost (2026-09-15).** Step 1 of the "Closing the Loop" punch
   list, which audited what steps 1-2 actually shipped. Three defects, all in one seam -- what
   happens when the world changes underneath a block that's open on screen.

@@ -1154,6 +1154,30 @@ input[type="text"].skill-item-detail:focus { outline: none; color: var(--text); 
 .skill-overflow { border-color: var(--warn); margin-top: 10px; }
 .skill-overflow-title { font-size: 12px; font-weight: 700; color: var(--warn); margin-bottom: 3px; }
 
+/* ---------- The pre-commit summary ---------- */
+/* Direction is the whole point of this screen, so it gets the one signal that reads without being
+   read: a stripe down the edge, green for a rung gained, red for one lost, neutral for a rung
+   repeated. Same --rung mechanism as the item cards -- a ::before rather than a border, because
+   several aesthetics restate `.panel`'s border-color and would repaint one out from under it. */
+.skill-move { --rung: var(--border); position: relative; padding-left: 17px; overflow: hidden; }
+.skill-move::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--rung); }
+.skill-move-up { --rung: var(--good); }
+.skill-move-down { --rung: var(--bad); }
+.skill-move-line { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; }
+.skill-move-arrow { color: var(--text-faint); font-size: 13px; }
+.skill-move-due { font-size: 11px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+/* FIFTH time: `.ehead`'s flex layout is scoped to `.entry-card .ehead`, so every other user of
+   the class declares its own (see .phase-card, .ex-target and .skill-item above). Without it the
+   verdict chip drops onto its own line under the item name. */
+.skill-move .ehead { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
+/* The verdict is coloured by the RATING, not by where the item landed. Taking the band's colour
+   meant two GOOD chips rendering differently depending on the rung underneath them, which reads
+   as a distinction that isn't there. These match the four rating buttons in the runner. */
+.skill-verdict-again { --rung: var(--bad); }
+.skill-verdict-hard  { --rung: var(--warn); }
+.skill-verdict-good  { --rung: var(--good); }
+.skill-verdict-easy  { --rung: var(--accent); }
+
 
 
 /* ---------- A checked-off reminder ---------- */

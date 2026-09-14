@@ -326,8 +326,86 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   await page.evaluate(() => rateSkillSessionItem(STATE.skillSession.items[1].itemId, 'again'));
   await settle(page);
   await page.fill('#skillSessionNotes', 'First run');
+  // FINISH opens the summary; it does not commit. Nothing may have moved at this point.
+  const reviewing = await page.evaluate(a => {
+    const ids = STATE.skillSession.items.map(x => x.itemId);
+    reviewSkillSession();
+    const skill = skillById(a.id);
+    return {
+      inReview: STATE.skillSession.reviewing,
+      untouched: ids.every(id => skillItemById(skill, id).item.reps === 0),
+      logged: skill.practiceLog.length,
+      notesCarried: STATE.skillSession.notes,
+    };
+  }, session);
+  await settle(page);
+  console.log('reviewing:', reviewing);
+  if (!reviewing.inReview) throw new Error('FINISH should open the summary, not commit');
+  if (!reviewing.untouched) throw new Error('Nothing may move before you confirm — that is the whole point of the screen');
+  if (reviewing.logged !== 0) throw new Error('No log entry is written until commit');
+  if (reviewing.notesCarried !== 'First run') throw new Error('Notes typed in the block must carry into the summary');
+
+  // The summary renders the move for each rated item, in both directions.
+  const summary = await page.evaluate(() => ({
+    html: document.querySelector('.screen').innerHTML,
+    rows: document.querySelectorAll('.skill-move').length,
+    up: document.querySelectorAll('.skill-move-up').length,
+    down: document.querySelectorAll('.skill-move-down').length,
+    hasBack: /backToSkillSession/.test(document.body.innerHTML),
+  }));
+  console.log('summary:', { rows: summary.rows, up: summary.up, down: summary.down });
+  if (summary.rows !== 2) throw new Error('One row per rated item, got ' + summary.rows);
+  // BOTH rows are gains here, including the AGAIN one — a never-practised item rated AGAIN still
+  // moves NEW -> LEARNING, because it has entered the ladder rather than fallen down it. A
+  // regression needs an item with something to lose, which the direct checks below cover.
+  if (summary.up !== 2) throw new Error('Both items enter the ladder here, got ' + summary.up + ' up-rows');
+  if (summary.down !== 0) throw new Error('Nothing can regress from NEW, got ' + summary.down);
+  if (!summary.hasBack) throw new Error('The summary needs a way back to the block');
+  if (!/NEW/.test(summary.html) || !/LEARNING/.test(summary.html)) throw new Error('The summary should name both ends of the move');
+
+  // Direction, directly. Rank alone isn't enough: two ratings can leave an item in the same band
+  // and still move it, so the interval breaks the tie and "unchanged" means genuinely unchanged.
+  const dirs = await page.evaluate(() => {
+    const mature = n => { const it = defaultSkillItem('x'); for (let i = 0; i < n; i++) applySkillRating(it, 'good', '2026-01-01'); return it; };
+    const move = (item, rating) => {
+      const m = nextSkillItemState(item, rating, '2026-02-01');
+      return skillMoveDirection(
+        { key: skillItemBand(item).key, interval: m.before.interval },
+        { key: skillItemBand({ interval: m.after.interval }).key, interval: m.after.interval });
+    };
+    return {
+      lapse: move(mature(7), 'again'),     // EXPERT -> LEARNING
+      hardMature: move(mature(7), 'hard'), // same rung, same gap
+      goodMature: move(mature(5), 'good'), // PROFICIENT -> EXPERT
+      // reps 1 -> 2 is LEARNING either side, and the interval doesn't move either: genuinely flat.
+      earlyGood: move(mature(1), 'good'),
+      // PURE: previewing must not touch the item.
+      pure: (() => { const it = mature(3); const snap = JSON.stringify(it); nextSkillItemState(it, 'again', '2026-02-01'); return JSON.stringify(it) === snap; })(),
+    };
+  });
+  console.log('directions:', dirs);
+  if (dirs.lapse !== 'down') throw new Error('A lapsed expert is a regression, got ' + dirs.lapse);
+  if (dirs.hardMature !== 'flat') throw new Error('HARD repeats the rung — neither direction. Got ' + dirs.hardMature);
+  if (dirs.goodMature !== 'up') throw new Error('PROFICIENT -> EXPERT is a gain, got ' + dirs.goodMature);
+  if (dirs.earlyGood !== 'flat') throw new Error('Same band and same interval is flat, got ' + dirs.earlyGood);
+  if (!dirs.pure) throw new Error('nextSkillItemState() must be pure — the summary previews with it before anything is committed');
+
+  // BACK returns to the block with every rating still on it, and still nothing committed.
+  const wentBack = await page.evaluate(a => {
+    backToSkillSession();
+    const skill = skillById(a.id);
+    return { reviewing: STATE.skillSession.reviewing, ratings: STATE.skillSession.items.map(x => x.rating),
+             logged: skill.practiceLog.length };
+  }, session);
+  await settle(page);
+  console.log('back to block:', wentBack);
+  if (wentBack.reviewing) throw new Error('BACK leaves the summary');
+  if (wentBack.ratings.join(',') !== 'easy,again') throw new Error('Every rating survives the round trip: ' + wentBack.ratings);
+  if (wentBack.logged !== 0) throw new Error('Still nothing committed after going back');
+
   const finished = await page.evaluate(a => {
     const ids = STATE.skillSession.items.map(x => x.itemId);
+    reviewSkillSession();
     finishSkillSession();
     const skill = skillById(a.id);
     const byId = id => skillItemById(skill, id).item;
@@ -344,7 +422,13 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   console.log('finished:', JSON.stringify(finished));
   if (!finished.cleared) throw new Error('Finishing clears the in-progress session');
   if (finished.logged !== 1 || finished.entry.minutes !== 30) throw new Error('Finishing writes one practice-log entry for the budget');
-  if (finished.entry.itemIds.length !== 2) throw new Error('The log entry records which items the session touched');
+  // ONE structure, not a list of ids beside a map of ratings — the parallel shape is the exact
+  // failure the Skill model exists to avoid, and a log entry is no more immune to it.
+  if (finished.entry.moves.length !== 2) throw new Error('The log entry records what the session did, got ' + finished.entry.moves.length);
+  if (finished.entry.moves.map(m => m.rating).join(',') !== 'easy,again') {
+    throw new Error('The log must remember WHAT you rated, not just which items: ' + JSON.stringify(finished.entry.moves));
+  }
+  if (finished.entry.moves.some(m => typeof m.spentSec !== 'number')) throw new Error('Each move carries what the timer banked');
   if (finished.entry.notes !== 'First run') throw new Error('Session notes should reach the log entry');
   if (finished.easy.reps !== 2) throw new Error('EASY on a new item lands at rep 2, got ' + finished.easy.reps);
   if (finished.again.reps !== 1) throw new Error('AGAIN on a new item still counts as practice, got ' + finished.again.reps);
@@ -421,9 +505,11 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     const s = skillById(STATE.skillSession.skillId);
     STATE.skillSession.items.forEach(x => rateSkillSessionItem(x.itemId, 'good'));
     const tapped = STATE.skillSession.items.length;
+    reviewSkillSession();
     finishSkillSession();
     const entry = s.practiceLog[s.practiceLog.length - 1];
-    return { tapped, logged: entry.itemIds.length, allResolve: entry.itemIds.every(id => !!skillItemById(s, id)) };
+    return { tapped, logged: entry.moves.length,
+             allResolve: entry.moves.every(m => !!skillItemById(s, m.itemId)) };
   });
   console.log('honest count:', honest);
   if (honest.logged !== honest.tapped) throw new Error('Everything tapped should have applied here');
@@ -585,6 +671,46 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (!wipCopy.over || !wipCopy.under) throw new Error('The read-out should read "Learning n of 5": ' + JSON.stringify(wipCopy));
   if (!wipCopy.overLoud) throw new Error('Going over should turn the read-out to the warning colour');
   if (wipCopy.underLoud) throw new Error('Under the ceiling it stays quiet');
+
+  // ---- 9b. Mastery is offered where you earn it, and stays an intent until commit ----
+  // You cross interval 20 mid-block. Offering it only in the item list means offering it three
+  // screens away from the session that earned it, which is just hiding it.
+  const mastery = await page.evaluate(() => {
+    STATE.skills = []; STATE.skillSession = null;
+    const s = defaultSkill('M');
+    const l = defaultSkillList('L', false);
+    const nearly = defaultSkillItem('nearly');
+    // interval 8 + GOOD -> 20, which is the offer threshold.
+    Object.assign(nearly, { reps: 6, ease: 2.5, interval: 8, dueIn: 0, lastPractised: shiftDate(todayStr(), -1) });
+    const young = defaultSkillItem('young');
+    Object.assign(young, { reps: 2, ease: 2.5, interval: 1, dueIn: 0, lastPractised: shiftDate(todayStr(), -1) });
+    l.items = [nearly, young];
+    s.lists = [l]; STATE.skills = [s];
+    switchTab('hobbies'); openSkill(s.id);
+    STATE.skillSession = buildSkillBlock(s, 30, todayStr());
+    rateSkillSessionItem(nearly.id, 'good');
+    rateSkillSessionItem(young.id, 'good');
+    reviewSkillSession();
+    const html = renderSkillSessionSummary(s, STATE.skillSession);
+    const offers = (html.match(/toggleSkillSessionMaster/g) || []).length;
+
+    toggleSkillSessionMaster(nearly.id);
+    const intent = {
+      flagged: STATE.skillSession.items.find(x => x.itemId === nearly.id).master,
+      notYet: !skillItemById(s, nearly.id).item.mastered,   // nothing has happened yet
+    };
+    finishSkillSession();
+    const after = skillItemById(s, nearly.id).item;
+    return { offers, intent, mastered: after.mastered, band: skillItemBand(after).label,
+             youngMastered: skillItemById(s, young.id).item.mastered };
+  });
+  await settle(page);
+  console.log('mastery in summary:', JSON.stringify(mastery));
+  if (mastery.offers !== 1) throw new Error('Only the item that crossed 20 gets the offer, got ' + mastery.offers);
+  if (!mastery.intent.flagged) throw new Error('Tapping the offer records the intent');
+  if (!mastery.intent.notYet) throw new Error('The summary is a place where nothing has happened yet — mastery included');
+  if (!mastery.mastered || mastery.band !== 'MASTERED') throw new Error('Confirming applies the mastery intent with everything else');
+  if (mastery.youngMastered) throw new Error('An item that was never offered mastery must not be retired');
 
   // ---- 10. The focus timer is voluntary, and blocks nothing ----
   //

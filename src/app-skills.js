@@ -206,10 +206,9 @@ function saveSkillPractice(skillId) {
   s.practiceLog.push({
     id: uid(), date: inputVal('skillLogDate') || todayStr(),
     minutes: Math.round(minutes), notes: inputVal('skillLogNotes') || '',
-    // Which items a session touched. Nothing fills this by hand -- the session engine will, and
-    // the field exists now so historical entries simply carry an empty list rather than needing
-    // a migration later.
-    itemIds: [],
+    // What the session did to each item. A hand-logged entry moved nothing, so it stays empty --
+    // the field exists on every entry so the two kinds read the same way.
+    moves: [],
   });
   UI.skillLogFormOpen = false;
   saveState();
