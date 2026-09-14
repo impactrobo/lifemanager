@@ -96,11 +96,11 @@ before starting any of these.
      (walking + 2 full-body sessions + mobility) the way C25K already proves works for cardio; and an
      unplanned-skip path distinct from a deload/active-rest, so silently skipping isn't how a block
      dies.
-  7. ~~**Skills, generalised**~~ — scoped as "Skills Own the Ladder" and **step 1 of 6 shipped
-     2026-09-15** (see Recently Shipped). Remaining: 2. the session engine + ladder (block building,
-     the two-dial time-then-frequency taper, AGAIN/HARD/GOOD/EASY, the WIP limit and phase-varying
-     floors); 3. guitar becomes a real skill, its index-keyed progress migrated across;
-     4. per-skill time categories; 5. skill targets; 6. practice on the weekday plan.
+  7. ~~**Skills, generalised**~~ — scoped as "Skills Own the Ladder", **steps 1–2 of 6 shipped
+     2026-09-15** (see Recently Shipped). Remaining: 3. guitar becomes a real skill via
+     `SKILL_TEMPLATES`, its index-keyed progress migrated across, and the old screens +
+     `NAV.guitarSubtab` retire; 4. per-skill time categories; 5. skill targets; 6. practice on the
+     weekday plan (last, because it's the only one that reshapes a primitive other features read).
   Deliberately **not** proposed: points, badges, streak-shaming — the app instruments the plan and
   doesn't second-guess the person, and gamification would be a different product.
 
@@ -413,6 +413,42 @@ on an architecture split + a large wave of Maximalist aesthetics.
   pattern.
 
 ### Feature changes
+
+- **Skills: the practice session and the ladder (2026-09-15).** Step 2 of 6. New file
+  `src/app-skill-session.js` — block building, the two-dial taper, the WIP limit, weighted time
+  allocation, AGAIN/HARD/GOOD/EASY, and the session runner. `tests/test_skill_session.js` asserts a
+  whole practice history in one pass; the engine is pure arithmetic over the model, so most of it
+  needs no clicking.
+  - **Two dials, not one, driven by one `reps` counter.** Phase A (reps 1–4) keeps an item in
+    *every* session while shrinking what it costs (weight 4→3→2→1); Phase B (5+) starts only once
+    the cost is at the floor, and opens the gap on the usual multiplier. A flashcard has no
+    duration, so classic SRS only ever has the second dial — here every item spends minutes from a
+    fixed budget, which is a lever the card model doesn't have. It also fixes an allocation problem
+    the interval-only draft had: a seventh item used to force everything else to shrink.
+  - **The floor and the proportional split are in direct contradiction** — 12 mature items plus one
+    new one wants 31.5 minutes of a 30-minute session. Resolved by *water-filling*: anything whose
+    proportional share falls under its floor is pinned at the floor, its minutes come off the top,
+    and the rest re-divide what's left. Terminates in at most n passes, and the test asserts it at
+    exactly the sizes where the naive split breaks.
+  - **Four layered mechanisms for an oversubscribed block,** in the order they act: the WIP limit
+    (5 Phase A items per skill) *prevents* it; floors that vary by phase (5/3/2 min) shape it;
+    deferral with a priority bump catches the rest (`deferrals` on the item, so nothing starves);
+    and a real shortfall earns one line offering to extend — an offer, not a modal, same register
+    as the calorie drift's USE THIS / KEEP MINE. Squeeze/Rotate/Pin/Grow are kept on the shelf.
+  - **The test caught a real design violation.** HARD was multiplying the interval like every other
+    rating, so "that was a struggle" bought you a *longer* break from the item — backwards, and
+    contrary to the spec's "same time, same gap, another go". Only an advance up the rep table
+    opens the gap now.
+  - **A lapse halves `reps` and caps back into Phase A.** SM-2 sends a failed card to zero, which
+    asserts you know nothing about it; for a motor skill that's false, because relearning is
+    reliably faster than initial learning (the savings effect). Halving alone left items above rep 8
+    still in Phase B, which contradicts what a lapse means, so it's capped — costing nothing, since
+    one clean session takes rep 4 straight back to 5.
+  - **"Stuck" comes out for free:** `stuckSkillItems()` is a filter on ease ≤ 1.3, no model
+    required. It's the natural hook for an "ask why I'm stuck" button later.
+  - The in-progress session lives in `STATE.skillSession`, not `UI` — it spans real minutes at a
+    guitar, and a reload or a backgrounded phone must not lose it. Ratings are held on the *block*
+    until you finish, so a mis-tap is one more tap rather than an interval to unpick.
 
 - **Skills: the model and its screens (2026-09-15).** Step 1 of "Skills Own the Ladder" —
   Hobbies stops being guitar-only. A **Skill** is a name, any number of **lists**, and a practice

@@ -39,6 +39,7 @@ function loadState() {
       lifts: parsed.lifts || [],
       exTargets: parsed.exTargets || [],
       skills: parsed.skills || [],
+      skillSession: parsed.skillSession || null,
       cardioWorkouts: parsed.cardioWorkouts || [],
       cardioLogs: parsed.cardioLogs || {},
       notes: parsed.notes || [],
@@ -389,6 +390,9 @@ function migrateState() {
   // A malformed skill would break every weekday read through it; normalise once on load
   // rather than guarding at each call site. Scheduling fields are backfilled here too, so a
   // skill saved before the session engine lands still gains them without its own migration.
+  // A session pointing at a skill that's since been deleted would render a block of missing
+  // items; drop it rather than guard every read through it.
+  if (STATE.skillSession && !STATE.skills.some(s => s.id === STATE.skillSession.skillId)) STATE.skillSession = null;
   STATE.skills.forEach(sk => {
     if (!Array.isArray(sk.lists)) sk.lists = [];
     if (!Array.isArray(sk.practiceLog)) sk.practiceLog = [];
@@ -401,6 +405,7 @@ function migrateState() {
         if (typeof it.dueIn !== 'number') it.dueIn = 0;
         if (it.lastPractised === undefined) it.lastPractised = null;
         if (typeof it.mastered !== 'boolean') it.mastered = false;
+        if (typeof it.deferrals !== 'number') it.deferrals = 0;
       });
     });
   });

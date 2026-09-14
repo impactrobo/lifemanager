@@ -18,10 +18,10 @@
 // record with its own id and its own progress ON the record, so there is no parallel structure to
 // keep aligned and the failure can't recur. Same reasoning as the lift library.
 //
-// ---- What's NOT here yet ----
-// The practice-session engine -- block building, the time/frequency taper, AGAIN/HARD/GOOD/EASY,
-// the WIP limit. Items carry their scheduling fields from the start (reps/ease/interval/dueIn)
-// and nothing writes them yet, so every item reads as "new" until that lands. See the scope doc.
+// ---- Where the scheduling lives ----
+// This file owns the SHAPE -- an item's reps/ease/interval/dueIn and the rung derived from them.
+// What moves those numbers (block building, the time-then-frequency taper, AGAIN/HARD/GOOD/EASY,
+// the WIP limit) is src/app-skill-session.js, which loads next.
 
 // Percent-free, deliberately: an item's rung is DERIVED from its interval rather than stored, so
 // it can't drift out of step with the ratings that produced it, and it self-corrects -- a bad
@@ -49,7 +49,8 @@ function defaultSkillItem(name, detail, detail2, tier) {
   return {
     id: uid(), name: (name || '').trim(), detail: detail || '', detail2: detail2 || '', tier: tier || 1,
     // Scheduling state. Untouched until the session engine lands -- see the file header.
-    reps: 0, ease: 2.5, interval: 0, dueIn: 0, lastPractised: null, mastered: false,
+    reps: 0, ease: SKILL_EASE_DEFAULT, interval: 0, dueIn: 0, lastPractised: null,
+    mastered: false, deferrals: 0,
   };
 }
 function defaultSkillList(name, tiered) {
@@ -389,6 +390,10 @@ function renderSkillItemList(skill, list) {
 }
 
 function renderSkillPracticeLog(skill) {
+  // A block in progress takes the whole subtab. A second place to find it would only be a second
+  // place to lose it, and there is nothing else you want on screen while you're practising.
+  const session = activeSkillSession();
+  if (session && session.skillId === skill.id) return renderSkillSession(skill, session);
   const list = [...(skill.practiceLog || [])].sort((a, b) => b.date.localeCompare(a.date));
   const week = skillMinutesSince(skill, shiftDate(todayStr(), -6));
   const all = skillMinutesSince(skill, null);
@@ -402,7 +407,10 @@ function renderSkillPracticeLog(skill) {
       <button class="btn btn-primary btn-block" onclick="saveSkillPractice('${skill.id}')">SAVE SESSION</button>
       <button class="btn btn-block" style="margin-top:8px;" onclick="toggleSkillLogForm()">CANCEL</button>
     </div>`
-    : `<button class="btn btn-primary btn-block" onclick="toggleSkillLogForm()">+ LOG A SESSION</button>`;
+    // Deliberately NOT a primary button: running a block is the main path now, and two primaries
+    // stacked would make you choose between them before you knew the difference. This one is for
+    // practice that happened away from the app.
+    : `<button class="btn btn-sm btn-block" onclick="toggleSkillLogForm()">+ LOG TIME BY HAND</button>`;
 
   return `
     <div class="grid2" style="margin:14px 0;">
@@ -415,6 +423,7 @@ function renderSkillPracticeLog(skill) {
         <div style="font-size:10px; color:var(--text-faint);">ALL TIME</div>
       </div>
     </div>
+    ${renderSkillSessionStarter(skill)}
     <div style="margin-bottom:12px;">${form}</div>
     <div class="entry-list">${list.map(e => `
       <div class="entry-card">

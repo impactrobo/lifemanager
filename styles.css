@@ -1090,6 +1090,53 @@ input[type="text"].skill-item-detail:focus { outline: none; color: var(--text); 
 .skill-legend-item { display: inline-flex; align-items: center; gap: 4px; text-transform: uppercase; letter-spacing: 0.05em; }
 .skill-legend-item i { width: 8px; height: 8px; border-radius: 2px; flex: none; }
 
+/* ---------- A practice session ---------- */
+/* STALE is the one badge that isn't a rung: it says WHY an item is in the block, not where it sits
+   on the ladder. Its own hue keeps that distinction visible -- a stale expert is still an expert. */
+.skill-band-stale { --rung: var(--warn); background: none; }
+.skill-start { padding: 12px 13px; }
+.skill-start-title { font-family: var(--font-head); font-size: 12px; font-weight: 700; letter-spacing: 0.08em; }
+.skill-start-note { font-size: 11px; color: var(--text-faint); line-height: 1.5; }
+/* "4 of 5 learning slots" -- produced by arithmetic, not by asking a model. It goes quiet until it
+   matters, and only turns red once you're genuinely past the cap. */
+.skill-wip {
+  flex: none; font-size: 10px; font-weight: 700; letter-spacing: 0.04em;
+  color: var(--text-faint); font-variant-numeric: tabular-nums;
+}
+.skill-wip-over { color: var(--bad); }
+
+.skill-run-head { padding: 11px 13px; margin-bottom: 0; }
+.skill-run-name { flex: 1 1 auto; min-width: 0; font-size: 15px; font-weight: 650; }
+.skill-run-mins { flex: none; font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.skill-run-detail { font-size: 12px; color: var(--text-dim); margin: -2px 0 8px; }
+/* A rated card recedes rather than vanishing: the block is also the record of what you just did,
+   and a list that empties as you work gives you nothing to look back at mid-session. */
+.skill-run-done > *:not(.skill-rate) { opacity: 0.5; }
+
+/* Four equal targets, because the rating IS the interaction and a mis-tap costs an interval.
+   `1fr` each rather than auto widths keeps them the same size whatever the label. */
+.skill-rate { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; margin-top: 10px; }
+.skill-rate-btn {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 7px 2px; min-height: 44px; cursor: pointer;
+  background: var(--surface2); border: 1px solid var(--border-soft); border-radius: var(--radius);
+  color: var(--text-dim); font-family: inherit;
+}
+.skill-rate-label { font-size: 10px; font-weight: 700; letter-spacing: 0.05em; }
+.skill-rate-hint { font-size: 8px; color: var(--text-faint); letter-spacing: 0.02em; }
+/* Unselected buttons stay neutral: colouring all four at rest turns the row into a traffic light
+   you have to decode, when the only thing that needs a colour is the answer you gave. */
+.skill-rate-btn.active { color: var(--bg); border-color: transparent; font-weight: 700; }
+.skill-rate-btn.active .skill-rate-hint { color: var(--bg); opacity: 0.72; }
+.skill-rate-again.active { background: var(--bad); }
+.skill-rate-hard.active { background: var(--warn); }
+.skill-rate-good.active { background: var(--good); }
+.skill-rate-easy.active { background: var(--accent); }
+
+.skill-overflow { border-color: var(--warn); margin-top: 10px; }
+.skill-overflow-title { font-size: 12px; font-weight: 700; color: var(--warn); margin-bottom: 3px; }
+
+
 
 /* ---------- A checked-off reminder ---------- */
 /* It stays exactly where it was rather than disappearing -- the point is being able to look back

@@ -115,14 +115,25 @@ STATE = {
               // the session engine does. loadState() backfills them, so a skill saved before that
               // lands needs no migration of its own.
               reps, ease, interval, dueIn, lastPractised,
+              deferrals,   // sessions running this item was cut to fit. Sorts first next time, so
+                           // nothing starves; back to 0 the moment it makes a block
               mastered },  // the ONE stored rung: a claim you make, not something the app observes
             ...            // progress lives ON the record. The guitar catalogues keyed it by ARRAY
           ] },             // INDEX into a shipped constant, so reordering one item silently moved
         ...                // every status after it. Same reasoning as lifts.
       ],
-      practiceLog: [ { id, date, minutes, notes, itemIds }, ... ] },  // itemIds: which items a
-    ...                                     // session touched. Empty until the session engine fills it
+      practiceLog: [ { id, date, minutes, notes, itemIds }, ... ] },  // itemIds: which items the
+    ...                                                   // session actually rated
   ],
+  skillSession: null | {   // the practice block you are in the MIDDLE of. In STATE, not UI: a
+    skillId, date,         // session spans real minutes at a guitar or a desk, and a reload or a
+    minutes,               // backgrounded phone must not lose it. One at a time.
+    items: [ { itemId, listId, minutes, isNew, stale,
+               rating } ], // 'again'|'hard'|'good'|'easy'|null -- held HERE until the session is
+                           // finished, so a mis-tap is one more tap rather than an interval to unpick
+    deferredIds,           // cut to fit; they get their deferrals bump when the session finishes
+    overflow,              // null | { shortfall, count } -- only when it's a real shortfall, not a trim
+  },
   phases: [                // a goal's blocks, IN ORDER -- array position is the phase order
     { id, goalId, kind: 'weight', label,
       weeks,                           // the LENGTH. Start dates are DERIVED by running sum from

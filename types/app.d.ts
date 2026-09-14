@@ -282,6 +282,31 @@ interface SkillItem {
   lastPractised: string | null;
   /** The one stored rung: a claim you make, never derived. */
   mastered: boolean;
+  /** How many sessions running this item was cut to fit the budget. Sorts first next time, so
+   *  nothing starves. Reset to 0 the moment it makes it into a block. */
+  deferrals: number;
+}
+
+/** One item's slot in a practice block. `rating` is held HERE until the session is finished,
+ *  so a mis-tap is one more tap to fix rather than an interval to unpick. */
+interface SkillSessionEntry {
+  itemId: string;
+  listId: string;
+  minutes: number;
+  isNew: boolean;
+  stale: boolean;
+  rating: string | null;
+}
+
+interface SkillSession {
+  skillId: string;
+  date: string;
+  minutes: number;
+  items: SkillSessionEntry[];
+  /** Cut to fit. They get a deferrals bump when the session is finished. */
+  deferredIds: string[];
+  /** Only set when the shortfall is real rather than a routine trim. */
+  overflow: { shortfall: number; count: number } | null;
 }
 
 interface SkillList {
@@ -575,6 +600,7 @@ interface AppState {
   lifts: Lift[];
   exTargets: ExerciseTarget[];
   skills: Skill[];
+  skillSession: SkillSession | null;
   logs: Record<string, any>;
   measurements: MeasurementEntry[];
   weightLog: WeightLogEntry[];

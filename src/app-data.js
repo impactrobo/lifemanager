@@ -787,6 +787,10 @@ function defaultState() {
     // Skills own their own items, ids and progress -- see src/app-skills.js. Guitar still lives
     // in STATE.life.guitar until the migration step; the two coexist deliberately.
     skills: [],
+    // The practice block you are in the MIDDLE of. In STATE and not UI because a session spans
+    // real minutes at a guitar or a desk -- a reload or a backgrounded phone must not lose it.
+    // One at a time, because you practise one thing at a time. See src/app-skill-session.js.
+    skillSession: null,
     logs: {},          // key `${cycle}_${workoutId}` -> {date, entries:{}, notes, complete} — every workout type shares this
     measurements: [],  // [{id,date,fields:{...cm/kg canonical},photos}] — photos is an array of resized data-URI JPEGs
     weightLog: [],     // [{id,date,weightLb,calories,cardioCalories}]
