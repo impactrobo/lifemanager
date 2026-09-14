@@ -974,6 +974,123 @@ input[type="text"].phase-label {
 }
 .phase-sum-note { font-size: 11px; color: var(--text-faint); margin-top: 3px; }
 
+/* ---------- Skills ---------- */
+/* The five rungs never get their own hex. Each maps onto a token every aesthetic already
+   redefines, so a skill badge retints with the theme for free and can never be the one element
+   left painted in the default palette:
+
+     new        border-soft + text-faint   nothing has happened yet, so it claims nothing
+     learning   --warn                     in progress, and the colour the app already uses for it
+     proficient --accent                    the theme's own voice, for the rung most items sit at
+     expert     --good                      outlined
+     mastered   --good, filled              retired: the same hue, but unmistakably terminal
+
+   Four hues, five appearances -- expert and mastered share a colour because they ARE the same
+   direction, and filling one of them separates "still practising it" from "done with it" without
+   spending a fifth hue the palettes don't reliably have. */
+.skill-list { display: flex; flex-direction: column; gap: 8px; }
+.skill-row {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; text-align: left; padding: 12px 13px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  color: var(--text); font-family: inherit; cursor: pointer;
+}
+.skill-row-main { flex: 1 1 auto; min-width: 0; }
+.skill-row-name { font-weight: 650; font-size: 15px; }
+.skill-row-sub { font-size: 11px; color: var(--text-faint); margin-top: 2px; }
+.skill-row-time { flex: none; text-align: right; font-variant-numeric: tabular-nums; }
+.skill-row-time .mono { font-size: 14px; font-weight: 700; }
+.skill-row-when { font-size: 9px; letter-spacing: 0.06em; color: var(--text-faint); }
+.skill-row-chev { flex: none; display: flex; font-size: 16px; color: var(--text-faint); }
+/* Dashed, because it isn't a skill yet -- it's a skill-shaped thing waiting to be converted. The
+   border says "temporary" before the LEGACY pill has to. */
+.skill-row-legacy { border-style: dashed; }
+
+/* Editable in place, like every other name in the app -- typed over, not opened in a dialog. */
+/* All four inline-edit fields here are written as `input[type="text"].x` (0,2,1) rather than a
+   bare class (0,1,0), because the base input rule at the top of this file is (0,1,1) and would
+   otherwise keep its border and box background -- turning every editable name back into a form
+   field. Exactly the trap documented on .phase-label above; this is the third and fourth time. */
+input[type="text"].skill-title {
+  width: 100%; padding: 4px 0; margin-bottom: 4px;
+  background: none; border: none; border-bottom: 1px solid transparent;
+  color: var(--text); font-family: var(--font-head); font-size: 22px; font-weight: 700;
+}
+input[type="text"].skill-title:focus { outline: none; border-bottom-color: var(--accent); }
+input[type="text"].skill-list-name {
+  flex: 1 1 auto; min-width: 0; width: auto; padding: 3px 0;
+  background: none; border: none; border-bottom: 1px solid transparent;
+  color: var(--text); font-family: var(--font-head); font-size: 14px;
+  font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+}
+input[type="text"].skill-list-name:focus { outline: none; border-bottom-color: var(--accent); }
+
+.skill-add-row { display: flex; gap: 6px; align-items: center; padding: 9px 10px; }
+.skill-add-row input { flex: 1 1 auto; min-width: 0; margin: 0; }
+.skill-add-row .btn { flex: none; }
+
+/* Fourth time: `.ehead`'s flex layout is scoped to `.entry-card .ehead`, so every other user of
+   the class declares its own (see .phase-card and .ex-target above). */
+.skill-item .ehead { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+input[type="text"].skill-item-name {
+  flex: 1 1 auto; min-width: 0; width: auto; padding: 2px 0;
+  background: none; border: none; border-bottom: 1px solid transparent;
+  color: var(--text); font-family: var(--font-body); font-size: 14px; font-weight: 650;
+}
+input[type="text"].skill-item-name:focus { outline: none; border-bottom-color: var(--accent); }
+input[type="text"].skill-item-detail {
+  width: 100%; padding: 2px 0; background: none; border: none;
+  color: var(--text-dim); font-family: var(--font-body); font-size: 12px;
+}
+input[type="text"].skill-item-detail:focus { outline: none; color: var(--text); }
+
+/* The rung is ONE custom property, not a colour repeated per component. The stripe down the card's
+   edge and the badge in its header both read `--rung`, so adding a rung means one line here rather
+   than an edit in every place a rung is drawn -- and the badge inside a card inherits it for free.
+   It's a stripe drawn as a ::before rather than a left border because several aesthetics restate
+   `.panel`'s border-color at (0,2,0) and would repaint a border out from under us; nothing anywhere
+   sets --rung, so this survives every theme. */
+.skill-item, .skill-band { --rung: var(--border-soft); }
+.skill-item-new,        .skill-band-new        { --rung: var(--border); }
+.skill-item-learning,   .skill-band-learning   { --rung: var(--warn); }
+.skill-item-proficient, .skill-band-proficient { --rung: var(--accent); }
+.skill-item-expert,     .skill-band-expert,
+.skill-item-mastered,   .skill-band-mastered   { --rung: var(--good); }
+
+.skill-item { position: relative; padding-left: 17px; overflow: hidden; }
+.skill-item::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--rung);
+}
+.skill-item-mastered input[type="text"].skill-item-name { color: var(--text-dim); }
+
+.skill-band {
+  flex: none; font-size: 9px; font-weight: 700; letter-spacing: 0.07em;
+  padding: 2px 7px; border-radius: 10px; white-space: nowrap;
+  border: 1px solid var(--rung); color: var(--rung);
+}
+/* Mastered is EXPERT's hue filled in: same direction, unmistakably terminal, and no fifth colour
+   the palettes can't all supply. */
+.skill-band-mastered { background: var(--rung); color: var(--bg); }
+.skill-band-new { color: var(--text-faint); }
+
+/* One bar for the whole skill: how many items sit at each rung, in order. Segments are widths of
+   a flex row rather than a stacked gradient, so a rung with no items simply isn't emitted and the
+   bar stays honest at any mix. */
+.skill-bar {
+  display: flex; height: 10px; border-radius: 5px; overflow: hidden;
+  background: var(--surface2); border: 1px solid var(--border-soft);
+}
+.skill-bar-seg { height: 100%; }
+.skill-bar-new { background: var(--border); }
+.skill-bar-learning { background: var(--warn); }
+.skill-bar-proficient { background: var(--accent); }
+.skill-bar-expert { background: color-mix(in srgb, var(--good) 55%, var(--surface)); }
+.skill-bar-mastered { background: var(--good); }
+.skill-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 10px; color: var(--text-faint); }
+.skill-legend-item { display: inline-flex; align-items: center; gap: 4px; text-transform: uppercase; letter-spacing: 0.05em; }
+.skill-legend-item i { width: 8px; height: 8px; border-radius: 2px; flex: none; }
+
+
 /* ---------- A checked-off reminder ---------- */
 /* It stays exactly where it was rather than disappearing -- the point is being able to look back
    at a day and see that you did the thing, instead of wondering because the row vanished. So this

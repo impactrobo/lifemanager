@@ -102,6 +102,27 @@ STATE = {
     ...        // measured SINCE the goal started; the lifetime best shows alongside as context.
                // No projection: strength and cardio move in steps and stalls
   ],
+  skills: [                // anything you're learning. Guitar becomes the first one at the
+    { id, name, color, archived, createdAt,   // migration step; until then STATE.life.guitar
+      lists: [                                // still holds it, untouched, and the two coexist
+        { id, name,
+          tiered,          // group items under TIER headings, or render one flat run
+          items: [
+            { id, name, detail, detail2, tier,
+              // Scheduling. The four rungs (NEW / LEARNING / PROFICIENT / EXPERT) are DERIVED from
+              // `interval` by skillItemBand(), never stored -- a bad rating collapses the interval
+              // and the rung follows it back down with no bookkeeping. Nothing writes these yet;
+              // the session engine does. loadState() backfills them, so a skill saved before that
+              // lands needs no migration of its own.
+              reps, ease, interval, dueIn, lastPractised,
+              mastered },  // the ONE stored rung: a claim you make, not something the app observes
+            ...            // progress lives ON the record. The guitar catalogues keyed it by ARRAY
+          ] },             // INDEX into a shipped constant, so reordering one item silently moved
+        ...                // every status after it. Same reasoning as lifts.
+      ],
+      practiceLog: [ { id, date, minutes, notes, itemIds }, ... ] },  // itemIds: which items a
+    ...                                     // session touched. Empty until the session engine fills it
+  ],
   phases: [                // a goal's blocks, IN ORDER -- array position is the phase order
     { id, goalId, kind: 'weight', label,
       weeks,                           // the LENGTH. Start dates are DERIVED by running sum from

@@ -79,6 +79,8 @@ function defaultTransientUi() {
     goalFormOpen: false,
     exGoalFormOpen: false,
     liftPicker: null,                  // { token, muscle, query } -- one picker, whoever opened it
+    skillFormOpen: false,
+    skillLogFormOpen: false,
     // The AM/PM quick-log sheet: { group: 'am'|'pm', focus: <field id> } or null. Lives in UI so
     // navigating away closes it, same as every other transient panel.
     logPopup: null,
@@ -153,7 +155,7 @@ let VIEW = {
 // globals to snapshot keys and eleven keys back again -- two mirror-image lists with a renaming in
 // between, the same drift hazard resetTransientUi() had. Now one declared key list drives both.
 const NAV_SNAPSHOT_KEYS = [
-  'currentTab', 'fitnessSubtab', 'guitarSubtab', 'setupPanel', 'setupSubtab', 'setupContext',
+  'currentTab', 'fitnessSubtab', 'guitarSubtab', 'skillId', 'skillSubtab', 'setupPanel', 'setupSubtab', 'setupContext',
   'notesSubtab', 'scheduleSubtab', 'budgetSubtab', 'scheduleSetupSubtab', 'healthSetupSubtab',
 ];
 // Which tab to boot into. Validated rather than read straight out of settings, because this runs
@@ -198,6 +200,10 @@ let NAV = {
   // (setupSubtab / healthSetupSubtab) untouched -- only the roof over them is new.
   setupPanel: 'workouts',          // 'workouts' | 'meals'
   guitarSubtab: 'chords',
+  // Which skill is open (null = the list), and which of its subtabs: 'log' | 'progress' | a
+  // list id. Not persisted -- NAV never is.
+  skillId: null,
+  skillSubtab: 'log',
   notesSubtab: 'write',
   scheduleSubtab: 'today',
   budgetSubtab: 'overview',
@@ -288,6 +294,9 @@ function switchTab(tab) {
     NAV.calMonth = { year: d.getFullYear(), month: d.getMonth() };
   }
   if (tab === 'budget') { NAV.budgetSubtab = 'overview'; }
+  // Every other tab lands on its own front page on a fresh visit; Hobbies now has one too, so
+  // tapping HOBBIES shows the skill list rather than resuming whichever skill was last open.
+  if (tab === 'hobbies') { NAV.skillId = null; NAV.skillSubtab = 'log'; }
   render();
 }
 function goHomeSection(tab) {
@@ -548,7 +557,17 @@ function renderTabbar() {
       fb('longevity', 'infinity', 'LONGEVITY') +
       fb('setup', 'setup', 'SETUP');
   } else if (NAV.currentTab === 'hobbies') {
-    sectionBtns = `
+    // Inside a Skill the bottom bar stays at TWO fixed buttons, because that skill's list strip is
+    // variable-width and lives in the in-screen .subnav instead -- the strip that has scroll
+    // chevrons, rather than the one with a logged overflow bug. The guitar strip below is the
+    // legacy screens' own bar and retires with them at the migration step.
+    // A skill's own lists deliberately do NOT come here: there can be any number of them, and
+    // `.subnav` is the strip with the scroll-chevron affordances while `.tabbar` is the one with a
+    // logged overflow bug. Variable-width content goes in the strip built to handle it.
+    if (!NAV.skillId) sectionBtns = '';                    // the skill list: HOME is enough
+    else if (NAV.skillId !== LEGACY_GUITAR_ID) {
+      sectionBtns = `<button onclick="closeSkill()"><span class="ic">${icon('hobbies')}</span>SKILLS</button>`;
+    } else sectionBtns = `
       <button class="${NAV.guitarSubtab==='chords'?'active':''}" onclick="setGuitarSubtab('chords')">CHORDS</button>
       <button class="${NAV.guitarSubtab==='songs'?'active':''}" onclick="setGuitarSubtab('songs')">SONGS</button>
       <button class="${NAV.guitarSubtab==='tech'?'active':''}" onclick="setGuitarSubtab('tech')">TECH</button>

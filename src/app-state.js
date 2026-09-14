@@ -38,6 +38,7 @@ function loadState() {
       phases: parsed.phases || [],
       lifts: parsed.lifts || [],
       exTargets: parsed.exTargets || [],
+      skills: parsed.skills || [],
       cardioWorkouts: parsed.cardioWorkouts || [],
       cardioLogs: parsed.cardioLogs || {},
       notes: parsed.notes || [],
@@ -384,6 +385,25 @@ function migrateState() {
   if (!Array.isArray(STATE.phases)) STATE.phases = [];
   if (!Array.isArray(STATE.lifts)) STATE.lifts = [];
   if (!Array.isArray(STATE.exTargets)) STATE.exTargets = [];
+  if (!Array.isArray(STATE.skills)) STATE.skills = [];
+  // A malformed skill would break every weekday read through it; normalise once on load
+  // rather than guarding at each call site. Scheduling fields are backfilled here too, so a
+  // skill saved before the session engine lands still gains them without its own migration.
+  STATE.skills.forEach(sk => {
+    if (!Array.isArray(sk.lists)) sk.lists = [];
+    if (!Array.isArray(sk.practiceLog)) sk.practiceLog = [];
+    sk.lists.forEach(l => {
+      if (!Array.isArray(l.items)) l.items = [];
+      l.items.forEach(it => {
+        if (typeof it.reps !== 'number') it.reps = 0;
+        if (typeof it.ease !== 'number') it.ease = 2.5;
+        if (typeof it.interval !== 'number') it.interval = 0;
+        if (typeof it.dueIn !== 'number') it.dueIn = 0;
+        if (it.lastPractised === undefined) it.lastPractised = null;
+        if (typeof it.mastered !== 'boolean') it.mastered = false;
+      });
+    });
+  });
   // A target whose goal is gone can never render; same reasoning as orphan phases.
   STATE.exTargets = STATE.exTargets.filter(t => STATE.goals.some(g => g.id === t.goalId));
   // A phase whose goal is gone can never render or be reached, but it would keep being saved

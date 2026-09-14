@@ -262,6 +262,46 @@ interface ExerciseTarget {
   createdAt: number;
 }
 
+/** One thing to learn inside a skill list. Progress lives ON the record -- the old guitar
+ *  catalogues keyed status by array index into a shipped constant, so inserting or reordering an
+ *  item silently shifted every status after it onto the wrong thing. An id and self-contained
+ *  progress make that failure impossible rather than merely unlikely. */
+interface SkillItem {
+  id: string;
+  name: string;
+  detail: string;
+  detail2: string;
+  tier: number;
+  /** Successful repetitions since the last lapse. Drives both the time and frequency tapers. */
+  reps: number;
+  /** 1.3-3.0. How hard this item is for you specifically. */
+  ease: number;
+  /** Sessions until it resurfaces. The four derived rungs read off this. */
+  interval: number;
+  dueIn: number;
+  lastPractised: string | null;
+  /** The one stored rung: a claim you make, never derived. */
+  mastered: boolean;
+}
+
+interface SkillList {
+  id: string;
+  name: string;
+  /** Group items under TIER headings, or render one flat run. */
+  tiered: boolean;
+  items: SkillItem[];
+}
+
+interface Skill {
+  id: string;
+  name: string;
+  color: string | null;
+  archived: boolean;
+  createdAt: number;
+  lists: SkillList[];
+  practiceLog: { id: string; date: string; minutes: number; notes: string; itemIds: string[] }[];
+}
+
 interface DeloadStyle {
   setsPct: number;
   repsPct: number;
@@ -534,6 +574,7 @@ interface AppState {
   /** Lifts ADDED by hand. The shipped library is concatenated at read time, never copied here. */
   lifts: Lift[];
   exTargets: ExerciseTarget[];
+  skills: Skill[];
   logs: Record<string, any>;
   measurements: MeasurementEntry[];
   weightLog: WeightLogEntry[];

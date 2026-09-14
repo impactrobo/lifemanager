@@ -96,10 +96,11 @@ before starting any of these.
      (walking + 2 full-body sessions + mobility) the way C25K already proves works for cardio; and an
      unplanned-skip path distinct from a deload/active-rest, so silently skipping isn't how a block
      dies.
-  7. **Skills, generalised** (L) — Hobbies is guitar, and only guitar, hardcoded to
-     `STATE.life.guitar`. A generic Skill (practice log + optional ladder + a target with no
-     projection, same shape as an exercise target) makes guitar the first of many rather than the
-     only one.
+  7. ~~**Skills, generalised**~~ — scoped as "Skills Own the Ladder" and **step 1 of 6 shipped
+     2026-09-15** (see Recently Shipped). Remaining: 2. the session engine + ladder (block building,
+     the two-dial time-then-frequency taper, AGAIN/HARD/GOOD/EASY, the WIP limit and phase-varying
+     floors); 3. guitar becomes a real skill, its index-keyed progress migrated across;
+     4. per-skill time categories; 5. skill targets; 6. practice on the weekday plan.
   Deliberately **not** proposed: points, badges, streak-shaming — the app instruments the plan and
   doesn't second-guess the person, and gamification would be a different product.
 
@@ -412,6 +413,36 @@ on an architecture split + a large wave of Maximalist aesthetics.
   pattern.
 
 ### Feature changes
+
+- **Skills: the model and its screens (2026-09-15).** Step 1 of "Skills Own the Ladder" —
+  Hobbies stops being guitar-only. A **Skill** is a name, any number of **lists**, and a practice
+  log; a **list** holds **items** (tiered under TIER headings, or one flat run). New file
+  `src/app-skills.js`, new `STATE.skills`, `.skill-*` styles, `tests/test_skills.js`.
+  - **Progress lives ON the item, keyed by its own id.** The guitar catalogues key status by
+    **array index** into a shipped constant (`g.chordStatus[3]` = "whatever is 4th in
+    `GUITAR_CHORDS` today"), so inserting or reordering one chord silently shifts every status
+    after it onto the wrong item, with nothing guarding it. Same reasoning as the lift library, and
+    the test reverses a list and re-asserts every rung to keep it that way.
+  - **The ladder is derived, not stored.** `skillItemBand()` reads NEW / LEARNING / PROFICIENT /
+    EXPERT off `interval`, so a bad rating collapses the interval and the rung follows it back down
+    with no bookkeeping. `mastered` is the one stored rung, because it's a claim you make.
+    EXPERT is open-ended (≥5) rather than a closed 5–6 band: at ease 2.5 the intervals land only on
+    0 → 1 → 3 → 8 → 20 → 50, so nothing would ever sit in a closed band. Mastery is *offered* at 20.
+  - **A skill's lists live in the in-screen `.subnav`, never the bottom `.tabbar`.** A skill can
+    have any number of them, and `.subnav` is the strip with the scroll-chevron affordances while
+    `.tabbar` is the one with the logged overflow bug (still open, below).
+  - **Guitar is untouched and still reachable**, from a dashed LEGACY row on the skill list, with
+    its way back rendered *in-screen* so its five-button strip doesn't push the bar to seven. It
+    becomes a real skill, with its progress carried across, at the next step.
+  - Items carry `reps`/`ease`/`interval`/`dueIn` from day one and nothing writes them yet — the
+    session engine (block building, the two-dial taper, AGAIN/HARD/GOOD/EASY, the WIP limit) is
+    step 2. `loadState()` backfills them, so a skill saved before that lands needs no migration.
+  - **Cost a repeat of a documented trap:** the base `input[type="text"]` rule is (0,1,1), so every
+    bare-class inline-edit field rendered as a boxed form input until rewritten as
+    `input[type="text"].skill-item-name` — exactly what the comment on `.phase-label` warns about.
+    The rung colour is a single inherited `--rung` custom property for the same class of reason:
+    several aesthetics restate `.panel`'s `border-color` at (0,2,0) and would repaint a left border
+    out from under it.
 
 - **Fixed: the retired HEALTH & DIET tile survived in saved Home layouts (2026-09-14).** Reported
   from a phone screenshot showing five tiles — FITNESS *and* HEALTH & DIET side by side — the day
@@ -1209,9 +1240,9 @@ on an architecture split + a large wave of Maximalist aesthetics.
     rows by name rather than by total (a total says nothing about *which* six, and breaks if the
     band gains a group), and `test_activity_overlaps` checks an exact array, matching the two
     sibling assertions beside it.
-- **Codebase survey — all seven findings landed (2026-09-13).** Three fixed immediately here;
-  the other four (`updateAllTMs()`, the date-key dedup, the test-assertion audit, the globals
-  consolidation) landed the same day as their own entries elsewhere in this changelog — see
+- **Codebase survey — all seven findings landed (2026-09-13).** Three fixed immediately here;
+  the other four (`updateAllTMs()`, the date-key dedup, the test-assertion audit, the globals
+  consolidation) landed the same day as their own entries elsewhere in this changelog — see
   "Survey item 6" and "Survey items 4, 5 and 7". A
   full investigation of `app.js` (11,270 lines, 706 functions, 46 test files) for bugs,
   limitations and refactorable code. Clean bill of health on several fronts worth knowing: **0
