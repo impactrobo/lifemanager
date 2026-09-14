@@ -776,6 +776,7 @@ function defaultState() {
     // evaluation, so it can only reach functions from files loaded BEFORE it -- and app-goals.js
     // loads after. A [] costs nothing to write here and removes the cross-file load-time edge.
     goals: [],
+    phases: [],
     logs: {},          // key `${cycle}_${workoutId}` -> {date, entries:{}, notes, complete} — every workout type shares this
     measurements: [],  // [{id,date,fields:{...cm/kg canonical},photos}] — photos is an array of resized data-URI JPEGs
     weightLog: [],     // [{id,date,weightLb,calories,cardioCalories}]

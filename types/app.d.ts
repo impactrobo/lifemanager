@@ -191,6 +191,22 @@ interface WeightGoal {
   createdAt: number;
 }
 
+/** A block a goal is run in. Holds its LENGTH, not its start date: phases run back to back from
+ *  the goal's startDate, so extending one pushes every later one out for free rather than needing
+ *  N records rewritten. Order within STATE.phases is the phase order. `ratePctPerWeek` is an
+ *  unsigned magnitude -- `direction` carries the sign, so a "Surplus" phase can't hold a negative
+ *  rate and mean the opposite of its own label. */
+interface GoalPhase {
+  id: string;
+  goalId: string;
+  kind: 'weight';
+  label: string;
+  weeks: number;
+  direction: 'deficit' | 'maintain' | 'surplus';
+  ratePctPerWeek: number;
+  createdAt: number;
+}
+
 interface RecurringIncome {
   id: string;
   name: string;
@@ -452,6 +468,7 @@ interface AppState {
   life: LifeState;
   currentCycle: number;
   goals: WeightGoal[];
+  phases: GoalPhase[];
   logs: Record<string, any>;
   measurements: MeasurementEntry[];
   weightLog: WeightLogEntry[];

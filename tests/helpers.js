@@ -23,13 +23,20 @@ async function settle(page) {
 // splitting a file further (or merging two) never silently narrows what these tests search. A
 // hardcoded list would still pass while quietly no longer covering the moved code.
 function appSource() {
+  return appFiles().map(f => f.text).join('\n');
+}
+
+// The same list, kept per-file and IN LOAD ORDER. Anything asking "which file is this in?" or
+// "which definition wins?" needs the files apart -- appSource()'s concatenation destroys exactly
+// that. test_smoke.js's duplicate-global guard is the reason this exists.
+function appFiles() {
   const fs = require('fs');
   const path = require('path');
   const root = path.resolve(__dirname, '..');
   const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
-  const files = [...html.matchAll(/<script src="(src\/[^"]+\.js)"><\/script>/g)].map(m => m[1]);
-  if (!files.length) throw new Error('appSource(): found no src/*.js script tags in index.html');
-  return files.map(f => fs.readFileSync(path.join(root, f), 'utf8')).join('\n');
+  const names = [...html.matchAll(/<script src="(src\/[^"]+\.js)"><\/script>/g)].map(m => m[1]);
+  if (!names.length) throw new Error('appFiles(): found no src/*.js script tags in index.html');
+  return names.map(f => ({ file: f, text: fs.readFileSync(path.join(root, f), 'utf8') }));
 }
 
-module.exports = { settle, appSource };
+module.exports = { settle, appSource, appFiles };
