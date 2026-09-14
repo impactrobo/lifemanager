@@ -2,13 +2,37 @@
 // Cheapest guard against a broken app.js load, a syntax error, or a bad global. (index.html
 // loads its logic from the extracted ./app.js — this also catches that going missing.)
 const { chromium } = require('playwright');
-const { settle } = require('./helpers');
+const { settle, appFiles } = require('./helpers');
 const path = require('path');
 
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 const TABS = ['home', 'train', 'hobbies', 'health', 'notes', 'schedule', 'budget', 'setup'];
 
+// Two files declaring the same top-level `function` name is SILENT. The later script in load order
+// simply wins, the earlier one's callers quietly run the wrong body, and nothing anywhere throws —
+// not the browser, not tsc, not a test that doesn't happen to click that exact control.
+//
+// This is a hazard the app.js split created: one file couldn't collide with itself, nineteen can.
+// It cost a real bug to notice — `updateGoalField` existed in both app-budget.js (savings goals)
+// and app-goals.js (weight goals), budget loaded later, and so editing a weight goal's name looked
+// completely normal and did nothing at all. The check is a dozen lines; finding it by hand is not.
+function assertNoDuplicateGlobals() {
+  const seen = new Map();
+  const dupes = [];
+  for (const { file, text } of appFiles()) {
+    for (const m of text.matchAll(/^function\s+([A-Za-z_$][\w$]*)/gm)) {
+      const name = m[1];
+      if (seen.has(name)) dupes.push(`${name}: ${seen.get(name)} then ${file} (the later one wins)`);
+      else seen.set(name, file);
+    }
+  }
+  if (dupes.length) throw new Error('Duplicate top-level function names across src/:\n  ' + dupes.join('\n  '));
+  console.log(`no duplicate globals across ${seen.size} top-level functions`);
+}
+
 (async () => {
+  assertNoDuplicateGlobals();
+
   const browser = await chromium.launch({ executablePath: process.env.PW_CHROMIUM_PATH || undefined });
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   const errors = [];

@@ -76,7 +76,16 @@ STATE = {
     { id, kind: 'weight', name, startDate, targetDate,
       startWeightLb, targetWeightLb,   // canonical lb, like weightLog
       archived, createdAt },           // archiving is the only way a goal ends -- nothing auto-completes
-    ...                                // `kind` will gain 'exercise'; phases will hang off goalId
+    ...                                // `kind` will gain 'exercise'
+  ],
+  phases: [                // a goal's blocks, IN ORDER -- array position is the phase order
+    { id, goalId, kind: 'weight', label,
+      weeks,                           // the LENGTH. Start dates are DERIVED by running sum from
+                                       // goal.startDate, never stored -- see src/app-phases.js
+      direction: 'deficit'|'maintain'|'surplus',  // carries the sign
+      ratePctPerWeek,                  // unsigned magnitude, %bw/wk, rounded to 2dp
+      createdAt },
+    ...                                // migrateState() drops any phase whose goal is gone
   ],
   diet: {
     tdee: null | number,

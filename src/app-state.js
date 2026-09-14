@@ -35,6 +35,7 @@ function loadState() {
       // still has the old key, so read either. Nothing else reads `parsed.meso`.
       program: parsed.program || parsed.meso || base.program,
       goals: parsed.goals || [],
+      phases: parsed.phases || [],
       cardioWorkouts: parsed.cardioWorkouts || [],
       cardioLogs: parsed.cardioLogs || {},
       notes: parsed.notes || [],
@@ -378,6 +379,11 @@ function migrateState() {
   // wondering which one is live.
   delete STATE.meso;
   if (!Array.isArray(STATE.goals)) STATE.goals = [];
+  if (!Array.isArray(STATE.phases)) STATE.phases = [];
+  // A phase whose goal is gone can never render or be reached, but it would keep being saved
+  // and would silently reappear if an id were ever reused. Dropping them here is cheaper than
+  // a guard at every read.
+  STATE.phases = STATE.phases.filter(p => STATE.goals.some(g => g.id === p.goalId));
   if (STATE.settings.waterTargetMl == null) {
     STATE.settings.waterTargetMl = STATE.settings.waterTarget != null
       ? Math.round(Number(STATE.settings.waterTarget) * 250) : 2000;

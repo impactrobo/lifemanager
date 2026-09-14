@@ -64,23 +64,44 @@ function daysBetween(aStr, bStr) {
 // Returns null rather than a number whenever there isn't enough to be honest about: fewer than two
 // entries, or a span too short to distinguish a trend from noise.
 function weightTrendRateLbPerWeek() {
-  const list = STATE.weightLog
+  const list = sortedWeightEntries();
+  if (!list.length) return null;
+  const last = list[list.length - 1].date;
+  return weightTrendRateBetween(shiftDate(last, -GOAL_RATE_WINDOW_DAYS), last);
+}
+
+function sortedWeightEntries() {
+  return STATE.weightLog
     .filter(e => e.weightLb != null)
     .sort((a, b) => a.date.localeCompare(b.date))
     .map(e => ({ date: e.date, value: e.weightLb }));
+}
+
+// The same reading, over an arbitrary window -- what a phase needs to report how it actually went.
+//
+// The trailing average is deliberately computed over the WHOLE log and only then sliced. Slicing
+// first would leave the window's opening entries averaging just themselves, which makes a phase's
+// first days read as a jump from nowhere: the smoothed line needs the week of weights BEFORE the
+// window to be smooth at its own start.
+function weightTrendRateBetween(fromDate, toDate) {
+  const list = sortedWeightEntries();
   if (list.length < 2) return null;
   const trend = trailingAverage(list, WEIGHT_TREND_WINDOW_DAYS);
-  const lastIdx = list.length - 1;
-  const cutoff = shiftDate(list[lastIdx].date, -GOAL_RATE_WINDOW_DAYS);
-  // The earliest entry still inside the window -- or the earliest entry there is, when the whole
-  // log is shorter than the window.
-  let firstIdx = 0;
-  for (let i = lastIdx; i >= 0; i--) {
-    if (list[i].date >= cutoff) firstIdx = i; else break;
+  let firstIdx = -1, lastIdx = -1;
+  for (let i = 0; i < list.length; i++) {
+    if (list[i].date >= fromDate && list[i].date <= toDate) { if (firstIdx < 0) firstIdx = i; lastIdx = i; }
   }
+  if (firstIdx < 0 || firstIdx === lastIdx) return null;
   const spanDays = daysBetween(list[firstIdx].date, list[lastIdx].date);
   if (spanDays < GOAL_RATE_MIN_DAYS) return null;
-  return { lbPerWeek: (trend[lastIdx] - trend[firstIdx]) / (spanDays / 7), spanDays, currentTrendLb: trend[lastIdx] };
+  return {
+    lbPerWeek: (trend[lastIdx] - trend[firstIdx]) / (spanDays / 7),
+    spanDays,
+    currentTrendLb: trend[lastIdx],
+    startTrendLb: trend[firstIdx],
+    fromDate: list[firstIdx].date,
+    toDate: list[lastIdx].date,
+  };
 }
 
 // Which band a rate falls in, taking the goal's LENGTH into account -- 1.2%/wk over five weeks is a
@@ -172,7 +193,11 @@ function createWeightGoal() {
   showToast('Goal set');
   render();
 }
-function updateGoalField(id, field, value) {
+// Named for the weight goal specifically, NOT updateGoalField: app-budget.js already owns that
+// name for savings goals and loads later, so the generic name silently resolved to the budget
+// version and these edits did nothing at all. Nineteen global-function files, one collision --
+// cheap to check for, invisible without checking.
+function updateWeightGoalField(id, field, value) {
   const g = (STATE.goals || []).find(x => x.id === id);
   if (!g) return;
   if (field === 'name') { const t = (value || '').trim(); if (t) g.name = t; }
@@ -202,8 +227,10 @@ function unarchiveGoal(id) {
   render();
 }
 function deleteGoal(id) {
-  showConfirm('Delete this goal? Its history goes with it.', () => {
+  showConfirm('Delete this goal? Its phases and history go with it.', () => {
     STATE.goals = (STATE.goals || []).filter(x => x.id !== id);
+    // Phases are meaningless without the goal whose start date they're measured from.
+    STATE.phases = (STATE.phases || []).filter(p => p.goalId !== id);
     saveState(); render();
   });
 }
@@ -260,7 +287,7 @@ function renderActiveGoal(goal) {
       <button class="btn btn-sm" onclick="archiveGoal('${goal.id}')">ARCHIVE</button>
     </div>
     <div class="panel">
-      <input type="text" value="${escapeHtml(goal.name)}" style="font-weight:700; font-size:15px; border:none; background:transparent; padding:0; color:var(--text); font-family:var(--font-body); width:100%;" onchange="updateGoalField('${goal.id}','name',this.value)">
+      <input type="text" value="${escapeHtml(goal.name)}" style="font-weight:700; font-size:15px; border:none; background:transparent; padding:0; color:var(--text); font-family:var(--font-body); width:100%;" onchange="updateWeightGoalField('${goal.id}','name',this.value)">
       <div style="font-size:13px; color:var(--text-dim); margin-top:2px;">
         ${fmt(lbToDisplay(p.start), 1)} &rarr; <b style="color:var(--text)">${fmt(lbToDisplay(p.target), 1)} ${u}</b>
         by ${fmtGoalDate(goal.targetDate)}
@@ -275,7 +302,8 @@ function renderActiveGoal(goal) {
       </div>
 
       ${renderGoalPace(p, u, dispRate)}
-    </div>`;
+    </div>
+    ${renderPhases(goal)}`;
 }
 
 // Required vs actual vs projected. Every row can say "not yet" -- that's the normal state for the

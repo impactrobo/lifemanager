@@ -385,6 +385,57 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Phases: the blocks a goal is actually run in (2026-09-13).** Step 3 of "Phases Own the Plan",
+  in `src/app-phases.js`. Name, length, direction and rate per phase, shown under the active goal.
+  Still no calorie authority (step 4) and no plan ownership (step 5) — this is the timeline and the
+  rate maths.
+  - **A phase stores its LENGTH, never its start date.** Phases run back to back from the goal's
+    start, so every start is a running sum of the lengths before it. The scope called for a stored
+    `startDate`; deriving it is strictly better, because the rule that matters most — *extend a phase
+    and every later phase, and every deload inside them, pushes out by the same amount* — stops being
+    an operation that has to remember to rewrite N records and becomes a property of the model.
+    Reordering and deleting fall out of it for free too. Same reasoning as the goal's required rate
+    being computed on every read.
+    - What it costs is the ability to represent a **gap** between phases. That's the right trade: an
+      unplanned stretch mid-goal isn't something you schedule. Both ends are reported instead — a
+      plan running past the target date, or leaving weeks unplanned, shows in the summary line.
+  - **Extending never re-paces you.** `extendPhase()` changes one number; the goal's required rate is
+    deliberately not recomputed to claw the time back. The projection moves later and the pace reads
+    behind, which is the truth. Re-pacing without being asked is how an app turns a good week into a
+    harder target.
+  - **Rates compound, because a percent of bodyweight tracks a bodyweight that's moving.** 0.75%/wk
+    off 232 lb for ten weeks is 215.2 lb, not the 214.6 lb a linear read gives.
+  - **Direction carries the sign; the stored rate is only a magnitude.** A signed rate would let a
+    phase labelled "Surplus" hold a negative number and mean the opposite of its own label.
+  - **`phasePlanSummary()` is the line that justifies writing phases down.** Three individually
+    reasonable phases can fill the goal's 22 weeks exactly and still land 6.6 lb short — nothing but
+    the arithmetic will tell you that. `addPhase()` seeds a new phase to close whatever gap is left,
+    solving the rate rather than copying the goal's linear figure.
+  - **`PHASE_TARGET_TOLERANCE_LB`.** Rates are stored rounded to 0.01 %bw/wk so the screen and the
+    arithmetic agree — checking the app's work by hand shouldn't give a different answer. The cost is
+    that a plan lands within that rounding of its target (a fifth of a pound over 22 weeks), and
+    calling that "short of target" would be the app nagging about its own rounding.
+  - **`phaseForDate(date, kind)` is the choke point** steps 4 and 5 will both read through. It scans
+    archived goals too, so a date inside a finished goal still resolves.
+  - **Orphan phases can't survive.** `deleteGoal()` cascades, and `migrateState()` drops any phase
+    whose goal is gone — cheaper than a guard at every read.
+  - **Two CSS traps, both found by looking at the render:** `.ehead`'s flex layout is scoped to
+    `.entry-card .ehead`, so a phase card dropped its state chip onto its own line until it declared
+    its own; and `.phase-label`'s `border: none` (0,1,0) silently lost to the base
+    `input[type="text"]` rule (0,1,1), so the selector is `input[type="text"].phase-label`. The same
+    trap already documented on `.log-water-target`.
+
+- **Found and fixed: `updateGoalField` was defined in two files (2026-09-13).** `app-budget.js`
+  (savings goals) and `app-goals.js` (weight goals) both declared it. Classic scripts, so the later
+  script in load order simply won — budget — and **editing a weight goal's name or target silently
+  did nothing.** Nothing threw; `tsc` was happy; the weight-goal tests passed because none of them
+  clicked that control. Renamed to `updateWeightGoalField()`.
+  - **`test_smoke.js` now asserts no two `src/app-*.js` files declare the same top-level function
+    name** (819 of them at the time of writing), reading the files apart via a new `appFiles()` in
+    `tests/helpers.js` — `appSource()`'s concatenation destroys exactly the information the check
+    needs. This is a hazard the `app.js` split created: one file could never collide with itself,
+    nineteen can, and the failure mode is completely silent.
+
 - **Weight goals: pace, projection and an advisory rate band (2026-09-13).** A new GOAL subtab in
   Health & Diet, and `src/app-goals.js`. Step 2 of the "Phases Own the Plan" scope — phases,
   per-phase calorie targets and exercise goals build on top of this, and `kind: 'weight'` is on the

@@ -801,6 +801,66 @@ button.hit-mark { padding: 0; background: none; font: inherit; color: inherit; c
   padding: 9px 0 0; border-top: 1px solid var(--border-soft);
 }
 
+/* ---------- Phases ---------- */
+/* Each phase is a card because it's an editable object with its own controls, not a row in a
+   readout -- the opposite call from .goal-row above, and for the opposite reason. The left edge
+   carries the state instead of a second badge colour: the whole strip of cards should read
+   done / done / NOW / upcoming at a glance without any of them shouting. */
+.phase-list { display: grid; gap: 10px; }
+.phase-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  border-left: 3px solid var(--border); padding: 12px 13px;
+}
+.phase-state-past    { border-left-color: var(--border); }
+.phase-state-current { border-left-color: var(--accent); }
+.phase-state-future  { border-left-color: var(--border-soft); }
+
+/* .ehead's flex layout is scoped to `.entry-card .ehead` in the entry-card block above, so a
+   phase card has to declare its own -- without this the chip drops onto its own line under a
+   full-width input, which is exactly what it did. */
+.phase-card .ehead { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+
+/* Borderless so the label reads as a heading, not a form field, until you're in it. Same treatment
+   as the goal name above it.
+
+   Written as input[type="text"].phase-label (0,2,1) on purpose: the base input rule is (0,1,1) and
+   a bare `.phase-label` (0,1,0) loses to it, so the "border: none" silently did nothing. Same trap
+   as .log-water-target further down. */
+input[type="text"].phase-label {
+  font-weight: 700; font-size: 14px; border: none; background: transparent;
+  padding: 0; color: var(--text); font-family: var(--font-body);
+  flex: 1 1 auto; width: auto; min-width: 0;
+}
+.phase-chip {
+  font-size: 9px; font-weight: 700; letter-spacing: 0.08em; padding: 2px 6px;
+  border-radius: 3px; white-space: nowrap; flex: none;
+}
+.phase-chip-past    { color: var(--text-faint); background: var(--surface2); }
+.phase-chip-current { color: var(--bg); background: var(--accent); }
+.phase-chip-future  { color: var(--text-dim); background: var(--surface2); }
+
+.phase-when { font-size: 11px; color: var(--text-dim); margin-top: 3px; }
+
+/* Three tracks that collapse to two then one. `minmax(0, 1fr)` rather than `1fr`: a number input
+   has a min-content width wider than its track, which pushes the grid past the card otherwise. */
+.phase-controls {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px; margin-top: 11px;
+}
+.phase-controls .field { margin-bottom: 0; }
+/* font-size only -- `select` sets padding-right: 30px to clear its own arrow, and a padding
+   shorthand here would win on specificity and put the text under the arrow. */
+.phase-controls input, .phase-controls select { font-size: 14px; }
+@media (max-width: 360px) { .phase-controls { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+
+.phase-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 11px; }
+
+.phase-sum {
+  margin-top: 10px; padding: 10px 13px;
+  background: var(--surface2); border: 1px solid var(--border-soft); border-radius: var(--radius);
+}
+.phase-sum-note { font-size: 11px; color: var(--text-faint); margin-top: 3px; }
+
 /* ---------- A checked-off reminder ---------- */
 /* It stays exactly where it was rather than disappearing -- the point is being able to look back
    at a day and see that you did the thing, instead of wondering because the row vanished. So this
