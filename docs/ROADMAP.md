@@ -385,6 +385,43 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Health & Fitness: Exercise and Health & Diet merged into one tab (2026-09-14).** The one item
+  "Phases Own the Plan" deliberately left open — *"worth doing after this lands and the seams are
+  visible, not before."* No new capability; a restructuring of navigation around splits that were
+  always there.
+  - **The seam, concretely.** Weight entry lived in Health → Specs while its chart lived in
+    Exercise → Progress — the same rows of the same array, two tabs apart. Same for measurements.
+    **BODY** now puts each log directly under its own chart. The block card that read *"Edit it in
+    Train → Setup → Planner"* no longer sends you to a different tab.
+  - **Six subtabs where there were eight across two tabs:** GOAL / WORKOUTS / BODY / DIET /
+    LONGEVITY / SETUP, opening on WORKOUTS. SETUP holds the workout and meal libraries as two
+    **panels** rather than as two tabs' worth of separate Setup screens.
+  - **Reuse the leaves, replace the roof.** `trainTopSubtab` + `healthSubtab` → one `fitnessSubtab`;
+    `progressSubtab` → `bodySubtab` (same five values, two renamed for what they now hold); one new
+    `setupPanel`. `setupSubtab` and `healthSetupSubtab` were left **completely untouched** — the leaf
+    concepts didn't change, only what sits over them.
+  - **`HOME_SECTION_META` keeps its `health` entry** even though the tile is gone, because
+    `LINKABLE_TYPES` colours meal chips from it — the identical hazard, with the identical fix, that
+    the `schedule` retirement already documented in that file. `test_home_bar.js` now asserts both
+    retirements, and that meal and workout chips stay visually **distinct**.
+  - **`timeCategories()` split in two.** A retired section still has to *resolve* — time already
+    tagged `health` keeps its label and colour — but must stop being *offered*, or you'd see two
+    names for one section. Dropping the id outright would have silently stripped the tag off real
+    logged time.
+  - **`initialTab()` needed `health` added to its dead-tab guard.** Its own comment predicted this:
+    migrations run *after* NAV's declaration, so migrating `defaultPage` alone still boots you onto
+    the dead tab. That exact bug was caught once before by `test_home_bar.js`.
+  - **Eleven stale cross-tab pointers in user-facing copy** were repointed or deleted — including
+    one under the weight log reading *"See the trend over time on Exercise → Progress → Body
+    Weight"*, which after the merge pointed at the chart three inches above it. Found by looking at
+    the screen, not by grep.
+  - **`test_smoke.js` was passing vacuously.** `switchTab()` to a tab with no render branch leaves
+    the *previous* tab's markup in `#app`, so "non-empty" and "NAV.currentTab is what I set" both
+    still held — it reported `health: 11993 chars`, byte-identical to the `hobbies` line above it.
+    It now asserts each tab renders something **different** from the one before.
+  - `renderSpecs()` is gone: it existed only to stack the two logs together, and BODY puts each one
+    under its own chart instead.
+
 - **Active rest, phase lines on the charts, and COMPARE on the lift library (2026-09-14).** Steps
   9-11 — the last three of "Phases Own the Plan", all small. **The scope is now fully built.**
   - **Active rest is not a light workout — it's the absence of one.** Walking, an easy bike, a
