@@ -5,14 +5,14 @@ Local-first via localStorage. No bundler / no build step to deploy. Read this be
 any change.
 
 The app ships as `index.html` (a ~100-line shell), `styles.css` (base + component styles + the
-twelve inline aesthetics), and **`src/app-*.js` — 18 ordered classic `<script>`s** holding all
+twelve inline aesthetics), and **`src/app-*.js` — 19 ordered classic `<script>`s** holding all
 application logic (~12.5k lines). They are NOT modules: top-level `function`s stay global so the
 inline `onclick=` handlers keep working. There is still no compile step — everything is served
 as-is.
 
 **What load order does and doesn't constrain.** A function in any file may call a function in any
 other, in either direction: `function` declarations are hoisted and global, and every call happens
-long after all 18 files have loaded. What order *does* constrain is anything that runs *while a
+long after all 19 files have loaded. What order *does* constrain is anything that runs *while a
 file is being evaluated* — a `const` initializer, an `addEventListener` registration — since that
 can only reach what earlier files already defined. Two consequences worth knowing:
 
