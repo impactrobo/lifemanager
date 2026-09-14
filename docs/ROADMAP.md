@@ -513,6 +513,12 @@ on an architecture split + a large wave of Maximalist aesthetics.
     no bounds stated returns `null` and renders its change as a plain uncoloured number.
   - The delta chip reads against the **immediately previous** draw only. "Since your last draw" has
     one answer; "since when?" across four dots is a question the row has no room to ask.
+  - **The current reading became a dot too**, one size up and solid, and the track grew to 11px.
+    It had been a tall bold rule spanning the bar, which was right while it was the only thing on
+    the track and wrong the moment the trail arrived — a single series rendered as two different
+    shapes reads as two unrelated things, and the rule was the first thing asked about on sight.
+    Removing it outright was the other option and would have been wrong: the dots are *prior*
+    readings, so dropping it takes "where you stand right now" off the panel named WHERE YOU STAND.
   - **Known limitation, deliberately not fixed here:** the axis starts at zero, so a marker whose
     whole meaningful span sits far from zero (HbA1c 5.4–5.9, creatinine, albumin) squeezes every dot
     into the right fifth of the track, where they overlap and can't be told apart. The bar has

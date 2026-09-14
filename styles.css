@@ -1271,12 +1271,17 @@ textarea.skill-item-detail + .skill-sched { margin-top: 0; }
    bands are context, and a saturated red zone would be the verdict this screen refuses to give. */
 .lab-bar { margin-top: 6px; }
 .lab-bar-track {
-  position: relative; height: 8px; border-radius: 20px;
+  position: relative; height: 11px; border-radius: 20px;
   border: 1px solid var(--border-soft); overflow: hidden;
 }
+/* The current reading is the same shape as its own history, just solid and a size up. It used to be
+   a tall bold rule, which was right when it was the only thing on the track and wrong the moment
+   the trail arrived: one series rendered as two different objects reads as two different things.
+   The dark halo is what separates it from the band behind it now that it no longer spans the bar. */
 .lab-bar-mark {
-  position: absolute; top: -2px; bottom: -2px; width: 3px; margin-left: -1.5px;
-  background: var(--text); border-radius: 2px; box-shadow: 0 0 0 1px rgba(0,0,0,0.3);
+  position: absolute; top: 50%; width: 7px; height: 7px;
+  margin: -3.5px 0 0 -3.5px; border-radius: 50%;
+  background: var(--text); box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.45);
 }
 .lab-bar-key {
   display: flex; gap: 10px; margin-top: 3px;
