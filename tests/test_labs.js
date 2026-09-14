@@ -281,6 +281,118 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   }
   if (orphaned.status !== null) throw new Error('...though it has no status, since nothing knows its range any more');
 
+  // ---- 8b. The position bar's zones ----
+  // Same construction the volume landmarks use -- zones across a track, a marker for the reading.
+  // What makes it non-trivial is that a marker states any SUBSET of its four bounds, so the zone
+  // walk has to skip the ones that aren't there rather than assuming five stops every time.
+  await reset();
+  const zones = await page.evaluate(() => {
+    const kinds = (key, v) => {
+      const z = labBarZones(key, v);
+      return z ? z.segs.map(sg => sg.kind).join('>') : null;
+    };
+    const markerPct = (key, v) => {
+      const z = labBarZones(key, v);
+      return z ? Math.round(z.pct(v)) : null;
+    };
+    // Which zone the reading actually lands in -- the thing the bar exists to show.
+    const landsIn = (key, v) => {
+      const z = labBarZones(key, v);
+      if (!z) return null;
+      const seg = z.segs.find(sg => v >= sg.from && v <= sg.to);
+      return seg ? seg.kind : null;
+    };
+    return {
+      // Ceiling only (ApoB: ref ≤130, target ≤80) -- no leading out-of-range band at all.
+      ceiling: kinds('apoB', 96),
+      ceilingLands: landsIn('apoB', 96),
+      ceilingOver: landsIn('apoB', 150),
+      // Floor only (HDL: ref ≥40, target ≥60) -- no trailing one.
+      floor: kinds('hdl', 58),
+      floorLands: landsIn('hdl', 58),
+      floorUnder: landsIn('hdl', 35),
+      floorOver: landsIn('hdl', 70),
+      // Nested window (vitamin D: ref 30-100, target 40-60) -- the full five stops.
+      window: kinds('vitD', 46),
+      windowLands: landsIn('vitD', 46),
+      windowLow: landsIn('vitD', 20),
+      windowHigh: landsIn('vitD', 110),
+      // Reference but no target (creatinine) -- no green band anywhere.
+      noTarget: kinds('creatinine', 1.0),
+      // A marker stating nothing has nothing to position against.
+      unbounded: labBarZones('wbc', 5) && labBarZones('wbc', 5).segs.length,
+      custom: (() => {
+        STATE.labSettings.custom = [{ key: 'c1', label: 'X', unit: '', group: 'custom', core: true,
+                                      ref: { low: null, high: null }, target: { low: null, high: null } }];
+        const r = labBarZones('c1', 5);
+        STATE.labSettings.custom = [];
+        return r;
+      })(),
+      // The axis always leaves headroom above the largest stated bound, so a reading at the very
+      // top of its range never renders pinned to the right edge with nowhere to go.
+      headroom: markerPct('apoB', 130),
+      offScale: landsIn('apoB', 400),
+    };
+  });
+  console.log('bar zones:', JSON.stringify(zones));
+  if (zones.ceiling !== 'target>in>out') throw new Error('A ceiling-only marker gets no bottom band: ' + zones.ceiling);
+  if (zones.ceilingLands !== 'in' || zones.ceilingOver !== 'out') throw new Error('ApoB positions: ' + JSON.stringify(zones));
+  if (zones.floor !== 'out>in>target') throw new Error('A floor-only marker gets no top band: ' + zones.floor);
+  if (zones.floorUnder !== 'out' || zones.floorLands !== 'in' || zones.floorOver !== 'target') {
+    throw new Error('HDL reads upward -- under/between/over: ' + JSON.stringify(zones));
+  }
+  if (zones.window !== 'out>in>target>in>out') throw new Error('A nested window is the full five stops: ' + zones.window);
+  if (zones.windowLands !== 'target' || zones.windowLow !== 'out' || zones.windowHigh !== 'out') {
+    throw new Error('Vitamin D positions: ' + JSON.stringify(zones));
+  }
+  // No target stated means no green band is invented for it.
+  if (zones.noTarget.indexOf('target') >= 0) throw new Error('A marker with no target must draw no target band: ' + zones.noTarget);
+  if (zones.custom !== null) throw new Error('A marker stating no bounds has nothing to position against -- the bar is omitted, not empty');
+  if (zones.headroom >= 100) throw new Error('A reading at its ceiling must not pin to the edge, got ' + zones.headroom);
+  if (zones.offScale !== 'out') throw new Error('A reading far past the top still lands out of range');
+
+  // The rendered bar only appears where there is something to say, and the standing view reads
+  // latest-per-MARKER rather than off the newest panel.
+  const standing = await page.evaluate(() => {
+    STATE.labs = [
+      { id: 'a', date: '2026-09-02', notes: '', values: { apoB: 96 } },
+      { id: 'b', date: '2026-03-14', notes: '', values: { ldl: 112, wbc: 5 } },
+    ];
+    STATE.labSettings.extended = true;   // so wbc (unbounded, extended) is offered too
+    const html = renderLabStanding();
+    STATE.labSettings.extended = false;
+    return {
+      hasApoB: /ApoB/.test(html), hasLdl: /LDL-C/.test(html),
+      bars: (html.match(/lab-bar-track/g) || []).length,
+      // Every SHIPPED marker states at least a reference, so all three draw a bar. Only a marker
+      // of your own starts with nothing to position against.
+      hasWbc: /WBC/.test(html),
+      unranged: (() => {
+        STATE.labSettings.custom = [{ key: 'c9', label: 'Ceruloplasmin', unit: 'mg/dL', group: 'custom',
+                                      core: true, ref: { low: null, high: null }, target: { low: null, high: null } }];
+        STATE.labs.push({ id: 'c', date: '2026-09-03', notes: '', values: { c9: 28 } });
+        const h = renderLabStanding();
+        STATE.labSettings.custom = []; STATE.labs.pop();
+        return { listed: /Ceruloplasmin/.test(h), bars: (h.match(/lab-bar-track/g) || []).length };
+      })(),
+      empty: renderLabStanding.call(null) && (() => { STATE.labs = []; return renderLabStanding(); })(),
+    };
+  });
+  console.log('standing view:', standing);
+  // Both markers appear even though their newest readings are on different draws.
+  if (!standing.hasApoB || !standing.hasLdl) throw new Error('Standing view spans panels: ' + JSON.stringify(standing));
+  if (!standing.hasWbc) throw new Error('WBC should be listed too');
+  // Every shipped marker states at least a reference interval, so each one draws a bar.
+  if (standing.bars !== 3) throw new Error('All three shipped markers draw a bar, got ' + standing.bars);
+  // A marker of your own starts unbounded: listed with its value, but no bar, because there is
+  // genuinely nothing to position it against until you give it a range.
+  if (!standing.unranged.listed) throw new Error('An unranged custom marker is still listed with its reading');
+  // Four markers listed, three bars: the unranged one contributes none.
+  if (standing.unranged.bars !== 3) {
+    throw new Error('...and adds no bar of its own, got ' + standing.unranged.bars + ' bars across 4 markers');
+  }
+  if (standing.empty !== '') throw new Error('With no panels at all the standing view renders nothing');
+
   // ---- 9. A save from before labs existed migrates cleanly ----
   await page.evaluate(() => {
     delete STATE.labs;

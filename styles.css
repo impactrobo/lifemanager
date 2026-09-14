@@ -1265,6 +1265,37 @@ textarea.skill-item-detail + .skill-sched { margin-top: 0; }
 /* A reading whose marker was deleted: shown, unranged, visibly lesser. It stays because the delete
    confirm said it would, not because it is still meaningful. */
 .lab-orphan { opacity: 0.55; border-left-style: dashed; }
+
+/* The position bar, built the same way the volume landmarks build theirs: zones painted as a
+   linear-gradient across the track, a marker line for the reading. Soft fills throughout -- the
+   bands are context, and a saturated red zone would be the verdict this screen refuses to give. */
+.lab-bar { margin-top: 6px; }
+.lab-bar-track {
+  position: relative; height: 8px; border-radius: 20px;
+  border: 1px solid var(--border-soft); overflow: hidden;
+}
+.lab-bar-mark {
+  position: absolute; top: -2px; bottom: -2px; width: 3px; margin-left: -1.5px;
+  background: var(--text); border-radius: 2px; box-shadow: 0 0 0 1px rgba(0,0,0,0.3);
+}
+.lab-bar-key {
+  display: flex; gap: 10px; margin-top: 3px;
+  font-size: 9px; color: var(--text-faint); font-variant-numeric: tabular-nums;
+}
+.lab-bar-key-target { color: var(--good); }
+
+.lab-stand { padding: 9px 0; border-bottom: 1px solid var(--border-soft); }
+.lab-stand:last-child { border-bottom: 0; }
+.lab-stand-group {
+  font-family: var(--font-head); font-size: 9px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--text-faint); margin: 12px 0 2px;
+}
+.lab-stand-group:first-child { margin-top: 0; }
+.lab-stand-head { display: flex; align-items: baseline; gap: 8px; }
+.lab-stand-name { flex: 1 1 auto; min-width: 0; font-size: 12px; font-weight: 650; }
+.lab-stand-val { flex: none; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.lab-stand-when { flex: none; font-size: 9px; color: var(--text-faint); }
+.lab-out-text { color: var(--bad); }
 .lab-count { flex: none; font-size: 10px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
 .lab-note { font-size: 11px; color: var(--text-dim); margin-top: 7px; line-height: 1.5; }
 /* Said once, at the foot of the screen, and never repeated on a card. */

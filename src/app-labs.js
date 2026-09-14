@@ -383,6 +383,8 @@ function renderLabPanels() {
   }).join('');
   return `
     <div style="margin-bottom:12px;">${form}</div>
+    ${renderLabStanding()}
+    <div class="subtle-label" style="margin:18px 0 8px;">PANELS</div>
     <div class="entry-list">${cards || emptyState('No lab panels yet. Add one when your next results come back.')}</div>
     ${renderLabDisclaimer()}`;
 }
@@ -451,5 +453,100 @@ function renderLabRanges() {
         <input type="text" id="newLabUnit" placeholder="Unit" style="flex:0 0 76px;">
         <button class="btn btn-sm btn-primary" onclick="addCustomLabMarker()">ADD</button>
       </div>
+    </div>`;
+}
+
+// ---- Where you stand ----
+//
+// The same shape the volume landmarks use: zones painted across a track, a marker line for the
+// reading. MEV/MAV/MRV maps onto ref/target almost exactly, because `target` nests INSIDE `ref` --
+// below-ref, in-ref, in-target, in-ref, above-ref is the same five stops as below-MEV, MEV-MAV,
+// MAV, MAV-MRV, over-MRV.
+//
+// Chosen over a time-series chart as the first view for a reason that only shows up once you think
+// about the cadence: labs come back two to four times a year, so ONE panel is the common case and a
+// trend line needs at least two. This works from a single draw. It's also pure CSS -- no Chart.js,
+// nothing to destroy and rebuild on render.
+function labBarZones(key, value) {
+  const r = labRange(key);
+  const bounds = [r.ref.low, r.ref.high, r.target.low, r.target.high].filter(b => b != null);
+  // Nothing stated to position against -- a bar with no zones would be a decoration.
+  if (!bounds.length) return null;
+  const hi = Math.max(Number(value) || 0, ...bounds) * 1.15;
+  if (!(hi > 0)) return null;
+
+  const segs = [];
+  let cursor = 0;
+  const push = (to, kind) => { if (to > cursor) { segs.push({ from: cursor, to, kind }); cursor = to; } };
+  // Walked in axis order, so a one-sided marker simply skips the zones it doesn't state: ApoB has
+  // no floor and gets no leading out-of-range band, HDL has no ceiling and gets no trailing one.
+  if (r.ref.low != null) push(r.ref.low, 'out');
+  push(r.target.low != null ? r.target.low : cursor, 'in');
+  if (r.target.low != null || r.target.high != null) {
+    push(r.target.high != null ? r.target.high : (r.ref.high != null ? r.ref.high : hi), 'target');
+  }
+  if (r.ref.high != null) push(r.ref.high, 'in');
+  push(hi, r.ref.high != null ? 'out' : 'in');
+
+  return { hi, segs, pct: v => Math.max(0, Math.min(100, (v / hi) * 100)) };
+}
+
+function renderLabBar(key, value) {
+  const z = labBarZones(key, value);
+  if (!z) return '';
+  const tone = { out: 'var(--bad-soft)', in: 'var(--surface2)', target: 'var(--good-soft)' };
+  const gradient = z.segs
+    .map(s => `${tone[s.kind]} ${z.pct(s.from).toFixed(1)}%, ${tone[s.kind]} ${z.pct(s.to).toFixed(1)}%`)
+    .join(', ');
+  const r = labRange(key);
+  const bound = (b, sep) => {
+    if (b.low != null && b.high != null) return `${b.low}\u2013${b.high}`;
+    if (b.high != null) return `\u2264 ${b.high}`;
+    if (b.low != null) return `\u2265 ${b.low}`;
+    return null;
+  };
+  const ref = bound(r.ref), target = bound(r.target);
+  return `
+    <div class="lab-bar">
+      <div class="lab-bar-track" style="background: linear-gradient(to right, ${gradient});">
+        <div class="lab-bar-mark" style="left:${z.pct(Number(value)).toFixed(1)}%;"></div>
+      </div>
+      <div class="lab-bar-key">
+        ${ref ? `<span>Ref ${ref}</span>` : ''}
+        ${target ? `<span class="lab-bar-key-target">Target ${target}</span>` : ''}
+      </div>
+    </div>`;
+}
+
+// Latest-per-MARKER, not the latest panel. Panels are sparse, so the newest reading of one marker
+// and the newest of another routinely come off different draws -- which is exactly what makes a
+// "where you stand" view worth having rather than just reading the top card.
+function renderLabStanding() {
+  const groups = labMarkersForDisplay()
+    .map(g => ({
+      label: g.label,
+      rows: g.markers
+        .map(m => ({ m, latest: latestLabValue(m.key) }))
+        .filter(x => x.latest),
+    }))
+    .filter(g => g.rows.length);
+  if (!groups.length) return '';
+  return `
+    <div class="subtle-label" style="margin:18px 0 8px;">WHERE YOU STAND</div>
+    <div class="panel">
+      ${groups.map(g => `
+        ${g.label ? `<div class="lab-stand-group">${g.label}</div>` : ''}
+        ${g.rows.map(({ m, latest }) => {
+          const s = labStatus(m.key, latest.value);
+          return `
+          <div class="lab-stand">
+            <div class="lab-stand-head">
+              <span class="lab-stand-name">${escapeHtml(m.label)}</span>
+              <span class="lab-stand-val mono ${s && s.inRef === false ? 'lab-out-text' : ''}">${latest.value}<i class="lab-unit">${escapeHtml(labRange(m.key).unit)}</i></span>
+              <span class="lab-stand-when">${fmtGoalDate(latest.date)}</span>
+            </div>
+            ${renderLabBar(m.key, latest.value)}
+          </div>`;
+        }).join('')}`).join('')}
     </div>`;
 }
