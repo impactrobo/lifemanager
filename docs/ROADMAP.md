@@ -81,9 +81,10 @@ before starting any of these.
      already exists in `STATE`, nothing assembles it. Outcome metrics (the scale) demotivate someone
      who struggles with motivation; process metrics ("did you show up") motivate. This is also the
      surface most of the items below would land on.
-  2. **Chart sleep &amp; steps, add RHR/BP chips** (S) — sleep hours, sleep quality and steps are
-     already logged daily via `LOG_FIELDS` and go straight into a hole: `WEIGHT_METRICS` charts only
-     weight/BF%/body water. Cheapest win in the whole scope.
+  2. ~~**Chart sleep & steps, add RHR/BP chips**~~ — **shipped 2026-09-15** as sleep hours, sleep
+     quality, steps and resting heart rate (see Recently Shipped). Blood pressure deliberately held
+     back — it's two numbers, not one, and doesn't fit this chart's single-value shape without its
+     own special case throughout. Worth a real two-line chart later, not a hack on this one.
   3. **Lab biomarkers** (M) — the actual missing piece for a longevity focus. No sparse, dated,
      ranged panel exists anywhere (lipids/ApoB, HbA1c, hs-CRP, vitamin D, ferritin, etc.) — a
      different data shape from the daily log, its own BODY subtab.
@@ -413,6 +414,28 @@ on an architecture split + a large wave of Maximalist aesthetics.
   pattern.
 
 ### Feature changes
+
+- **Sleep, steps and resting heart rate charted on the Body tab (2026-09-15).** From the "Best Shape
+  of Your Life" scope, ranked #2 — the cheapest win in it. `WEIGHT_METRICS` charted only
+  weight/body fat %/body water %, while sleep hours, sleep quality and steps were already logged
+  daily via Home's quick-log chips and went straight into a hole. Resting heart rate is new.
+  - **The two sources were genuinely different shapes**, not just different fields: `STATE.weightLog`
+    is an array of dated entries, `STATE.life.dailyLog` is an object *keyed* by date. Generalized via
+    one `metricSeries(metric)` in `app-body.js` that resolves either into the `{date, value}` list
+    the chart and `trailingAverage()` already expect — a metric carries `source`, `get()` and
+    `has()`, and drawing code never needs to know which kind it's looking at. No test had ever
+    existed for this chart, weight-only or otherwise; `test_body_metrics.js` is new and pins the
+    sort order surviving unordered object-key insertion, per-field filtering (a day with sleep but
+    no steps logged must drop out of the steps series only), and the empty-state copy — which had to
+    stop pointing "at the log below" for `dailyLog` metrics, since there isn't one there.
+  - **Resting heart rate got a new AM chip** (checked on waking, same moment as sleep), taking the
+    AM strip from 3 chips to 4. Screenshot-checked at 390px before shipping — the grid held up fine;
+    the label reads `REST HR` to keep it on one line at that width.
+  - **Blood pressure was scoped out on purpose.** It's two numbers, not one, and neither the chip
+    (`logFieldDisplay` returns a single formatted string) nor this chart (one line plus its 7-day
+    trailing average) has a hook for a paired value. Building it here would have meant a special
+    case in the chip, the chart, and the metric picker for the one two-valued entry among several
+    single-valued ones. Logged as a real follow-up: a two-line chart of its own.
 
 - **Practice on the weekday plan (2026-09-15).** Step 6 of "Skills Own the Ladder" — the last, and
   the only one that reshaped a primitive other features read. Shipped in two commits: the shape

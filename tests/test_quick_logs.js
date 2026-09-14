@@ -63,14 +63,16 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // something and a dash isn't.
   const empty = await page.evaluate(() => ({
     weight: logFieldDisplay('weight'), sleepLen: logFieldDisplay('sleepLen'),
-    sleepQual: logFieldDisplay('sleepQual'), calories: logFieldDisplay('calories'),
+    sleepQual: logFieldDisplay('sleepQual'), restingHR: logFieldDisplay('restingHR'),
+    calories: logFieldDisplay('calories'),
     water: logFieldDisplay('water'), steps: logFieldDisplay('steps'),
     setChips: document.querySelectorAll('.log-chip-set').length,
     chips: document.querySelectorAll('.log-chip').length,
   }));
   console.log('nothing logged yet:', empty);
-  if (empty.chips !== 6) throw new Error(`Expected 6 chips across the two strips, got ${empty.chips}`);
-  ['weight', 'sleepLen', 'sleepQual', 'calories', 'steps'].forEach(f => {
+  // 4 AM (weight, sleep length, sleep quality, resting HR) + 3 PM (calories, water, steps).
+  if (empty.chips !== 7) throw new Error(`Expected 7 chips across the two strips, got ${empty.chips}`);
+  ['weight', 'sleepLen', 'sleepQual', 'restingHR', 'calories', 'steps'].forEach(f => {
     if (empty[f] !== '&mdash;') throw new Error(`${f} should read as a dash when unlogged, got "${empty[f]}"`);
   });
   if (empty.water !== '0/2000') throw new Error(`Water should show progress even at zero, got "${empty.water}"`);
@@ -122,26 +124,32 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (opened.focused !== 'log_sleepQual') throw new Error(`The sheet should open focused on the chip you tapped, got ${opened.focused}`);
   if (!opened.hasWeight) throw new Error('The AM sheet holds the whole morning group, not just one field');
   if (opened.hasCalories) throw new Error('The AM sheet must not carry PM fields');
-  if (opened.rows !== 3) throw new Error(`Expected 3 rows in the AM sheet, got ${opened.rows}`);
+  // weight, sleep length, sleep quality, resting HR.
+  if (opened.rows !== 4) throw new Error(`Expected 4 rows in the AM sheet, got ${opened.rows}`);
 
   // ---- 5. Saving writes every field in the group at once ----
   await page.fill('#log_weight', '181.2');
   await page.fill('#log_sleepLen', '7.5');
   await page.selectOption('#log_sleepQual', '4');
+  await page.fill('#log_restingHR', '58');
   await page.evaluate(() => saveLogPopup());
   await settle(page);
   const saved = await page.evaluate(() => ({
     weight: logFieldValue('weight'), sleepLen: logFieldValue('sleepLen'), sleepQual: logFieldValue('sleepQual'),
+    restingHR: logFieldValue('restingHR'),
     closed: UI.logPopup === null,
     chipWeight: logFieldDisplay('weight'),
+    chipRestingHR: logFieldDisplay('restingHR'),
     setChips: document.querySelectorAll('.log-chip-set').length,
   }));
   console.log('after saving the AM sheet:', saved);
   if (Math.abs(saved.weight - 181.2) > 0.05) throw new Error(`Weight should be 181.2, got ${saved.weight}`);
   if (saved.sleepLen !== 7.5 || saved.sleepQual !== 4) throw new Error('Sleep length and quality should both save');
+  if (saved.restingHR !== 58) throw new Error(`Resting HR should be 58, got ${saved.restingHR}`);
   if (!saved.closed) throw new Error('Saving should close the sheet');
   if (saved.chipWeight !== '181.2') throw new Error(`The chip must show what the sheet saved, got ${saved.chipWeight}`);
-  if (saved.setChips !== 3) throw new Error(`All 3 AM chips should now read as set, got ${saved.setChips}`);
+  if (saved.chipRestingHR !== '58') throw new Error(`The resting HR chip must show what the sheet saved, got ${saved.chipRestingHR}`);
+  if (saved.setChips !== 4) throw new Error(`All 4 AM chips should now read as set, got ${saved.setChips}`);
 
   // ---- 6. A blank field CLEARS, rather than being skipped ----
   // The sheet opens pre-filled with what's already logged, so a blank is a deliberate act. Without

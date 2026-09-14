@@ -572,6 +572,8 @@ const LOG_FIELDS = {
   weight:    { group: 'am', label: 'Weight',   unit: () => weightUnitLabel(), step: '0.1' },
   sleepLen:  { group: 'am', label: 'Sleep',    unit: () => 'hrs', step: '0.1' },
   sleepQual: { group: 'am', label: 'Quality',  unit: () => '1-5' },
+  // Checked on waking, same moment as sleep -- AM, not PM.
+  restingHR: { group: 'am', label: 'Rest HR',  unit: () => 'bpm', step: '1' },
   calories:  { group: 'pm', label: 'Calories', unit: () => 'kcal', step: '1' },
   water:     { group: 'pm', label: 'Water',    unit: () => waterUnitLabel() },
   steps:     { group: 'pm', label: 'Steps',    unit: () => 'steps', step: '1' },
@@ -586,6 +588,7 @@ function logFieldValue(field) {
     case 'calories':  return w && w.calories != null ? w.calories : null;
     case 'sleepLen':  return log.sleepHours != null ? log.sleepHours : null;
     case 'sleepQual': return log.sleepQuality != null ? log.sleepQuality : null;
+    case 'restingHR': return log.restingHR != null ? log.restingHR : null;
     case 'water':     return log.waterMl != null ? log.waterMl : null;
     case 'steps':     return log.steps != null ? log.steps : null;
     default:          return null;
@@ -734,7 +737,7 @@ function renderLogStrip(group, fields) {
     <div class="subtle-label" style="margin:18px 0 8px;">LOG &middot; ${group.toUpperCase()}</div>
     <div class="log-strip">${fields.map(logChip).join('')}</div>`;
 }
-function renderHomeAmLogBox() { return renderLogStrip('am', ['weight', 'sleepLen', 'sleepQual']); }
+function renderHomeAmLogBox() { return renderLogStrip('am', ['weight', 'sleepLen', 'sleepQual', 'restingHR']); }
 function renderHomePmLogBox() { return renderLogStrip('pm', ['calories', 'water', 'steps']); }
 
 function openLogPopup(group, focus) { UI.logPopup = { group, focus }; render(); }
@@ -765,6 +768,7 @@ function saveLogPopup() {
   const log = todayLifeLog();
   if (fields.includes('sleepLen')) setOrClear(log, 'sleepHours', vals.sleepLen);
   if (fields.includes('sleepQual')) setOrClear(log, 'sleepQuality', vals.sleepQual);
+  if (fields.includes('restingHR')) setOrClear(log, 'restingHR', vals.restingHR);
   if (fields.includes('steps')) setOrClear(log, 'steps', vals.steps);
   // The weight entry is only created if there's something to put in it -- browsing the sheet and
   // closing it must not leave an empty row in weightLog that the TDEE window then counts.

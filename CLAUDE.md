@@ -279,7 +279,7 @@ contract — old saves gain new defaults, keep their data).
 
 Canonical tests didn't exist as committed files before this repo — they only ever lived inside
 temporary chat sandboxes and were lost between sessions, so building this suite out was genuinely
-new work, not a restore. `npm test` is currently **74/74 test files passing** (`run_all.js`
+new work, not a restore. `npm test` is currently **75/75 test files passing** (`run_all.js`
 auto-discovers every `test_*.js` in `tests/`, so this number moves — trust its own summary line
 over any count written here). Run the full suite before any publish, and add a new `test_*.js`
 whenever a new feature area is added, so this stays complete rather than drifting back toward the

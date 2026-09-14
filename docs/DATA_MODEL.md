@@ -198,7 +198,14 @@ STATE = {
 
   // ---------------- SCHEDULE / DAILY LIFE ----------------
   life: {
-    dailyLog: {},          // date -> { [anchorId]: true }         (fixed daily habit completion)
+    dailyLog: {},          // date -> { [anchorId]: true,          (fixed daily habit completion)
+                           //           sleepHours, sleepQuality,  // AM quick-log chips
+                           //           restingHR,                 // bpm; AM, added 2026-09-15
+                           //           steps, waterMl }            // PM quick-log chips
+                           // Sparse and freeform -- see LOG_FIELDS in app-home.js for the whole set
+                           // and setOrClear() for how a field is written/cleared. All of these plus
+                           // weightLog's weight/bodyFatPct/bodyWaterPct feed the Body tab's trend
+                           // chart via WEIGHT_METRICS + metricSeries() in app-body.js.
     periodicLog: {},        // anchorId -> last-done date string     (weekly/periodic check-ins)
     anchors: [ { id, start: 'HH:MM', end: 'HH:MM', label, detail } ],   // user-editable, seeded from DEFAULT_DAILY_ANCHORS
     periodic: [ { id, label, cadenceDays, cadenceLabel } ],             // seeded from DEFAULT_PERIODIC_ANCHORS

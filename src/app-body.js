@@ -303,15 +303,11 @@ function drawWeightChart() {
   const canvas = document.getElementById('weightChart');
   if (!canvas || typeof Chart === 'undefined') return;
   const metric = WEIGHT_METRICS.find(m => m.key === VIEW.selectedWeightMetric) || WEIGHT_METRICS[0];
-  const isWeight = metric.key === 'weight';
-  const list = STATE.weightLog
-    .filter(e => isWeight ? e.weightLb != null : e[metric.key] != null)
-    .sort((a, b) => a.date.localeCompare(b.date))
-    .map(e => ({ date: e.date, value: isWeight ? lbToDisplay(e.weightLb) : e[metric.key] }));
+  const list = metricSeries(metric);
   if (weightChartInstance) { weightChartInstance.destroy(); }
   const trend = trailingAverage(list, WEIGHT_TREND_WINDOW_DAYS);
   const styles = getComputedStyle(document.documentElement);
-  const unitSuffix = isWeight ? ' ' + weightUnitLabel() : '%';
+  const unitSuffix = metric.suffix();
   weightChartInstance = new Chart(canvas.getContext('2d'), {
     type: 'line',
     data: {
@@ -356,18 +352,52 @@ function drawWeightChart() {
 // These were chart-ONLY views while entry lived a tab away under Health & Diet -> Specs.
 // renderBody() now stacks each log directly beneath its chart, which is the seam the Health &
 // Fitness merge existed to close -- so these empty states point DOWN the page, not sideways.
-// Same three metrics the weight-log entry form can capture (weight required, body fat %/body
-// water % optional smart-scale readings) \u2014 one chart at a time via this selector, same UX
-// convention as VIEW.selectedMeasurementField's dropdown below for Body Measurements.
+//
+// Started as the three metrics the weight-log entry form captures (weight required, body fat %/
+// body water % optional smart-scale readings). Sleep hours, sleep quality, steps and resting heart
+// rate joined on 2026-09-15 -- they were already being logged daily via Home's quick-log chips
+// (see LOG_FIELDS in app-home.js) and had nowhere to show a trend. Same selector, same chart, one
+// more `source` to read from: `weightLog` (dated entries, one per day at most) or `dailyLog`
+// (STATE.life.dailyLog, keyed by date -- the checklist/quick-log table). `get`/`has` isolate that
+// difference so drawWeightChart() and renderBodyWeightChart() don't need to know it.
+//
+// Blood pressure was deliberately left out of this pass: it's two numbers, not one, and neither the
+// chip display nor this chart's single-line-plus-trend shape fits a value that isn't scalar. Worth
+// its own two-line chart later rather than a special case bolted onto every metric here.
 const WEIGHT_METRICS = [
-  { key: 'weight', label: 'Weight' },
-  { key: 'bodyFatPct', label: 'Body Fat %' },
-  { key: 'bodyWaterPct', label: 'Body Water %' },
+  { key: 'weight', label: 'Weight', source: 'weightLog',
+    has: e => e.weightLb != null, get: e => lbToDisplay(e.weightLb), suffix: () => ' ' + weightUnitLabel() },
+  { key: 'bodyFatPct', label: 'Body Fat %', source: 'weightLog',
+    has: e => e.bodyFatPct != null, get: e => e.bodyFatPct, suffix: () => '%' },
+  { key: 'bodyWaterPct', label: 'Body Water %', source: 'weightLog',
+    has: e => e.bodyWaterPct != null, get: e => e.bodyWaterPct, suffix: () => '%' },
+  { key: 'sleepHours', label: 'Sleep', source: 'dailyLog',
+    has: l => l.sleepHours != null, get: l => l.sleepHours, suffix: () => 'h' },
+  { key: 'sleepQuality', label: 'Sleep Quality', source: 'dailyLog',
+    has: l => l.sleepQuality != null, get: l => l.sleepQuality, suffix: () => '/5' },
+  { key: 'steps', label: 'Steps', source: 'dailyLog',
+    has: l => l.steps != null, get: l => l.steps, suffix: () => '' },
+  { key: 'restingHR', label: 'Resting Heart Rate', source: 'dailyLog',
+    has: l => l.restingHR != null, get: l => l.restingHR, suffix: () => ' bpm' },
 ];
+// The one place either source turns into the {date, value} list every chart/trailingAverage() call
+// already expects. weightLog is an array of dated entries; dailyLog is an object keyed BY date, so
+// it needs Object.keys() first -- everything downstream of this is source-agnostic.
+function metricSeries(metric) {
+  if (metric.source === 'dailyLog') {
+    return Object.keys(STATE.life.dailyLog)
+      .filter(d => metric.has(STATE.life.dailyLog[d]))
+      .sort()
+      .map(d => ({ date: d, value: metric.get(STATE.life.dailyLog[d]) }));
+  }
+  return STATE.weightLog
+    .filter(metric.has)
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map(e => ({ date: e.date, value: metric.get(e) }));
+}
 function setWeightMetric(m) { VIEW.selectedWeightMetric = m; render(); }
 function renderBodyWeightChart() {
   const metric = WEIGHT_METRICS.find(m => m.key === VIEW.selectedWeightMetric) || WEIGHT_METRICS[0];
-  const isWeight = metric.key === 'weight';
   const selector = `
     <label class="field" style="margin-bottom:12px;">
       <span class="lbl">Metric</span>
@@ -375,9 +405,13 @@ function renderBodyWeightChart() {
         ${WEIGHT_METRICS.map(m => `<option value="${m.key}" ${m.key===VIEW.selectedWeightMetric?'selected':''}>${m.label}</option>`).join('')}
       </select>
     </label>`;
-  const list = STATE.weightLog.filter(e => isWeight ? e.weightLb != null : e[metric.key] != null);
+  const list = metricSeries(metric);
   if (list.length < 2) {
-    return selector + emptyState(`Log at least 2 entries with ${metric.label} in the log below to see a trend here.`);
+    // weightLog metrics are entered in the log directly below this chart; dailyLog ones are logged
+    // from Home's AM/PM chips instead, and telling someone to look "below" for a table that isn't
+    // there would send them nowhere.
+    const where = metric.source === 'dailyLog' ? "Home's daily log chips" : 'the log below';
+    return selector + emptyState(`Log at least 2 entries with ${metric.label} via ${where} to see a trend here.`);
   }
   return selector + `<div class="chart-wrap"><canvas id="weightChart" height="180"></canvas></div>`;
 }
