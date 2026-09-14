@@ -385,6 +385,40 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **The lift library (2026-09-14).** Step 7 of "Phases Own the Plan", in `src/app-lifts.js`, and the
+  prerequisite for everything below it — the piece that finally gives the app one durable way to
+  name a lift.
+  - **Why an exercise id can't be the answer.** Phases own plans, so every new block builds a new
+    plan with new `uid()`s. A target or a PR pointing at an exercise id would break at *every block
+    boundary* — the exact thing the phases feature exists to make routine. Lift identity has to
+    outlive the plan, by construction.
+  - **What was broken before:** GZCL's T1/T2 reference a `categoryId`, but **T3 slots use free text**
+    — so a single workout style carried two identity schemes. Flat-list exercises had only a `name`
+    and a `uid()` unique to that exercise in that workout.
+  - **A Lift is pure identity:** a name and a muscle, nothing about programs, tiers or training
+    maxes. A category **gains** a `liftId` rather than being replaced by one — "Bench" the lift and
+    "Bench as a GZCL category with a T1 training max of 245" stay different things.
+  - **101 lifts ship** across all fifteen muscle groups, **equipment-leading**: Barbell Bench Press,
+    Dumbbell Bench Press, Incline Barbell Bench Press. A bare "Bench Press" is exactly what must not
+    exist — three different loads and three different progressions, and collapsing them would corrupt
+    all three histories at once. A `short` rides along for log rows (`BB Bench`).
+  - **Nothing merges automatically.** An exact name match is not a guess and gets a one-tap link;
+    everything else is a **suggestion** a person chooses between. That's where fuzzy matching earns
+    its place — generating candidates, nowhere near the code that assigns. A wrong automatic merge
+    fuses two lifts' histories permanently with no undo; a wrong suggestion costs a glance. Scored on
+    shared *words* rather than edit distance, because the failure to handle is a missing qualifier
+    ("Bench Press" → "Barbell Bench Press"), not a typo.
+  - **Muscle first, then the lift.** Choosing Chest and seeing a dozen options beats scrolling two
+    hundred, and muscle alone makes the list short enough that a second filter isn't worth the tap.
+    One picker serves categories, flat exercises, T3 slots and the review screen via a token, so none
+    of them knows about the others.
+  - **`allLifts()` concatenates rather than merging into STATE**, so the shipped list can grow
+    between releases with no migration and a hand-added lift can never be shadowed by one.
+  - Two **vacuous-assertion** bugs caught in my own test: the "no duplicate lift" check passed for
+    the wrong reason because the picker had never rendered so nothing was typed — and then again
+    because the row it picked had an *exact* match and correctly showed no picker at all. `render()`
+    is rAF-deferred, so opening a picker and typing into it must straddle a `settle()`.
+
 - **Deloads (2026-09-14).** Step 6 of "Phases Own the Plan". Reduced volume *and* maintenance
   calories, all of it applied at **display time** — a saved workout is never edited, so turning a
   deload off restores the real numbers exactly rather than leaving a halved version behind.
