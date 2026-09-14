@@ -500,6 +500,7 @@ function finishSkillSession() {
     moves: applied.map(x => ({ itemId: x.itemId, rating: x.rating, spentSec: Math.round(Number(x.spentSec) || 0) })),
   });
   STATE.skillSession = null;
+  stampReachedSkillTargets(skill.id);
   saveState();
   showToast(`Session logged — ${applied.length} item${applied.length === 1 ? '' : 's'} rated`);
   render();

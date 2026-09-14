@@ -96,10 +96,14 @@ before starting any of these.
      (walking + 2 full-body sessions + mobility) the way C25K already proves works for cardio; and an
      unplanned-skip path distinct from a deload/active-rest, so silently skipping isn't how a block
      dies.
-  7. ~~**Skills, generalised**~~ — scoped as "Skills Own the Ladder", **steps 1–3 of 6 shipped
+  7. ~~**Skills, generalised**~~ — scoped as "Skills Own the Ladder", **steps 1–5 of 6 shipped
      2026-09-15**, plus the four-step "Closing the Loop" punch list between 2 and 3 (see Recently
-     Shipped). Remaining: 4. per-skill time categories; 5. skill targets; 6. practice on the weekday
-     plan (last, because it's the only one that reshapes a primitive other features read).
+     Shipped). Remaining: **6. practice on the weekday plan** — the biggest and last, because it's
+     the only one that reshapes a primitive other features read. It needs the plan entry generalised
+     from `{id, workoutId}` to `{id, kind:'workout'|'skill', refId}`, which touches
+     `exercisePlanInEffect()`, `dayModel()`, the Planner UI, and the per-block plan copying phases
+     do. Everything else in the scope is done, so the Skill model is settled before the plan has to
+     reference it — which was the whole reason for leaving it last.
   Deliberately **not** proposed: points, badges, streak-shaming — the app instruments the plan and
   doesn't second-guess the person, and gamification would be a different product.
 
@@ -412,6 +416,37 @@ on an architecture split + a large wave of Maximalist aesthetics.
   pattern.
 
 ### Feature changes
+
+- **Skill targets (2026-09-15).** Step 5 of "Skills Own the Ladder", and the last before the weekday
+  plan. New file `src/app-skill-targets.js`, new `STATE.skillTargets`, a TARGETS subtab.
+  `{id, skillId, kind: 'items'|'minutes', listId, rung, count, byDate, createdAt, reachedOn}`.
+  - **A skill target can go BACKWARDS, and an exercise target can't.** That's the one real difference
+    and the whole design turns on it: once 225 has been on the bar it has been on the bar (hence
+    `.ex-target-hit` turns green and stays), but an item's rung is *derived* from its interval, so a
+    bad rating collapses it. "3 songs at PROFICIENT" can be true in October and false in December.
+  - **So `reachedOn` is stamped, not recomputed.** The tick is permanent — you did hit it — and the
+    live count appears beside it whenever it has since slipped: *"reached 25 Aug · 2 of 3 right
+    now"*. Hiding a real regression to protect a tick would be the app flattering you; dropping the
+    tick would deny something that happened. Minutes targets can't slip, and aren't checked for it.
+  - **"Or better" is an index comparison** against the ordered ladder, so a MASTERED song counts
+    toward a PROFICIENT target — it passed through proficient on the way. `'new'` isn't offered as a
+    target rung: "3 songs at NEW or better" is every song in the list, a target you clear by typing.
+  - **Minutes count practice you LOGGED**, in the window from `createdAt` to `byDate`. Deliberately
+    *not* the week rollup's de-duplicated figure, which adds scheduled blocks you never logged
+    against — reproducing that here would mean scanning the schedule for every day of the window on
+    every render, ninety passes for a three-month target. The copy says "practice logged" so the two
+    numbers can't be confused.
+  - **`byDate` is optional.** A standing ambition is a legitimate target; a date turns it into a
+    deadline. Overdue is reported and never enforced — the target stays, it just says the date passed.
+  - **Stamping happens at the three places progress can RISE, and that list is exhaustive rather than
+    hopeful:** a rung only rises through `applySkillRating()` (finishing a session) or by claiming
+    mastery, and minutes only rise by logging a session. Editing a name or tier can't raise a rung;
+    adding an item adds a NEW one, rank 0, which can't lift an "at proficient" count; deleting only
+    lowers, and lowering never un-stamps. Doing it there rather than lazily inside
+    `skillTargetProgress()` keeps the read-out a pure function — a renderer that writes to STATE
+    works right up until two of them run in one frame.
+  - Inherits the **no-projection** rule outright. Learning moves in steps and stalls exactly as
+    strength does, and a straight line through it would be confidently wrong.
 
 - **Per-skill time categories (2026-09-15).** Step 4 of "Skills Own the Ladder". Each skill emits
   its own time category (`skill:<id>`) with its own name and colour, so guitar time and language

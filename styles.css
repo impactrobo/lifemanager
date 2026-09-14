@@ -1226,6 +1226,19 @@ textarea.skill-item-detail + .skill-sched { margin-top: 0; }
 .skill-row-flag-stale { background: color-mix(in srgb, var(--warn) 16%, var(--surface)); color: var(--warn); }
 .skill-row-flag-stuck { background: color-mix(in srgb, var(--bad) 14%, var(--surface)); color: var(--bad); }
 
+/* ---------- Skill targets ---------- */
+/* Green on reach and it stays, like .ex-target-hit -- but a skill target CAN slip afterwards, so the
+   card keeps its tick and the live count appears underneath in the warning colour rather than the
+   tick quietly going away. */
+.skill-target { --rung: var(--border); position: relative; padding-left: 17px; overflow: hidden; }
+.skill-target::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--rung); }
+.skill-target-hit { --rung: var(--good); border-color: var(--good); }
+.skill-target-late { --rung: var(--warn); }
+.skill-target .ehead { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
+.skill-target-name { flex: 1 1 auto; min-width: 0; font-size: 14px; font-weight: 650; }
+.skill-target-bar { height: 6px; border-radius: 3px; background: var(--surface2); overflow: hidden; margin-bottom: 6px; }
+.skill-target-fill { height: 100%; background: var(--accent); }
+
 /* A template is a starting point, so it reads as a choice rather than a submit: two lines, left
    aligned, and never the primary button next to CREATE. */
 .skill-template { display: block; text-align: left; padding: 10px 12px; margin-bottom: 6px; }

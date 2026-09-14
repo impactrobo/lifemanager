@@ -151,6 +151,18 @@ STATE = {
                            // review comes back where you left off
     notes,                 // carried between the block and the summary, which both show the field
   },
+  skillTargets: [         // named ambitions per skill. Mirrors exTargets, and differs in ONE way:
+    { id, skillId,        // an exercise target is monotonic, a skill target is not -- an item's
+      kind: 'items'|'minutes',   // rung is derived from its interval, so a bad rating pulls it
+      listId,             // items only; null = any list in the skill        // back down
+      rung,               // items only: count at this rung OR BETTER. Never 'new'
+      count,              // how many items, or how many minutes
+      byDate,             // null = a standing ambition rather than a deadline
+      createdAt,          // also the window START for a minutes target
+      reachedOn },        // STAMPED the first time it was hit, and never cleared. The live count
+    ...                   // shows beside it when it has since slipped -- hiding a regression to
+  ],                      // protect a tick would be the app flattering you
+
   phases: [                // a goal's blocks, IN ORDER -- array position is the phase order
     { id, goalId, kind: 'weight', label,
       weeks,                           // the LENGTH. Start dates are DERIVED by running sum from

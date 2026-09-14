@@ -40,6 +40,7 @@ function loadState() {
       exTargets: parsed.exTargets || [],
       skills: parsed.skills || [],
       skillSession: parsed.skillSession || null,
+      skillTargets: parsed.skillTargets || [],
       cardioWorkouts: parsed.cardioWorkouts || [],
       cardioLogs: parsed.cardioLogs || {},
       notes: parsed.notes || [],
@@ -387,6 +388,9 @@ function migrateState() {
   if (!Array.isArray(STATE.lifts)) STATE.lifts = [];
   if (!Array.isArray(STATE.exTargets)) STATE.exTargets = [];
   if (!Array.isArray(STATE.skills)) STATE.skills = [];
+  if (!Array.isArray(STATE.skillTargets)) STATE.skillTargets = [];
+  // A target pointing at a skill that's gone would render a row nothing can satisfy.
+  STATE.skillTargets = STATE.skillTargets.filter(t => STATE.skills.some(s => s.id === t.skillId));
   // A malformed skill would break every weekday read through it; normalise once on load
   // rather than guarding at each call site. Scheduling fields are backfilled here too, so a
   // skill saved before the session engine lands still gains them without its own migration.

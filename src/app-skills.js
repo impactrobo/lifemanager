@@ -192,6 +192,7 @@ function deleteSkill(id) {
     : '';
   showConfirm(`Delete “${s.name}”? Its lists and practice history go with it.${extra}`, () => {
     STATE.skills = allSkills().filter(x => x.id !== id);
+    STATE.skillTargets = allSkillTargets().filter(t => t.skillId !== id);
     if (NAV.skillId === id) NAV.skillId = null;
     // The session goes with the skill. loadState() drops an orphan on the next boot anyway, but
     // leaving one live until then means the runner is on screen with nothing behind it.
@@ -267,6 +268,7 @@ function toggleSkillItemMastered(skillId, itemId) {
   const found = skillItemById(skillById(skillId), itemId);
   if (!found) return;
   found.item.mastered = !found.item.mastered;
+  stampReachedSkillTargets(skillId);
   saveState();
   showToast(found.item.mastered ? 'Mastered — retired from practice' : 'Back in rotation');
   render();
@@ -286,6 +288,7 @@ function saveSkillPractice(skillId) {
     moves: [],
   });
   UI.skillLogFormOpen = false;
+  stampReachedSkillTargets(skillId);
   saveState();
   showToast('Session logged');
   render();
@@ -400,12 +403,14 @@ function renderOneSkill(skill) {
   const tab = (key, label) =>
     `<button class="${NAV.skillSubtab === key ? 'active' : ''}" onclick="setSkillSubtab('${key}')">${escapeHtml(label)}</button>`;
   const subnav = subNav(
-    tab('log', 'LOG') + skill.lists.map(l => tab(l.id, l.name)).join('') + tab('progress', 'PROGRESS'),
+    tab('log', 'LOG') + skill.lists.map(l => tab(l.id, l.name)).join('')
+      + tab('progress', 'PROGRESS') + tab('targets', 'TARGETS'),
     { marginTop: false });
 
   let body;
   if (NAV.skillSubtab === 'log') body = renderSkillPracticeLog(skill);
   else if (NAV.skillSubtab === 'progress') body = renderSkillTimeline(skill);
+  else if (NAV.skillSubtab === 'targets') body = renderSkillTargets(skill);
   else {
     const l = skillListById(skill, NAV.skillSubtab);
     body = l ? renderSkillItemList(skill, l) : renderSkillPracticeLog(skill);

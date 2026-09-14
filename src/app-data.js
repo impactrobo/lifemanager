@@ -791,6 +791,9 @@ function defaultState() {
     // real minutes at a guitar or a desk -- a reload or a backgrounded phone must not lose it.
     // One at a time, because you practise one thing at a time. See src/app-skill-session.js.
     skillSession: null,
+    // Named ambitions per skill -- "3 songs at proficient", "20 hours". Top-level with a
+    // skillId, mirroring exTargets. See src/app-skill-targets.js.
+    skillTargets: [],
     logs: {},          // key `${cycle}_${workoutId}` -> {date, entries:{}, notes, complete} — every workout type shares this
     measurements: [],  // [{id,date,fields:{...cm/kg canonical},photos}] — photos is an array of resized data-URI JPEGs
     weightLog: [],     // [{id,date,weightLb,calories,cardioCalories}]

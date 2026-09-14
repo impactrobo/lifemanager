@@ -81,6 +81,7 @@ function defaultTransientUi() {
     liftPicker: null,                  // { token, muscle, query } -- one picker, whoever opened it
     skillFormOpen: false,
     skillLogFormOpen: false,
+    skillTargetFormOpen: false,
     // The AM/PM quick-log sheet: { group: 'am'|'pm', focus: <field id> } or null. Lives in UI so
     // navigating away closes it, same as every other transient panel.
     logPopup: null,

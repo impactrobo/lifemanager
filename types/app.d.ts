@@ -346,6 +346,29 @@ interface Skill {
   }[];
 }
 
+/** A named ambition for one skill. Mirrors ExerciseTarget, and differs in one way that matters:
+ *  an exercise target is MONOTONIC (once 225 was on the bar, it was on the bar) while a skill
+ *  target is not -- an item's rung is derived from its interval, so a bad rating pulls it back down.
+ *  Hence `reachedOn` is STAMPED rather than recomputed: the tick is permanent, and the live count is
+ *  shown beside it whenever it has since slipped. */
+interface SkillTarget {
+  id: string;
+  skillId: string;
+  kind: 'items' | 'minutes';
+  /** items only. null = any list in the skill. */
+  listId: string | null;
+  /** items only: the rung to count at, "or better". Never 'new'. */
+  rung: string | null;
+  /** How many items, or how many minutes. */
+  count: number;
+  /** null = a standing ambition with no deadline. */
+  byDate: string | null;
+  /** Also the window start for a minutes target. */
+  createdAt: string;
+  /** Stamped the first time it was hit, and never cleared. */
+  reachedOn: string | null;
+}
+
 interface DeloadStyle {
   setsPct: number;
   repsPct: number;
@@ -620,6 +643,7 @@ interface AppState {
   exTargets: ExerciseTarget[];
   skills: Skill[];
   skillSession: SkillSession | null;
+  skillTargets: SkillTarget[];
   logs: Record<string, any>;
   measurements: MeasurementEntry[];
   weightLog: WeightLogEntry[];
