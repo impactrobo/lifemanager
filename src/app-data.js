@@ -772,6 +772,10 @@ function defaultState() {
     muscleLandmarks: defaultMuscleLandmarks(),
     life: defaultLifeState(),
     currentCycle: 1,
+    // Inline rather than a defaultGoals() call: defaultState() runs during app-state.js's own
+    // evaluation, so it can only reach functions from files loaded BEFORE it -- and app-goals.js
+    // loads after. A [] costs nothing to write here and removes the cross-file load-time edge.
+    goals: [],
     logs: {},          // key `${cycle}_${workoutId}` -> {date, entries:{}, notes, complete} — every workout type shares this
     measurements: [],  // [{id,date,fields:{...cm/kg canonical},photos}] — photos is an array of resized data-URI JPEGs
     weightLog: [],     // [{id,date,weightLb,calories,cardioCalories}]

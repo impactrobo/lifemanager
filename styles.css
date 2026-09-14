@@ -763,6 +763,44 @@ button.hit-mark { padding: 0; background: none; font: inherit; color: inherit; c
 
 
 
+/* ---------- Weight goal: pace and projection ---------- */
+/* The bar is the only "big number" here on purpose. Required / actual / projected are a plain
+   label-value-context list rather than three tiles, because two of the three rows routinely say
+   "not yet" -- a goal's first fortnight has no trend to read, and a tile that renders as a dash
+   looks broken in a way a list row doesn't. */
+.goal-bar {
+  height: 8px; border-radius: 4px; background: var(--surface2);
+  border: 1px solid var(--border-soft); overflow: hidden; margin-top: 14px;
+}
+.goal-bar-fill { height: 100%; background: var(--accent); border-radius: 3px; }
+
+.goal-rows { margin-top: 14px; border-top: 1px solid var(--border-soft); }
+.goal-row {
+  display: grid; grid-template-columns: 74px auto 1fr; gap: 10px; align-items: baseline;
+  padding: 9px 0; border-bottom: 1px solid var(--border-soft);
+}
+.goal-row:last-child { border-bottom: none; }
+.goal-row-k { font-size: 11px; color: var(--text-faint); letter-spacing: 0.04em; text-transform: uppercase; }
+.goal-row-v { font-size: 14px; font-weight: 700; white-space: nowrap; }
+.goal-row-x { font-size: 11px; color: var(--text-faint); text-align: right; min-width: 0; }
+
+/* Advisory only -- the band names where a rate sits, it never prevents one. Same posture as the
+   water target being "a target, not a cap". */
+.goal-band { font-weight: 700; }
+.goal-band-conservative { color: var(--good); }
+.goal-band-typical      { color: var(--good); }
+.goal-band-aggressive   { color: var(--warn); }
+.goal-band-beyond       { color: var(--bad); }
+
+.goal-pace { font-weight: 700; }
+.goal-pace-ok     { color: var(--good); }
+.goal-pace-behind { color: var(--warn); }
+
+.goal-note-late {
+  font-size: 11px; color: var(--warn); line-height: 1.5;
+  padding: 9px 0 0; border-top: 1px solid var(--border-soft);
+}
+
 /* ---------- A checked-off reminder ---------- */
 /* It stays exactly where it was rather than disappearing -- the point is being able to look back
    at a day and see that you did the thing, instead of wondering because the row vanished. So this

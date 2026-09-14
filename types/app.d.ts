@@ -175,6 +175,22 @@ interface DietState {
   tdeeWindowWeeks: number;
 }
 
+/** A weight goal: the destination and the deadline. The required rate is derived from them, so
+ *  neither is ever recomputed behind your back. `kind` will gain 'exercise' -- at most one goal of
+ *  each kind is active at a time. Nothing auto-completes a goal: reaching the weight or passing the
+ *  date is reported, and `archived` is set by hand. */
+interface WeightGoal {
+  id: string;
+  kind: 'weight';
+  name: string;
+  startDate: string;
+  targetDate: string;
+  startWeightLb: number;
+  targetWeightLb: number;
+  archived: boolean;
+  createdAt: number;
+}
+
 interface RecurringIncome {
   id: string;
   name: string;
@@ -435,6 +451,7 @@ interface AppState {
   muscleLandmarks: Record<string, any>;
   life: LifeState;
   currentCycle: number;
+  goals: WeightGoal[];
   logs: Record<string, any>;
   measurements: MeasurementEntry[];
   weightLog: WeightLogEntry[];

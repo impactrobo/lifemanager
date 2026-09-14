@@ -34,6 +34,7 @@ function loadState() {
       // `meso` is what this was called before it was renamed to `program` -- an existing save
       // still has the old key, so read either. Nothing else reads `parsed.meso`.
       program: parsed.program || parsed.meso || base.program,
+      goals: parsed.goals || [],
       cardioWorkouts: parsed.cardioWorkouts || [],
       cardioLogs: parsed.cardioLogs || {},
       notes: parsed.notes || [],
@@ -376,6 +377,7 @@ function migrateState() {
   // carried over. Dropping the old key stops a save dump showing both and leaving the next reader
   // wondering which one is live.
   delete STATE.meso;
+  if (!Array.isArray(STATE.goals)) STATE.goals = [];
   if (STATE.settings.waterTargetMl == null) {
     STATE.settings.waterTargetMl = STATE.settings.waterTarget != null
       ? Math.round(Number(STATE.settings.waterTarget) * 250) : 2000;

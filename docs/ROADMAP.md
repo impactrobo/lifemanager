@@ -385,6 +385,39 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Weight goals: pace, projection and an advisory rate band (2026-09-13).** A new GOAL subtab in
+  Health & Diet, and `src/app-goals.js`. Step 2 of the "Phases Own the Plan" scope — phases,
+  per-phase calorie targets and exercise goals build on top of this, and `kind: 'weight'` is on the
+  goal record from day one for that reason.
+  - **The goal holds the destination and the deadline; the rate is derived.** Storing a rate *and* a
+    date is the usual way this feature ends up fighting itself — edit one and the other silently
+    contradicts it. Here `requiredLbPerWeek` is computed on every read, so there is nothing to fall
+    out of sync. Phases will own how hard you're pushing *right now*; the goal keeps owning where
+    you're going. Keeping those at two levels is the whole reason it's built this way.
+  - **The actual rate reads the 7-day trailing average the Body Weight chart already draws**, not
+    raw entries. Bodyweight swings pounds on water alone and a rate off two raw readings swings with
+    it. `weightTrendRateLbPerWeek()` measures over the last `GOAL_RATE_WINDOW_DAYS` (28) — recent
+    enough to reflect what you're doing now, long enough that one heavy dinner doesn't move it.
+  - **Every row can say "not yet", and does.** Under `GOAL_RATE_MIN_DAYS` (14) of weights there is no
+    honest rate, so none is given — reporting 0 lb/wk there would read as "you're going nowhere" when
+    the truth is "ask me later". Likewise there's no projected date when the trend is heading *away*
+    from the target: extrapolating that would hand back a date in the past. That's the normal state
+    for a goal's first fortnight.
+  - **Nothing auto-completes.** Reaching the weight or passing the date is reported and then waits —
+    same posture as a checked-off reminder staying on its day. Archiving is the only way a goal ends.
+  - **The rate band is advisory and reads the goal's LENGTH.** 1.2 %bw/wk over five weeks is a
+    mini-cut; the same number over twenty weeks isn't, so past `GOAL_MINICUT_MAX_WEEKS` (6) the
+    ceiling drops back to 1%. Percent of bodyweight is the unit because what a rate *means* changes
+    as you descend. Nothing is ever blocked — the band names where a rate sits, the same way the
+    water target is documented as "a target, not a cap".
+  - **`fmtGoalDate()` rather than `fmtDueDate()`**, because a projection lands wherever the arithmetic
+    puts it. A slow cut projected into next June rendered as a bare "Jun 6" and read as this June —
+    caught in a screenshot, not in the markup. The year now appears only when it differs.
+  - **One active weight goal at a time**, enforced in `createWeightGoal()` and `unarchiveGoal()`.
+    `goals` was added inline as `[]` in `defaultState()` rather than via a `defaultGoals()` call:
+    `defaultState()` runs during `app-state.js`'s own evaluation and so can only reach files loaded
+    *before* it — `app-goals.js` loads after. The same load-order rule as `HOME_BOX_RENDERERS`.
+
 - **Reminders can be checked off, and their lead time edited after creation (2026-09-13).**
   - **Checking off deliberately does not delete.** The reminder stays on its day so you can look
     back and see that you did it, rather than being left wondering because the row vanished — which

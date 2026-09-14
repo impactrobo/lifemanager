@@ -1099,7 +1099,8 @@ const MEASURE_FIELDS = [
 function renderHealth() {
   if (NAV.healthSubtab === 'setup') return renderHealthSetup(); // already a full .screen with its own header — don't double-wrap
   let body;
-  if (NAV.healthSubtab === 'specs') body = renderSpecs();
+  if (NAV.healthSubtab === 'goal') body = renderGoalTab();
+  else if (NAV.healthSubtab === 'specs') body = renderSpecs();
   else if (NAV.healthSubtab === 'diet') body = renderDietSetup();
   else body = renderLifeLongevity();
   return `<div class="screen">

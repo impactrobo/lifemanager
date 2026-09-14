@@ -76,6 +76,7 @@ function defaultTransientUi() {
     exceptionFormOpen: false,
     homeEditMode: false,
     homeAddPopup: null,                // 'sections' | 'boxes' | null
+    goalFormOpen: false,
     // The AM/PM quick-log sheet: { group: 'am'|'pm', focus: <field id> } or null. Lives in UI so
     // navigating away closes it, same as every other transient panel.
     logPopup: null,
@@ -512,6 +513,7 @@ function renderTabbar() {
       <button class="${NAV.guitarSubtab==='progress'?'active':''}" onclick="setGuitarSubtab('progress')"><span class="ic">${icon('progress')}</span>PROGRESS</button>`;
   } else if (NAV.currentTab === 'health') {
     sectionBtns = `
+      <button class="${NAV.healthSubtab==='goal'?'active':''}" onclick="setHealthSubtab('goal')"><span class="ic">${icon('flag')}</span>GOAL</button>
       <button class="${NAV.healthSubtab==='specs'?'active':''}" onclick="setHealthSubtab('specs')"><span class="ic">${icon('ruler')}</span>SPECS</button>
       <button class="${NAV.healthSubtab==='diet'?'active':''}" onclick="setHealthSubtab('diet')"><span class="ic">${icon('drumstick')}</span>DIET</button>
       <button class="${NAV.healthSubtab==='longevity'?'active':''}" onclick="setHealthSubtab('longevity')"><span class="ic">${icon('infinity')}</span>LONGEVITY</button>

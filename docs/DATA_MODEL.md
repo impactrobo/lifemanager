@@ -72,6 +72,12 @@ STATE = {
     ...
   ],
   weightLog: [ { id, date, weightLb, calories, cardioCalories }, ... ],
+  goals: [                 // at most ONE un-archived goal per `kind`; the UI refuses to create a second
+    { id, kind: 'weight', name, startDate, targetDate,
+      startWeightLb, targetWeightLb,   // canonical lb, like weightLog
+      archived, createdAt },           // archiving is the only way a goal ends -- nothing auto-completes
+    ...                                // `kind` will gain 'exercise'; phases will hang off goalId
+  ],
   diet: {
     tdee: null | number,
     proteinG: null | number, fatG: null | number, carbG: null | number,
