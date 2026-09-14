@@ -1198,6 +1198,19 @@ input[type="text"].skill-item-detail:focus { outline: none; color: var(--text); 
 .skill-stuck-name { flex: 1 1 auto; min-width: 0; font-weight: 650; font-size: 13px; }
 .skill-stuck-list { flex: none; font-size: 10px; color: var(--text-faint); }
 
+/* What's WAITING, beside the name, on the list you see before opening anything. One flag, not
+   three: a row is a glance, and three competing counts on it is a dashboard nobody reads. */
+.skill-row-flag {
+  display: inline-block; vertical-align: 1px; margin-left: 5px;
+  font-family: var(--font-mono); font-size: 9px; font-weight: 700; letter-spacing: 0.05em;
+  padding: 1px 6px; border-radius: 3px;
+  background: var(--accent-soft); color: var(--accent);
+}
+/* Stale is the loudest because it means real time has passed rather than sessions -- the one thing
+   the session counter can't notice on its own. */
+.skill-row-flag-stale { background: color-mix(in srgb, var(--warn) 16%, var(--surface)); color: var(--warn); }
+.skill-row-flag-stuck { background: color-mix(in srgb, var(--bad) 14%, var(--surface)); color: var(--bad); }
+
 
 
 /* ---------- A checked-off reminder ---------- */

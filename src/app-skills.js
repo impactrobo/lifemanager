@@ -254,13 +254,26 @@ function renderSkillsTab() {
 function renderSkillList() {
   const weekAgo = shiftDate(todayStr(), -6);
   const list = activeSkills();
+  // The row used to show minutes practised this week -- history -- and say nothing about what is
+  // waiting. A system that only tells you what's due after you've decided to practise has the
+  // causality backwards, and the engine can answer it instantly for every skill.
   const rows = list.map(s => {
     const mins = skillMinutesSince(s, weekAgo);
     const n = skillItemCount(s);
+    const due = skillSessionCandidates(s, todayStr());
+    const stale = due.filter(c => c.stale).length;
+    const stuck = stuckSkillItems(s).length;
+    // Priority order, one line: the thing you'd act on wins. Stale is the loudest because it means
+    // time has passed rather than sessions, so nothing else in the model noticed.
+    const flag = stale
+      ? `<span class="skill-row-flag skill-row-flag-stale">${stale} STALE</span>`
+      : due.length
+        ? `<span class="skill-row-flag">${due.length} DUE</span>`
+        : stuck ? `<span class="skill-row-flag skill-row-flag-stuck">${stuck} STUCK</span>` : '';
     return `
       <button class="skill-row" onclick="openSkill('${s.id}')">
         <div class="skill-row-main">
-          <div class="skill-row-name">${escapeHtml(s.name)}</div>
+          <div class="skill-row-name">${escapeHtml(s.name)} ${flag}</div>
           <div class="skill-row-sub">${n} item${n === 1 ? '' : 's'} · ${s.lists.length} list${s.lists.length === 1 ? '' : 's'}</div>
         </div>
         <div class="skill-row-time">

@@ -414,6 +414,22 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Skills: practice is visible before you open a skill (2026-09-15).** Step 4 of "Closing the
+  Loop", and the last of it. The finding that prompted it: **no file outside the two skill files
+  called `allSkills()`, `activeSkills()` or `skillById()` at all.** The engine could answer "3 items
+  due" for any skill instantly and nothing anywhere asked it — the skill row showed minutes
+  practised this week, which is history, and said nothing about what was waiting. A system that only
+  tells you what's due after you've decided to practise has the causality backwards.
+  - Each row now carries **one flag** beside the name: `3 DUE`, `1 STALE` or `1 STUCK`. One and not
+    three, because a row is a glance and three competing counts on it is a dashboard nobody reads.
+  - **Priority order is stale → due → stuck.** Stale outranks due because it means real *time* has
+    passed rather than sessions, which is the one thing the session counter can't notice on its own;
+    stuck comes last because it's a diagnosis rather than something waiting. A skill with nothing
+    waiting carries no flag at all.
+  - **Deliberately not a Home tile or a notification.** Step 6 of the original scope (practice on the
+    weekday plan) is the real integration and the only step that reshapes a primitive other features
+    read; this is the cheap independent half and shouldn't pre-empt that design.
+
 - **Skills: the ladder becomes legible (2026-09-15).** Step 3 of the "Closing the Loop" punch list.
   The engine computes a phase, a weight, a floor, an interval, a due countdown and an ease for every
   item; the card showed a rung badge and nothing else, so when something didn't come up in a block

@@ -268,6 +268,59 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   const gone = await page.evaluate(() => !!document.querySelector('.skill-stuck'));
   if (!clean || gone) throw new Error('Nothing stuck means no section at all');
 
+  // ---- 6c. The skill list says what's WAITING, not just what happened ----
+  // Before this, no file outside the two skill files called allSkills()/skillById() at all — the
+  // engine could answer "3 items due" instantly for any skill and nothing ever asked it.
+  const flags = await page.evaluate(() => {
+    const mk = (name, spec) => {
+      const s = defaultSkill(name);
+      const l = defaultSkillList('L', false);
+      spec.forEach((o, i) => {
+        const it = defaultSkillItem(name + i);
+        Object.assign(it, { reps: 3, ease: o.ease || 2.5, interval: 1,
+                            dueIn: o.due ? 0 : 5, lastPractised: shiftDate(todayStr(), o.ago || 1) });
+        l.items.push(it);
+      });
+      s.lists = [l];
+      return s;
+    };
+    // Kept aside and put back below — §7 asserts on the Spanish skill built earlier.
+    window._savedSkills = STATE.skills;
+    STATE.skills = [
+      mk('Due', [{ due: true }, { due: true }, {}]),
+      mk('Stale', [{ ago: -90 }, { due: true }]),
+      mk('Stuck', [{ ease: 1.3 }]),
+      mk('Quiet', [{}]),
+    ];
+    STATE.skillSession = null;
+    saveState();
+    closeSkill();
+    return true;
+  });
+  await settle(page);
+  const rowFlags = await page.evaluate(() => {
+    const out = {};
+    document.querySelectorAll('.skill-row-name').forEach(n => {
+      const flag = n.querySelector('.skill-row-flag');
+      out[n.textContent.trim().split(' ')[0]] = flag
+        ? { text: flag.textContent.trim(), cls: flag.className.replace('skill-row-flag', '').trim() }
+        : null;
+    });
+    return out;
+  });
+  console.log('row flags:', JSON.stringify(rowFlags));
+  if (!flags) throw new Error('fixture failed');
+  if (!rowFlags.Due || rowFlags.Due.text !== '2 DUE') throw new Error('A row should say what is waiting: ' + JSON.stringify(rowFlags.Due));
+  // Stale wins over due: real time has passed, which is the one thing the session counter can't see.
+  if (!rowFlags.Stale || rowFlags.Stale.text !== '1 STALE') throw new Error('Stale should outrank due: ' + JSON.stringify(rowFlags.Stale));
+  if (!/stale/.test(rowFlags.Stale.cls)) throw new Error('Stale takes its own colour');
+  if (!rowFlags.Stuck || rowFlags.Stuck.text !== '1 STUCK') throw new Error('With nothing due, stuck is worth saying: ' + JSON.stringify(rowFlags.Stuck));
+  // One flag, not three — a row is a glance, and competing counts on it is a dashboard nobody reads.
+  if (rowFlags.Quiet !== null) throw new Error('A skill with nothing waiting carries no flag');
+
+  await page.evaluate(() => { STATE.skills = window._savedSkills; saveState(); render(); });
+  await settle(page);
+
   // ---- 7. Guitar is untouched and still reachable ----
   await page.evaluate(() => { closeSkill(); });
   await settle(page);
@@ -277,7 +330,8 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   }));
   console.log('skill list:', listScreen);
   if (!listScreen.legacy) throw new Error('Guitar needs a row until it is migrated');
-  if (!listScreen.rows.includes('Spanish')) throw new Error('The created skill should be listed');
+  // The row now carries its waiting-work flag inline after the name, so match the prefix.
+  if (!listScreen.rows.some(r => r.startsWith('Spanish'))) throw new Error('The created skill should be listed: ' + listScreen.rows);
 
   await page.evaluate(() => openLegacyGuitar());
   await settle(page);
