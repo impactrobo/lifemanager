@@ -193,8 +193,52 @@ function labPanelsSorted() { return [...allLabPanels()].sort((a, b) => b.date.lo
 // marker is not the same as "the latest panel", and reading it off the top panel would show a blank
 // for anything that particular draw didn't include.
 function latestLabValue(key) {
-  const found = labPanelsSorted().find(p => p.values && p.values[key] != null);
-  return found ? { date: found.date, value: found.values[key] } : null;
+  return labHistory(key)[0] || null;
+}
+// Every reading of ONE marker, newest first. This is the function comparison is built on, and the
+// reason it's marker-first rather than panel-vs-panel: panels are sparse and irregular (a full
+// panel in March, lipids only in September, a CBC from urgent care in between), so two arbitrary
+// draws routinely share a handful of markers. A single marker's own history has no such gaps.
+function labHistory(key) {
+  return labPanelsSorted()
+    .filter(p => p.values && p.values[key] != null)
+    .map(p => ({ date: p.date, value: p.values[key] }));
+}
+
+// How many earlier readings ride along on the bar, and how solid each one is. The ramp runs newest
+// to oldest so the current reading stays the one your eye lands on.
+//
+// Literal 25% steps from full would put the fourth dot at zero -- invisible, which is not a dot. An
+// even ramp across the same span keeps all four readable and reads the same way.
+const LAB_TRAIL_MAX = 4;
+// Rounded because the result goes straight into a style attribute, and 0.6000000000000001 in the
+// markup is the kind of thing that makes a reader doubt the number next to it.
+function labTrailOpacity(i) { return Math.round((0.8 - i * 0.2) * 100) / 100; }   // 0.8, 0.6, 0.4, 0.2
+
+// How far outside the band you're aiming at a reading sits; 0 means inside it. Distance, not
+// judgement -- the band is a number you typed on the ranges screen.
+function labBandDistance(key, v) {
+  const r = labRange(key);
+  const b = (r.target.low != null || r.target.high != null) ? r.target : r.ref;
+  if (b.low == null && b.high == null) return null;
+  const n = Number(v);
+  if (!isFinite(n)) return null;
+  if (b.low != null && n < b.low) return b.low - n;
+  if (b.high != null && n > b.high) return n - b.high;
+  return 0;
+}
+
+// THE LINE, restated for movement. A delta needs to know which way is good -- down 14 on ApoB is
+// progress, down 14 on HDL is not -- and this feature does not get to hold opinions about markers.
+// So direction is measured as movement relative to YOUR band: "closer to the range you set" is
+// arithmetic on your own numbers, the same thing labStatus() already reports for a single reading.
+// A marker with no bounds stated gets `null` and renders as a plain uncoloured number.
+function labMovement(key, from, to) {
+  const a = labBandDistance(key, from), b = labBandDistance(key, to);
+  if (a == null || b == null) return null;
+  if (b < a) return 'toward';
+  if (b > a) return 'away';
+  return 'level';   // both inside the band, or equally far outside it
 }
 
 // ---- Mutations ----
@@ -544,12 +588,16 @@ function renderLabRanges() {
 // about the cadence: labs come back two to four times a year, so ONE panel is the common case and a
 // trend line needs at least two. This works from a single draw. It's also pure CSS -- no Chart.js,
 // nothing to destroy and rebuild on render.
-function labBarZones(key, value) {
+function labBarZones(key, value, trail) {
   const r = labRange(key);
   const bounds = [r.ref.low, r.ref.high, r.target.low, r.target.high].filter(b => b != null);
   // Nothing stated to position against -- a bar with no zones would be a decoration.
   if (!bounds.length) return null;
-  const hi = Math.max(Number(value) || 0, ...bounds) * 1.15;
+  // The trail is part of the axis, not decoration laid over it. An ApoB of 180 three draws ago sits
+  // well above a ceiling of 130, and leaving it out of `hi` would clamp that dot to the right edge
+  // -- drawing the single most dramatic improvement in the series as no movement at all.
+  const past = (trail || []).map(t => Number(t.value)).filter(v => isFinite(v));
+  const hi = Math.max(Number(value) || 0, ...past, ...bounds) * 1.15;
   if (!(hi > 0)) return null;
 
   const segs = [];
@@ -568,8 +616,8 @@ function labBarZones(key, value) {
   return { hi, segs, pct: v => Math.max(0, Math.min(100, (v / hi) * 100)) };
 }
 
-function renderLabBar(key, value) {
-  const z = labBarZones(key, value);
+function renderLabBar(key, value, trail) {
+  const z = labBarZones(key, value, trail);
   if (!z) return '';
   const tone = { out: 'var(--bad-soft)', in: 'var(--surface2)', target: 'var(--good-soft)' };
   const gradient = z.segs
@@ -583,9 +631,16 @@ function renderLabBar(key, value) {
     return null;
   };
   const ref = bound(r.ref), target = bound(r.target);
+  // Earlier readings as fading dots on the same track. Nothing new is measured or scaled here --
+  // they're the same values through the same pct(), which is why this needed no chart library and
+  // works from the second draw ever rather than the fifth.
+  const ghosts = (trail || []).slice(0, LAB_TRAIL_MAX).map((t, i) => `
+    <div class="lab-bar-ghost" style="left:${z.pct(Number(t.value)).toFixed(1)}%; opacity:${labTrailOpacity(i)};"
+         title="${escapeHtml(t.date)}: ${escapeHtml(String(t.value))}"></div>`).join('');
   return `
     <div class="lab-bar">
       <div class="lab-bar-track" style="background: linear-gradient(to right, ${gradient});">
+        ${ghosts}
         <div class="lab-bar-mark" style="left:${z.pct(Number(value)).toFixed(1)}%;"></div>
       </div>
       <div class="lab-bar-key">
@@ -603,8 +658,8 @@ function renderLabStanding() {
     .map(g => ({
       label: g.label,
       rows: g.markers
-        .map(m => ({ m, latest: latestLabValue(m.key) }))
-        .filter(x => x.latest),
+        .map(m => ({ m, hist: labHistory(m.key) }))
+        .filter(x => x.hist.length),
     }))
     .filter(g => g.rows.length);
   if (!groups.length) return '';
@@ -613,7 +668,9 @@ function renderLabStanding() {
     <div class="panel">
       ${groups.map(g => `
         ${g.label ? `<div class="lab-stand-group">${g.label}</div>` : ''}
-        ${g.rows.map(({ m, latest }) => {
+        ${g.rows.map(({ m, hist }) => {
+          const latest = hist[0];
+          const trail = hist.slice(1);
           const s = labStatus(m.key, latest.value);
           return `
           <div class="lab-stand">
@@ -622,9 +679,28 @@ function renderLabStanding() {
               <span class="lab-stand-val mono ${s && s.inRef === false ? 'lab-out-text' : ''}">${latest.value}<i class="lab-unit">${escapeHtml(labRange(m.key).unit)}</i></span>
               <span class="lab-stand-when">${fmtGoalDate(latest.date)}</span>
             </div>
-            ${renderLabBar(m.key, latest.value)}
+            ${renderLabBar(m.key, latest.value, trail)}
+            ${renderLabDelta(m.key, latest, trail[0])}
           </div>`;
         }).join('')}`).join('')}
+    </div>`;
+}
+
+// The number the dots are showing, said once in words. Only against the immediately previous
+// reading -- "since your last draw" is a question with one answer, where "since when?" across four
+// dots is a question this row has no room to ask.
+function renderLabDelta(key, latest, prev) {
+  if (!prev) return '';
+  const d = Number(latest.value) - Number(prev.value);
+  if (!isFinite(d)) return '';
+  const move = labMovement(key, prev.value, latest.value);
+  const cls = move ? `lab-move-${move}` : '';
+  const arrow = d > 0 ? '↑' : d < 0 ? '↓' : '→';
+  const mag = fmt(Math.abs(d), Math.abs(d) < 10 ? 1 : 0);
+  return `
+    <div class="lab-delta ${cls}">
+      <span class="mono">${arrow} ${d === 0 ? 'no change' : mag}</span>
+      <span class="lab-delta-since">since ${fmtGoalDate(prev.date)}</span>
     </div>`;
 }
 

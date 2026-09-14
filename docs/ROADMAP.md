@@ -81,20 +81,19 @@ before starting any of these.
   markers out of thirty. The measurements compare already needs a "no overlapping fields" fallback;
   labs would live in it. A marker's own history is dense even when panels are sparse, and
   "is my ApoB coming down?" is the question people actually ask.
-  1. **Ghost dots on the existing bar** (next up). `labBarZones()` already returns `pct(v)` mapping
-     a value to a position on the track, so prior readings plot on the bar that's *already there* —
-     no new chart, no second coordinate system, no Chart.js. Agreed shape: **up to 4 dots, opacity
-     stepping down ~25% per step by age**, newest solid. You watch the reading walk across the zones.
-     Since WHERE YOU STAND already lists every marker, scrolling it gives you the whole picture at
-     once. Works from the *second draw ever*, which matters at 2–4 draws a year.
-     - Known limitation, accepted: dots carry no time axis — two readings a week apart and two years
-       apart render identically. The date labels and (2) are where that gets addressed.
+  1. ~~**Ghost dots on the existing bar**~~ — **shipped 2026-09-15**, see Recently Shipped. Carries
+     one accepted limitation: dots have no time axis, so two readings a week apart and two years
+     apart render identically. (2) is where that gets addressed.
   2. **Pick a date range and a set of markers, then see how they all moved over that period,
-     regardless of when each was actually measured** (longer term, wants mock-ups first). The last
-     clause is the whole design: it compares *first reading in range vs last reading in range, per
-     marker*, which is what dissolves the sparsity problem — no two markers need share a draw date.
-  3. A banded time-series chart stays last. At 2–4 draws a year it says nothing for a long while,
-     and "a line with bands behind it" is close to what the position bar already is.
+     regardless of when each was actually measured** (next, wants mock-ups first). The last clause
+     is the whole design: it compares *first reading in range vs last reading in range, per marker*,
+     which is what dissolves the sparsity problem — no two markers need share a draw date.
+     - **Render it as a graph, reusing the exercise-progress machinery rather than inventing a
+       lab-specific one** (decided 2026-09-15). `WEIGHT_METRICS` / `metricSeries()` / the compare
+       mini-charts in `app-body.js` already do date-ranged multi-series charting with a metric
+       picker; labs are another series source, not a new problem. Note that Chart.js comes from the
+       CDN and is blocked in the test harness, so chart *drawing* can't be asserted — put the range
+       and series selection in pure functions that can be, the way `metricSeries()` already is.
   - **The directionality question, and the line that keeps it honest:** a delta needs to know which
     way is good — −14 on ApoB is progress, −14 on HDL is not — and this feature has refused to
     interpret results from the start. Resolution: colour by **movement relative to the bands you
@@ -490,6 +489,39 @@ on an architecture split + a large wave of Maximalist aesthetics.
     the card — while the delete confirm promised they would stay. They fall back to the raw key now.
   - **Still open:** comparison — see "Lab comparison, agreed direction" under Ideas worth
     considering for the shape that was settled on and why a panel-vs-panel compare isn't it.
+
+- **The trail: earlier lab readings as fading dots on the same bar (2026-09-15).** Comparison, built
+  marker-first for the reason recorded under Ideas: panels are sparse and irregular, so two
+  arbitrary draws share a handful of markers, while one marker's own history has no gaps.
+  `labHistory(key)` is the function the whole thing rests on, and `latestLabValue()` collapsed into
+  its head.
+  - **No chart library, no second coordinate system.** `labBarZones()` already returned `pct(v)`, so
+    prior readings plot on the bar that was already there. Four dots maximum, fading with age
+    (0.8 / 0.6 / 0.4 / 0.2), newest solid. Works from the *second draw ever* — which matters at two
+    to four draws a year, where a line chart stays uninformative for years.
+  - **The axis trap, and the reason the trail had to change `labBarZones()` rather than sit on top
+    of it.** `hi` came from the current value and the bounds alone. ApoB's ceiling is 130 and the
+    current reading is 96, so the axis topped out near 150 — and a reading of 180 from four draws
+    ago clamped to the right edge, drawing *the single most dramatic improvement in the series* as a
+    dot that never moved. The trail is now part of the axis. A test pins that history widens `hi`
+    without moving the **bands**, which are fixed numbers and must not drift because data arrived.
+  - **Direction is measured against your band, never the raw sign.** Down 14 on ApoB is progress;
+    down 14 on HDL is not. `labBandDistance()` returns how far outside your band a reading sits (0 =
+    inside), and `labMovement()` compares two of those: `toward` / `away` / `level`. That's
+    arithmetic on numbers you typed on the ranges screen, which is the same thing `labStatus()`
+    already does for a single reading — not the app forming an opinion about a marker. A marker with
+    no bounds stated returns `null` and renders its change as a plain uncoloured number.
+  - The delta chip reads against the **immediately previous** draw only. "Since your last draw" has
+    one answer; "since when?" across four dots is a question the row has no room to ask.
+  - **Known limitation, deliberately not fixed here:** the axis starts at zero, so a marker whose
+    whole meaningful span sits far from zero (HbA1c 5.4–5.9, creatinine, albumin) squeezes every dot
+    into the right fifth of the track, where they overlap and can't be told apart. The bar has
+    always been zero-based and a single mark was fine there; four marks are not. Fixing it means
+    deciding whether a lab bar should start at zero at all — a real design call about what the bar
+    claims, not a tweak, so it's the person's to make rather than one to slip in.
+  - My own wrong test expectation, again, and the same marker as last time: WBC states a reference
+    interval of 4–11, so two readings inside it are `level`, not "no opinion". An *unbounded* marker
+    is a custom one you added, which starts with no bounds at all.
 
 - **Editing a saved lab panel (2026-09-15).** There was no edit path at all — correcting one digit
   meant deleting the panel and retyping every number in it. Survivable while entry was slow and

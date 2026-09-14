@@ -694,6 +694,163 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (orphan.values.apoB !== 92) throw new Error('The edit still applies, got ' + orphan.values.apoB);
   if (orphan.values.gone !== 41) throw new Error('A reading with no marker left SURVIVES the edit -- the delete confirm promised it would');
 
+  // ---- 12. The trail: earlier readings as fading dots on the same bar ----
+  // Comparison here is MARKER-first, not panel-vs-panel, and this is the section that says why:
+  // panels are sparse and irregular, so two arbitrary draws share a handful of markers, while one
+  // marker's own history has no gaps. labHistory() is what everything below is built on.
+  await reset();
+  const hist = await page.evaluate(() => {
+    STATE.labs = [
+      { id: 'a', date: '2025-03-01', notes: '', values: { apoB: 180, hdl: 38 } },
+      { id: 'b', date: '2025-09-01', notes: '', values: { apoB: 150 } },
+      { id: 'c', date: '2026-03-01', notes: '', values: { apoB: 120, hdl: 52 } },
+      { id: 'd', date: '2026-06-01', notes: '', values: { apoB: 108 } },
+      { id: 'e', date: '2026-09-01', notes: '', values: { apoB: 96, hdl: 58 } },
+    ];
+    return {
+      order: labHistory('apoB').map(h => h.value),          // newest first
+      dates: labHistory('apoB').map(h => h.date),
+      // A marker measured on only SOME draws gets its own dense history, gaps and all.
+      sparse: labHistory('hdl').map(h => h.value),
+      never: labHistory('ferritin').length,
+      // latestLabValue() is now just the head of that list; it must still agree with itself.
+      latest: latestLabValue('apoB'),
+    };
+  });
+  console.log('marker history:', JSON.stringify(hist));
+  if (hist.order.join(',') !== '96,108,120,150,180') throw new Error('History runs newest first: ' + hist.order);
+  if (hist.dates[0] !== '2026-09-01') throw new Error('...by date, not insertion order: ' + hist.dates);
+  if (hist.sparse.join(',') !== '58,52,38') throw new Error('A marker measured on only some draws still has a dense history: ' + hist.sparse);
+  if (hist.never !== 0) throw new Error('A marker never measured has no history, got ' + hist.never);
+  if (hist.latest.value !== 96 || hist.latest.date !== '2026-09-01') throw new Error('latestLabValue is the head of it: ' + JSON.stringify(hist.latest));
+
+  // THE AXIS TRAP. `hi` used to come from the current value and the bounds alone. ApoB's ceiling is
+  // 130 and the current reading is 96, so without the trail the axis tops out around 150 -- and the
+  // 180 from four draws ago clamps to the right edge, drawing the single most dramatic improvement
+  // in the series as a dot that never moved.
+  const axis = await page.evaluate(() => {
+    const trail = labHistory('apoB').slice(1);
+    const without = labBarZones('apoB', 96);
+    const withTrail = labBarZones('apoB', 96, trail);
+    return {
+      hiWithout: without.hi,
+      hiWith: withTrail.hi,
+      oldestClamped: without.pct(180),          // pinned at the edge
+      oldestPlaced: withTrail.pct(180),         // actually positioned
+      current: withTrail.pct(96),
+      // The zones themselves must not move because history arrived -- the bands are fixed numbers.
+      kindsWithout: without.segs.map(sg => sg.kind).join('>'),
+      kindsWith: withTrail.segs.map(sg => sg.kind).join('>'),
+    };
+  });
+  console.log('axis with trail:', JSON.stringify(axis));
+  if (axis.oldestClamped !== 100) throw new Error('fixture: without the trail the oldest reading should clamp to the edge, got ' + axis.oldestClamped);
+  if (!(axis.hiWith > axis.hiWithout)) throw new Error('The trail widens the axis: ' + JSON.stringify(axis));
+  if (!(axis.oldestPlaced < 100)) throw new Error('...so the oldest reading is placed rather than pinned, got ' + axis.oldestPlaced);
+  if (!(axis.current < axis.oldestPlaced)) throw new Error('...and the current reading sits left of it, which is the whole point');
+  if (axis.kindsWith !== axis.kindsWithout) throw new Error('History must not move the BANDS: ' + axis.kindsWith + ' vs ' + axis.kindsWithout);
+
+  // At most four dots, fading with age, and all four still visible -- a dot at zero opacity is not
+  // a dot, which is why the ramp is even rather than literal 25% steps from full.
+  const dots = await page.evaluate(() => {
+    const html = renderLabStanding();
+    const ops = (html.match(/lab-bar-ghost[^>]*opacity:([\d.]+)/g) || []).map(x => Number(x.match(/opacity:([\d.]+)/)[1]));
+    return {
+      opacities: [...new Set(ops)].sort((a, b) => b - a),
+      apoBDots: (html.match(/lab-bar-ghost/g) || []).length,
+      max: LAB_TRAIL_MAX,
+      ramp: [0, 1, 2, 3].map(labTrailOpacity),
+    };
+  });
+  console.log('trail dots:', JSON.stringify(dots));
+  if (dots.ramp.some(o => o <= 0 || o > 1)) throw new Error('Every step of the ramp must be visible: ' + dots.ramp);
+  if (dots.ramp.join(',') !== [...dots.ramp].sort((a, b) => b - a).join(',')) throw new Error('...and fade monotonically with age: ' + dots.ramp);
+  // ApoB has 4 priors (capped at 4), HDL has 2. Six dots total, none beyond the cap.
+  if (dots.apoBDots !== 6) throw new Error('Four dots for ApoB (capped) plus two for HDL, got ' + dots.apoBDots);
+  const capped = await page.evaluate(() => {
+    STATE.labs = [];
+    for (let i = 0; i < 9; i++) STATE.labs.push({ id: 'x' + i, date: '2026-0' + (i + 1) + '-01', notes: '', values: { apoB: 100 + i } });
+    return (renderLabStanding().match(/lab-bar-ghost/g) || []).length;
+  });
+  if (capped !== dots.max) throw new Error('Nine draws still draw at most ' + dots.max + ' dots, got ' + capped);
+  if (dots.opacities.join(',') !== '0.8,0.6,0.4,0.2') throw new Error('The ramp lands in a style attribute, so it stays clean: ' + dots.opacities);
+
+  // ---- 12b. Direction is measured against YOUR band, never the raw sign ----
+  // Down 14 on ApoB is progress; down 14 on HDL is not. The feature does not get to hold opinions
+  // about markers, so movement is arithmetic on the bounds you set -- the same thing labStatus()
+  // already reports for a single reading.
+  await reset();
+  const move = await page.evaluate(() => ({
+    // ApoB: target ≤80. Falling is toward the band.
+    apoBDown: labMovement('apoB', 110, 96),
+    apoBUp: labMovement('apoB', 96, 110),
+    // HDL: target ≥60. Falling by the same amount is AWAY -- the opposite verdict from the same sign.
+    hdlDown: labMovement('hdl', 58, 44),
+    hdlUp: labMovement('hdl', 44, 58),
+    // Movement INSIDE the band is not progress or regress; you're already there.
+    insideBand: labMovement('apoB', 70, 60),
+    // Entering the band counts as toward; leaving it counts as away.
+    entering: labMovement('apoB', 90, 75),
+    leaving: labMovement('apoB', 75, 90),
+    // WBC states a reference interval (4–11), so two readings inside it are neither progress nor
+    // regress. "Level" is the honest answer, not "no opinion".
+    insideRefOnly: labMovement('wbc', 5, 9),
+    towardRefOnly: labMovement('wbc', 14, 12),
+    // A marker of your own starts with NO bounds, and that is what has nothing to measure against.
+    unbounded: (() => {
+      STATE.labSettings.custom = [{ key: 'c9', label: 'Zonulin', unit: '', group: 'custom', core: true,
+                                    ref: { low: null, high: null }, target: { low: null, high: null } }];
+      const r = labMovement('c9', 30, 50);
+      STATE.labSettings.custom = [];
+      return r;
+    })(),
+    unknown: labMovement('nope', 1, 2),
+    // Distance is zero anywhere inside the band, and positive on either side of it.
+    dIn: labBandDistance('apoB', 70), dOver: labBandDistance('apoB', 90),
+    dUnder: labBandDistance('hdl', 50), dInHdl: labBandDistance('hdl', 65),
+  }));
+  console.log('movement:', JSON.stringify(move));
+  if (move.apoBDown !== 'toward' || move.apoBUp !== 'away') throw new Error('ApoB falls toward its ceiling: ' + JSON.stringify(move));
+  if (move.hdlDown !== 'away' || move.hdlUp !== 'toward') {
+    throw new Error('The SAME sign reads the opposite way on a floor marker -- this is the whole rule: ' + JSON.stringify(move));
+  }
+  if (move.insideBand !== 'level') throw new Error('Moving around inside your band is neither, got ' + move.insideBand);
+  if (move.entering !== 'toward' || move.leaving !== 'away') throw new Error('Entering/leaving the band: ' + JSON.stringify(move));
+  if (move.insideRefOnly !== 'level') throw new Error('Two readings inside a reference interval are level, got ' + move.insideRefOnly);
+  if (move.towardRefOnly !== 'toward') throw new Error('...and a marker with no target falls back to its reference, got ' + move.towardRefOnly);
+  if (move.unbounded !== null || move.unknown !== null) throw new Error('No bounds stated means no direction claimed: ' + JSON.stringify(move));
+  if (move.dIn !== 0 || move.dInHdl !== 0) throw new Error('Distance is zero anywhere inside the band: ' + JSON.stringify(move));
+  if (move.dOver !== 10 || move.dUnder !== 10) throw new Error('...and positive on either side: ' + JSON.stringify(move));
+
+  // The row says it in words too, once, against the immediately previous draw only.
+  const delta = await page.evaluate(() => {
+    // ApoB falls toward its ceiling; HDL falls away from its floor. Same direction, opposite
+    // reading -- both on one screen, which is the clearest possible statement of the rule.
+    STATE.labSettings.custom = [{ key: 'c9', label: 'Zonulin', unit: '', group: 'custom', core: true,
+                                  ref: { low: null, high: null }, target: { low: null, high: null } }];
+    STATE.labs = [
+      { id: 'a', date: '2026-03-01', notes: '', values: { apoB: 110, hdl: 58, c9: 30 } },
+      { id: 'b', date: '2026-09-01', notes: '', values: { apoB: 96, hdl: 44, c9: 50 } },
+    ];
+    const html = renderLabStanding();
+    const first = (STATE.labs = [{ id: 'a', date: '2026-09-01', notes: '', values: { apoB: 96 } }], renderLabStanding());
+    STATE.labSettings.custom = [];
+    return {
+      toward: /lab-move-toward/.test(html),
+      away: /lab-move-away/.test(html),
+      deltas: (html.match(/lab-delta /g) || []).length,
+      coloured: (html.match(/lab-move-/g) || []).length,
+      // A first-ever reading has nothing to compare against, so no chip at all.
+      firstEver: /lab-delta/.test(first),
+    };
+  });
+  console.log('delta chips:', JSON.stringify(delta));
+  if (!delta.toward || !delta.away) throw new Error('Both directions appear on the same screen: ' + JSON.stringify(delta));
+  if (delta.deltas !== 3) throw new Error('One chip per marker with a prior reading, got ' + delta.deltas);
+  // The unbounded marker still SHOWS its change -- it just makes no claim about which way is good.
+  if (delta.coloured !== 2) throw new Error('Only the two markers with bounds get a direction, got ' + delta.coloured);
+  if (delta.firstEver) throw new Error('A first-ever reading has nothing to compare against and gets no chip');
+
   await page.evaluate(() => {
     STATE.labs = [];
     STATE.labSettings = { extended: false, sort: 'group', ranges: {}, custom: [] };

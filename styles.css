@@ -2185,3 +2185,22 @@ input[type="number"].lab-filled {
   background: var(--accent); border-radius: var(--radius) 0 0 var(--radius);
 }
 .lab-card-editing .lab-count { color: var(--accent); font-weight: 700; }
+
+/* ---- The trail: earlier readings on the same track ---- */
+/* Dots, not lines, so the current reading's mark stays the one thing that reads as "now". They sit
+   under it in the DOM, so an old reading that landed on today's value never hides it. */
+.lab-bar-ghost {
+  position: absolute; top: 50%; width: 5px; height: 5px;
+  margin: -2.5px 0 0 -2.5px; border-radius: 50%;
+  background: var(--text); pointer-events: none;
+}
+.lab-delta {
+  display: flex; align-items: baseline; gap: 6px;
+  font-size: 10px; margin-top: 4px; color: var(--text-dim);
+}
+.lab-delta-since { color: var(--text-faint); }
+/* Coloured by movement relative to the band YOU set, never by the raw sign — down 14 on ApoB is
+   progress and down 14 on HDL is not, and this screen doesn't get to hold that opinion itself.
+   A marker with no bounds stated keeps the inherited dim colour. */
+.lab-move-toward .mono { color: var(--good); }
+.lab-move-away .mono { color: var(--bad); }
