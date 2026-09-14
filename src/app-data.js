@@ -108,7 +108,7 @@ const DEFAULT_DAILY_ANCHORS = [
   { id: 'dinner',      start: '18:30', end: '19:15', label: 'Dinner', detail: 'Protein at this meal too; magnesium pairs well here or near bed.' },
   { id: 'guitarpractice', start: '19:15', end: '19:35', label: 'Guitar practice', detail: "15-20 min, current tier — see the Hobbies tab." },
   { id: 'sauna',       start: '19:35', end: '19:55', label: 'Sauna (optional)', detail: '15-20 min if you have access.' },
-  { id: 'pmskin',      start: '19:55', end: '20:15', label: 'PM skin + dental hygiene', detail: "Skin cycling night (see Health &amp; Fitness &rarr; Longevity) + floss/brush." },
+  { id: 'pmskin',      start: '19:55', end: '20:15', label: 'PM skin + dental hygiene', detail: "Skin cycling night (see Health &amp; Wellness &rarr; Longevity) + floss/brush." },
   { id: 'winddown',    start: '20:15', end: '21:00', label: 'Wind-down', detail: 'Dim lights, reduce screens, low-key activity.' },
   { id: 'mindfulness', start: '21:00', end: '21:15', label: 'Mindfulness / breathing', detail: '5-10 min of slow breathing or a short guided session.' },
   { id: 'bed',         start: '21:30', end: '22:00', label: 'Bed', detail: 'Cool, dark room — consistent even on weekends.' },
@@ -304,7 +304,7 @@ const FOOD_DB = [
 // lookup/browse/search function should use so a custom food behaves identically to a built-in
 // one everywhere (Meal Builder's category list and search, foodById()). Defensive Array.isArray
 // guard rather than relying solely on migrateState()'s migration (which only runs lazily, the
-// first time Setup's MAXES tab renders) — an old save visiting Health & Fitness directly
+// first time Setup's MAXES tab renders) — an old save visiting Health & Wellness directly
 // shouldn't be able to hit this before that guard has ever run.
 function allFoods() { return FOOD_DB.concat(Array.isArray(STATE.diet.customFoods) ? STATE.diet.customFoods : []); }
 function foodById(id) { return allFoods().find(f => f.id === id) || null; }
@@ -703,7 +703,7 @@ function defaultWorkouts() {
 function defaultHomeLayout() {
   return {
     // No 'schedule' tile: Home *is* the schedule now. No 'health' tile either: Health & Diet
-    // merged into Health & Fitness, which is the 'train' tile. BOTH keep their HOME_SECTION_META
+    // merged into Health & Wellness, which is the 'train' tile. BOTH keep their HOME_SECTION_META
     // entries -- LINKABLE_TYPES colours every reminder, habit, meal and workout link chip from it,
     // so deleting an entry would silently drop those chips back to an unstyled fallback.
     sectionOrder: ['train', 'hobbies', 'notes', 'budget'],
@@ -720,7 +720,7 @@ function defaultHomeLayout() {
 // use elsewhere (Notes tags / muscle groups) for a consistent palette rather than a new one.
 const HOME_SECTION_META = {
   schedule: { label: 'SCHEDULE', icon: 'schedule', color: '#819FFF' },
-  train: { label: 'FITNESS', icon: 'exercise', color: '#FF9191' },
+  train: { label: 'WELLNESS', icon: 'wellness', color: '#FF9191' },
   hobbies: { label: 'HOBBIES', icon: 'hobbies', color: '#CAAFFF' },
   // Tile-less, like `schedule` above it: kept only so `meal` link chips keep their own colour
   // rather than falling back to unstyled. See sectionOrder's comment.

@@ -162,7 +162,7 @@ const NAV_SNAPSHOT_KEYS = [
 // stored and still boots you onto the dead tab; caught exactly that way by test_home_bar.js.
 // Anything unrecognised falls back to Home instead of stranding you on a tab nothing renders.
 // 'schedule' and 'health' both keep HOME_SECTION_META entries without being real tabs any more
-// (Home absorbed Schedule; Health & Fitness absorbed Health & Diet), and the entries have to stay
+// (Home absorbed Schedule; Health & Wellness absorbed Health & Diet), and the entries have to stay
 // -- LINKABLE_TYPES colours its chips from them. So neither can be trusted as a landing tab, and
 // both are named here rather than inferred.
 // TWO different retirements, and conflating them breaks navigation -- which is exactly what a first
@@ -184,7 +184,7 @@ let NAV = {
   currentTab: initialTab(), // Settings -> Default Page, not always Home
   /** @type {{ mode: string, workoutId?: any, cardioId?: any }} */
   trainView: { mode: 'grid', workoutId: null }, // {mode:'grid'} | {mode:'log', workoutId} | {mode:'cardioLog', cardioId}
-  // The one subtab key for the whole Health & Fitness tab: 'goal' | 'workouts' | 'body' | 'diet' |
+  // The one subtab key for the whole Health & Wellness tab: 'goal' | 'workouts' | 'body' | 'diet' |
   // 'longevity' | 'setup'. Replaced trainTopSubtab + healthSubtab when Exercise and Health & Diet
   // merged -- they described a split that no longer exists.
   fitnessSubtab: 'workouts',
@@ -534,7 +534,8 @@ function renderTabbar() {
   }
   let sectionBtns = '';
   if (NAV.currentTab === 'train') {
-    // Health & Fitness: Exercise and Health & Diet merged into one tab. Six buttons where there
+    // Health & Wellness (shipped 2026-09-14 as "Health & Fitness", renamed 2026-09-15): Exercise
+    // and Health & Diet merged into one tab. Six buttons where there
     // used to be eight across two tabs -- BODY absorbed Specs and Progress, SETUP absorbed both
     // sections' Setup screens as panels. `.tabbar` scrolls horizontally past what fits.
     const fb = (key, ic, label) =>

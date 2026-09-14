@@ -1148,7 +1148,7 @@ const MEASURE_FIELDS = [
 // title over someone else's render function, and each used to grow its own copy of this.
 function renderFitnessScreen(body) {
   return `<div class="screen">
-    <div class="section-title">Health &amp; Fitness</div>
+    <div class="section-title">Health &amp; Wellness</div>
     ${body}
   </div>`;
 }
@@ -1182,7 +1182,7 @@ function renderBody() {
   else if (NAV.bodySubtab === 'pr') body = renderPrLog();
   else body = renderVolume();
   return `<div class="screen">
-    <div class="section-title">Health &amp; Fitness</div>
+    <div class="section-title">Health &amp; Wellness</div>
     ${subnav}
     ${body}
   </div>`;

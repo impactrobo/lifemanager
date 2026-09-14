@@ -136,7 +136,7 @@ function renderTrainGrid() {
   if (weights.length === 0 && cardio.length === 0 && mobility.length === 0 && warmup.length === 0) {
     return `
       <div class="screen">
-        <div class="section-title">Health &amp; Fitness</div>
+        <div class="section-title">Health &amp; Wellness</div>
         <div class="empty-state">
           <div class="big">${icon('lock')}</div>
           No workouts yet.<br>
@@ -153,7 +153,7 @@ function renderTrainGrid() {
 
   return `
     <div class="screen">
-      <div class="section-title">Health &amp; Fitness</div>
+      <div class="section-title">Health &amp; Wellness</div>
       <div class="week-selector">
         <div>
           <div class="subtle-label">PROGRAM CYCLE</div>
@@ -1297,7 +1297,7 @@ function renderHomeSetup() {
   // No SCHEDULE entry: Home opens on the day, so "open to Schedule" and "open to Home" are the
   // same choice now.
   // No SCHEDULE and no HEALTH & DIET: Home opens on the day, and Health & Diet merged into
-  // Health & Fitness -- a saved 'health' migrates to 'train' on load (see migrateState()).
+  // Health & Wellness -- a saved 'health' migrates to 'train' on load (see migrateState()).
   const pageOptions = [
     ['home', 'HOME'], ['train', 'HEALTH & FITNESS'], ['hobbies', 'HOBBIES'],
     ['notes', 'NOTES'], ['budget', 'FINANCIAL'],

@@ -54,7 +54,7 @@ function startNewMeal() {
 function editMeal(id) {
   const meal = STATE.diet.meals.find(m => m.id === id);
   if (!meal) return;
-  // One tab now -- the meal library is a PANEL of Health & Fitness's Setup, not its own tab's.
+  // One tab now -- the meal library is a PANEL of Health & Wellness's Setup, not its own tab's.
   ensureTab('train');
   NAV.fitnessSubtab = 'setup';
   NAV.setupPanel = 'meals';
@@ -996,7 +996,7 @@ function renderDietSetup() {
         // while the Diet log compares against something else entirely.
         const t = calorieTargetForDate(todayStr());
         return t && t.source === 'phase'
-          ? `<div class="cal-source" style="margin-top:6px;">Not what today is compared against — phase &ldquo;${escapeHtml(t.label)}&rdquo; sets <b style="color:var(--text)">${t.calories} cal/day</b>. Health &amp; Fitness &rarr; GOAL to change it.</div>`
+          ? `<div class="cal-source" style="margin-top:6px;">Not what today is compared against — phase &ldquo;${escapeHtml(t.label)}&rdquo; sets <b style="color:var(--text)">${t.calories} cal/day</b>. Health &amp; Wellness &rarr; GOAL to change it.</div>`
           : '';
       })()}
       <button class="btn btn-ghost btn-sm" style="margin-top:10px;" onclick="toggleTDEECalc()">${UI.tdeeCalcOpen ? 'HIDE' : 'OPEN'} CALCULATOR</button>
@@ -1024,7 +1024,7 @@ function renderRollingTdeePanel() {
           </div>
           <button class="btn btn-good btn-sm" onclick="applyTDEEResult(${rolling.estimate})">USE THIS</button>
         </div>
-        ${cardio && cardio.avgCardioPerDay > 0 ? `<div style="font-size:11px; color:var(--text-faint); margin-top:8px;">Of that, ~<b style="color:var(--text)">${cardio.avgCardioPerDay} cal/day</b> came from logged cardio sessions over those same weeks — <b style="color:var(--text)">${cardio.nonExerciseTdee} cal/day</b> non-exercise. A breakdown of the number above, not a separate target — logging more cardio here already moves the estimate itself, no extra math needed on top.</div>` : ''}` : `<div style="font-size:11px; color:var(--text-faint);">Not enough data yet — keep logging daily weight (Health & Fitness → Body) and calories (there or via the Diet log) to see this.</div>`}
+        ${cardio && cardio.avgCardioPerDay > 0 ? `<div style="font-size:11px; color:var(--text-faint); margin-top:8px;">Of that, ~<b style="color:var(--text)">${cardio.avgCardioPerDay} cal/day</b> came from logged cardio sessions over those same weeks — <b style="color:var(--text)">${cardio.nonExerciseTdee} cal/day</b> non-exercise. A breakdown of the number above, not a separate target — logging more cardio here already moves the estimate itself, no extra math needed on top.</div>` : ''}` : `<div style="font-size:11px; color:var(--text-faint);">Not enough data yet — keep logging daily weight (Health & Wellness → Body) and calories (there or via the Diet log) to see this.</div>`}
       <label class="field" style="margin-top:12px; margin-bottom:0;">
         <span class="lbl">Averaging window (weeks)</span>
         <input type="number" step="1" min="1" value="${STATE.diet.tdeeWindowWeeks}" onchange="updateTdeeWindowWeeks(this.value)">

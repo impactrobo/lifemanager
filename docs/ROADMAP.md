@@ -56,6 +56,23 @@ These are **not** requested features — they're natural extensions given the cu
 app, logged here so they're not lost, not so they get built unprompted. Confirm with the person
 before starting any of these.
 
+- **Health & Wellness's bottom tabbar overruns on a real device (reported 2026-09-15, not fixed).**
+  Six subtabs (WORKOUTS/GOAL/BODY/DIET/LONGEVITY/SETUP) plus HOME is seven buttons in `.tabbar`, and
+  a phone screenshot showed the labels running into each other — worse than the 390px headless
+  viewport every test in this suite runs at, which only shows the bar scrolling with **SETUP**
+  clipped at the edge and no hint that it's scrollable.
+  - `.tabbar` (`styles.css`) already has `overflow-x:auto` and `min-width:58px` per button — a
+    comment on it even predicts this exact case ("once a section has enough sub-tabs to exceed the
+    viewport (e.g. Health & Diet's 7)"). But unlike `.subnav` (the in-screen sub-tab strips), it has
+    **no scroll-chevron affordance** (`subnav-more-l`/`-r`) — nothing tells you there's more to the
+    right. At a real device's system font size (Dynamic Type), `.tabbar button` labels use
+    `white-space: nowrap` with no truncation, which could let a long label like LONGEVITY visually
+    bleed past its own 58px box into its neighbour rather than wrapping or clipping.
+  - Likely fix shape: give `.tabbar` the same chevron-affordance system `.subnav` already has (see
+    `subnav-scroll-affordances` in project memory), and/or clip/ellipsis long labels. Worth checking
+    on a real device before assuming which of the two is actually happening.
+
+
 - **"Best Shape of Your Life" scope check (2026-09-14)** — for someone overweight, untrained,
   motivation-sensitive, with a longevity focus (biomarkers, supplementation) across health, money
   and personal development. Full scope published as an artifact; ranked by leverage, not size:
@@ -418,6 +435,16 @@ on an architecture split + a large wave of Maximalist aesthetics.
     `switchTab()` anyway.
   - The WORKOUTS screen still titled itself "Exercise" while every other screen in the tab said
     "Health & Fitness". Fixed in the same pass.
+
+- **Renamed "Health & Fitness" to "Health & Wellness", and gave it its own icon (2026-09-15).**
+  Every user-facing occurrence (four `section-title`s, the cross-references under GOAL/Longevity/
+  the TDEE panel) now reads "Health & Wellness"; internal identifiers (`fitnessSubtab`,
+  `renderFitnessSetup()`, `MERGED_TABS`, the `train` tab id itself) are untouched, same discipline
+  as `budget`/"FINANCIAL" already diverging. The Home tile's `wellness` icon is the `exercise`
+  barbell scaled to 0.6 and re-centred inside the `health` heart's rounder upper body — verified in
+  isolation before wiring in, since the heart narrows to a point toward the bottom and a naively
+  centred barbell would have overflowed the outline. Tile label follows: FITNESS → WELLNESS. The
+  entry below is left as shipped and named at the time; this is the addendum, not a rewrite.
 
 - **Health & Fitness: Exercise and Health & Diet merged into one tab (2026-09-14).** The one item
   "Phases Own the Plan" deliberately left open — *"worth doing after this lands and the seams are

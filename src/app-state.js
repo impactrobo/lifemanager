@@ -424,7 +424,7 @@ function migrateState() {
   // choice means Home -- and a save still holding it would otherwise boot to a tab with no way
   // back to Home in its bar's first slot.
   if (STATE.settings.defaultPage === 'schedule') STATE.settings.defaultPage = 'home';
-  // Health & Diet merged into Health & Fitness, whose tab id is still 'train'. Same shape as the
+  // Health & Diet merged into Health & Wellness, whose tab id is still 'train'. Same shape as the
   // schedule line above: the tab is gone, the saved preference shouldn't strand you on it.
   if (STATE.settings.defaultPage === 'health') STATE.settings.defaultPage = 'train';
   if (!STATE.settings.homeLayout) STATE.settings.homeLayout = defaultHomeLayout();
@@ -437,7 +437,7 @@ function migrateState() {
     // The SCHEDULE tile retired -- Home renders the schedule itself, so a tile pointing at it is a
     // tile pointing at where you already are. Dropped from both lists rather than left to the
     // stale-id filter below, so the intent is stated where someone will look for it.
-    // ...and the same for HEALTH & DIET, which merged into Health & Fitness. Both have to be
+    // ...and the same for HEALTH & DIET, which merged into Health & Wellness. Both have to be
     // filtered BY NAME: each still has a HOME_SECTION_META entry (see below), so the stale-id
     // guard at the bottom can't reach them. Missing this line shipped a real bug -- the tile kept
     // rendering for anyone with a saved layout, and tapping it stranded them on a dead tab.

@@ -99,7 +99,7 @@ const EXTRA_TIME_CATEGORIES = [
 //
 // timeCategoryChoices() OFFERS: what a <select> should show today. 'schedule' was never a category
 // (it's the container everything sits in), and 'health' stopped being one when Health & Diet merged
-// into Health & Fitness -- offering both would be two names for the same section.
+// into Health & Wellness -- offering both would be two names for the same section.
 const RETIRED_TIME_CATEGORIES = ['health'];
 function timeCategories() {
   const fromSections = Object.keys(HOME_SECTION_META)
