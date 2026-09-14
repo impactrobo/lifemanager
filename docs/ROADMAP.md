@@ -415,6 +415,37 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Lab biomarkers, and where you stand (2026-09-15).** From the "Best Shape of Your Life" scope,
+  ranked #3 — the actual missing piece for a longevity focus. New `src/app-labs.js`, a LABS subtab
+  under BODY, `STATE.labs` shaped like `STATE.measurements` (sparse and dated: a marker that draw
+  didn't include simply isn't a key). 32 markers across six groups, 16 core and the rest behind
+  MORE MARKERS, sortable grouped or A–Z.
+  - **Two ranges, because one would lie either way.** `ref` is the interval your lab prints as
+    normal; `target` is the stricter figure someone optimising is aiming at. The test that pins it
+    says why best: ApoB at 96 is *inside* the reference and *outside* the target — one range would
+    have said "fine" there.
+  - **The position bar reuses the volume-landmark construction**, which was suggested rather than
+    my plan and was the better call. MEV/MAV/MRV paints zones as a gradient across a track with a
+    marker line; `target` nesting inside `ref` gives the same five stops. It also works from a
+    SINGLE reading, which matters because labs come back two to four times a year — a trend line
+    needs two draws and this doesn't. Pure CSS, no Chart.js.
+  - The zone walk handles any SUBSET of the four bounds: a ceiling-only marker draws no bottom band,
+    a floor-only one no top band, a marker with no target draws no target band rather than inventing
+    one, and a marker of your own starts unbounded and draws no bar at all.
+  - **WHERE YOU STAND reads latest-per-MARKER, not off the newest panel** — panels are sparse, so
+    the newest reading of one marker and of another routinely come from different draws.
+  - **The line this feature does not cross:** it records and positions, never interprets. Every
+    shipped number is an editable default, stored as sparse overrides so a changed default in a
+    later release still reaches anyone who never edited that marker. Sex-specific intervals are
+    deliberately not modelled — encoding a split would still be wrong for many people while looking
+    far more authoritative than it is. The disclaimer is said once and hands interpretation back to
+    a doctor.
+  - Two bugs the tests caught, both mine: `labStatus()` returned a truthy object for a marker the
+    catalogue has never heard of, and deleting a custom marker made its past readings vanish from
+    the card — while the delete confirm promised they would stay. They fall back to the raw key now.
+  - **Still open:** a time-series chart with the same bands behind it, once several draws exist; and
+    bulk entry, which is the real friction (see Ideas Worth Considering).
+
 - **Sleep, steps, resting heart rate and blood pressure charted on the Body tab (2026-09-15).** From the "Best Shape
   of Your Life" scope, ranked #2 — the cheapest win in it. `WEIGHT_METRICS` charted only
   weight/body fat %/body water %, while sleep hours, sleep quality and steps were already logged
