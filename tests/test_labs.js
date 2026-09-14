@@ -34,7 +34,8 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   const reset = () => page.evaluate(() => {
     STATE.labs = [];
     STATE.labSettings = { extended: false, sort: 'group', ranges: {}, custom: [] };
-    UI.labFormOpen = false; UI.labRangesOpen = false;
+    UI.labFormOpen = false; UI.labRangesOpen = false; UI.labPasteOpen = false;
+    VIEW.labPasteDraft = null; VIEW.labPasteReport = null;
     saveState();
   });
   await reset();
@@ -434,6 +435,150 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (!partial) throw new Error('fixture failed');
   if (healed.extended !== true) throw new Error('A field that WAS set must survive the backfill');
   if (healed.sort !== 'group' || !healed.custom || !healed.ranges) throw new Error('...and the missing ones filled: ' + JSON.stringify(healed));
+
+  // ---- 10. Reading a pasted report ----
+  // The parser exists so a fifteen-line report isn't fifteen hand-typed numbers. It is allowed to
+  // MISS -- an unrecognised line just gets typed in. What it is never allowed to do is put a
+  // confident WRONG number in a medical field, so most of what follows is false-positive cases.
+  await reset();
+  const paste = await page.evaluate(() => {
+    const p = t => parseLabText(t);
+    return {
+      // The plain case: name, number, unit, sometimes a range in brackets.
+      plain: p('Apolipoprotein B   96  mg/dL  (40-125)\nHemoglobin A1c     5.3  %\nFerritin  22 ng/mL').values,
+      // Aliases and abbreviations, which is what portals actually print.
+      aliases: p('APO B 88\nA1C 5.1\nHS-CRP 0.4\nLP(A) 14').values,
+      // Longest name wins: a bare "hdl" must not claim the non-HDL line, and "cholesterol"
+      // must not claim "Cholesterol, Total" out from under the full name.
+      longest: p('Non-HDL Cholesterol 110\nHDL Cholesterol 58\nCholesterol, Total 175').values,
+      // Numbers living INSIDE a marker's name are not its value.
+      insideName: p('Vitamin D, 25-Hydroxy  46 ng/mL\nVitamin B-12  512 pg/mL').values,
+      // A ratio line names two markers and carries a number belonging to neither.
+      ratio: p('Cholesterol/HDL Ratio   3.1').values,
+      ratioSkipped: p('Cholesterol/HDL Ratio 3.1').unmatched.length,
+      // First mention wins, so a repeated name in a footnote can't overwrite the result.
+      repeat: p('Ferritin 22 ng/mL\nFerritin reference 30-400').values.ferritin,
+      // Decimals, negatives and comparator-prefixed results.
+      shapes: p('hs-CRP <0.3\nTSH 1.82\nInsulin 4').values,
+      // Nothing recognisable is a clean empty result, not a crash or a guess.
+      junk: (() => { const r = p('Patient: J Smith\nCollected 2026-03-14\n\n   '); return { n: Object.keys(r.values).length, un: r.unmatched.length }; })(),
+      blank: Object.keys(p('').values).length,
+      nullish: Object.keys(p(null).values).length,
+      // A name with no number at all is a miss, not a zero.
+      noNumber: (() => { const r = p('Ferritin  pending'); return { n: Object.keys(r.values).length, un: r.unmatched.length }; })(),
+      // Custom markers join the matcher the moment they exist.
+      custom: (() => {
+        STATE.labSettings.custom = [{ key: 'c1', label: 'Zonulin', unit: '', group: 'custom', core: true,
+                                      ref: { low: null, high: null }, target: { low: null, high: null } }];
+        const r = p('Zonulin 41').values.c1;
+        STATE.labSettings.custom = [];
+        return r;
+      })(),
+    };
+  });
+  console.log('paste parse:', JSON.stringify(paste));
+  if (paste.plain.apoB !== 96 || paste.plain.hba1c !== 5.3 || paste.plain.ferritin !== 22) {
+    throw new Error('The plain three-line case: ' + JSON.stringify(paste.plain));
+  }
+  if (paste.aliases.apoB !== 88 || paste.aliases.hba1c !== 5.1 || paste.aliases.hscrp !== 0.4 || paste.aliases.lpa !== 14) {
+    throw new Error('Portal abbreviations must match: ' + JSON.stringify(paste.aliases));
+  }
+  if (paste.longest.nonHdl !== 110 || paste.longest.hdl !== 58 || paste.longest.totalChol !== 175) {
+    throw new Error('Longest name wins -- non-HDL/HDL/total got crossed: ' + JSON.stringify(paste.longest));
+  }
+  // The bug this guards: reading left-to-right takes the 25 out of "25-Hydroxy" and the 12 out
+  // of "B-12", recording vitamin D as 25 and B12 as 12. Both are plausible-looking numbers.
+  if (paste.insideName.vitD !== 46) throw new Error('Digits in the NAME are not the value, got vitD ' + paste.insideName.vitD);
+  if (paste.insideName.b12 !== 512) throw new Error('...same for B-12, got ' + paste.insideName.b12);
+  // 3.1 recorded as total cholesterol would be a wildly out-of-range reading presented as fact.
+  if (Object.keys(paste.ratio).length !== 0) throw new Error('A ratio line yields no reading: ' + JSON.stringify(paste.ratio));
+  if (paste.ratioSkipped !== 1) throw new Error('...and is reported as unread rather than dropped silently');
+  if (paste.repeat !== 22) throw new Error('First mention wins so a footnote cannot overwrite it, got ' + paste.repeat);
+  if (paste.shapes.tsh !== 1.82 || paste.shapes.insulin !== 4) throw new Error('Decimals and integers: ' + JSON.stringify(paste.shapes));
+  if (paste.shapes.hscrp !== 0.3) throw new Error('"<0.3" reads as 0.3 -- the comparator is lost, but the number is right: ' + paste.shapes.hscrp);
+  if (paste.junk.n !== 0) throw new Error('Header lines yield no readings');
+  if (paste.junk.un !== 2) throw new Error('...and blank lines are not reported as unread, got ' + paste.junk.un);
+  if (paste.blank !== 0 || paste.nullish !== 0) throw new Error('Empty and null input parse to nothing, not a throw');
+  if (paste.noNumber.n !== 0 || paste.noNumber.un !== 1) throw new Error('A name with no number is a miss: ' + JSON.stringify(paste.noNumber));
+  if (paste.custom !== 41) throw new Error('A custom marker is matched by its own label, got ' + paste.custom);
+
+  // ---- 10b. Nothing is saved without a look ----
+  // The parse fills the FORM. The save path is untouched, so a wrong number is one field-edit away
+  // from right and a person who ignores the whole feature is unaffected.
+  await page.evaluate(() => {
+    switchTab('train'); setFitnessSubtab('body'); NAV.bodySubtab = 'labs';
+    toggleLabForm();
+  });
+  await settle(page);
+  // render() is deferred to the next frame, so every DOM read here sits behind its own settle().
+  const collapsedHasBox = await page.evaluate(() => !!document.getElementById('labPasteText'));
+  await page.evaluate(() => toggleLabPaste());
+  await settle(page);
+  const openHasBox = await page.evaluate(() => !!document.getElementById('labPasteText'));
+  await page.fill('#labPasteText', 'ApoB 96\nHemoglobin A1c 5.3\nCollected by J Smith');
+  await page.evaluate(() => applyLabPaste());
+  await settle(page);
+  const flow = await page.evaluate(() => ({
+    collapsedHasBox: null, openHasBox: null,
+    savedNothing: allLabPanels().length,          // still zero -- a parse is not a save
+    report: JSON.parse(JSON.stringify(VIEW.labPasteReport)),
+    fieldValue: document.getElementById('lab_apoB').value,
+    flagged: document.getElementById('lab_apoB').classList.contains('lab-filled'),
+    untouched: document.getElementById('lab_ldl').value,
+    boxClosed: !document.getElementById('labPasteText'),
+  }));
+  flow.collapsedHasBox = collapsedHasBox;
+  flow.openHasBox = openHasBox;
+  // Editing a filled field then saving keeps YOUR number, not the parsed one.
+  await page.fill('#lab_apoB', '91');
+  Object.assign(flow, await page.evaluate(() => {
+    saveLabPanel();
+    return { saved: JSON.parse(JSON.stringify(allLabPanels()[0].values)), draftCleared: VIEW.labPasteDraft };
+  }));
+  console.log('paste flow:', JSON.stringify(flow));
+  if (flow.collapsedHasBox) throw new Error('The paste box starts collapsed -- typing four numbers is faster than pasting');
+  if (!flow.openHasBox || !flow.boxClosed) throw new Error('It opens on request and closes once read');
+  if (flow.savedNothing !== 0) throw new Error('A parse must not save a panel, got ' + flow.savedNothing + ' panels');
+  if (flow.fieldValue !== '96') throw new Error('The form is FILLED, got ' + JSON.stringify(flow.fieldValue));
+  if (!flow.flagged) throw new Error('A filled field is marked as parsed so it is obvious what still needs checking');
+  if (flow.untouched !== '') throw new Error('An unmatched marker is left empty, not zeroed');
+  if (flow.report.matched !== 2 || flow.report.unmatched !== 1) throw new Error('The report states both counts: ' + JSON.stringify(flow.report));
+  if (flow.saved.apoB !== 91) throw new Error('An edited field wins over the parsed value, got ' + flow.saved.apoB);
+  if (flow.saved.hba1c !== 5.3) throw new Error('...and the untouched parsed value still saves, got ' + flow.saved.hba1c);
+  if (flow.draftCleared !== null) throw new Error('Saving clears the draft so it cannot reappear pre-filled later');
+
+  // A marker OUTSIDE the core panel still saves. saveLabPanel() reads only the offered markers,
+  // so without the draft joining that set the number would fill a row that never renders.
+  await page.evaluate(() => { STATE.labs = []; toggleLabForm(); });
+  await settle(page);
+  const coreOnly = await page.evaluate(() => offeredLabMarkers().some(m => m.key === 'ggt'));
+  await page.evaluate(() => toggleLabPaste());
+  await settle(page);
+  await page.fill('#labPasteText', 'GGT 19 U/L');
+  await page.evaluate(() => applyLabPaste());
+  await settle(page);
+  const extended = await page.evaluate(() => {
+    const offeredNow = offeredLabMarkers().some(m => m.key === 'ggt');
+    const renders = !!document.getElementById('lab_ggt');
+    saveLabPanel();
+    return { offeredNow, renders, saved: allLabPanels()[0].values.ggt };
+  });
+  extended.coreOnly = coreOnly;
+  // Closing the form without saving drops the draft rather than leaving it primed.
+  await page.evaluate(() => { toggleLabForm(); toggleLabPaste(); });
+  await settle(page);
+  await page.fill('#labPasteText', 'ApoB 96');
+  Object.assign(extended, await page.evaluate(() => {
+    applyLabPaste();
+    toggleLabForm();
+    return { afterCancel: VIEW.labPasteDraft, panels: allLabPanels().length };
+  }));
+  console.log('extended marker paste:', JSON.stringify(extended));
+  if (extended.coreOnly) throw new Error('fixture: GGT is meant to be an extended marker');
+  if (!extended.offeredNow || !extended.renders) throw new Error('A pasted marker joins the offered set or its row never renders');
+  if (extended.saved !== 19) throw new Error('...and therefore saves, got ' + extended.saved);
+  if (extended.afterCancel !== null) throw new Error('Cancelling the form drops the draft');
+  if (extended.panels !== 1) throw new Error('...without saving anything, got ' + extended.panels + ' panels');
 
   await page.evaluate(() => {
     STATE.labs = [];

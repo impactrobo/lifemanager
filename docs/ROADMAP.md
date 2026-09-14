@@ -73,6 +73,22 @@ before starting any of these.
     on a real device before assuming which of the two is actually happening.
 
 
+- **Claude-assisted lab entry, if the paste-parser proves insufficient (2026-09-15).** The parser
+  now shipping reads pasted *text*. It cannot read a photo of a printout or a PDF, and it will miss
+  formats nobody anticipated. A model would handle both. Deliberately deferred until the parser has
+  actually been used enough to say what it misses — and the bar is high, for two reasons worth
+  keeping written down:
+  - **Lab results are the most sensitive data in this app.** Everything else here is local-first by
+    construction; sending a report to an API is a genuine departure, not an implementation detail,
+    and is the person's call to make explicitly rather than a feature that quietly appears.
+  - **There is no free way to make the call.** `window.claude` exists only inside Claude artifacts,
+    *not* on GitHub Pages where this app actually runs — the same lesson `exportData()` taught (see
+    CLAUDE.md). So it needs either the existing Cloudflare Worker extended into a key-holding proxy,
+    or a user-supplied key. **Not the latter:** a key in `localStorage` rides into Firestore with
+    Cloud Sync, which is a credential leak, not a setting.
+  - If it is built: it should fill the same draft the parser fills and go through the same
+    check-before-save review, so the trust model doesn't change with the input method.
+
 - **"Best Shape of Your Life" scope check (2026-09-14)** — for someone overweight, untrained,
   motivation-sensitive, with a longevity focus (biomarkers, supplementation) across health, money
   and personal development. Full scope published as an artifact; ranked by leverage, not size:
@@ -85,9 +101,9 @@ before starting any of these.
      sleep quality, steps, resting heart rate and blood pressure (see Recently Shipped). BP was
      briefly held back as not fitting a single-value chart, then built once the water chip's
      existing a/b display (`1250/2000`) was pointed out as the precedent it needed.
-  3. **Lab biomarkers** (M) — the actual missing piece for a longevity focus. No sparse, dated,
-     ranged panel exists anywhere (lipids/ApoB, HbA1c, hs-CRP, vitamin D, ferritin, etc.) — a
-     different data shape from the daily log, its own BODY subtab.
+  3. ~~**Lab biomarkers**~~ — **shipped 2026-09-15**: 32 markers, two ranges, the position bar, and
+     pasting a report to fill the form (see Recently Shipped). A time-series chart with the same
+     bands behind it is the remaining tail, and needs several draws before it says anything.
   4. **Editable, dosed supplement stack + adherence** (M) — `SUPPLEMENTS` is a hardcoded list of 7,
      not editable, no dosing, no trend. Link a supplement to the lab marker it's meant to move and
      the budget line it costs.
@@ -443,8 +459,36 @@ on an architecture split + a large wave of Maximalist aesthetics.
   - Two bugs the tests caught, both mine: `labStatus()` returned a truthy object for a marker the
     catalogue has never heard of, and deleting a custom marker made its past readings vanish from
     the card — while the delete confirm promised they would stay. They fall back to the raw key now.
-  - **Still open:** a time-series chart with the same bands behind it, once several draws exist; and
-    bulk entry, which is the real friction (see Ideas Worth Considering).
+  - **Still open:** a time-series chart with the same bands behind it, once several draws exist.
+
+- **Pasting a lab report (2026-09-15).** Bulk entry was the real friction left in labs: a report is
+  routinely fifteen numbers, and typing fifteen numbers into fifteen boxes is where the feature
+  stops getting used. Four approaches were on the table, including sending the report to Claude.
+  **The local paste-parser won, and the reason is worth keeping:** lab results are the most
+  sensitive data this app holds, sending them anywhere departs from its local-first posture, and a
+  regex clears the job. It's also the cheapest way to *find out* whether a model is needed — ship
+  the dumb version, see what it can't read.
+  - `parseLabText(text)` walks the pasted lines, matches the longest known marker name or alias, and
+    takes the first number **after** the name. It returns what it matched *and* what it didn't,
+    because a parser that silently mis-fills medical numbers is worse than no parser at all.
+  - **Most of the work is refusing to guess.** Three false positives the tests pin, all of which
+    produce a plausible-looking wrong number rather than an obvious failure:
+    - `Cholesterol/HDL Ratio 3.1` names two markers and carries a number belonging to neither —
+      without `LAB_SKIP_LINE` it records total cholesterol as 3.1.
+    - `Vitamin D, 25-Hydroxy 46` and `Vitamin B-12 512` carry digits *inside the name*; reading
+      left-to-right gives vitamin D as 25 and B12 as 12. Hence numbers only after the name.
+    - A bare `hdl` would otherwise claim the `Non-HDL Cholesterol` line, so candidates are matched
+      longest-name-first. First mention in the document wins, so a footnote can't overwrite a result.
+  - **It fills the form; it never saves.** The parse writes to `VIEW.labPasteDraft`, filled fields
+    render with an accent border so what still needs checking against the paper is obvious, and
+    `saveLabPanel()` is untouched — an edited field beats the parsed value, and ignoring the feature
+    entirely changes nothing.
+  - **The subtle bug worth the note:** `saveLabPanel()` reads only the *offered* markers, so a paste
+    matching something outside the core panel would have filled a row that never renders and been
+    dropped on save. The draft now joins `offeredLabMarkers()` the same way a saved reading does —
+    the resolve-vs-offer split, load-bearing for the fifth time.
+  - The draft dies with the form. Unlike a half-built meal, a pasted draft that survived navigation
+    would come back pre-filled with medical numbers whose origin you've forgotten.
 
 - **Sleep, steps, resting heart rate and blood pressure charted on the Body tab (2026-09-15).** From the "Best Shape
   of Your Life" scope, ranked #2 — the cheapest win in it. `WEIGHT_METRICS` charted only

@@ -141,6 +141,10 @@ function offeredLabMarkers() {
   const { extended } = labSettings();
   const logged = {};
   allLabPanels().forEach(p => Object.keys(p.values || {}).forEach(k => { logged[k] = true; }));
+  // A pasted draft counts the same way a saved reading does. saveLabPanel() reads only the OFFERED
+  // markers, so a paste that matched something outside the core panel would otherwise fill a row
+  // that never renders and be dropped on save -- a number silently lost is the worst outcome here.
+  Object.keys((VIEW && VIEW.labPasteDraft) || {}).forEach(k => { logged[k] = true; });
   return allLabMarkers().filter(m => m.core || extended || logged[m.key]);
 }
 
@@ -194,7 +198,16 @@ function latestLabValue(key) {
 }
 
 // ---- Mutations ----
-function toggleLabForm() { UI.labFormOpen = !UI.labFormOpen; render(); }
+// Closing the form drops the pasted draft with it. Unlike a half-built meal, a draft that outlives
+// its form would come back silently pre-filled the next time labs are opened, and pre-filled
+// medical numbers whose origin you've forgotten are exactly what this feature must not create.
+function toggleLabForm() {
+  UI.labFormOpen = !UI.labFormOpen;
+  UI.labPasteOpen = false;
+  VIEW.labPasteDraft = null;
+  VIEW.labPasteReport = null;
+  render();
+}
 function setLabSort(mode) {
   STATE.labSettings.sort = mode === 'alpha' ? 'alpha' : 'group';
   saveState(); render();
@@ -216,6 +229,9 @@ function saveLabPanel() {
   if (!Array.isArray(STATE.labs)) STATE.labs = [];
   STATE.labs.push({ id: uid(), date, notes: inputVal('labNotes') || '', values });
   UI.labFormOpen = false;
+  UI.labPasteOpen = false;
+  VIEW.labPasteDraft = null;
+  VIEW.labPasteReport = null;
   saveState();
   showToast('Panel saved');
   render();
@@ -300,21 +316,25 @@ function renderLabSortBar() {
 // entry the measurements form uses, just longer and grouped.
 function renderLabForm() {
   const groups = labMarkersForDisplay();
+  const draft = (VIEW.labPasteDraft || {});
   const rows = groups.map(g => `
     ${g.label ? `<div class="subtle-label" style="margin:14px 0 8px;">${g.label}</div>` : ''}
     <div class="grid2">
       ${g.markers.map(m => {
         const r = labRange(m.key);
+        const filled = draft[m.key] !== undefined;
         return `
         <label class="field">
           <span class="lbl">${escapeHtml(m.label)}${r.unit ? ` <i class="lab-unit">${escapeHtml(r.unit)}</i>` : ''}</span>
-          <input type="number" step="any" id="lab_${m.key}" inputmode="decimal" placeholder="${labBoundHint(r)}">
+          <input type="number" step="any" id="lab_${m.key}" inputmode="decimal" placeholder="${labBoundHint(r)}"
+                 class="${filled ? 'lab-filled' : ''}"${filled ? ` value="${draft[m.key]}"` : ''}>
         </label>`;
       }).join('')}
     </div>`).join('');
   return `
     <div class="panel">
       <label class="field"><span class="lbl">Date drawn</span><input type="date" id="labDate" value="${todayStr()}"></label>
+      ${renderLabPasteBox()}
       ${renderLabSortBar()}
       ${rows}
       <label class="field" style="margin-top:14px;"><span class="lbl">Notes</span>
@@ -549,4 +569,140 @@ function renderLabStanding() {
           </div>`;
         }).join('')}`).join('')}
     </div>`;
+}
+
+// ---- Pasting a report ----
+//
+// Lab portal text is regular enough to parse without a model: a marker name, then its number.
+// Kept local on purpose -- these are the most sensitive readings in the app, and this app is
+// local-first by design, so the bar for sending them anywhere is high and a regex clears the job.
+//
+// Aliases live apart from the catalogue rather than on each marker: the catalogue is read when
+// you're reasoning about ranges and this list is read when a match goes wrong, and interleaving
+// them would make the first harder to scan for the sake of the second.
+const LAB_ALIASES = {
+  totalChol: ['cholesterol, total', 'total cholesterol', 'cholesterol total'],
+  ldl: ['ldl cholesterol', 'ldl chol', 'ldl-c', 'ldl calc', 'ldl'],
+  hdl: ['hdl cholesterol', 'hdl chol', 'hdl-c', 'hdl'],
+  trig: ['triglycerides', 'triglyceride', 'trig'],
+  apoB: ['apolipoprotein b', 'apo b', 'apob'],
+  lpa: ['lipoprotein (a)', 'lipoprotein a', 'lp(a)', 'lpa'],
+  nonHdl: ['non-hdl cholesterol', 'non hdl cholesterol', 'non-hdl chol', 'non-hdl'],
+  glucose: ['glucose, fasting', 'fasting glucose', 'glucose'],
+  hba1c: ['hemoglobin a1c', 'haemoglobin a1c', 'hgb a1c', 'hba1c', 'a1c'],
+  insulin: ['insulin, fasting', 'fasting insulin', 'insulin'],
+  uricAcid: ['uric acid'],
+  hscrp: ['hs-crp', 'hscrp', 'high sensitivity crp', 'c-reactive protein, high sensitivity', 'crp, high sensitivity'],
+  homocysteine: ['homocysteine'],
+  vitD: ['vitamin d, 25-hydroxy', '25-hydroxyvitamin d', 'vitamin d (25-oh)', 'vitamin d 25-oh', '25-oh vitamin d', 'vitamin d'],
+  ferritin: ['ferritin'],
+  b12: ['vitamin b-12', 'vitamin b12', 'cobalamin', 'b12'],
+  magnesium: ['magnesium, rbc', 'rbc magnesium', 'magnesium'],
+  omega3: ['omega-3 index', 'omega 3 index'],
+  alt: ['alt (sgpt)', 'alanine aminotransferase', 'sgpt', 'alt'],
+  creatinine: ['creatinine, serum', 'creatinine'],
+  tsh: ['thyroid stimulating hormone', 'tsh'],
+  ast: ['ast (sgot)', 'aspartate aminotransferase', 'sgot', 'ast'],
+  ggt: ['gamma glutamyl transferase', 'ggt'],
+  alkPhos: ['alkaline phosphatase', 'alk phos'],
+  albumin: ['albumin'],
+  egfr: ['egfr', 'gfr estimated', 'estimated gfr'],
+  bun: ['blood urea nitrogen', 'urea nitrogen', 'bun'],
+  freeT4: ['free t4', 't4, free', 'free thyroxine'],
+  wbc: ['white blood cell', 'wbc'],
+  hgb: ['hemoglobin', 'haemoglobin', 'hgb'],
+  hct: ['hematocrit', 'haematocrit', 'hct'],
+  platelets: ['platelet count', 'platelets'],
+};
+
+// Lines that name a marker but whose number is not that marker's value. A lipid panel routinely
+// prints "Cholesterol/HDL Ratio 3.1", which contains two marker names and a number belonging to
+// neither -- without this the longest-alias rule confidently records total cholesterol as 3.1.
+const LAB_SKIP_LINE = /\bratio\b|\bindex of\b|\bper\b\s*$/i;
+
+// Returns what it could match and what it couldn't, because a parser that silently mis-fills
+// medical numbers is worse than no parser. Nothing is saved from here -- it fills the form.
+function parseLabText(text) {
+  const candidates = [];
+  allLabMarkers().forEach(m => {
+    [m.label].concat(LAB_ALIASES[m.key] || []).forEach(n => {
+      candidates.push({ key: m.key, needle: String(n).toLowerCase() });
+    });
+  });
+  // Longest first: "Non-HDL Cholesterol" must not be claimed by "hdl", and "Cholesterol, Total"
+  // must not be claimed by a bare "cholesterol" that happens to sort earlier.
+  candidates.sort((a, b) => b.needle.length - a.needle.length);
+
+  const values = {}, matched = [];
+  const unmatched = [];
+  String(text || '').split(/[\r\n]+/).forEach(raw => {
+    const line = raw.trim();
+    if (!line) return;
+    if (LAB_SKIP_LINE.test(line)) { unmatched.push(line); return; }
+    const lower = line.toLowerCase();
+    for (const c of candidates) {
+      if (values[c.key] !== undefined) continue;   // first mention in the document wins
+      const at = lower.indexOf(c.needle);
+      if (at < 0) continue;
+      // Only numbers AFTER the name. "Vitamin D, 25-OH 46" and "Vitamin B12 500" both carry digits
+      // inside the name itself, and reading left to right would take those.
+      const num = line.slice(at + c.needle.length).match(/-?\d+(?:\.\d+)?/);
+      if (!num) continue;
+      values[c.key] = Number(num[0]);
+      matched.push({ key: c.key, value: Number(num[0]), line });
+      return;
+    }
+    unmatched.push(line);
+  });
+  return { values, matched, unmatched };
+}
+
+// The box is collapsed by default: typing the four numbers you care about is faster than pasting,
+// and this is for the day you're holding a fifteen-line report.
+function renderLabPasteBox() {
+  const rep = VIEW.labPasteReport;
+  if (!UI.labPasteOpen) {
+    return `
+      <button class="btn btn-sm btn-block" style="margin:-4px 0 14px;" onclick="toggleLabPaste()">PASTE FROM A REPORT</button>
+      ${rep ? renderLabPasteReport(rep) : ''}`;
+  }
+  return `
+    <div class="lab-paste">
+      <div class="subtle-label">Paste from a report</div>
+      <p class="lab-paste-help">
+        Copy the results out of your lab portal and drop them in. Known marker names are matched to
+        their number and the form is filled for you &mdash; nothing is saved until you check it and
+        hit save. This all happens on your device; the text never leaves it.
+      </p>
+      <textarea id="labPasteText" rows="6" placeholder="Apolipoprotein B   96 mg/dL&#10;Hemoglobin A1c     5.3 %&#10;Ferritin           22 ng/mL"></textarea>
+      <div class="row" style="gap:8px; margin-top:8px;">
+        <button class="btn btn-primary" style="flex:1;" onclick="applyLabPaste()">READ IT</button>
+        <button class="btn" onclick="toggleLabPaste()">CANCEL</button>
+      </div>
+    </div>`;
+}
+// Says what it did AND what it couldn't, with the count of skipped lines rather than a quiet
+// success -- the failure mode that matters is a line you assume was read and wasn't.
+function renderLabPasteReport(rep) {
+  return `
+    <div class="lab-paste-report">
+      <span>Filled <b>${rep.matched}</b> marker${rep.matched === 1 ? '' : 's'} below &mdash; check each one against your report.
+      ${rep.unmatched ? `${rep.unmatched} line${rep.unmatched === 1 ? ' wasn&rsquo;t' : 's weren&rsquo;t'} recognised; add those by hand.` : ''}</span>
+      <button class="btn btn-sm" onclick="clearLabPaste()">CLEAR</button>
+    </div>`;
+}
+
+function toggleLabPaste() { UI.labPasteOpen = !UI.labPasteOpen; render(); }
+function applyLabPaste() {
+  const res = parseLabText(inputVal('labPasteText'));
+  if (!res.matched.length) { showToast('Nothing recognised — type them in instead'); return; }
+  VIEW.labPasteDraft = res.values;
+  VIEW.labPasteReport = { matched: res.matched.length, unmatched: res.unmatched.length };
+  UI.labPasteOpen = false;
+  render();
+}
+function clearLabPaste() {
+  VIEW.labPasteDraft = null;
+  VIEW.labPasteReport = null;
+  render();
 }

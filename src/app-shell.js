@@ -84,6 +84,7 @@ function defaultTransientUi() {
     skillTargetFormOpen: false,
     labFormOpen: false,
     labRangesOpen: false,
+    labPasteOpen: false,
     // The AM/PM quick-log sheet: { group: 'am'|'pm', focus: <field id> } or null. Lives in UI so
     // navigating away closes it, same as every other transient panel.
     logPopup: null,
@@ -131,6 +132,8 @@ let VIEW = {
   compareB: null,
   compareSelected: ['bodyweight'],
   measureDraftPhotos: [],            // draft photos on an unsaved measurement
+  labPasteDraft: null,               // {markerKey: number} parsed out of a pasted report, unsaved
+  labPasteReport: null,              // {matched, unmatched} counts from that parse
   selectedWeightMetric: 'weight',
   selectedMeasurementField: 'weight',
   notesSelectedTag: 'general',       // tag for a new note; saveNote() puts this back to 'general'

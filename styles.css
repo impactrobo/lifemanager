@@ -2140,3 +2140,32 @@ input[type="number"].lab-range-in {
   -webkit-mask-repeat: repeat; mask-repeat: repeat;
   -webkit-mask-size: 120px 120px; mask-size: 120px 120px;
 }
+
+/* ---- Pasting a lab report ---- */
+.lab-paste {
+  background: var(--surface2); border: 1px solid var(--border-soft);
+  border-radius: var(--radius); padding: 12px; margin-bottom: 14px;
+}
+.lab-paste-help { font-size: 11px; color: var(--text-dim); line-height: 1.5; margin: 6px 0 10px; }
+/* Monospace and unwrapped on purpose: pasted report text arrives column-aligned, and either a
+   proportional face or a soft wrap scrambles that into something you can't check against the paper
+   in your hand. Report lines are wider than a phone, so the box scrolls sideways instead. */
+.lab-paste textarea {
+  font-family: var(--font-mono); font-size: 12px;
+  white-space: pre; overflow-x: auto;
+}
+.lab-paste-report {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 11px; line-height: 1.45; color: var(--text-dim);
+  background: var(--surface2); border-left: 3px solid var(--accent);
+  border-radius: var(--radius); padding: 8px 10px; margin-bottom: 14px;
+}
+.lab-paste-report span { flex: 1 1 auto; min-width: 0; }
+.lab-paste-report .btn { flex: none; }
+/* A field the paste filled reads differently from one you typed, so the numbers still needing a
+   check against the report are obvious at a glance. Element+class, because a bare class loses to
+   the (0,1,1) of `input[type="number"]`. */
+input[type="number"].lab-filled {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+}
