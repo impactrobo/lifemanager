@@ -394,6 +394,9 @@ function migrateState() {
   // items; drop it rather than guard every read through it.
   if (STATE.skillSession && !STATE.skills.some(s => s.id === STATE.skillSession.skillId)) STATE.skillSession = null;
   STATE.skills.forEach(sk => {
+    // Skills predating the time-category step have no colour, and the rollup swatch needs one.
+    if (!sk.color) sk.color = nextSkillColor();
+    if (typeof sk.archived !== 'boolean') sk.archived = false;
     if (!Array.isArray(sk.lists)) sk.lists = [];
     if (!Array.isArray(sk.practiceLog)) sk.practiceLog = [];
     sk.lists.forEach(l => {

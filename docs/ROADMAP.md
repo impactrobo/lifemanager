@@ -413,6 +413,34 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Per-skill time categories (2026-09-15).** Step 4 of "Skills Own the Ladder". Each skill emits
+  its own time category (`skill:<id>`) with its own name and colour, so guitar time and language
+  time separate instead of both landing in one HOBBIES bucket.
+  - **The seam already existed.** `timeCategories()` (resolve) vs `timeCategoryChoices()` (offer)
+    was built for the retired `health` category; skills are the second feature to need it and slot
+    straight in — resolve from `allSkills()`, offer from `activeSkills()`.
+  - **HOBBIES stays**, against the original scope, which had it retire. A hobby that isn't a tracked
+    Skill — a film, a garden, a bike — would otherwise have nowhere to go, and making someone create
+    a Skill just to tag an hour is backwards. Skills are an addition to the list, not a replacement.
+  - **Deleting became archiving.** `archived` has been on the model since the Skill model shipped and
+    `activeSkills()` has filtered on it the whole time; this is the first thing to set it. A skill
+    emits a category that schedule blocks out in the calendar point at, so deleting it outright would
+    strip the label off real logged hours living somewhere else entirely. Delete still works and now
+    says how many blocks it would orphan.
+  - **Logged practice feeds the rollup, de-duplicated per day.** Without it the feature would be
+    near-useless: you run a 25-minute block with the focus timer and the chart shows nothing unless
+    you *also* put a Guitar block on the schedule. Whatever the schedule already claims for that
+    skill that day is subtracted first — a 30-minute block plus a 25-minute session is 30 minutes,
+    and a 45-minute session against it adds only the 15 that overran. Overlapping *blocks* still each
+    count their own duration; that's two things sharing a clock, where this is one thing described
+    twice.
+  - **`registerSkill()` assigns the colour, not `defaultSkill()`.** Caught in the screenshot pass:
+    three skills came out identical because "least used among existing skills" only has an answer at
+    the moment a skill JOINS the list — build three before pushing any and all three see the same
+    empty list. Every creation path goes through the one function now.
+  - The palette reuses the Notes colours rather than inventing a thirteenth set, ordered so the first
+    six avoid every hue a Home section already spends — they share the same chart.
+
 - **Guitar becomes a real skill (2026-09-15).** Step 3 of "Skills Own the Ladder". New file
   `src/app-skill-templates.js`: `SKILL_TEMPLATES`, the create-from-template flow, and the one-time
   carry-across. The three hardcoded catalogue screens, `NAV.guitarSubtab`, `setGuitarSubtab()` and

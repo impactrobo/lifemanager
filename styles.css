@@ -1004,7 +1004,10 @@ input[type="text"].phase-label {
 .skill-row-chev { flex: none; display: flex; font-size: 16px; color: var(--text-faint); }
 /* Dashed, because it isn't a skill yet -- it's a skill-shaped thing waiting to be converted. The
    border says "temporary" before the LEGACY pill has to. */
-.skill-row-legacy { border-style: dashed; }
+/* Archived: still listed, visibly not in play. Dimmed rather than hidden, because the reason it
+   is still here at all is that logged hours out in the schedule still point at it. */
+.skill-row-archived { opacity: 0.6; cursor: default; }
+.skill-row-archived .skill-row-name { font-weight: 600; }
 
 /* Editable in place, like every other name in the app -- typed over, not opened in a dialog. */
 /* All four inline-edit fields here are written as `input[type="text"].x` (0,2,1) rather than a

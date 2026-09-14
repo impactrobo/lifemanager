@@ -56,6 +56,37 @@ function defaultSkillItem(name, detail, detail2, tier) {
 function defaultSkillList(name, tiered) {
   return { id: uid(), name: (name || 'Items').trim(), tiered: tiered !== false, items: [] };
 }
+// Reuses the Notes palette rather than inventing a thirteenth set of hues -- the same reasoning the
+// section colours already follow. Safe as a `const` initializer because app-notes.js loads at 14 and
+// this file at 21; see CLAUDE.md on what load order does and doesn't constrain.
+//
+// Ordered so the first six are the ones NOT already spent on a Home section. A skill's colour and a
+// section's colour end up side by side in the same week rollup, so starting where the sections
+// stopped means the first handful of skills can't turn up wearing WELLNESS's red.
+const SKILL_COLOR_PALETTE = (() => {
+  const taken = Object.keys(HOME_SECTION_META).map(k => HOME_SECTION_META[k].color);
+  const all = NOTE_TAG_COLOR_PALETTE.map(c => c.dark);
+  return all.filter(c => taken.indexOf(c) < 0).concat(all.filter(c => taken.indexOf(c) >= 0));
+})();
+// Least-used wins, so colours only repeat once the palette is exhausted.
+function nextSkillColor() {
+  const used = {};
+  allSkills().forEach(s => { if (s.color) used[s.color] = (used[s.color] || 0) + 1; });
+  return SKILL_COLOR_PALETTE.reduce((best, c) => (used[c] || 0) < (used[best] || 0) ? c : best, SKILL_COLOR_PALETTE[0]);
+}
+
+// defaultSkill() deliberately does NOT pick the colour. "Least used among existing skills" is
+// only a well-defined question at the moment a skill JOINS the list -- build three in a row
+// before pushing any and all three see the same empty list and come out the same colour. So the
+// colour is assigned here, at the one point that can't be got wrong, and every creation path
+// goes through it.
+function registerSkill(skill) {
+  if (!Array.isArray(STATE.skills)) STATE.skills = [];
+  if (!skill.color) skill.color = nextSkillColor();
+  STATE.skills.push(skill);
+  return skill;
+}
+
 function defaultSkill(name) {
   return {
     id: uid(), name: (name || 'New skill').trim(), color: null,
@@ -100,7 +131,7 @@ function createSkill() {
   // A skill with no lists can't hold anything, and "add a list" as a required first step reads as
   // busywork. One list named after the skill is a sane floor you can rename or add beside.
   skill.lists.push(defaultSkillList('Items', true));
-  STATE.skills.push(skill);
+  registerSkill(skill);
   UI.skillFormOpen = false;
   saveState();
   openSkill(skill.id);
@@ -112,10 +143,54 @@ function renameSkill(id, value) {
   s.name = t;
   saveState(); render();
 }
+// How much scheduled time would lose its label if this skill went. Anchors and schedule activities
+// are the two things that carry a `category`, so they're the two things to count.
+function skillTaggedBlockCount(skill) {
+  if (!skill) return 0;
+  const catId = 'skill:' + skill.id;
+  const life = STATE.life || {};
+  let n = (life.anchors || []).filter(a => a.category === catId).length;
+  (life.schedules || []).forEach(sch => {
+    n += (sch.activities || []).filter(act => act.category === catId).length;
+  });
+  return n;
+}
+
+// Archiving is what deleting used to have to be. A skill emits its own time category, so schedule
+// blocks out in the calendar can be tagged to it -- and deleting the skill outright would strip the
+// label and colour off real logged hours that live somewhere else entirely. Archived keeps
+// resolving (timeCategories reads allSkills) while dropping out of what's offered, which is exactly
+// the resolve/offer split the retired `health` category established.
+//
+// `archived` has been on the model since the Skill model shipped, and activeSkills() has filtered
+// on it the whole time. This is the first thing to actually set it.
+function archiveSkill(id) {
+  const s = skillById(id);
+  if (!s) return;
+  s.archived = true;
+  if (NAV.skillId === id) NAV.skillId = null;
+  if (STATE.skillSession && STATE.skillSession.skillId === id) STATE.skillSession = null;
+  saveState();
+  showToast(`“${s.name}” archived — its logged time keeps its label`);
+  render();
+}
+function unarchiveSkill(id) {
+  const s = skillById(id);
+  if (!s) return;
+  s.archived = false;
+  saveState(); render();
+}
 function deleteSkill(id) {
   const s = skillById(id);
   if (!s) return;
-  showConfirm(`Delete “${s.name}”? Its lists and practice history go with it.`, () => {
+  // Only ever a warning. The app doesn't refuse a delete anywhere else, and the point is to say what
+  // ELSE goes -- the hours tagged to it are out in the schedule, not on this screen, so they're the
+  // part you can't see from here.
+  const tagged = skillTaggedBlockCount(s);
+  const extra = tagged
+    ? ` ${tagged} scheduled block${tagged === 1 ? '' : 's'} tagged to it would lose the label — ARCHIVE keeps it.`
+    : '';
+  showConfirm(`Delete “${s.name}”? Its lists and practice history go with it.${extra}`, () => {
     STATE.skills = allSkills().filter(x => x.id !== id);
     if (NAV.skillId === id) NAV.skillId = null;
     // The session goes with the skill. loadState() drops an orphan on the next boot anyway, but
@@ -299,9 +374,27 @@ function renderSkillList() {
           </button>`).join('')}
       </div>` : ''}
     ${rows ? `<div class="skill-list">${rows}</div>`
-           : emptyState('No skills yet. Add one for anything you’re building — an instrument, a language, a craft.')}`;
+           : emptyState('No skills yet. Add one for anything you’re building — an instrument, a language, a craft.')}
+    ${renderArchivedSkills()}`;
 }
 
+
+// Archived skills sit below the live ones rather than in a separate screen: there are never many,
+// and a skill you archived last month is exactly the thing you want to find without hunting.
+function renderArchivedSkills() {
+  const archived = allSkills().filter(s => s.archived);
+  if (!archived.length) return '';
+  return `
+    <div class="subtle-label" style="margin:22px 0 8px;">ARCHIVED</div>
+    <div class="skill-list">${archived.map(s => `
+      <div class="skill-row skill-row-archived">
+        <div class="skill-row-main">
+          <div class="skill-row-name">${escapeHtml(s.name)}</div>
+          <div class="skill-row-sub">${skillItemCount(s)} items · time logged against it keeps this label</div>
+        </div>
+        <button class="btn btn-sm" onclick="unarchiveSkill('${s.id}')">RESTORE</button>
+      </div>`).join('')}</div>`;
+}
 
 function renderOneSkill(skill) {
   const tab = (key, label) =>
@@ -321,7 +414,10 @@ function renderOneSkill(skill) {
   return `
     <div class="row" style="margin-bottom:6px;">
       <button class="btn btn-ghost btn-sm" onclick="closeSkill()">&#8249; SKILLS</button>
-      <button class="btn btn-ghost btn-sm" style="color:var(--bad);" onclick="deleteSkill('${skill.id}')">DELETE</button>
+      <div style="display:flex; gap:4px; flex:none;">
+        <button class="btn btn-ghost btn-sm" onclick="archiveSkill('${skill.id}')">ARCHIVE</button>
+        <button class="btn btn-ghost btn-sm" style="color:var(--bad);" onclick="deleteSkill('${skill.id}')">DELETE</button>
+      </div>
     </div>
     <input type="text" class="skill-title" value="${escapeHtml(skill.name)}"
            onchange="renameSkill('${skill.id}', this.value)">

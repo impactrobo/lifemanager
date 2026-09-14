@@ -48,10 +48,9 @@ function skillTemplate(key) { return SKILL_TEMPLATES.find(t => t.key === key) ||
 function createSkillFromTemplate(key) {
   const tpl = skillTemplate(key);
   if (!tpl) return;
-  if (!Array.isArray(STATE.skills)) STATE.skills = [];
   const skill = defaultSkill(tpl.name);
   skill.lists = tpl.build();
-  STATE.skills.push(skill);
+  registerSkill(skill);
   UI.skillFormOpen = false;
   saveState();
   openSkill(skill.id);
@@ -137,8 +136,7 @@ function migrateGuitarToSkill() {
     moves: [],
   }));
 
-  if (!Array.isArray(STATE.skills)) STATE.skills = [];
-  STATE.skills.push(skill);
+  registerSkill(skill);
   // STATE.life.guitar is deliberately NOT deleted. The screens retire; the data stays exactly where
   // it was, so a mapping that turns out wrong can be redone against the original rather than
   // reconstructed from what this function produced.

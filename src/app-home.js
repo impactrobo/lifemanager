@@ -103,23 +103,52 @@ const EXTRA_TIME_CATEGORIES = [
 // (it's the container everything sits in), and 'health' stopped being one when Health & Diet merged
 // into Health & Wellness -- offering both would be two names for the same section.
 const RETIRED_TIME_CATEGORIES = ['health'];
+// Each skill emits its own category, so guitar time and language time separate instead of both
+// landing in one HOBBIES bucket. Prefixed, because a skill's uid and a section's id share a
+// namespace here and only one of them is under our control.
+//
+// HOBBIES deliberately STAYS offered alongside them. The original scope had it retire once skills
+// existed -- but a hobby that isn't a tracked Skill (a film, a garden, a bike) would then have
+// nowhere to go, and making someone create a Skill just to tag an hour is backwards.
+function skillTimeCategoryId(skill) { return 'skill:' + skill.id; }
+function skillTimeCategories() {
+  return allSkills().map(s => ({
+    id: skillTimeCategoryId(s), label: (s.name || 'Skill').toUpperCase(),
+    color: s.color || SKILL_COLOR_PALETTE[0], archived: !!s.archived,
+  }));
+}
 function timeCategories() {
+  // `archived` on every entry, not just the skills: a mixed-shape list means every consumer has to
+  // remember which kind it's holding, and the one that forgets reads undefined as false by luck.
   const fromSections = Object.keys(HOME_SECTION_META)
     .filter(id => id !== 'schedule')
-    .map(id => ({ id, label: HOME_SECTION_META[id].label, color: HOME_SECTION_META[id].color }));
-  return fromSections.concat(EXTRA_TIME_CATEGORIES);
+    .map(id => ({ id, label: HOME_SECTION_META[id].label, color: HOME_SECTION_META[id].color, archived: false }));
+  const extras = EXTRA_TIME_CATEGORIES.map(c => ({ id: c.id, label: c.label, color: c.color, archived: false }));
+  // allSkills(), not activeSkills(): this is the RESOLVE list, and an archived skill's logged hours
+  // must keep their own label and colour rather than falling back to an unstyled tag.
+  return fromSections.concat(extras).concat(skillTimeCategories());
 }
 function timeCategoryChoices() {
-  return timeCategories().filter(c => RETIRED_TIME_CATEGORIES.indexOf(c.id) < 0);
+  return timeCategories().filter(c => RETIRED_TIME_CATEGORIES.indexOf(c.id) < 0 && !c.archived);
 }
 function timeCategoryMeta(id) { return timeCategories().find(c => c.id === id) || null; }
 // A <select> shared by the anchor and activity editors. Uncategorised is the default and stays a
 // real choice — nothing is auto-assigned, so the rollup only fills in as things get tagged.
 function timeCategorySelect(current, onchange) {
+  const opt = c => `<option value="${c.id}" ${current === c.id ? 'selected' : ''}>${escapeHtml(c.label)}</option>`;
+  const choices = timeCategoryChoices();
+  const skills = choices.filter(c => c.id.indexOf('skill:') === 0);
+  const rest = choices.filter(c => c.id.indexOf('skill:') !== 0);
+  // Grouped once there are skills, because the list is otherwise a flat run of areas with a few
+  // proper nouns buried in it. A current value pointing at an ARCHIVED skill still renders, since
+  // that option is added back below -- otherwise opening the editor would silently clear the tag.
+  const stale = current && !choices.some(c => c.id === current) && timeCategoryMeta(current);
   return `<label class="field"><span class="lbl">Counts as</span>
     <select onchange="${onchange}">
       <option value="" ${!current ? 'selected' : ''}>Uncategorised</option>
-      ${timeCategoryChoices().map(c => `<option value="${c.id}" ${current === c.id ? 'selected' : ''}>${escapeHtml(c.label)}</option>`).join('')}
+      ${rest.map(opt).join('')}
+      ${skills.length ? `<optgroup label="Skills">${skills.map(opt).join('')}</optgroup>` : ''}
+      ${stale ? `<optgroup label="No longer offered">${opt(stale)}</optgroup>` : ''}
     </select>
   </label>`;
 }
@@ -132,6 +161,7 @@ function timeCategorySelect(current, onchange) {
 // category's own figure is what's being asked about, and nothing claims they tile a day.
 function timeRollupForDates(dateStrs) {
   const totals = {};
+  const perDate = {};   // dateStr -> { categoryId: minutes } -- only needed for the de-dupe below
   dateStrs.forEach(dateStr => {
     const { blocks } = scheduleBlocksForDate(new Date(dateStr + 'T00:00:00'));
     blocks.forEach(b => {
@@ -139,6 +169,31 @@ function timeRollupForDates(dateStrs) {
       const mins = blockDurationMinutes(b);
       if (mins <= 0) return;
       totals[b.category] = (totals[b.category] || 0) + mins;
+      perDate[dateStr] = perDate[dateStr] || {};
+      perDate[dateStr][b.category] = (perDate[dateStr][b.category] || 0) + mins;
+    });
+  });
+
+  // A logged practice session is the second source of "how long did this take", and without it the
+  // per-skill categories would be near-useless: you run a 25-minute block with the focus timer and
+  // this chart shows nothing unless you ALSO happened to put a Guitar block on the schedule.
+  //
+  // De-duplicated per day, because doing both is the normal case, not the odd one: whatever the
+  // schedule already claims for that skill on that date is subtracted first, so a 30-minute
+  // scheduled block plus a 25-minute logged session is 30 minutes, and a 45-minute session against
+  // that same block adds only the 15 that overran it. Overlapping BLOCKS still each count their own
+  // duration (see above) -- that's two different things sharing a clock, where this is one thing
+  // described twice.
+  allSkills().forEach(s => {
+    const catId = skillTimeCategoryId(s);
+    dateStrs.forEach(dateStr => {
+      const logged = (s.practiceLog || [])
+        .filter(e => e.date === dateStr)
+        .reduce((n, e) => n + (Number(e.minutes) || 0), 0);
+      if (logged <= 0) return;
+      const claimed = (perDate[dateStr] && perDate[dateStr][catId]) || 0;
+      const add = Math.max(0, logged - claimed);
+      if (add > 0) totals[catId] = (totals[catId] || 0) + add;
     });
   });
   return totals;

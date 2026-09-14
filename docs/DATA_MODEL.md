@@ -103,8 +103,14 @@ STATE = {
                // No projection: strength and cardio move in steps and stalls
   ],
   skills: [                // anything you're learning. Guitar became the first one on 2026-09-15;
-    { id, name, color, archived, createdAt,   // STATE.life.guitar is kept as the fallback rather
-      lists: [                                // than deleted -- see src/app-skill-templates.js
+    { id, name,            // STATE.life.guitar is kept as the fallback rather than deleted --
+      color,               // see src/app-skill-templates.js. `color` is assigned by
+                           // registerSkill(), never by defaultSkill(): "least used among existing
+                           // skills" only has an answer at the moment one JOINS the list
+      archived,            // still RESOLVES as a time category (so its logged hours keep their
+                           // label) but is no longer OFFERED. This is what deleting used to be
+      createdAt,
+      lists: [
         { id, name,
           tiered,          // group items under TIER headings, or render one flat run
           items: [
