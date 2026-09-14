@@ -136,7 +136,7 @@ function renderTrainGrid() {
   if (weights.length === 0 && cardio.length === 0 && mobility.length === 0 && warmup.length === 0) {
     return `
       <div class="screen">
-        <div class="section-title">Exercise</div>
+        <div class="section-title">Health &amp; Fitness</div>
         <div class="empty-state">
           <div class="big">${icon('lock')}</div>
           No workouts yet.<br>
@@ -153,7 +153,7 @@ function renderTrainGrid() {
 
   return `
     <div class="screen">
-      <div class="section-title">Exercise</div>
+      <div class="section-title">Health &amp; Fitness</div>
       <div class="week-selector">
         <div>
           <div class="subtle-label">PROGRAM CYCLE</div>

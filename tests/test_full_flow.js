@@ -7,7 +7,11 @@ const { settle } = require('./helpers');
 const path = require('path');
 
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
-const SECTIONS = ['schedule', 'train', 'hobbies', 'health', 'notes', 'budget'];
+// No 'health': Health & Diet merged into Health & Fitness, which is the 'train' tab. The id is
+// still a live HOME_SECTION_META entry (its meal link chips need the colour) and switchTab()
+// redirects it to 'train', so walking it here would assert the redirect didn't happen.
+// test_home_bar.js owns that redirect's coverage.
+const SECTIONS = ['schedule', 'train', 'hobbies', 'notes', 'budget'];
 
 (async () => {
   const browser = await chromium.launch({ executablePath: process.env.PW_CHROMIUM_PATH || undefined });

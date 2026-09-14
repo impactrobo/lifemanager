@@ -396,6 +396,29 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Fixed: the retired HEALTH & DIET tile survived in saved Home layouts (2026-09-14).** Reported
+  from a phone screenshot showing five tiles — FITNESS *and* HEALTH & DIET side by side — the day
+  after the merge shipped.
+  - **Fresh installs were fine, which is why the whole suite passed.** `defaultHomeLayout()` had
+    already dropped `health`. But a **saved** layout still named it, and `migrateState()`'s stale-id
+    guard (`filter(id => HOME_SECTION_META[id])`) cannot drop it — the entry deliberately survives
+    so meal link chips keep their colour. It has to be filtered **by name**, exactly as `schedule`
+    already was, and the comment on that line spelled out this very hazard.
+  - **Tapping it didn't just look wrong, it stranded you.** `health` has no render branch, and
+    `switchTab()` to a branchless tab doesn't blank the screen — it leaves the *previous* screen's
+    markup up while the bottom bar loses its section buttons. Reads as a frozen app. `MERGED_TABS`
+    now redirects it to `train` in `switchTab()`.
+  - **`schedule` is deliberately NOT redirected**, and conflating the two broke Home's bar on the
+    first attempt (caught by `test_home_bar.js`). It's still a live tab `goSchedule()` navigates to
+    on purpose — only its *tile* retired. Two separate constants now: `RETIRED_SECTION_TILES` (no
+    Home tile, not a landing page) and `MERGED_TABS` (no render branch, redirect to where it went).
+  - **The test gap:** `test_home_bar.js` had a thorough table of saved-layout migration cases from
+    the schedule retirement, and every one still expected `health` to survive — the merge never
+    updated them. `health` is folded into that table now, plus a case for a retired id reaching
+    `switchTab()` anyway.
+  - The WORKOUTS screen still titled itself "Exercise" while every other screen in the tab said
+    "Health & Fitness". Fixed in the same pass.
+
 - **Health & Fitness: Exercise and Health & Diet merged into one tab (2026-09-14).** The one item
   "Phases Own the Plan" deliberately left open — *"worth doing after this lands and the seams are
   visible, not before."* No new capability; a restructuring of navigation around splits that were

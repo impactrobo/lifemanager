@@ -437,8 +437,12 @@ function migrateState() {
     // The SCHEDULE tile retired -- Home renders the schedule itself, so a tile pointing at it is a
     // tile pointing at where you already are. Dropped from both lists rather than left to the
     // stale-id filter below, so the intent is stated where someone will look for it.
-    L.sectionOrder = L.sectionOrder.filter(id => id !== 'schedule');
-    L.sectionHidden = L.sectionHidden.filter(id => id !== 'schedule');
+    // ...and the same for HEALTH & DIET, which merged into Health & Fitness. Both have to be
+    // filtered BY NAME: each still has a HOME_SECTION_META entry (see below), so the stale-id
+    // guard at the bottom can't reach them. Missing this line shipped a real bug -- the tile kept
+    // rendering for anyone with a saved layout, and tapping it stranded them on a dead tab.
+    L.sectionOrder = L.sectionOrder.filter(id => RETIRED_SECTION_TILES.indexOf(id) < 0);
+    L.sectionHidden = L.sectionHidden.filter(id => RETIRED_SECTION_TILES.indexOf(id) < 0);
     // RIGHT NOW / TODAY'S WORKOUTS / HABITS merged into one `day` box. A saved layout still names
     // the old three, so fold them down. `day` is only visible if at least one of them was --
     // somebody who hid all three wanted their Home without the day on it, and that intent survives.

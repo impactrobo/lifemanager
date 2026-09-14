@@ -132,20 +132,24 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // Home's bar and Schedule's are the same four buttons; what differs is which reads as active.
   if (fromSchedule.active !== 'CALENDAR') throw new Error(`Inside Calendar, CALENDAR should be the active button, got ${fromSchedule.active}`);
 
-  // ---- 5. Saved layouts naming the retired tile ----
+  // ---- 5. Saved layouts naming a retired tile ----
+  // TWO tiles are retired now, and both have to be filtered BY NAME: each keeps its
+  // HOME_SECTION_META entry for its link-chip colour, so the stale-id guard can't reach either.
+  // Every case below predated the Health & Fitness merge and expected `health` to survive; missing
+  // that is what shipped a fifth tile to a real phone on 2026-09-14.
   const cases = [
-    { name: 'default pre-retirement order',
+    { name: 'pre-retirement order, both tiles present',
       order: ['schedule', 'train', 'hobbies', 'health', 'notes', 'budget'], hidden: [],
-      want: ['train', 'hobbies', 'health', 'notes', 'budget'], wantHidden: [] },
-    { name: 'schedule was hidden anyway',
-      order: ['train', 'hobbies', 'health', 'notes', 'budget'], hidden: ['schedule'],
-      want: ['train', 'hobbies', 'health', 'notes', 'budget'], wantHidden: [] },
-    { name: 'reordered, schedule mid-list',
-      order: ['budget', 'schedule', 'notes'], hidden: ['train', 'hobbies', 'health'],
-      want: ['budget', 'notes'], wantHidden: ['train', 'hobbies', 'health'] },
+      want: ['train', 'hobbies', 'notes', 'budget'], wantHidden: [] },
+    { name: 'retired tiles were hidden anyway',
+      order: ['train', 'hobbies', 'notes', 'budget'], hidden: ['schedule', 'health'],
+      want: ['train', 'hobbies', 'notes', 'budget'], wantHidden: [] },
+    { name: 'reordered, retired tiles mid-list',
+      order: ['budget', 'schedule', 'notes', 'health'], hidden: ['train', 'hobbies'],
+      want: ['budget', 'notes'], wantHidden: ['train', 'hobbies'] },
     { name: 'a stale section id is dropped',
       order: ['train', 'gremlin', 'notes'], hidden: ['hobbies', 'health', 'budget'],
-      want: ['train', 'notes'], wantHidden: ['hobbies', 'health', 'budget'] },
+      want: ['train', 'notes'], wantHidden: ['hobbies', 'budget'] },
   ];
   for (const c of cases) {
     await page.evaluate((c) => {
@@ -197,6 +201,39 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   await page.evaluate(() => {
     STATE.settings.homeLayout = defaultHomeLayout();
     STATE.settings.defaultPage = 'home';
+    saveState();
+  });
+
+  // ---- 6. A retired id reaching switchTab() anyway ----
+  // Defence in depth for the bug above: an old deep link, a hand-edited save, or a tile that got
+  // through. `health` has no render branch at all, and landing on a tab with none does NOT blank
+  // the screen -- it leaves the PREVIOUS screen's markup up while the bottom bar loses its section
+  // buttons, which reads as the app having frozen.
+  //
+  // `schedule` is deliberately NOT redirected: it's still a live tab that goSchedule() navigates to
+  // on purpose. Only its TILE retired. Conflating the two broke Home's bar the first time.
+  // Each switchTab has to straddle a settle(): render() defers to rAF, so reading the DOM in the
+  // same evaluate() that navigated reads the markup from BEFORE the navigation.
+  await page.evaluate(() => switchTab('home'));
+  await settle(page);
+  const homeMarkup = await page.evaluate(() => document.getElementById('app').innerHTML);
+  await page.evaluate(() => switchTab('health'));
+  await settle(page);
+  const redirects = { health: await page.evaluate((hm) => ({
+      tab: NAV.currentTab, rendered: document.getElementById('app').innerHTML !== hm,
+    }), homeMarkup) };
+  await page.evaluate(() => switchTab('schedule'));
+  await settle(page);
+  redirects.schedule = await page.evaluate(() => ({ tab: NAV.currentTab }));
+  await page.evaluate(() => switchTab('home'));
+  await settle(page);
+  console.log('retired ids reaching switchTab():', redirects);
+  if (redirects.health.tab !== 'train') throw new Error(`switchTab('health') should redirect to the tab it merged into, got '${redirects.health.tab}'`);
+  if (!redirects.health.rendered) throw new Error("switchTab('health') left the previous screen's markup up — the dead-tab freeze");
+  if (redirects.schedule.tab !== 'schedule') throw new Error('schedule is a LIVE tab — only its tile retired. Redirecting it breaks goSchedule()');
+
+  await page.evaluate(() => {
+    STATE.settings.homeLayout = defaultHomeLayout();
     saveState();
   });
 

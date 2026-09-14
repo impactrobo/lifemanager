@@ -165,10 +165,20 @@ const NAV_SNAPSHOT_KEYS = [
 // (Home absorbed Schedule; Health & Fitness absorbed Health & Diet), and the entries have to stay
 // -- LINKABLE_TYPES colours its chips from them. So neither can be trusted as a landing tab, and
 // both are named here rather than inferred.
-const DEAD_LANDING_TABS = ['schedule', 'health'];
+// TWO different retirements, and conflating them breaks navigation -- which is exactly what a first
+// pass at this did, caught by test_home_bar.js.
+//
+// RETIRED_SECTION_TILES: has a HOME_SECTION_META entry (its link chips need the colour) but no Home
+// tile and can't be a landing page. Both members qualify. Filtered out of saved layouts by name in
+// migrateState(), since the stale-id guard there can't drop an id whose entry deliberately survives.
+const RETIRED_SECTION_TILES = ['schedule', 'health'];
+// MERGED_TABS: a tab id with NO render branch left, mapped to where its content actually went.
+// Only 'health' qualifies -- `schedule` is still a perfectly live tab that goSchedule() navigates
+// to on purpose; it just isn't a tile, because Home shows the day itself.
+const MERGED_TABS = { health: 'train' };
 function initialTab() {
   const want = (STATE.settings && STATE.settings.defaultPage) || 'home';
-  return HOME_SECTION_META[want] && DEAD_LANDING_TABS.indexOf(want) < 0 ? want : 'home';
+  return HOME_SECTION_META[want] && RETIRED_SECTION_TILES.indexOf(want) < 0 ? want : 'home';
 }
 let NAV = {
   currentTab: initialTab(), // Settings -> Default Page, not always Home
@@ -250,6 +260,12 @@ function pushNavHistory() {
 // `switchTab(); toggleReminderForm()` had just opened in the same tick.
 function resetTransientUi() { Object.assign(UI, defaultTransientUi()); LINK_PICKER = null; LINK_PICKER_QUERY = ''; }
 function switchTab(tab) {
+  // A merged-away tab is still a live HOME_SECTION_META entry (the link chips need its colour), so
+  // a saved Home layout or an old deep link can still hand one in. Without the redirect you land on
+  // a tab with no render branch, which doesn't blank the screen -- it leaves the PREVIOUS screen's
+  // markup sitting there while the bottom bar loses its section buttons. Looks like the app froze.
+  // Shipped exactly that way on 2026-09-14, caught from a phone screenshot.
+  if (MERGED_TABS[tab]) tab = MERGED_TABS[tab];
   pushNavHistory();
   resetTransientUi();
   NAV.currentTab = tab;
