@@ -181,12 +181,17 @@ interface DietState {
  *  date is reported, and `archived` is set by hand. */
 interface WeightGoal {
   id: string;
-  kind: 'weight';
+  /** 'weight' owns the calorie target; 'exercise' owns training. Exactly one scarce resource each,
+   *  which is what lets both run at once with no precedence rule. At most one of each is active. */
+  kind: 'weight' | 'exercise';
   name: string;
   startDate: string;
   targetDate: string;
-  startWeightLb: number;
-  targetWeightLb: number;
+  /** Weight goals only. An exercise goal has no weight target, and therefore no pace, projection or
+   *  rate band -- strength and cardio move in steps and stalls, so a straight line through them
+   *  would be confidently wrong. Its progress becomes its targets (step 8). */
+  startWeightLb?: number;
+  targetWeightLb?: number;
   archived: boolean;
   createdAt: number;
 }
@@ -199,11 +204,16 @@ interface WeightGoal {
 interface GoalPhase {
   id: string;
   goalId: string;
-  kind: 'weight';
+  kind: 'weight' | 'exercise';
   label: string;
   weeks: number;
-  direction: 'deficit' | 'maintain' | 'surplus';
-  ratePctPerWeek: number;
+  /** Weight phases only -- an exercise block carries a plan instead of a rate. */
+  direction?: 'deficit' | 'maintain' | 'surplus';
+  ratePctPerWeek?: number;
+  /** Exercise blocks only: this block's own weekday -> workout-slot map. Seeded as a COPY of
+   *  whatever plan was in effect where the block starts, never a shared reference -- aliasing it
+   *  would make editing the new block silently rewrite the old one. */
+  exercisePlan?: { [weekday: number]: { id: string; workoutId: string | null }[] };
   /** What to eat during this phase. Seeded from the rolling TDEE with the phase's rate applied, then
    *  editable. While set, it takes over from STATE.diet.tdee as what the Diet log compares against --
    *  calorieTargetForDate() is the only thing that decides which wins. */

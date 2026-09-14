@@ -197,7 +197,7 @@ function renderDayUntimedItems(dateStr) {
   // Says the pause out loud rather than just rendering nothing, so an emptied plan never reads as
   // a bug. Habits still render underneath it, which is the point: the day is off, the streak isn't.
   const ex = day.exception;
-  const pausedNotice = day.isDayOff && hasWeekdayPlan(day.weekday)
+  const pausedNotice = day.isDayOff && hasWeekdayPlan(day.weekday, day.dateStr)
     ? `<div class="panel" style="margin-top:14px;">
         <div style="font-size:12px; color:var(--text-dim);">Planned workouts and meals are paused for this day${ex.label ? ` (${escapeHtml(ex.label)})` : ''}. Habits carry on.</div>
       </div>`
@@ -254,8 +254,8 @@ function renderDayUntimedItems(dateStr) {
 // Is there anything for a day off to actually pause? dayModel() has already emptied the lists by
 // the time a caller sees them, so the notice has to ask the template directly -- otherwise a day
 // off with nothing planned anyway would announce a pause that cancelled nothing.
-function hasWeekdayPlan(weekday) {
-  return !!((STATE.exercisePlan[weekday] || []).some(e => e.workoutId)
+function hasWeekdayPlan(weekday, dateStr) {
+  return !!((activeExercisePlan(dateStr || todayStr())[weekday] || []).some(e => e.workoutId)
          || (STATE.diet.mealPlan[weekday] || []).some(e => e.mealId));
 }
 function renderPeriodicRow(a) {

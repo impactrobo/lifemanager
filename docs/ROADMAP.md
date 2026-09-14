@@ -385,6 +385,41 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Exercise goals and per-block training plans (2026-09-14).** Step 5 of "Phases Own the Plan", and
+  the largest of them. The second goal type had to arrive with this rather than later: a block
+  carrying a plan has to belong to something, and that something is a training goal.
+  - **Starting a new block never destroys the old one.** A block's `exercisePlan` is seeded as a deep
+    **copy** of whatever plan was in effect where it starts — a running start rather than a blank
+    week, and never a shared reference. Aliasing there would be invisible right up until the day you
+    looked back at what you used to be doing and found it rewritten.
+  - **`exercisePlanInEffect(date)` answers which plan governs a date, and why:** `'phase'` (a block
+    covers it), `'carried'` (no block covers it, but an earlier one's plan is still what you're
+    running), or `'global'`. **`'carried'` is the deliberate answer to "the goal ended, now what?"** —
+    a plan that was working doesn't stop working because a date passed, so it continues and the
+    Planner says so rather than silently reverting you to a plan you last touched months ago.
+  - **With no training goal, nothing changes.** `STATE.exercisePlan` keeps its exact meaning as the
+    plan in effect before any block exists. Nothing was migrated into a phase; the Planner, Home and
+    the Day view behave for a non-user of this feature precisely as they did before it shipped, and
+    the Planner's scope banner doesn't render at all when there's only one plan to show.
+  - **One editor, not two.** The block card shows what a block holds and points at the Planner; the
+    Planner edits whatever plan is in effect and names it, with tabs to page into another block.
+    Building a second weekday editor on the GOAL tab would have given the app two places to change
+    the same seven days.
+  - **One active goal per KIND.** A weight goal and a training goal are *meant* to run together —
+    each owns exactly one scarce resource (calories / training), which is what removes any precedence
+    rule between them. `unarchiveGoal()` now checks per-kind; checking globally would have blocked
+    the intended pairing.
+  - **`deleteWorkout()` now clears every plan**, not just the global one — a workout assigned inside
+    a block would otherwise survive its own deletion and render as a blank row in that block forever.
+  - **No pace or projection on a training goal, on purpose.** Weight loss is roughly linear against a
+    deficit, which is what makes projecting it defensible; strength and cardio move in steps and
+    stalls, so a straight line through them would be confidently wrong most of the time. Its progress
+    becomes its *targets* in step 8.
+  - **Deferred honestly:** the scope's *"Phase 3 goal achieved — keep pushing!"* variant of the
+    carried-plan message needs exercise targets to know whether a goal was actually met. Until step 8
+    there is nothing to measure that against, so only the plain version ships — claiming an
+    achievement the app can't verify would be worse than saying less.
+
 - **The calorie loop: per-phase targets and weekly TDEE drift (2026-09-14).** Step 4 of "Phases Own
   the Plan", and the point at which the rolling TDEE earns its keep.
   - **A rate converts to calories by arithmetic** — lb/week x 3500 / 7 = kcal/day, so -1.0 lb/wk *is*

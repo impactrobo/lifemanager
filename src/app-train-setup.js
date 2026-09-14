@@ -389,24 +389,36 @@ function editWorkout(id) {
 // the cycle-based Train Grid rather than replacing it: Train Grid is still where you log a
 // cycle's sets against training maxes; the Planner (plus Home's weekday card) is just "what's
 // on the schedule today" convenience layered on top.
+// The Planner edits THE PLAN IN EFFECT, which is a phase's own plan once a training goal has
+// blocks and STATE.exercisePlan otherwise. Every read and write below goes through this one call
+// rather than reaching for STATE.exercisePlan, so the editor can never end up changing a different
+// week than the one it's showing you. exercisePlanInEffect() in app-phases.js decides which.
+function plannerPlan() { return exercisePlanInEffect(plannerDate()).plan; }
+// Which date the Planner is planning FOR. Today, unless you're looking at a future block -- see
+// setPlannerDate(); it's what lets a block that hasn't started yet be filled in ahead of time.
+function plannerDate() { return VIEW.plannerDate || todayStr(); }
+function setPlannerDate(dateStr) { VIEW.plannerDate = dateStr || null; render(); }
+
 function addPlanWorkoutSlot(day) {
-  if (!Array.isArray(STATE.exercisePlan[day])) STATE.exercisePlan[day] = [];
-  STATE.exercisePlan[day].push({ id: uid(), workoutId: null });
+  const plan = plannerPlan();
+  if (!Array.isArray(plan[day])) plan[day] = [];
+  plan[day].push({ id: uid(), workoutId: null });
   saveState(); render();
 }
 function removePlanWorkoutSlot(day, entryId) {
-  STATE.exercisePlan[day] = (STATE.exercisePlan[day] || []).filter(e => e.id !== entryId);
+  const plan = plannerPlan();
+  plan[day] = (plan[day] || []).filter(e => e.id !== entryId);
   delete VIEW.exPlanExpanded[entryId];
   saveState(); render();
 }
 function setPlanWorkoutSlotWorkout(day, entryId, workoutId) {
-  const entry = (STATE.exercisePlan[day] || []).find(e => e.id === entryId);
+  const entry = (plannerPlan()[day] || []).find(e => e.id === entryId);
   if (!entry) return;
   entry.workoutId = workoutId || null;
   saveState(); render();
 }
 function copyDayWorkoutPlan(day) {
-  const entries = (STATE.exercisePlan[day] || []).map(e => ({ workoutId: e.workoutId }));
+  const entries = (plannerPlan()[day] || []).map(e => ({ workoutId: e.workoutId }));
   VIEW.exPlanClipboard = { day, entries };
   showToast(MEAL_PLAN_DAY_LABELS[day] + "'s workout plan copied");
   render();
@@ -414,12 +426,12 @@ function copyDayWorkoutPlan(day) {
 function pasteDayWorkoutPlan(day) {
   if (!VIEW.exPlanClipboard) return;
   const doPaste = () => {
-    STATE.exercisePlan[day] = VIEW.exPlanClipboard.entries.map(e => ({ id: uid(), workoutId: e.workoutId }));
+    plannerPlan()[day] = VIEW.exPlanClipboard.entries.map(e => ({ id: uid(), workoutId: e.workoutId }));
     saveState();
     showToast('Pasted into ' + MEAL_PLAN_DAY_LABELS[day]);
     render();
   };
-  if ((STATE.exercisePlan[day] || []).length) {
+  if ((plannerPlan()[day] || []).length) {
     showConfirm(`Replace ${MEAL_PLAN_DAY_LABELS[day]}'s existing workout plan with the copied one?`, doPaste);
   } else {
     doPaste();
@@ -432,6 +444,7 @@ function renderExercisePlanTab() {
   const hasProgram = programWorkouts('C25K').length > 0 || programWorkouts('C2Triathlon').length > 0;
   return `
     <div style="font-size:11px; color:var(--text-dim); margin:18px 0 14px;">Assign saved workouts to each day of the week. Copy a day's plan to reuse it elsewhere.</div>
+    ${renderPlannerScope()}
     ${hasProgram ? `<button class="btn btn-sm btn-block" style="margin-bottom:14px;" onclick="openAutoFillPicker()">AUTO-FILL C25K / C2TRIATHLON</button>` : ''}
     ${UI.autofillPickerOpen ? renderAutoFillPicker() : ''}
     ${clipboardLabel ? `<div class="panel" style="margin-bottom:14px; font-size:11px; color:var(--text-dim);">Clipboard: ${escapeHtml(clipboardLabel)}</div>` : ''}
@@ -440,8 +453,39 @@ function renderExercisePlanTab() {
     </div>
   `;
 }
+// Names which week you're editing, and offers the blocks you could be editing instead.
+//
+// With no training goal this renders nothing at all — there's exactly one plan, saying so would be
+// noise, and the Planner looks precisely as it always has.
+function renderPlannerScope() {
+  const goal = activeExerciseGoal();
+  const sched = goal ? phaseSchedule(goal) : [];
+  const eff = exercisePlanInEffect(plannerDate());
+  if (!sched.length && eff.source === 'global') return '';
+  const note = eff.source === 'phase'
+    ? `Editing <b style="color:var(--text)">${escapeHtml(eff.label)}</b>'s plan.`
+    : eff.source === 'carried'
+      // Deliberate: a plan that was working doesn't stop working because a date passed. It carries
+      // on, and says that it's doing so rather than reverting you to a global plan you last touched
+      // months ago. (Once exercise targets land in step 8 this can also say whether the goal was
+      // actually MET -- today there is nothing to measure that against, so it doesn't claim to know.)
+      ? `Still running <b style="color:var(--text)">${escapeHtml(eff.label)}</b>'s plan — no block covers ${fmtGoalDate(plannerDate())}.`
+      : `Editing the plan in effect before any block starts.`;
+  return `
+    <div class="planner-scope">
+      <div>${note}</div>
+      ${sched.length > 1 || eff.source !== 'phase' ? `
+        <div class="planner-scope-tabs">
+          ${sched.map(s => `
+            <button class="btn btn-sm ${s.startDate <= plannerDate() && plannerDate() <= s.endDate ? 'btn-primary' : ''}"
+                    onclick="setPlannerDate('${s.state === 'current' ? todayStr() : s.startDate}')">${escapeHtml(s.phase.label)}</button>`).join('')}
+          <button class="btn btn-sm ${eff.source === 'global' ? 'btn-primary' : ''}" onclick="setPlannerDate(null)">TODAY</button>
+        </div>` : ''}
+    </div>`;
+}
+
 function renderExercisePlanDay(day) {
-  const entries = STATE.exercisePlan[day] || [];
+  const entries = plannerPlan()[day] || [];
   return `<div class="panel">
     <div class="row" style="margin-bottom:${entries.length ? '10px' : '0'};">
       <div style="font-size:15px; font-weight:700;">${MEAL_PLAN_DAY_LABELS[day]}</div>
@@ -540,8 +584,9 @@ function applyAutoFill() {
   if (!sessions.length || !VIEW.autofillDays.length) return;
   VIEW.autofillDays.forEach((day, i) => {
     const w = sessions[i % sessions.length];
-    if (!Array.isArray(STATE.exercisePlan[day])) STATE.exercisePlan[day] = [];
-    STATE.exercisePlan[day].push({ id: uid(), workoutId: w.id });
+    const plan = plannerPlan();
+    if (!Array.isArray(plan[day])) plan[day] = [];
+    plan[day].push({ id: uid(), workoutId: w.id });
   });
   saveState();
   showToast(VIEW.autofillProgram + ' scheduled');

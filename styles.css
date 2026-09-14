@@ -848,6 +848,9 @@ input[type="text"].phase-label {
   gap: 8px; margin-top: 11px;
 }
 .phase-controls .field { margin-bottom: 0; }
+/* An exercise block has one control, not three -- a 3-up grid would stretch a two-digit week count
+   across a third of the card. */
+.phase-controls-1 { grid-template-columns: minmax(0, 120px); }
 /* font-size only -- `select` sets padding-right: 30px to clear its own arrow, and a padding
    shorthand here would win on specificity and put the text under the arrow. */
 .phase-controls input, .phase-controls select { font-size: 14px; }
@@ -875,6 +878,15 @@ input[type="text"].phase-label {
 /* Says WHICH target a figure came from. Per-phase targets mean the number you eat against lives in
    two places depending on the day, so every screen showing one names its source. */
 .cal-source { font-size: 11px; color: var(--text-faint); line-height: 1.5; margin-top: 4px; }
+
+/* Names which week the Planner is editing. Renders at all only once training blocks exist -- with
+   one plan there is nothing to disambiguate and a banner would be pure noise. */
+.planner-scope {
+  padding: 10px 12px; margin-bottom: 14px;
+  background: var(--surface2); border: 1px solid var(--border-soft); border-radius: var(--radius);
+  font-size: 11px; color: var(--text-dim); line-height: 1.5;
+}
+.planner-scope-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 
 .phase-sum {
   margin-top: 10px; padding: 10px 13px;

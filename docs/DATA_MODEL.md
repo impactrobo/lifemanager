@@ -73,11 +73,16 @@ STATE = {
   ],
   weightLog: [ { id, date, weightLb, calories, cardioCalories }, ... ],
   goals: [                 // at most ONE un-archived goal per `kind`; the UI refuses to create a second
-    { id, kind: 'weight', name, startDate, targetDate,
-      startWeightLb, targetWeightLb,   // canonical lb, like weightLog
+    { id, kind: 'weight'|'exercise', name, startDate, targetDate,
+      startWeightLb, targetWeightLb,   // WEIGHT goals only; canonical lb, like weightLog. An exercise
+                                       // goal has no weight target and so no pace or projection
       archived, createdAt },           // archiving is the only way a goal ends -- nothing auto-completes
-    ...                                // `kind` will gain 'exercise'
+    ...        // one weight + one exercise goal active at a time; each owns ONE scarce resource
+               // (calories / training), which is what removes any precedence rule between them
   ],
+  // NOTE: STATE.exercisePlan (further up) keeps its meaning as THE PLAN IN EFFECT BEFORE ANY BLOCK
+  // EXISTS. Nothing was migrated into a phase -- someone who never makes a training goal sees the
+  // app exactly as it was. exercisePlanInEffect(date) in app-phases.js picks between them.
   phases: [                // a goal's blocks, IN ORDER -- array position is the phase order
     { id, goalId, kind: 'weight', label,
       weeks,                           // the LENGTH. Start dates are DERIVED by running sum from
@@ -88,6 +93,10 @@ STATE = {
                                        // Diet log compares against -- see calorieTargetForDate()
       calorieSetOn,                    // null | 'YYYY-MM-DD'. When you last set/accepted/declined a
                                        // target; the weekly drift re-check counts from here
+      // -- exercise blocks (kind: 'exercise') carry a plan instead of the four fields above --
+      exercisePlan,                    // { 0..6: [{id, workoutId}] }. Seeded as a deep COPY of the
+                                       // plan in effect where the block starts -- NEVER a shared
+                                       // reference, or editing the new block rewrites the old one
       createdAt },
     ...                                // migrateState() drops any phase whose goal is gone
   ],

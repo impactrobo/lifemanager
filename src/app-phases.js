@@ -70,8 +70,12 @@ function phasesForGoal(goalId) { return (STATE.phases || []).filter(p => p.goalI
 function phaseSchedule(goal) {
   if (!goal) return [];
   const today = todayStr();
+  const weighted = goal.kind === 'weight';
   let cursor = goal.startDate;
-  let weightLb = Number(goal.startWeightLb);
+  // An exercise goal has no weight to walk. The dates, the ordering and the state are identical for
+  // both kinds -- only the weight projection is weight-goal-specific, so it's the only part that
+  // branches rather than there being two separate schedulers to keep in step.
+  let weightLb = weighted ? Number(goal.startWeightLb) : 0;
   return phasesForGoal(goal.id).map((phase, index) => {
     const weeks = Math.max(1, Number(phase.weeks) || 1);
     const startDate = cursor;
@@ -81,13 +85,14 @@ function phaseSchedule(goal) {
     // Compounded, not multiplied out. The rate is a percent OF BODYWEIGHT and bodyweight is moving,
     // so 1%/wk off 232 lb is 2.32 lb this week and 2.30 lb the next. Ten weeks linear says 208.8 lb;
     // compounding says 209.8 lb, and the second one is what actually happens.
-    const endWeightLb = startWeightLb * Math.pow(1 + phaseSignedPct(phase) / 100, weeks);
+    const endWeightLb = weighted ? startWeightLb * Math.pow(1 + phaseSignedPct(phase) / 100, weeks) : 0;
     weightLb = endWeightLb;
     return {
-      phase, index, weeks, startDate, endDate, startWeightLb, endWeightLb,
+      phase, index, weeks, startDate, endDate, goal,
+      startWeightLb, endWeightLb,
       plannedLbPerWeek: (endWeightLb - startWeightLb) / weeks,   // the average; each week is slightly smaller
       state: today < startDate ? 'future' : today > endDate ? 'past' : 'current',
-      band: goalRateBand(phaseSignedPct(phase), weeks),
+      band: weighted ? goalRateBand(phaseSignedPct(phase), weeks) : null,
     };
   });
 }
@@ -142,6 +147,68 @@ function phaseActualRate(entry) {
   if (entry.state === 'future') return null;
   const until = entry.state === 'current' ? todayStr() : entry.endDate;
   return weightTrendRateBetween(entry.startDate, until);
+}
+
+// ---- The exercise plan in effect ----
+//
+// An exercise goal owns training the way a weight goal owns calories, and each of its phases carries
+// its own weekday->workout plan. Starting a new block therefore means BUILDING something rather than
+// editing over the top of what you were doing, and last block's plan survives intact to look back at.
+//
+// STATE.exercisePlan keeps its meaning as the plan in effect before any phase exists -- so the
+// Planner and Home behave exactly as they do now for anyone who never creates an exercise goal, and
+// nothing had to be migrated into a phase to make this ship.
+const EMPTY_WEEK_PLAN = () => ({ 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] });
+
+// Which plan governs a given date, and why -- the single answer every reader and the editor share.
+// Returns { plan, source, label, entry }:
+//   'phase'   a phase covers this date and carries a plan
+//   'carried' no phase covers it, but an earlier one's plan is still what you're running
+//   'global'  no exercise phase has ever applied; STATE.exercisePlan
+//
+// 'carried' is the deliberate answer to "the goal ended, now what?". A plan that was working doesn't
+// stop working because a date passed, so it simply continues and the Planner says that it's doing so
+// rather than silently reverting you to a global plan you last touched months ago.
+function exercisePlanInEffect(dateStr) {
+  let best = null;
+  for (const g of (STATE.goals || [])) {
+    if (g.kind !== 'exercise') continue;
+    for (const s of phaseSchedule(g)) {
+      if (s.startDate > dateStr || !s.phase.exercisePlan) continue;
+      // The latest phase to have STARTED by this date. Within a goal, phases are contiguous, so if
+      // one covers the date it is necessarily that one; across goals this prefers the most recent.
+      if (!best || s.startDate > best.startDate) best = s;
+    }
+  }
+  if (!best) return { plan: STATE.exercisePlan, source: 'global', label: null, entry: null };
+  return {
+    plan: best.phase.exercisePlan,
+    source: dateStr <= best.endDate ? 'phase' : 'carried',
+    label: best.phase.label,
+    entry: best,
+  };
+}
+// The plan alone, for the many callers that only want to read a weekday out of it.
+function activeExercisePlan(dateStr) { return exercisePlanInEffect(dateStr).plan; }
+
+// A deep copy, because a phase's plan must not alias the one it was seeded from -- sharing the
+// object would make editing the new block silently rewrite the old one, which is the exact failure
+// this whole feature exists to prevent.
+function copyWeekPlan(plan) {
+  const out = EMPTY_WEEK_PLAN();
+  for (let d = 0; d <= 6; d++) {
+    out[d] = ((plan && plan[d]) || []).map(e => ({ id: uid(), workoutId: e.workoutId }));
+  }
+  return out;
+}
+function weekPlanWorkoutCount(plan) {
+  let n = 0, days = 0;
+  for (let d = 0; d <= 6; d++) {
+    const filled = ((plan && plan[d]) || []).filter(e => e.workoutId).length;
+    n += filled;
+    if (filled) days++;
+  }
+  return { workouts: n, days };
 }
 
 // ---- Calories ----
@@ -219,6 +286,7 @@ function phaseCalorieDrift(entry) {
 function addPhase(goalId) {
   const goal = (STATE.goals || []).find(g => g.id === goalId);
   if (!goal) return;
+  if (goal.kind === 'exercise') return addExercisePhase(goal);
   const summary = phasePlanSummary(goal);
   const fromLb = summary ? summary.endWeightLb : Number(goal.startWeightLb);
   const goalWeeks = daysBetween(goal.startDate, goal.targetDate) / 7;
@@ -239,6 +307,24 @@ function addPhase(goalId) {
     // phase shouldn't quietly change what you're eating.
     calorieTarget: null,
     calorieSetOn: null,
+    createdAt: Date.now(),
+  });
+  saveState();
+  render();
+}
+
+// An exercise phase carries a plan instead of a rate. It's seeded as a COPY of whatever plan is in
+// effect where it starts, not as an empty week: starting from blank means rebuilding six days of
+// assignments to change two of them, and starting from a shared reference would mean editing the new
+// block silently rewrote the old one. A copy gives you a running start and leaves the past intact.
+function addExercisePhase(goal) {
+  const existing = phaseSchedule(goal);
+  const startDate = existing.length ? shiftDate(existing[existing.length - 1].endDate, 1) : goal.startDate;
+  STATE.phases.push({
+    id: uid(), goalId: goal.id, kind: 'exercise',
+    label: 'Block ' + (existing.length + 1),
+    weeks: PHASE_DEFAULT_WEEKS,
+    exercisePlan: copyWeekPlan(exercisePlanInEffect(startDate).plan),
     createdAt: Date.now(),
   });
   saveState();
@@ -340,23 +426,24 @@ function renderPhases(goal) {
   const summary = phasePlanSummary(goal);
   return `
     <div class="row" style="margin:22px 0 8px;">
-      <div class="subtle-label" style="margin-bottom:0;">PHASES</div>
-      <button class="btn btn-sm" onclick="addPhase('${goal.id}')">+ ADD PHASE</button>
+      <div class="subtle-label" style="margin-bottom:0;">${goal.kind === 'exercise' ? 'BLOCKS' : 'PHASES'}</div>
+      <button class="btn btn-sm" onclick="addPhase('${goal.id}')">+ ADD ${goal.kind === 'exercise' ? 'BLOCK' : 'PHASE'}</button>
     </div>
     ${sched.length
       ? `<div class="phase-list">${sched.map(renderPhaseCard).join('')}</div>
-         ${renderPhaseSummary(goal, summary)}`
-      : emptyState('No phases yet. One long push is a plan too — add phases when you want to change pace partway, or take a planned break.')}`;
+         ${goal.kind === 'weight' ? renderPhaseSummary(goal, summary) : ''}`
+      : emptyState(goal.kind === 'exercise'
+          ? 'No blocks yet. Add one when a stretch of training should have its own plan — whatever you’re running now simply carries on until you do.'
+          : 'No phases yet. One long push is a plan too — add phases when you want to change pace partway, or take a planned break.')}`;
 }
 
+// The shell -- label, dates, length, and the extend/move/delete row -- is identical for both kinds,
+// because all of that is about WHEN a block runs and that question has one answer. Only the middle
+// differs: a weight phase carries a rate and a calorie target, an exercise block carries a plan.
 function renderPhaseCard(entry) {
   const p = entry.phase;
-  const u = weightUnitLabel();
-  const dir = phaseDirection(p.direction);
-  const maintain = dir.key === 'maintain';
-  const actual = phaseActualRate(entry);
+  const exercise = entry.goal.kind === 'exercise';
   const stateLabel = { past: 'DONE', current: 'NOW', future: 'UPCOMING' }[entry.state];
-  const signedLb = (n) => (n < 0 ? '&minus;' : '+') + fmt(Math.abs(Number(lbToDisplay(n))), 2);
   return `
     <div class="phase-card phase-state-${entry.state}">
       <div class="ehead">
@@ -365,10 +452,58 @@ function renderPhaseCard(entry) {
         <span class="phase-chip phase-chip-${entry.state}">${stateLabel}</span>
       </div>
       <div class="phase-when">
-        ${fmtGoalDate(entry.startDate)} &ndash; ${fmtGoalDate(entry.endDate)}
-        · ${fmt(lbToDisplay(entry.startWeightLb), 1)} &rarr; ${fmt(lbToDisplay(entry.endWeightLb), 1)} ${u} planned
+        ${fmtGoalDate(entry.startDate)} &ndash; ${fmtGoalDate(entry.endDate)} · ${entry.weeks} weeks${exercise ? ''
+          : ` · ${fmt(lbToDisplay(entry.startWeightLb), 1)} &rarr; ${fmt(lbToDisplay(entry.endWeightLb), 1)} ${weightUnitLabel()} planned`}
       </div>
 
+      ${exercise ? renderExercisePhaseBody(entry) : renderWeightPhaseBody(entry)}
+
+      <div class="phase-actions">
+        <button class="btn btn-sm" onclick="extendPhase('${p.id}',1)" title="Everything after this moves out a week; your pace is left alone">+1 WK</button>
+        <button class="btn btn-sm" onclick="extendPhase('${p.id}',-1)">&minus;1 WK</button>
+        <button class="btn btn-sm" onclick="movePhase('${p.id}',-1)">&uarr;</button>
+        <button class="btn btn-sm" onclick="movePhase('${p.id}',1)">&darr;</button>
+        <button class="btn btn-sm btn-danger" onclick="deletePhase('${p.id}')">DELETE</button>
+      </div>
+    </div>`;
+}
+
+// A block's plan is NOT edited here. The Planner already is that editor, and building a second one
+// would give the app two places to change the same seven days. This says what the block holds and
+// points at the one editor, which follows whichever plan is in effect.
+function renderExercisePhaseBody(entry) {
+  const p = entry.phase;
+  const n = weekPlanWorkoutCount(p.exercisePlan);
+  return `
+      <div class="phase-controls phase-controls-1">
+        <label class="field"><span class="lbl">Weeks</span>
+          <input type="number" min="1" max="${PHASE_MAX_WEEKS}" step="1" value="${entry.weeks}"
+                 onchange="updatePhaseField('${p.id}','weeks',this.value)"></label>
+      </div>
+      <div class="goal-rows">
+        <div class="goal-row">
+          <span class="goal-row-k">Plan</span>
+          <span class="goal-row-v">${n.workouts ? `${n.workouts} workout${n.workouts === 1 ? '' : 's'}` : 'empty'}</span>
+          <span class="goal-row-x">${n.workouts ? `across ${n.days} day${n.days === 1 ? '' : 's'} a week` : 'nothing assigned to any day yet'}</span>
+        </div>
+      </div>
+      <div class="phase-cal-note">
+        ${entry.state === 'current'
+          ? 'This is the plan in effect. Edit it in Train &rarr; Setup &rarr; Planner.'
+          : entry.state === 'future'
+            ? `Takes over on ${fmtGoalDate(entry.startDate)}.`
+            : 'Finished, and kept as it was — starting a new block never overwrites an old one.'}
+      </div>`;
+}
+
+function renderWeightPhaseBody(entry) {
+  const p = entry.phase;
+  const u = weightUnitLabel();
+  const dir = phaseDirection(p.direction);
+  const maintain = dir.key === 'maintain';
+  const actual = phaseActualRate(entry);
+  const signedLb = (n) => (n < 0 ? '&minus;' : '+') + fmt(Math.abs(Number(lbToDisplay(n))), 2);
+  return `
       <div class="phase-controls">
         <label class="field"><span class="lbl">Weeks</span>
           <input type="number" min="1" max="${PHASE_MAX_WEEKS}" step="1" value="${entry.weeks}"
@@ -402,16 +537,7 @@ function renderPhaseCard(entry) {
         </div>`}
       </div>
 
-      ${renderPhaseCalories(entry)}
-
-      <div class="phase-actions">
-        <button class="btn btn-sm" onclick="extendPhase('${p.id}',1)" title="Everything after this moves out a week; your pace is left alone">+1 WK</button>
-        <button class="btn btn-sm" onclick="extendPhase('${p.id}',-1)">&minus;1 WK</button>
-        <button class="btn btn-sm" onclick="movePhase('${p.id}',-1)">&uarr;</button>
-        <button class="btn btn-sm" onclick="movePhase('${p.id}',1)">&darr;</button>
-        <button class="btn btn-sm btn-danger" onclick="deletePhase('${p.id}')">DELETE</button>
-      </div>
-    </div>`;
+      ${renderPhaseCalories(entry)}`;
 }
 
 // The calorie target: what the phase's rate actually asks you to eat. Editable, because the seed is

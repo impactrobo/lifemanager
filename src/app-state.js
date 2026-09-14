@@ -384,6 +384,13 @@ function migrateState() {
   // and would silently reappear if an id were ever reused. Dropping them here is cheaper than
   // a guard at every read.
   STATE.phases = STATE.phases.filter(p => STATE.goals.some(g => g.id === p.goalId));
+  // An exercise block with a malformed plan would break every weekday read through it. Cheaper to
+  // normalise once on load than to guard seven array lookups at every call site.
+  STATE.phases.forEach(p => {
+    if (p.kind !== 'exercise') return;
+    if (!p.exercisePlan || typeof p.exercisePlan !== 'object') p.exercisePlan = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
+    for (let d = 0; d <= 6; d++) if (!Array.isArray(p.exercisePlan[d])) p.exercisePlan[d] = [];
+  });
   if (STATE.settings.waterTargetMl == null) {
     STATE.settings.waterTargetMl = STATE.settings.waterTarget != null
       ? Math.round(Number(STATE.settings.waterTarget) * 250) : 2000;
@@ -691,7 +698,12 @@ function createWorkout(type, style) {
 function deleteWorkout(id) {
   showConfirm('Delete this workout? Its logged history stays on record but the workout itself is gone.', () => {
     STATE.workouts = STATE.workouts.filter(w => w.id !== id);
-    for (let d = 0; d <= 6; d++) STATE.exercisePlan[d] = (STATE.exercisePlan[d] || []).filter(e => e.workoutId !== id);
+    // Every plan, not just the global one: a workout assigned inside a training block would
+    // otherwise survive its own deletion and render as a blank row in that block forever.
+    const plans = [STATE.exercisePlan].concat((STATE.phases || []).filter(p => p.exercisePlan).map(p => p.exercisePlan));
+    plans.forEach(plan => {
+      for (let d = 0; d <= 6; d++) plan[d] = (plan[d] || []).filter(e => e.workoutId !== id);
+    });
     saveState();
     showToast('Workout deleted');
     render();

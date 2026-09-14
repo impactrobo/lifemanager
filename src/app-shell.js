@@ -77,6 +77,7 @@ function defaultTransientUi() {
     homeEditMode: false,
     homeAddPopup: null,                // 'sections' | 'boxes' | null
     goalFormOpen: false,
+    exGoalFormOpen: false,
     // The AM/PM quick-log sheet: { group: 'am'|'pm', focus: <field id> } or null. Lives in UI so
     // navigating away closes it, same as every other transient panel.
     logPopup: null,
@@ -116,6 +117,9 @@ let VIEW = {
   dietLogSearchQuery: '',
   exPlanExpanded: {},
   exPlanClipboard: null,
+  // Which date the Planner is editing FOR. null = today. Lets a block that hasn't started yet
+  // be filled in ahead of time without pretending today is inside it.
+  plannerDate: null,
   autofillProgram: null,
   autofillDays: [],
   compareA: null,

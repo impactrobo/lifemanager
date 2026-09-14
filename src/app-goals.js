@@ -38,10 +38,21 @@ const GOAL_MINICUT_MAX_WEEKS = 6;
 const GOAL_RATE_WINDOW_DAYS = 28;
 const GOAL_RATE_MIN_DAYS = 14;
 
-function weightGoals() { return (STATE.goals || []).filter(g => g.kind === 'weight'); }
-// The one live weight goal. At most one is ever un-archived, so this is a find rather than a sort:
-// the UI refuses to create a second while one is running.
-function activeWeightGoal() { return weightGoals().find(g => !g.archived) || null; }
+function goalsOfKind(kind) { return (STATE.goals || []).filter(g => g.kind === kind); }
+// At most ONE of each kind is ever un-archived, so these are finds rather than sorts: the UI refuses
+// to create or reactivate a second of the same kind while one is running.
+//
+// One weight goal and one exercise goal at a time is not a simplification for the software's sake.
+// Adding cardio cuts into what you can recover from in the weight room, so two concurrent training
+// goals would be promising something the body can't deliver -- "Hypertrophy" and "VO2 Max" in
+// parallel is a claim, not a plan. Blended intent belongs in the phase label instead: a block called
+// "GPP + Cut" is an honest description of a real trade-off.
+function activeGoalOfKind(kind) { return goalsOfKind(kind).find(g => !g.archived) || null; }
+
+function weightGoals() { return goalsOfKind('weight'); }
+function activeWeightGoal() { return activeGoalOfKind('weight'); }
+function exerciseGoals() { return goalsOfKind('exercise'); }
+function activeExerciseGoal() { return activeGoalOfKind('exercise'); }
 
 // fmtGoalDate() omits the year, which is right for a reminder a few days out and wrong here: a
 // projection can easily land in a different year, and a bare “Jun 6” then reads as this coming
@@ -193,6 +204,39 @@ function createWeightGoal() {
   showToast('Goal set');
   render();
 }
+
+// An exercise goal owns training. It carries no weight target, and therefore has no pace, no
+// projection and no rate band -- extrapolating strength or cardio the way weight loss extrapolates
+// would be confidently wrong most of the time, because they move in steps and stalls rather than
+// roughly linearly against a deficit. Its progress becomes its TARGETS (step 8); until then it is
+// the container its training blocks belong to, which is the thing the blocks actually need.
+function createExerciseGoal() {
+  if (activeExerciseGoal()) { showToast('Archive the running training goal first'); return; }
+  const name = (inputVal('exGoalName') || '').trim();
+  const targetDate = inputVal('exGoalTargetDate');
+  const startDate = inputVal('exGoalStartDate') || todayStr();
+  if (!targetDate) { showToast('Pick an end date'); return; }
+  if (targetDate <= startDate) { showToast('The end date has to be after the start'); return; }
+  STATE.goals.push({
+    id: uid(), kind: 'exercise', name: name || 'Training goal',
+    startDate, targetDate,
+    archived: false, createdAt: Date.now(),
+  });
+  UI.exGoalFormOpen = false;
+  saveState();
+  showToast('Training goal set');
+  render();
+}
+function toggleExerciseGoalForm() { UI.exGoalFormOpen = !UI.exGoalFormOpen; render(); }
+
+function updateExerciseGoalField(id, field, value) {
+  const g = (STATE.goals || []).find(x => x.id === id);
+  if (!g) return;
+  if (field === 'name') { const t = (value || '').trim(); if (t) g.name = t; }
+  else if (field === 'targetDate') { if (value && value > g.startDate) g.targetDate = value; }
+  saveState();
+  render();
+}
 // Named for the weight goal specifically, NOT updateGoalField: app-budget.js already owns that
 // name for savings goals and loads later, so the generic name silently resolved to the budget
 // version and these edits did nothing at all. Nineteen global-function files, one collision --
@@ -219,9 +263,14 @@ function archiveGoal(id) {
   render();
 }
 function unarchiveGoal(id) {
-  if (activeWeightGoal()) { showToast('Archive the running goal first'); return; }
   const g = (STATE.goals || []).find(x => x.id === id);
   if (!g) return;
+  // Per KIND, not globally -- a weight goal and a training goal are meant to run together, so
+  // reactivating one must not be blocked by the other.
+  if (activeGoalOfKind(g.kind)) {
+    showToast(g.kind === 'exercise' ? 'Archive the running training goal first' : 'Archive the running goal first');
+    return;
+  }
   g.archived = false;
   saveState();
   render();
@@ -237,14 +286,64 @@ function deleteGoal(id) {
 function toggleGoalForm() { UI.goalFormOpen = !UI.goalFormOpen; render(); }
 
 // ---- Screen ----
+// Two goals, stacked, each owning exactly one scarce resource -- the weight goal owns the calorie
+// target, the training goal owns the plan. That split is what lets both run at once with no
+// precedence rule to remember, and it's why they're two sections rather than one with a type switch.
+// They keep independent timelines too: a ten-week cut and a fourteen-week training arc have no
+// reason to share boundaries.
 function renderGoalTab() {
   const active = activeWeightGoal();
-  const archived = weightGoals().filter(g => g.archived).sort((a, b) => b.createdAt - a.createdAt);
+  const exActive = activeExerciseGoal();
+  const archived = (STATE.goals || []).filter(g => g.archived).sort((a, b) => b.createdAt - a.createdAt);
   return `
     ${active ? renderActiveGoal(active) : renderNoGoal()}
+    ${exActive ? renderActiveExerciseGoal(exActive) : renderNoExerciseGoal()}
     ${archived.length ? `
       <div class="subtle-label" style="margin:22px 0 8px;">ARCHIVED</div>
       <div class="entry-list">${archived.map(renderArchivedGoal).join('')}</div>` : ''}`;
+}
+
+function renderNoExerciseGoal() {
+  return `
+    <div class="row" style="margin:22px 0 10px; align-items:flex-start;">
+      <div class="subtle-label" style="margin-bottom:0; padding-top:8px;">TRAINING GOAL</div>
+      <button class="btn btn-sm" onclick="toggleExerciseGoalForm()">${UI.exGoalFormOpen ? 'CANCEL' : '+ SET A GOAL'}</button>
+    </div>
+    ${UI.exGoalFormOpen ? `
+      <div class="panel">
+        <label class="field"><span class="lbl">Name</span><input type="text" id="exGoalName" placeholder="e.g. Build aerobic base"></label>
+        <div class="field-row">
+          <label class="field"><span class="lbl">Starting</span><input type="date" id="exGoalStartDate" value="${todayStr()}"></label>
+          <label class="field"><span class="lbl">Through</span><input type="date" id="exGoalTargetDate"></label>
+        </div>
+        <div style="font-size:11px; color:var(--text-faint); margin:-4px 0 10px;">
+          No weight target — this one owns your training. Split it into blocks and each carries its own
+          weekly plan, so starting the next block builds something new instead of overwriting the last.
+        </div>
+        <button class="btn btn-primary btn-block" onclick="createExerciseGoal()">SET GOAL</button>
+      </div>`
+      : emptyState('No training goal. Your weekly plan still works exactly as it does now — a goal is what lets it change in blocks.')}`;
+}
+
+function renderActiveExerciseGoal(goal) {
+  return `
+    <div class="row" style="margin:22px 0 10px;">
+      <div class="subtle-label" style="margin-bottom:0;">TRAINING GOAL</div>
+      <button class="btn btn-sm" onclick="archiveGoal('${goal.id}')">ARCHIVE</button>
+    </div>
+    <div class="panel">
+      <input type="text" value="${escapeHtml(goal.name)}" style="font-weight:700; font-size:15px; border:none; background:transparent; padding:0; color:var(--text); font-family:var(--font-body); width:100%;" onchange="updateExerciseGoalField('${goal.id}','name',this.value)">
+      <div style="font-size:13px; color:var(--text-dim); margin-top:2px;">
+        ${fmtGoalDate(goal.startDate)} &ndash; ${fmtGoalDate(goal.targetDate)}
+        ${todayStr() > goal.targetDate ? ' · <span style="color:var(--warn);">past its end date</span>' : ''}
+      </div>
+      <div style="font-size:11px; color:var(--text-faint); margin-top:8px; line-height:1.5;">
+        No pace or projection here on purpose. Weight loss is roughly linear against a deficit, which is
+        what makes projecting it defensible; strength and cardio move in steps and stalls, so a straight
+        line through them would be confidently wrong most of the time.
+      </div>
+    </div>
+    ${renderPhases(goal)}`;
 }
 
 function renderNoGoal() {
@@ -371,7 +470,9 @@ function renderArchivedGoal(g) {
       <button class="icon-btn" onclick="deleteGoal('${g.id}')">${icon('close')}</button>
     </div>
     <div style="font-size:12px; color:var(--text-dim); margin-top:2px;">
-      ${fmt(lbToDisplay(g.startWeightLb), 1)} &rarr; ${fmt(lbToDisplay(g.targetWeightLb), 1)} ${u}
+      ${g.kind === 'exercise'
+        ? `Training · ${phasesForGoal(g.id).length} block${phasesForGoal(g.id).length === 1 ? '' : 's'}`
+        : `${fmt(lbToDisplay(g.startWeightLb), 1)} &rarr; ${fmt(lbToDisplay(g.targetWeightLb), 1)} ${u}`}
       · ${fmtGoalDate(g.startDate)}&ndash;${fmtGoalDate(g.targetDate)}
     </div>
     <button class="btn btn-sm" style="margin-top:8px;" onclick="unarchiveGoal('${g.id}')">REACTIVATE</button>
