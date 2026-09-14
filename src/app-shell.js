@@ -78,6 +78,7 @@ function defaultTransientUi() {
     homeAddPopup: null,                // 'sections' | 'boxes' | null
     goalFormOpen: false,
     exGoalFormOpen: false,
+    liftPicker: null,                  // { token, muscle, query } -- one picker, whoever opened it
     // The AM/PM quick-log sheet: { group: 'am'|'pm', focus: <field id> } or null. Lives in UI so
     // navigating away closes it, same as every other transient panel.
     logPopup: null,

@@ -777,6 +777,9 @@ function defaultState() {
     // loads after. A [] costs nothing to write here and removes the cross-file load-time edge.
     goals: [],
     phases: [],
+    // Lifts you ADDED. The shipped LIFT_LIBRARY is never copied in here -- allLifts()
+    // concatenates them, so the shipped list can grow between releases with no migration.
+    lifts: [],
     logs: {},          // key `${cycle}_${workoutId}` -> {date, entries:{}, notes, complete} — every workout type shares this
     measurements: [],  // [{id,date,fields:{...cm/kg canonical},photos}] — photos is an array of resized data-URI JPEGs
     weightLog: [],     // [{id,date,weightLb,calories,cardioCalories}]

@@ -907,6 +907,43 @@ input[type="text"].phase-label {
 .deload-levers .field { margin-bottom: 0; }
 .deload-levers input { font-size: 14px; }
 
+/* ---------- Lift library ---------- */
+/* A lift is pure identity and outlives any plan using it, so the link is shown as a distinct row
+   rather than another form field -- it's a reference, not a value you type. */
+.lift-link {
+  display: flex; align-items: baseline; gap: 8px; width: 100%; text-align: left;
+  padding: 7px 9px; margin-bottom: 8px;
+  background: var(--surface2); border: 1px dashed var(--border); border-radius: var(--radius);
+  color: var(--text-dim); font-family: var(--font-body); font-size: 12px; cursor: pointer;
+}
+.lift-link-set { border-style: solid; border-color: var(--accent); color: var(--text); }
+.lift-link-k { font-size: 9px; font-weight: 700; letter-spacing: 0.08em; color: var(--text-faint); flex: none; }
+.lift-link-v { flex: 1 1 auto; min-width: 0; font-weight: 600; }
+.lift-link-short { font-size: 10px; color: var(--text-faint); font-family: var(--font-mono); flex: none; }
+
+.lift-picker {
+  padding: 11px 12px; margin-bottom: 8px;
+  background: var(--surface2); border: 1px solid var(--accent); border-radius: var(--radius);
+}
+/* Muscle first, then the lift: a dozen options beats scrolling two hundred, and muscle alone makes
+   the list short enough that a second filter isn't worth the tap. */
+.lift-muscles { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px; }
+.lift-list { display: grid; gap: 4px; max-height: 260px; overflow-y: auto; }
+.lift-row {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  width: 100%; text-align: left; padding: 8px 10px;
+  background: var(--surface); border: 1px solid var(--border-soft); border-radius: var(--radius);
+  color: var(--text); font-family: var(--font-body); font-size: 13px; cursor: pointer;
+}
+.lift-row-current { border-color: var(--accent); }
+.lift-row-name { font-weight: 600; min-width: 0; }
+.lift-row-short { font-size: 10px; color: var(--text-faint); font-family: var(--font-mono); flex: none; }
+.lift-add { border-top: 1px solid var(--border-soft); margin-top: 10px; }
+.lift-muscle-chip {
+  font-size: 9px; font-weight: 700; color: #1a1a1a;
+  padding: 2px 7px; border-radius: 10px; flex: none;
+}
+
 .phase-sum {
   margin-top: 10px; padding: 10px 13px;
   background: var(--surface2); border: 1px solid var(--border-soft); border-radius: var(--radius);

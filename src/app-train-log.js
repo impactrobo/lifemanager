@@ -1248,6 +1248,7 @@ function renderExerciseSetup() {
   else if (NAV.setupSubtab === 'builder') body = renderWorkoutBuilder();
   else if (NAV.setupSubtab === 'plan') body = renderPlan();
   else if (NAV.setupSubtab === 'viewWorkouts') body = renderViewWorkouts();
+  else if (NAV.setupSubtab === 'lifts') body = renderLiftReview();
   else if (NAV.setupSubtab === 'planner') body = renderExercisePlanTab();
   else body = renderRestSettingsPanel();
 
@@ -1262,6 +1263,7 @@ function renderExerciseSetup() {
       <button class="${NAV.setupSubtab==='tm'?'active':''}" onclick="setSetupSubtab('tm')">MAXES</button>
       <button class="${NAV.setupSubtab==='builder'?'active':''}" onclick="setSetupSubtab('builder')">BUILDER</button>
       <button class="${NAV.setupSubtab==='viewWorkouts'?'active':''}" onclick="setSetupSubtab('viewWorkouts')">VIEW WORKOUTS</button>
+      <button class="${NAV.setupSubtab==='lifts'?'active':''}" onclick="setSetupSubtab('lifts')">LIFTS</button>
       <button class="${NAV.setupSubtab==='planner'?'active':''}" onclick="setSetupSubtab('planner')">PLANNER</button>
       <button class="${NAV.setupSubtab==='general'?'active':''}" onclick="setSetupSubtab('general')">GENERAL</button>
     `)}

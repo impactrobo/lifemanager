@@ -36,6 +36,7 @@ function loadState() {
       program: parsed.program || parsed.meso || base.program,
       goals: parsed.goals || [],
       phases: parsed.phases || [],
+      lifts: parsed.lifts || [],
       cardioWorkouts: parsed.cardioWorkouts || [],
       cardioLogs: parsed.cardioLogs || {},
       notes: parsed.notes || [],
@@ -380,6 +381,7 @@ function migrateState() {
   delete STATE.meso;
   if (!Array.isArray(STATE.goals)) STATE.goals = [];
   if (!Array.isArray(STATE.phases)) STATE.phases = [];
+  if (!Array.isArray(STATE.lifts)) STATE.lifts = [];
   // A phase whose goal is gone can never render or be reached, but it would keep being saved
   // and would silently reappear if an id were ever reused. Dropping them here is cheaper than
   // a guard at every read.

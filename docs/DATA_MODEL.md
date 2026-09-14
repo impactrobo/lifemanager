@@ -88,6 +88,11 @@ STATE = {
   // NOTE: STATE.exercisePlan (further up) keeps its meaning as THE PLAN IN EFFECT BEFORE ANY BLOCK
   // EXISTS. Nothing was migrated into a phase -- someone who never makes a training goal sees the
   // app exactly as it was. exercisePlanInEffect(date) in app-phases.js picks between them.
+  lifts: [                 // lifts you ADDED. The shipped LIFT_LIBRARY is never copied in here --
+    { id, name, short, muscle },   // allLifts() concatenates, so the shipped list can grow between
+    ...                            // releases with no migration. A lift is PURE IDENTITY: no tiers,
+  ],                               // no training max, no program. It outlives any plan using it,
+                                   // which is why targets/PRs hang off liftId and not exercise ids
   phases: [                // a goal's blocks, IN ORDER -- array position is the phase order
     { id, goalId, kind: 'weight', label,
       weeks,                           // the LENGTH. Start dates are DERIVED by running sum from

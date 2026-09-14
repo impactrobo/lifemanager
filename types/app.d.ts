@@ -230,6 +230,18 @@ interface GoalPhase {
 
 /** The four volume levers a deload pulls. Percentages are 50-100; both counts floor at 1 when
  *  applied, so nothing is silently dropped -- only accExercises: false removes work. */
+/** Pure identity: a name and a muscle, nothing about programs, tiers or training maxes. Ids in the
+ *  shipped LIFT_LIBRARY are stable slugs; hand-added lifts get a uid(). A lift outlives any plan
+ *  that references it, which is the whole point -- a block's exercise ids change every time you
+ *  start a new one, so a target or a PR can't hang off them. */
+interface Lift {
+  id: string;
+  name: string;
+  /** Short form for log rows, e.g. "BB Bench". Falls back to `name`. */
+  short: string;
+  muscle: string | null;
+}
+
 interface DeloadStyle {
   setsPct: number;
   repsPct: number;
@@ -499,6 +511,8 @@ interface AppState {
   currentCycle: number;
   goals: WeightGoal[];
   phases: GoalPhase[];
+  /** Lifts ADDED by hand. The shipped library is concatenated at read time, never copied here. */
+  lifts: Lift[];
   logs: Record<string, any>;
   measurements: MeasurementEntry[];
   weightLog: WeightLogEntry[];

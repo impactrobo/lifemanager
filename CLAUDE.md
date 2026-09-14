@@ -5,14 +5,14 @@ Local-first via localStorage. No bundler / no build step to deploy. Read this be
 any change.
 
 The app ships as `index.html` (a ~100-line shell), `styles.css` (base + component styles + the
-twelve inline aesthetics), and **`src/app-*.js` — 20 ordered classic `<script>`s** holding all
+twelve inline aesthetics), and **`src/app-*.js` — 21 ordered classic `<script>`s** holding all
 application logic (~12.5k lines). They are NOT modules: top-level `function`s stay global so the
 inline `onclick=` handlers keep working. There is still no compile step — everything is served
 as-is.
 
 **What load order does and doesn't constrain.** A function in any file may call a function in any
 other, in either direction: `function` declarations are hoisted and global, and every call happens
-long after all 20 files have loaded. What order *does* constrain is anything that runs *while a
+long after all 21 files have loaded. What order *does* constrain is anything that runs *while a
 file is being evaluated* — a `const` initializer, an `addEventListener` registration — since that
 can only reach what earlier files already defined. Two consequences worth knowing:
 
@@ -22,7 +22,7 @@ can only reach what earlier files already defined. Two consequences worth knowin
   arrow for exactly this reason — see its comment.
 - **Two files declaring the same top-level `function` name is completely silent** — the later script
   wins, the earlier one's callers run the wrong body, and nothing throws. One file could never
-  collide with itself; twenty can. This cost a real bug (`updateGoalField` in both `app-budget.js`
+  collide with itself; twenty-one can. This cost a real bug (`updateGoalField` in both `app-budget.js`
   and `app-goals.js`, so weight-goal edits did nothing), and `test_smoke.js` now guards it.
 
 A dynamic `import()`'s specifier resolves against **the importing script's own URL**, not the
