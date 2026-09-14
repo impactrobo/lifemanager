@@ -55,7 +55,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     STATE.life.anchors = []; STATE.life.schedules = [];
     const w1 = createWorkout('weights', 'P-Zero (GZCL)'); w1.name = 'Lower Body';
     const w2 = createWorkout('cardio', 'Time/Dist/Cal'); w2.name = 'Zone 2 Ride';
-    STATE.exercisePlan[weekday] = [{ id: 'p1', workoutId: w1.id }, { id: 'p2', workoutId: w2.id }];
+    STATE.exercisePlan[weekday] = [planEntry('workout', w1.id), planEntry('workout', w2.id)];
     // Only the cardio one is logged, and it's logged *today*.
     STATE.logs[logKey(STATE.currentCycle, w2.id)] = { date: today, entries: {}, notes: '', complete: true };
     STATE.diet.meals = [

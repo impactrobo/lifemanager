@@ -162,7 +162,27 @@ function phaseActualRate(entry) {
 // STATE.exercisePlan keeps its meaning as the plan in effect before any phase exists -- so the
 // Planner and Home behave exactly as they do now for anyone who never creates an exercise goal, and
 // nothing had to be migrated into a phase to make this ship.
+// A weekday plan is { 0..6: [entry] }, and an entry is { id, kind, refId }.
+//
+// `kind` was added on 2026-09-15 so a day could hold something other than a workout. It could
+// have been a second nullable `skillId` beside `workoutId` -- half the edits and no migration --
+// but two nullable fields where exactly one is ever set IS a discriminated union, with the rule
+// living in a comment instead of in the data. That shape is what the Skill model spent a fortnight
+// removing elsewhere; it doesn't get reintroduced here to save an afternoon.
+const PLAN_ENTRY_KINDS = ['workout'];
 const EMPTY_WEEK_PLAN = () => ({ 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] });
+function planEntry(kind, refId) { return { id: uid(), kind: kind || 'workout', refId: refId || null }; }
+// The one-time conversion, and the only place that knows the old shape. Idempotent: an entry
+// that already has a `kind` is left exactly as it is, so this can run on every load forever.
+function migrateWeekPlanEntries(plan) {
+  if (!plan || typeof plan !== 'object') return;
+  for (let d = 0; d <= 6; d++) {
+    if (!Array.isArray(plan[d])) continue;
+    plan[d] = plan[d].map(e => (e && e.kind)
+      ? e
+      : { id: (e && e.id) || uid(), kind: 'workout', refId: (e && e.workoutId) || null });
+  }
+}
 
 // Which plan governs a given date, and why -- the single answer every reader and the editor share.
 // Returns { plan, source, label, entry }:
@@ -215,14 +235,14 @@ function activeExercisePlan(dateStr) { return exercisePlanInEffect(dateStr).plan
 function copyWeekPlan(plan) {
   const out = EMPTY_WEEK_PLAN();
   for (let d = 0; d <= 6; d++) {
-    out[d] = ((plan && plan[d]) || []).map(e => ({ id: uid(), workoutId: e.workoutId }));
+    out[d] = ((plan && plan[d]) || []).map(e => ({ id: uid(), kind: e.kind || 'workout', refId: e.refId || null }));
   }
   return out;
 }
 function weekPlanWorkoutCount(plan) {
   let n = 0, days = 0;
   for (let d = 0; d <= 6; d++) {
-    const filled = ((plan && plan[d]) || []).filter(e => e.workoutId).length;
+    const filled = ((plan && plan[d]) || []).filter(e => e.refId).length;
     n += filled;
     if (filled) days++;
   }

@@ -512,7 +512,7 @@ function dayModel(dateStr) {
     // activeExercisePlan(), not STATE.exercisePlan: which weekly plan governs a date depends on
     // which training block covers it. With no blocks this is still STATE.exercisePlan.
     workouts: isDayOff ? [] : (activeExercisePlan(dateStr)[weekday] || [])
-      .filter(e => e.workoutId).map(e => getWorkout(e.workoutId)).filter(Boolean),
+      .filter(e => e.kind === 'workout' && e.refId).map(e => getWorkout(e.refId)).filter(Boolean),
     meals: isDayOff ? [] : (STATE.diet.mealPlan[weekday] || [])
       .filter(e => e.mealId).map(e => STATE.diet.meals.find(m => m.id === e.mealId)).filter(Boolean),
     habits: (STATE.life.habits || []).filter(h => habitIsActiveOn(h, dateStr)),

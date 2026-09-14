@@ -163,7 +163,7 @@ function renderDailySchedule(dateStr) {
 // ---- Calendar Day: the untimed half of a day ----
 // The timeline above can only show things that occupy a span of clock time. Three of this app's
 // day-level concepts carry no times at all — planned workouts (`exercisePlan[weekday]` entries are
-// just {id, workoutId}), planned meals (`diet.mealPlan[weekday]`, {id, mealId}) and habit marks
+// just {id, kind, refId}), planned meals (`diet.mealPlan[weekday]`, {id, mealId}) and habit marks
 // (a per-date kept/broke flag) — so they'd never appear on the Calendar at all, even though each
 // is unambiguously part of "what's going on this day". They render here as a day-level band
 // instead of being given invented times, which is the honest representation.
@@ -255,7 +255,7 @@ function renderDayUntimedItems(dateStr) {
 // the time a caller sees them, so the notice has to ask the template directly -- otherwise a day
 // off with nothing planned anyway would announce a pause that cancelled nothing.
 function hasWeekdayPlan(weekday, dateStr) {
-  return !!((activeExercisePlan(dateStr || todayStr())[weekday] || []).some(e => e.workoutId)
+  return !!((activeExercisePlan(dateStr || todayStr())[weekday] || []).some(e => e.refId)
          || (STATE.diet.mealPlan[weekday] || []).some(e => e.mealId));
 }
 function renderPeriodicRow(a) {

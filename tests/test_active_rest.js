@@ -34,7 +34,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     w.exercises = [{ id: 'x1', name: 'Barbell Bench Press', liftId: 'bb-bench', sets: 4, repMin: 5,
       repMax: 8, targetRIR: 2, resType: 'weight', setType: 'straight', muscle: 'Chest', adjustments: [] }];
     const mk = (n) => { const o = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
-      for (let i = 0; i < n; i++) o[i + 1] = [{ id: uid(), workoutId: w.id }]; return o; };
+      for (let i = 0; i < n; i++) o[i + 1] = [planEntry('workout', w.id)]; return o; };
     STATE.exercisePlan = mk(1);
     STATE.weightLog = [];
     for (let d = 140; d >= 0; d -= 2) {

@@ -57,8 +57,8 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     STATE.workouts.push({ id: 'wA', name: 'Lower Body', type: 'weights', style: 'P-Zero (GZCL)', exercises: [] });
     const todayWd = new Date().getDay();
     for (let d = 0; d <= 6; d++) STATE.exercisePlan[d] = [];
-    STATE.exercisePlan[todayWd] = [{ id: 'p1', workoutId: 'wA' }];
-    STATE.exercisePlan[(todayWd + 5) % 7] = [{ id: 'p2', workoutId: 'wA' }]; // lands on the day off
+    STATE.exercisePlan[todayWd] = [planEntry('workout', 'wA')];
+    STATE.exercisePlan[(todayWd + 5) % 7] = [planEntry('workout', 'wA')]; // lands on the day off
     saveState();
     switchTab('schedule'); setScheduleSubtab('agenda');
     return { dayOffStart: plus(5) };

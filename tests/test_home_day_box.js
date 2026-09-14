@@ -49,7 +49,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     const wd = new Date(today + 'T00:00:00').getDay();
     STATE.workouts = STATE.workouts.filter(w => w.id !== 'wX');
     STATE.workouts.push({ id: 'wX', name: 'Lower Body', type: 'weights', style: 'P-Zero (GZCL)', exercises: [] });
-    STATE.exercisePlan[wd] = [{ id: 'ep1', workoutId: 'wX' }];
+    STATE.exercisePlan[wd] = [planEntry('workout', 'wX')];
     STATE.life.habits = [{ id: 'hX', name: 'Stretches', startDate: '2020-01-01', endDate: null, createdAt: 1 }];
     STATE.life.scheduleExceptions = [];
     saveState();

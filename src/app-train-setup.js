@@ -403,7 +403,7 @@ function setPlannerDate(dateStr) { VIEW.plannerDate = dateStr || null; render();
 function addPlanWorkoutSlot(day) {
   const plan = plannerPlan();
   if (!Array.isArray(plan[day])) plan[day] = [];
-  plan[day].push({ id: uid(), workoutId: null });
+  plan[day].push(planEntry('workout', null));
   saveState(); render();
 }
 function removePlanWorkoutSlot(day, entryId) {
@@ -415,11 +415,12 @@ function removePlanWorkoutSlot(day, entryId) {
 function setPlanWorkoutSlotWorkout(day, entryId, workoutId) {
   const entry = (plannerPlan()[day] || []).find(e => e.id === entryId);
   if (!entry) return;
-  entry.workoutId = workoutId || null;
+  entry.kind = 'workout';
+  entry.refId = workoutId || null;
   saveState(); render();
 }
 function copyDayWorkoutPlan(day) {
-  const entries = (plannerPlan()[day] || []).map(e => ({ workoutId: e.workoutId }));
+  const entries = (plannerPlan()[day] || []).map(e => ({ kind: e.kind, refId: e.refId }));
   VIEW.exPlanClipboard = { day, entries };
   showToast(MEAL_PLAN_DAY_LABELS[day] + "'s workout plan copied");
   render();
@@ -427,7 +428,7 @@ function copyDayWorkoutPlan(day) {
 function pasteDayWorkoutPlan(day) {
   if (!VIEW.exPlanClipboard) return;
   const doPaste = () => {
-    plannerPlan()[day] = VIEW.exPlanClipboard.entries.map(e => ({ id: uid(), workoutId: e.workoutId }));
+    plannerPlan()[day] = VIEW.exPlanClipboard.entries.map(e => planEntry(e.kind, e.refId));
     saveState();
     showToast('Pasted into ' + MEAL_PLAN_DAY_LABELS[day]);
     render();
@@ -502,7 +503,7 @@ function renderExercisePlanDay(day) {
   </div>`;
 }
 function renderPlanWorkoutEntry(day, entry) {
-  if (!entry.workoutId) {
+  if (!entry.refId) {
     return `<div class="panel" style="background:var(--surface2);">
       <div class="field-row" style="align-items:flex-end;">
         <label class="field" style="flex:2; margin-bottom:0;"><span class="lbl">Select a workout</span>
@@ -519,8 +520,8 @@ function renderPlanWorkoutEntry(day, entry) {
       </div>
     </div>`;
   }
-  const w = getWorkout(entry.workoutId);
-  if (!w) return renderPlanWorkoutEntry(day, Object.assign({}, entry, { workoutId: null })); // referenced workout was deleted elsewhere
+  const w = getWorkout(entry.refId);
+  if (!w) return renderPlanWorkoutEntry(day, Object.assign({}, entry, { refId: null })); // referenced workout was deleted elsewhere
   return `<div class="panel">
     <div class="row">
       <div style="display:flex; align-items:center; gap:6px;">
@@ -587,7 +588,7 @@ function applyAutoFill() {
     const w = sessions[i % sessions.length];
     const plan = plannerPlan();
     if (!Array.isArray(plan[day])) plan[day] = [];
-    plan[day].push({ id: uid(), workoutId: w.id });
+    plan[day].push(planEntry('workout', w.id));
   });
   saveState();
   showToast(VIEW.autofillProgram + ' scheduled');

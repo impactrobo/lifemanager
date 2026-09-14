@@ -34,7 +34,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     createWorkout('weights', 'P-Zero (GZCL)'); createWorkout('cardio', 'Time/Dist/Cal'); createWorkout('mobility');
     const w = STATE.workouts.slice(-3).map(x => x.id);
     const mk = (map) => { const o = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
-      Object.keys(map).forEach(d => { o[d] = map[d].map(id => ({ id: uid(), workoutId: id })); }); return o; };
+      Object.keys(map).forEach(d => { o[d] = map[d].map(id => planEntry('workout', id)); }); return o; };
     STATE.exercisePlan = mk({ 1: [w[0]], 3: [w[1]] });
     STATE.goals = [{ id: 'e1', kind: 'exercise', name: 'Build aerobic base',
       startDate: shiftDate(t, -42), targetDate: shiftDate(t, 84), archived: false, createdAt: 1 }];
@@ -84,7 +84,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     const seededFrom = weekPlanWorkoutCount(STATE.phases[1].exercisePlan);
     const seededTo = weekPlanWorkoutCount(fresh.exercisePlan);
     // Now scribble on the new block and check nothing else moved.
-    fresh.exercisePlan[0].push({ id: uid(), workoutId: STATE.workouts[0].id });
+    fresh.exercisePlan[0].push(planEntry('workout', STATE.workouts[0].id));
     fresh.exercisePlan[1] = [];
     return {
       seededFrom, seededTo,
@@ -155,7 +155,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   const deleted = await page.evaluate((w) => {
     showConfirm = (msg, fn) => fn();
     deleteWorkout(w[1]);                            // the cardio workout, used in both blocks
-    const stillThere = (plan) => Object.keys(plan).some(d => (plan[d] || []).some(e => e.workoutId === w[1]));
+    const stillThere = (plan) => Object.keys(plan).some(d => (plan[d] || []).some(e => e.refId === w[1]));
     return {
       global: stillThere(STATE.exercisePlan),
       b1: stillThere(STATE.phases[0].exercisePlan),

@@ -53,7 +53,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     const wd = new Date('2026-10-06T00:00:00').getDay();
     STATE.workouts = STATE.workouts.filter(w => w.id !== 'wTest');
     STATE.workouts.push({ id: 'wTest', name: 'Lower Body', type: 'weights', style: 'P-Zero (GZCL)', exercises: [] });
-    STATE.exercisePlan[wd] = [{ id: 'p1', workoutId: 'wTest' }];
+    STATE.exercisePlan[wd] = [planEntry('workout', 'wTest')];
     STATE.life.habits = [{ id: 'h1', name: 'No drinking', startDate: '2026-01-01', endDate: null, createdAt: 1 }];
     saveState();
   });

@@ -428,6 +428,8 @@ function migrateState() {
     if (p.kind !== 'exercise') return;
     if (!p.exercisePlan || typeof p.exercisePlan !== 'object') p.exercisePlan = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
     for (let d = 0; d <= 6; d++) if (!Array.isArray(p.exercisePlan[d])) p.exercisePlan[d] = [];
+    // Every block carries its OWN copy of a plan, so the entry conversion has to reach all of them.
+    migrateWeekPlanEntries(p.exercisePlan);
   });
   if (STATE.settings.waterTargetMl == null) {
     STATE.settings.waterTargetMl = STATE.settings.waterTarget != null
@@ -542,6 +544,7 @@ function migrateState() {
   }
   if (!STATE.exercisePlan || typeof STATE.exercisePlan !== 'object') STATE.exercisePlan = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
   for (let d = 0; d <= 6; d++) { if (!Array.isArray(STATE.exercisePlan[d])) STATE.exercisePlan[d] = []; }
+  migrateWeekPlanEntries(STATE.exercisePlan);
   STATE.workouts.forEach(w => {
     if (w.type === undefined) w.type = w.t1 ? 'weights' : 'weights'; // defensive fallback — shouldn't happen post-migration
     if (w.style === undefined) w.style = w.t1 ? 'P-Zero (GZCL)' : (w.type === 'cardio' ? 'Time/Dist/Cal' : 'Hypertrophy (RP Strength)');
@@ -750,7 +753,7 @@ function deleteWorkout(id) {
     // otherwise survive its own deletion and render as a blank row in that block forever.
     const plans = [STATE.exercisePlan].concat((STATE.phases || []).filter(p => p.exercisePlan).map(p => p.exercisePlan));
     plans.forEach(plan => {
-      for (let d = 0; d <= 6; d++) plan[d] = (plan[d] || []).filter(e => e.workoutId !== id);
+      for (let d = 0; d <= 6; d++) plan[d] = (plan[d] || []).filter(e => !(e.kind === 'workout' && e.refId === id));
     });
     saveState();
     showToast('Workout deleted');

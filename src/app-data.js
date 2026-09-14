@@ -800,7 +800,10 @@ function defaultState() {
     cardioWorkouts: [], // legacy — only ever populated pre-migration, see migrateState()
     cardioLogs: {},      // legacy — folded into `logs` on migration
     // Weekday assignment for saved workouts (any type), Sun=0..Sat=6 — matches the Meal Plan
-    // convention. Each day is a list of slots: {id, workoutId}. See Setup -> Exercise Planner.
+    // convention. Each day is a list of slots: {id, kind, refId}. See Setup -> Exercise Planner.
+    // Entries are {id, kind, refId}. `kind` exists so a day can hold something other than a
+    // workout -- see migrateWeekPlanEntries() in app-phases.js for why it isn't a second
+    // nullable id beside the first.
     exercisePlan: { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] },
     notes: [],          // [{id, date, createdAt, title, bodyHtml, tag, photos}] — bodyHtml is sanitized rich text, photos is an array of resized data-URI JPEGs; older entries may only have a plain `text` field and/or no `photos`
     reminders: [],      // [{id, date, time, title, notes, createdAt}]
