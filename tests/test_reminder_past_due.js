@@ -6,7 +6,7 @@
 // "NOW - 30m LEFT" chip on the same block), and a to-do with every box ticked is finished whatever
 // the clock says.
 const { chromium } = require('playwright');
-const { settle } = require('./helpers');
+const { settle, pinClock } = require('./helpers');
 const path = require('path');
 
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
@@ -22,6 +22,9 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     return route.abort();
   });
 
+  // Every case here is "a time clearly before/after now", built relative to the clock — so the
+  // clock is pinned. See the note above `cases` for the two opposite ways this broke unpinned.
+  await pinClock(page);
   await page.goto(APP_PATH);
   await settle(page);
 
@@ -31,15 +34,20 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     schedules: JSON.parse(JSON.stringify(STATE.life.schedules)),
   }));
 
-  // Every offset case is anchored to today's own calendar date with its target minute-of-day
-  // clamped to [1, 1439], rather than literally adding/subtracting minutes from the wall clock and
-  // letting the result land wherever it lands. A naive version of this broke for real near local
-  // midnight: e.g. at 22:36, "90 minutes from now" is 00:06 the *next* calendar day, but a reminder
-  // dated "today" with time "00:06" reads as very early in today, not 90 minutes from now —
-  // reminderIsPastDue() correctly saw the numerically-small time as already past, exactly as it
-  // should for that (wrong) input. None of these cases care about the exact real elapsed time,
-  // only "clearly before/after now" — clamping keeps every one correct and same-day regardless of
-  // what time this test happens to run, without mocking Date itself.
+  // Every offset case is anchored to today's own calendar date, with its minute-of-day clamped to
+  // [1, 1439] so it can never cross into another day. That clamp fixed one midnight bug and caused
+  // the opposite one — worth keeping both written down, because they pull in different directions:
+  //
+  //   Late evening: at 22:36, "90 minutes from now" is 00:06 the NEXT day. Dated today, 00:06 reads
+  //   as very early today, so reminderIsPastDue() correctly called a "future" case past — right
+  //   answer, wrong input. The clamp stops that.
+  //
+  //   Just after midnight: at 00:00, "90 minutes BEFORE now" clamps up to 00:01, which is ahead of
+  //   now, not behind it. So `timePassed` expected true and got false — the clamp silently put the
+  //   fixture on the wrong side of the line it was testing. That failure is what pinClock() is for.
+  //
+  // With the clock pinned to mid-afternoon neither can happen: no wrap to guard against and nothing
+  // to clamp. The clamp stays as a cheap belt-and-braces, not as the thing holding this together.
   const cases = await page.evaluate(() => {
     const pad = n => String(n).padStart(2, '0');
     const today = todayStr();

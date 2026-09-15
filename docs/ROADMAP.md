@@ -115,19 +115,8 @@ before starting any of these.
     typed yourself, not the app's opinion, and it's what `inTarget`/`inRef` already do on a single
     reading. A marker with no bounds stated gets a plain uncoloured number, same as it gets no bar.
 
-- **`test_day_fold.js` fails when run within a few minutes of midnight (found 2026-09-15, not
-  fixed).** It asserts "a day with something behind and ahead folds into 2 bands", and just after
-  00:00 nothing is behind yet, so only one band renders and the assertion fails. Verified
-  pre-existing by stashing a working tree and running it at HEAD: fails identically either way.
-  `test_reminder_past_due.js` has a narrower version of the same fragility — it wants a time that
-  has already passed today, which at 00:00–00:01 there isn't.
-  - The file already carries a comment about midnight fragility for a *different* assertion, so
-    this is the second instance in one test.
-  - Fix shape: these tests derive their fixtures from `Date.now()` and should pin the clock instead
-    (inject a fixed "now" through the same seam `partitionDayBlocks(blocks, nowMin)` already
-    exposes — it takes `nowMin` as an argument, so the production code is already testable; it's
-    the fixture that reaches for the real clock). Worth doing before it wastes another debugging
-    session, since a midnight failure looks exactly like a real regression.
+- ~~`test_day_fold.js` fails when run within a few minutes of midnight~~ — **fixed the same day**,
+  see Recently Shipped.
 
 - **Claude-assisted lab entry, if the paste-parser proves insufficient (2026-09-15).** The parser
   now shipping reads pasted *text*. It cannot read a photo of a printout or a PDF, and it will miss
@@ -517,6 +506,35 @@ on an architecture split + a large wave of Maximalist aesthetics.
     the card — while the delete confirm promised they would stay. They fall back to the raw key now.
   - **Still open:** comparison — see "Lab comparison, agreed direction" under Ideas worth
     considering for the shape that was settled on and why a panel-vs-panel compare isn't it.
+
+- **The midnight test failures: pinned, and guarded against coming back (2026-09-15).** Found by
+  running the suite at 00:02 — `test_day_fold.js` failed and looked exactly like a regression from
+  the COMPARE work. It wasn't: stashing the working tree and running at HEAD failed identically.
+  - **The shape, which is worth recognising anywhere:** a fixture says "now ± n minutes" and clamps
+    the result into a valid day (`Math.max(0, …)`, `Math.min(1439, …)`). Near midnight the clamp
+    lands it on the **wrong side of now** — five "already passed" blocks all clamp to 00:00, which
+    is not passed — so the fixture quietly describes a different day than the one being asserted.
+    It fails about twice a year, only for whoever runs the suite around midnight.
+  - `test_reminder_past_due.js` had the mirror image, and its comment is a small lesson in its own
+    right: the clamp was *added* to fix a 22:36 day-wrap bug, and claimed to do so "without mocking
+    Date itself". It traded a late-evening failure for an after-midnight one. Both notes kept.
+  - **Fixed with `pinClock(page)`** in `tests/helpers.js` — Playwright's `clock.setFixedTime` at a
+    fixed mid-afternoon instant, called before `page.goto()` so boot-time reads see it too. The
+    whole page then agrees: the fixture's `new Date()`, `todayStr()` and the renderer's own clock
+    are one instant, which is what actually makes these deterministic. `setFixedTime`, not
+    `install()`: this app renders through `requestAnimationFrame`, and faking timers would stall
+    `render()` and hang `settle()`.
+  - Applied to all four clock-reading tests, two of which hadn't failed yet but were one late run
+    away: `test_dated_events.js` (a live event built as `now ± 10m` but stamped `todayStr()` — at
+    00:05 the start formats as 23:55 *tonight*) and `test_today_schedule_layout.js` (`now .. now+10m`
+    wrapped mod 1440 becomes an *overnight* block at 23:55, a different case than it asserts).
+  - **The durable part is the guard**: `test_smoke.js` now fails if any test reads `getHours()`/
+    `getMinutes()` without an `await pinClock(`. Same principle as the CSS contract test — convert a
+    silent, conditional failure into a loud immediate one.
+    - First version of the guard was wrong and passed a file I had deliberately broken: it matched
+      a bare `pinClock(`, which these files mention *in their comments*. Only caught by deleting
+      the real call and watching the guard stay green. **A guard is worth having only once you have
+      watched it fail.**
 
 - **COMPARE stops being a lift screen: labs and the daily log chart there too (2026-09-15).** The
   lab-comparison feature, built to the four decisions recorded under Ideas plus two answered while

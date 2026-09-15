@@ -15,6 +15,27 @@ async function settle(page) {
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
 }
 
+// Pins the page's wall clock, for tests whose fixtures are built RELATIVE TO NOW.
+//
+// The failure this exists to stop: a test wants "something behind me and something ahead", builds
+// it as `now ± n minutes`, and clamps into the valid day with Math.max(0, …) / Math.min(1439, …).
+// Run that at 00:02 and every "behind" block clamps to 00:00 — which is not behind you — so the
+// fixture silently describes a different day than the one the test asserts about. It fails looking
+// exactly like a real regression, roughly twice a year per test, and only for whoever is unlucky
+// enough to run the suite around midnight.
+//
+// setFixedTime (not install()) on purpose: it fixes what `new Date()` reads while leaving timers
+// alone, and this app renders through requestAnimationFrame — faking timers would stall render()
+// and settle() would hang.
+//
+// Call BEFORE page.goto() so boot-time reads see the pinned value too. The whole page agrees after
+// that: the fixture's `new Date()`, todayStr(), and the renderer's own clock are the same instant,
+// which is the property that actually makes these tests deterministic.
+const PINNED_NOW = '2026-06-15T13:30:00';   // a Monday, mid-afternoon, far from any boundary
+async function pinClock(page, isoLocal) {
+  await page.clock.setFixedTime(new Date(isoLocal || PINNED_NOW));
+}
+
 // The app's whole source, concatenated in load order. Several tests make STRUCTURAL assertions by
 // reading the source itself -- "no render surface hardcodes a section hex", "no function reaches
 // past dayModel() for the raw weekday arrays" -- which need the text, not the running page.
@@ -39,4 +60,4 @@ function appFiles() {
   return names.map(f => ({ file: f, text: fs.readFileSync(path.join(root, f), 'utf8') }));
 }
 
-module.exports = { settle, appSource, appFiles };
+module.exports = { settle, appSource, appFiles, pinClock, PINNED_NOW };

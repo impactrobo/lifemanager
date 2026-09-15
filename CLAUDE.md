@@ -171,6 +171,20 @@ talons both pushed the third column off screen). Two things to budget for:
   box stays ~42px tall however small you make the SVG inside. That wrapper, not the icon, is
   what the vertical budget actually has to fit.
 
+### Tests that read the clock must pin it
+If a test builds fixtures from the time of day (`getHours()`/`getMinutes()`), call
+`await pinClock(page)` from `tests/helpers.js` **before** `page.goto()`. `test_smoke.js` fails the
+suite if you don't.
+
+The failure it prevents: a fixture says "now ± n minutes" and clamps into a valid day
+(`Math.max(0, …)`, `Math.min(1439, …)`); near midnight the clamp puts it on the **wrong side of
+now**, so the fixture describes a different day than the test asserts. It fails about twice a year,
+looks exactly like a real regression, and costs a stash-and-bisect to disprove. Four tests had or
+were one late run away from it.
+
+`setFixedTime`, not `clock.install()` — this app renders through `requestAnimationFrame`, and
+faking timers stalls `render()` so `settle()` never resolves.
+
 ### CSS: the "my rule silently lost" family
 CSS has no failure mode for a declaration that loses. Every other layer here fails loudly (a
 bad reference is a `pageerror`, a type error fails `tsc`); a losing CSS rule renders a page

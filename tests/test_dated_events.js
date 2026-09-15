@@ -5,7 +5,7 @@
 // Also covers the Day timeline's own math: blockDurationMinutes() across midnight, and
 // dayBookedMinutes()'s interval *union* (overlapping blocks must not double-count).
 const { chromium } = require('playwright');
-const { settle } = require('./helpers');
+const { settle, pinClock } = require('./helpers');
 const path = require('path');
 
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
@@ -21,6 +21,10 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     return route.abort();
   });
 
+  // The live-event fixture is `now ± 10 minutes` stamped with todayStr(). Unpinned, at 00:05 the
+  // start formats as 23:55 while still dated today -- late tonight, not ten minutes ago -- and the
+  // event stops being live. Pinned, start and end sit either side of now on the same day.
+  await pinClock(page);
   await page.goto(APP_PATH);
   await settle(page);
 

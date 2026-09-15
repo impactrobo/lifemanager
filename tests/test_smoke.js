@@ -35,8 +35,44 @@ function assertNoDuplicateGlobals() {
   console.log(`no duplicate globals across ${seen.size} top-level functions`);
 }
 
+// A test that builds fixtures from the wall clock must pin the wall clock.
+//
+// The failure mode is nasty precisely because it is rare: a fixture says "now minus 90 minutes",
+// clamps the result into a valid day, and near midnight the clamp lands it on the WRONG SIDE of
+// now. The test then fails looking exactly like a real regression, roughly twice a year, only for
+// whoever runs the suite around midnight. Two tests had it; a third and fourth were one late-night
+// run away from it. Diagnosing it cost a stash-and-bisect to prove the working tree was innocent.
+//
+// So: reading the clock in a test is fine, reading it WITHOUT pinning it is the bug. Same principle
+// as test_css_contract.js — turn a silent, conditional failure into a loud, immediate one.
+function assertClockTestsArePinned() {
+  const fs = require('fs');
+  const dir = __dirname;
+  const offenders = [];
+  fs.readdirSync(dir).filter(f => /^test_.*\.js$/.test(f)).forEach(f => {
+    const text = fs.readFileSync(require('path').join(dir, f), 'utf8');
+    // Building a time-of-day from the real clock. `new Date()` alone is not enough to flag: plenty
+    // of tests only want today's DATE, which is stable except across a midnight the suite can't
+    // straddle anyway.
+    const readsClock = /getHours\s*\(\s*\)|getMinutes\s*\(\s*\)/.test(text);
+    // `await pinClock(` specifically, not a bare mention: these files DISCUSS pinClock in their
+    // comments, so a looser match found the word and passed a file that had lost the actual call.
+    // Caught by deleting the call and watching this guard stay green -- a guard is only worth
+    // having if you have seen it fail.
+    if (readsClock && !/await\s+pinClock\s*\(/.test(text)) offenders.push(f);
+  });
+  if (offenders.length) {
+    throw new Error(
+      'These tests build fixtures from the time of day but never call pinClock(page):\n  ' +
+      offenders.join('\n  ') +
+      '\nAdd `await pinClock(page);` before page.goto() — see tests/helpers.js.');
+  }
+  console.log('every clock-reading test pins its clock');
+}
+
 (async () => {
   assertNoDuplicateGlobals();
+  assertClockTestsArePinned();
 
   const browser = await chromium.launch({ executablePath: process.env.PW_CHROMIUM_PATH || undefined });
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });

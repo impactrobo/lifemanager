@@ -2,7 +2,7 @@
 // today's assigned schedule (wake/bed/activities), correct chronological sort, currentScheduleBlock()
 // picking the block containing "right now", and toggleDailyAnchor()'s completion tracking.
 const { chromium } = require('playwright');
-const { settle } = require('./helpers');
+const { settle, pinClock } = require('./helpers');
 const path = require('path');
 
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
@@ -18,6 +18,9 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     return route.abort();
   });
 
+  // The "right now" anchor is now .. now+10m, wrapped modulo 1440. Unpinned, running at 23:55 makes
+  // that an overnight block instead of a plain one -- a different case than the layout this asserts.
+  await pinClock(page);
   await page.goto(APP_PATH);
   await settle(page);
 

@@ -10,7 +10,7 @@
 // genuinely not render its rows (a CSS-hidden band would still bloat the DOM and still be found by
 // every querySelector in the app), and an open band must render rows identical to the full day's.
 const { chromium } = require('playwright');
-const { settle } = require('./helpers');
+const { settle, pinClock } = require('./helpers');
 const path = require('path');
 
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
@@ -25,6 +25,10 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     if (url.startsWith('file://')) return route.continue();
     return route.abort();
   });
+  // §2 builds its day relative to now. Unpinned, that broke just after midnight: every "behind"
+  // block clamped to 00:00, nothing was actually behind, and the fold rendered one band instead of
+  // two. Pinned, the fixture and the renderer read the same mid-afternoon instant.
+  await pinClock(page);
   await page.goto(APP_PATH);
   await settle(page);
 
@@ -73,8 +77,9 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (!eq(part.overnightDaytime, { passed: [], now: [], coming: ['bed'] })) throw new Error('An overnight block not yet started is coming, never passed');
 
   // ---- 2. A full default day folds ----
-  // Built around the real clock and clamped, so the exact counts depend on the time of day — the
-  // assertions below are the ones that hold at any hour. Section 1 above pins the exact rules.
+  // Built around the page's clock, which pinClock() has fixed at 13:30 — so the counts below are
+  // exact and identical on every run, rather than "whatever holds at any hour". Section 1 pins the
+  // partition rules themselves; this section pins the rendering around them.
   const built = await page.evaluate(() => {
     const pad = n => String(n).padStart(2, '0');
     const hhmm = m => pad(Math.floor(m / 60) % 24) + ':' + pad(m % 60);
