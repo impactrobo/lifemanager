@@ -38,7 +38,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // ---- 1. The selector offers all seven, in one place ----
   const keys = await page.evaluate(() => WEIGHT_METRICS.map(m => m.key));
   console.log('metric keys:', keys);
-  const want = ['weight', 'bodyFatPct', 'bodyWaterPct', 'sleepHours', 'sleepQuality', 'steps', 'restingHR', 'bloodPressure'];
+  const want = ['weight', 'bodyFatPct', 'bodyWaterPct', 'sleepHours', 'sleepQuality', 'steps', 'restingHR'];
   if (keys.join(',') !== want.join(',')) throw new Error('Metric list changed shape: ' + keys.join(','));
 
   // ---- 2. weightLog metrics: unit conversion happens in get(), sorted by date ----
@@ -158,52 +158,9 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (stepsState.hasCanvas) throw new Error('Switching to an unlogged metric should show the empty state, not a blank chart');
   if (!stepsState.hasEmpty) throw new Error('...and that empty state should be the dailyLog-flavoured one');
 
-  // ---- 8. Blood pressure: one metric, two lines, one shared set of days ----
-  // The only multi-part metric. `parts` is what keeps that from becoming a special case in every
-  // other metric -- and the load-bearing property is that both lines come off the SAME date list,
-  // chosen once by metric.has(), so they can't drift apart on the x-axis.
-  const bp = await page.evaluate(() => {
-    STATE.weightLog = [];
-    STATE.life.dailyLog = {
-      '2026-09-03': { bpSystolic: 124, bpDiastolic: 80 },
-      '2026-09-01': { bpSystolic: 118, bpDiastolic: 76 },
-      '2026-09-02': { bpSystolic: 121 },                    // half a reading -- must not plot
-      '2026-09-04': { restingHR: 60 },                      // a different metric entirely
-    };
-    const metric = WEIGHT_METRICS.find(m => m.key === 'bloodPressure');
-    const sys = metricSeries(metric, metric.parts[0].get);
-    const dia = metricSeries(metric, metric.parts[1].get);
-    VIEW.selectedWeightMetric = 'bloodPressure';
-    return {
-      partCount: metric.parts.length,
-      labels: metric.parts.map(p => p.label),
-      suffix: metric.suffix(),
-      sys, dia,
-      html: renderBodyWeightChart(),
-    };
-  });
-  console.log('blood pressure series:', JSON.stringify({ sys: bp.sys, dia: bp.dia }));
-  if (bp.partCount !== 2 || bp.labels.join(',') !== 'Systolic,Diastolic') throw new Error('BP should carry two named parts: ' + bp.labels);
-  if (bp.suffix !== ' mmHg') throw new Error('BP suffix: ' + bp.suffix);
-  // 09-02 logged only a systolic, so it is not a reading and appears in NEITHER series.
-  if (bp.sys.length !== 2 || bp.dia.length !== 2) {
-    throw new Error('A half-logged day must not plot: ' + JSON.stringify({ sys: bp.sys.length, dia: bp.dia.length }));
-  }
-  if (bp.sys.map(e => e.date).join(',') !== bp.dia.map(e => e.date).join(',')) {
-    throw new Error('Both lines must share one date list, or they drift apart on the x-axis');
-  }
-  if (bp.sys.map(e => e.date).join(',') !== '2026-09-01,2026-09-03') throw new Error('BP dates: ' + JSON.stringify(bp.sys));
-  if (bp.sys[0].value !== 118 || bp.dia[0].value !== 76) throw new Error('Each part reads its own half: ' + JSON.stringify([bp.sys[0], bp.dia[0]]));
-  if (!/id="weightChart"/.test(bp.html)) throw new Error('Two readings should render the chart');
-
-  // One reading isn't a trend, same threshold as every other metric.
-  const oneReading = await page.evaluate(() => {
-    STATE.life.dailyLog = { '2026-09-01': { bpSystolic: 118, bpDiastolic: 76 } };
-    VIEW.selectedWeightMetric = 'bloodPressure';
-    return renderBodyWeightChart();
-  });
-  if (/id="weightChart"/.test(oneReading)) throw new Error('A single BP reading should show the empty state, not a chart');
-  if (!/daily log chips/.test(oneReading)) throw new Error("...pointing at Home's chips, since BP is a dailyLog metric");
+  // BP's section lived here while it was a WEIGHT_METRICS entry with two `parts`. It moved to
+  // Labs as two ordinary markers -- see test_labs.js SS13, which carries the same coverage
+  // (both halves, shared dates) plus the two-source union the daily log now feeds.
 
   await page.evaluate(() => { STATE.weightLog = []; STATE.life.dailyLog = {}; saveState(); });
   await browser.close();

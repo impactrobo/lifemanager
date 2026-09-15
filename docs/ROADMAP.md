@@ -468,9 +468,39 @@ on an architecture split + a large wave of Maximalist aesthetics.
   - **Still open:** comparison — see "Lab comparison, agreed direction" under Ideas worth
     considering for the shape that was settled on and why a panel-vs-panel compare isn't it.
 
+- **Blood pressure moves to Labs, as two markers with two sources (2026-09-15).** Reasoning given
+  with the ask: most people don't take BP at home, they get it taken at the doctor — in the same
+  appointment the blood is drawn — so it belongs beside the panel, not on a morning chip between
+  sleep and steps.
+  - **Two markers, not one paired reading.** `bpSystolic` and `bpDiastolic` have genuinely different
+    reference numbers (≤130/≤120 and ≤85/≤80 as shipped defaults), and splitting them means each
+    gets a position bar, a ghost-dot trail and movement colouring for free rather than needing a
+    paired special case threaded through all of it. New `vitals` group.
+  - **Two sources that coexist, which is the actual design ask:** inside a lab panel like any other
+    marker, *and* standalone dated readings. `labHistory()` unions them — the one function every
+    bar, trail, chart and history list already reads, so the two-source-ness exists in exactly one
+    place.
+  - **A panel WINS on a shared date, and only shadows** the standalone reading rather than deleting
+    it. The drawn-blood reading was taken with a cuff by someone doing it for a living; but a
+    destructive override would throw away a reading to express a preference. Verified: a home
+    reading of 126 on the panel's date is kept in state while the panel's 132 is what's shown.
+  - **`STATE.life.dailyLog` stays exactly where it is** and becomes the standalone store. It was
+    already a dated store of BP readings, so this means **no migration and no history lost** — and
+    crucially no turning sixty days of home readings into sixty one-marker "lab panels" that would
+    bury real bloodwork. Only the entry point moved.
+  - **A BP-only door** (`+ BP` beside `+ ADD A PANEL`): a reading without inventing a panel, for
+    people who do check routinely. Both halves or neither — a lone systolic isn't a blood pressure,
+    the same rule the old chip enforced.
+  - Removed from Home's AM strip (now four chips) and from `WEIGHT_METRICS`. The `parts` machinery
+    that existed solely for BP is **deliberately left in place** — it's what any future paired
+    metric would use, and tearing it out would mean rebuilding it verbatim. COMPARE picks BP up
+    under its LABS group instead, so charting is unchanged in kind.
+  - Its `test_body_metrics.js` section moved to `test_labs.js` rather than being deleted: same
+    coverage (both halves, shared dates) plus the union and override the daily log now feeds.
+
 - **The water chip pulses; HOME moves to the wordmark (2026-09-15).** Two small ones asked together.
   - **Water's accent is a pulse now, not a state.** It jumps to `--accent` on tap and fades to
-    `--text` over 0.75s. Water is the one chip tapped several times a day, so the confirmation has
+    `--text` over 0.4s. Water is the one chip tapped several times a day, so the confirmation has
     to be instant and then get out of the way — a colour that *stays* says "logged today", which the
     chip's border already says, and tells you nothing about the tap you just made. Measured across
     the animation: `rgb(254,50,216)` → `rgb(238,166,243)` → `--text`.

@@ -64,15 +64,16 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   const empty = await page.evaluate(() => ({
     weight: logFieldDisplay('weight'), sleepLen: logFieldDisplay('sleepLen'),
     sleepQual: logFieldDisplay('sleepQual'), restingHR: logFieldDisplay('restingHR'),
-    bloodPressure: logFieldDisplay('bloodPressure'), calories: logFieldDisplay('calories'),
+    calories: logFieldDisplay('calories'),
     water: logFieldDisplay('water'), steps: logFieldDisplay('steps'),
     setChips: document.querySelectorAll('.log-chip-set').length,
     chips: document.querySelectorAll('.log-chip').length,
   }));
   console.log('nothing logged yet:', empty);
-  // 5 AM (weight, sleep length, sleep quality, resting HR, BP) + 3 PM (calories, water, steps).
-  if (empty.chips !== 8) throw new Error(`Expected 8 chips across the two strips, got ${empty.chips}`);
-  ['weight', 'sleepLen', 'sleepQual', 'restingHR', 'bloodPressure', 'calories', 'steps'].forEach(f => {
+  // 4 AM (weight, sleep length, sleep quality, resting HR) + 3 PM (calories, water, steps).
+  // BP was a fifth AM chip until it moved to Labs.
+  if (empty.chips !== 7) throw new Error(`Expected 7 chips across the two strips, got ${empty.chips}`);
+  ['weight', 'sleepLen', 'sleepQual', 'restingHR', 'calories', 'steps'].forEach(f => {
     if (empty[f] !== '&mdash;') throw new Error(`${f} should read as a dash when unlogged, got "${empty[f]}"`);
   });
   if (empty.water !== '0/2000') throw new Error(`Water should show progress even at zero, got "${empty.water}"`);
@@ -125,80 +126,35 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (!opened.hasWeight) throw new Error('The AM sheet holds the whole morning group, not just one field');
   if (opened.hasCalories) throw new Error('The AM sheet must not carry PM fields');
   // weight, sleep length, sleep quality, resting HR, blood pressure.
-  if (opened.rows !== 5) throw new Error(`Expected 5 rows in the AM sheet, got ${opened.rows}`);
+  if (opened.rows !== 4) throw new Error(`Expected 4 rows in the AM sheet, got ${opened.rows}`);
 
   // ---- 5. Saving writes every field in the group at once ----
   await page.fill('#log_weight', '181.2');
   await page.fill('#log_sleepLen', '7.5');
   await page.selectOption('#log_sleepQual', '4');
   await page.fill('#log_restingHR', '58');
-  await page.fill('#log_bpSystolic', '118');
-  await page.fill('#log_bpDiastolic', '76');
   await page.evaluate(() => saveLogPopup());
   await settle(page);
   const saved = await page.evaluate(() => ({
     weight: logFieldValue('weight'), sleepLen: logFieldValue('sleepLen'), sleepQual: logFieldValue('sleepQual'),
     restingHR: logFieldValue('restingHR'),
-    bp: logFieldValue('bloodPressure'),
     closed: UI.logPopup === null,
     chipWeight: logFieldDisplay('weight'),
     chipRestingHR: logFieldDisplay('restingHR'),
-    chipBp: logFieldDisplay('bloodPressure'),
     setChips: document.querySelectorAll('.log-chip-set').length,
   }));
   console.log('after saving the AM sheet:', saved);
   if (Math.abs(saved.weight - 181.2) > 0.05) throw new Error(`Weight should be 181.2, got ${saved.weight}`);
   if (saved.sleepLen !== 7.5 || saved.sleepQual !== 4) throw new Error('Sleep length and quality should both save');
   if (saved.restingHR !== 58) throw new Error(`Resting HR should be 58, got ${saved.restingHR}`);
-  if (!saved.bp || saved.bp.systolic !== 118 || saved.bp.diastolic !== 76) {
-    throw new Error('Blood pressure should save as a pair, got ' + JSON.stringify(saved.bp));
-  }
   if (!saved.closed) throw new Error('Saving should close the sheet');
   if (saved.chipWeight !== '181.2') throw new Error(`The chip must show what the sheet saved, got ${saved.chipWeight}`);
   if (saved.chipRestingHR !== '58') throw new Error(`The resting HR chip must show what the sheet saved, got ${saved.chipRestingHR}`);
-  // The same a/b shape water's chip already uses -- read aloud as "118 over 76".
-  if (saved.chipBp !== '118/76') throw new Error(`The BP chip should read systolic/diastolic, got ${saved.chipBp}`);
-  if (saved.setChips !== 5) throw new Error(`All 5 AM chips should now read as set, got ${saved.setChips}`);
+  if (saved.setChips !== 4) throw new Error(`All 4 AM chips should now read as set, got ${saved.setChips}`);
 
-  // ---- 5b. Blood pressure is a PAIR, not two fields that happen to sit together ----
-  // The chip reads a/b the way water's does, but unlike water there's no meaningful zero -- so an
-  // unlogged day is a dash, and a HALF-logged one has to be too. Storing a lone systolic would put
-  // "118/" on the chip and a point on the chart the other line can't match.
-  await page.evaluate(() => openLogPopup('am', 'bloodPressure'));
-  await settle(page);
-  const bpFocus = await page.evaluate(() => document.activeElement ? document.activeElement.id : null);
-  // Its row has two inputs, so `log_<field>` doesn't exist -- tapping the chip lands on the number
-  // you say first.
-  if (bpFocus !== 'log_bpSystolic') throw new Error(`The BP chip should focus systolic, got ${bpFocus}`);
-
-  await page.fill('#log_bpDiastolic', '');
-  await page.evaluate(() => saveLogPopup());
-  await settle(page);
-  const halfCleared = await page.evaluate(() => ({
-    value: logFieldValue('bloodPressure'),
-    display: logFieldDisplay('bloodPressure'),
-    storedSys: lifeLogForDate(todayStr()).bpSystolic,
-    storedDia: lifeLogForDate(todayStr()).bpDiastolic,
-    othersIntact: logFieldValue('restingHR'),
-  }));
-  console.log('one half blanked:', halfCleared);
-  if (halfCleared.value !== null) throw new Error('Half a reading is not a reading -- it must read as unlogged');
-  if (halfCleared.display !== '&mdash;') throw new Error(`...and show a dash, got "${halfCleared.display}"`);
-  if (halfCleared.storedSys !== undefined || halfCleared.storedDia !== undefined) {
-    throw new Error('Clearing one half must clear BOTH, or a stale systolic outlives the reading it belonged to');
-  }
-  if (halfCleared.othersIntact !== 58) throw new Error('Clearing BP must not disturb the rest of the group');
-
-  // And it comes back as a pair.
-  await page.evaluate(() => openLogPopup('am', 'bloodPressure'));
-  await settle(page);
-  await page.fill('#log_bpSystolic', '122');
-  await page.fill('#log_bpDiastolic', '79');
-  await page.evaluate(() => saveLogPopup());
-  await settle(page);
-  const bpBack = await page.evaluate(() => logFieldDisplay('bloodPressure'));
-  console.log('BP re-logged:', bpBack);
-  if (bpBack !== '122/79') throw new Error(`BP should read 122/79, got ${bpBack}`);
+  // SS5b tested blood pressure as a PAIR behind one chip. BP moved to Labs as two markers
+  // with their own ranges -- see test_labs.js SS13, which carries that coverage plus the
+  // two-source union. Nothing here logs BP any more.
 
   // ---- 6. A blank field CLEARS, rather than being skipped ----
   // The sheet opens pre-filled with what's already logged, so a blank is a deliberate act. Without

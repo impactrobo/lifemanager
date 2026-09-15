@@ -85,6 +85,7 @@ function defaultTransientUi() {
     labFormOpen: false,
     labRangesOpen: false,
     labPasteOpen: false,
+    bpFormOpen: false,
     waterPulse: false,                 // one render's worth of "you just tapped +" on the water chip
     // The AM/PM quick-log sheet: { group: 'am'|'pm', focus: <field id> } or null. Lives in UI so
     // navigating away closes it, same as every other transient panel.
@@ -669,7 +670,7 @@ function _doRender() {
   if (UI.logPopup && UI.logPopup.focus) {
     // Blood pressure is the one field whose row has two inputs rather than one, so `log_<field>`
     // doesn't exist for it -- tapping its chip should land on the number you say first.
-    const focusId = UI.logPopup.focus === 'bloodPressure' ? 'log_bpSystolic' : 'log_' + UI.logPopup.focus;
+    const focusId = 'log_' + UI.logPopup.focus;   // BP's two-input special case left with it, to Labs
     const f = document.getElementById(focusId);
     if (f) f.focus();
   }

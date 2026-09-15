@@ -997,6 +997,119 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   const reclosed = await page.evaluate(() => document.querySelectorAll('.lab-hist').length);
   if (reclosed !== 0) throw new Error('Tapping again closes it, got ' + reclosed + ' still open');
 
+  // ---- 13. Blood pressure: one marker pair, two sources ----
+  // BP moved here from the daily log's morning chips, because most people have it taken at the
+  // doctor in the same appointment the blood is drawn. But some check at home, and that history is
+  // worth more than one reading a year -- so BP has two sources that coexist:
+  //   * inside a lab panel, like any other marker
+  //   * standalone dated readings still in STATE.life.dailyLog
+  //
+  // The daily log stays put ON PURPOSE. It is already a dated store of BP readings, so keeping it
+  // means no migration and no history lost -- and no turning sixty days of home readings into sixty
+  // one-marker "lab panels" that would bury real bloodwork.
+  await reset();
+  const bpMarkers = await page.evaluate(() => {
+    const sys = labMarker('bpSystolic'), dia = labMarker('bpDiastolic');
+    return {
+      // Two markers, not one paired reading: they have genuinely different reference numbers, and
+      // splitting them means each gets a bar, a trail and movement colouring with no special case.
+      bothExist: !!sys && !!dia,
+      group: sys && sys.group,
+      groupKnown: LAB_GROUPS.some(g => g.key === (sys && sys.group)),
+      core: !!(sys && sys.core && dia && dia.core),
+      sysRange: labRange('bpSystolic'), diaRange: labRange('bpDiastolic'),
+      // A marker with bounds draws a bar like any other.
+      drawsBar: !!labBarZones('bpSystolic', 118),
+      // ...and is no longer a daily-log chip.
+      offHome: typeof LOG_FIELDS.bloodPressure === 'undefined',
+    };
+  });
+  console.log('bp markers:', JSON.stringify(bpMarkers));
+  if (!bpMarkers.bothExist) throw new Error('Systolic and diastolic are two separate markers');
+  if (bpMarkers.group !== 'vitals' || !bpMarkers.groupKnown) throw new Error('...in a real group, got ' + bpMarkers.group);
+  if (!bpMarkers.core) throw new Error('...both core: when blood is drawn the cuff has usually been on');
+  // Different numbers, which is the reason they are two markers rather than one "120/80".
+  if (bpMarkers.sysRange.target.high === bpMarkers.diaRange.target.high) {
+    throw new Error('Systolic and diastolic should not share a target: ' + JSON.stringify(bpMarkers));
+  }
+  if (!bpMarkers.drawsBar) throw new Error('BP states bounds, so it draws a position bar');
+  if (!bpMarkers.offHome) throw new Error('BP should no longer be a daily-log chip field');
+
+  // The union, and which source wins.
+  const bpUnion = await page.evaluate(() => {
+    STATE.life.dailyLog = {
+      '2026-09-01': { bpSystolic: 118, bpDiastolic: 76 },
+      '2026-09-02': { bpSystolic: 121 },                 // half a reading
+      '2026-09-03': { bpSystolic: 124, bpDiastolic: 80 },
+      '2026-09-05': { restingHR: 60 },                   // a different metric entirely
+    };
+    // A panel on a date the daily log ALSO has: the panel wins.
+    STATE.labs = [{ id: 'p', date: '2026-09-03', notes: '', values: { bpSystolic: 132, bpDiastolic: 86, apoB: 96 } }];
+    const sys = labHistory('bpSystolic');
+    return {
+      dates: sys.map(r => r.date),
+      values: sys.map(r => r.value),
+      dia: labHistory('bpDiastolic').map(r => `${r.date}:${r.value}`),
+      // A marker with no second source is untouched by any of this.
+      apoB: labHistory('apoB').length,
+      // The shadowed standalone reading is KEPT, not deleted -- overriding a preference must not
+      // throw a reading away.
+      standaloneIntact: STATE.life.dailyLog['2026-09-03'].bpSystolic,
+      latest: latestLabValue('bpSystolic'),
+    };
+  });
+  console.log('bp union:', JSON.stringify(bpUnion));
+  // Newest first, and 09-02 appears for systolic only -- each marker reads its own half, so half a
+  // reading is a real systolic and simply not a diastolic.
+  if (bpUnion.dates.join(',') !== '2026-09-03,2026-09-02,2026-09-01') throw new Error('Union runs newest-first: ' + bpUnion.dates);
+  if (bpUnion.values[0] !== 132) throw new Error('A panel WINS on a shared date, got ' + bpUnion.values[0]);
+  if (bpUnion.values[2] !== 118) throw new Error('...and a date only the daily log has still counts: ' + bpUnion.values);
+  if (bpUnion.dia.join(',') !== '2026-09-03:86,2026-09-01:76') throw new Error('Diastolic reads its own half: ' + bpUnion.dia);
+  if (bpUnion.standaloneIntact !== 124) throw new Error('A shadowed reading is kept, not deleted, got ' + bpUnion.standaloneIntact);
+  if (bpUnion.apoB !== 1) throw new Error('A marker with one source is unaffected, got ' + bpUnion.apoB);
+  if (!bpUnion.latest || bpUnion.latest.value !== 132) throw new Error('latestLabValue reads the union: ' + JSON.stringify(bpUnion.latest));
+
+  // The BP-only door: a reading without inventing a panel.
+  await page.evaluate(() => {
+    STATE.labs = []; STATE.life.dailyLog = {};
+    switchTab('train'); setFitnessSubtab('body'); NAV.bodySubtab = 'labs';
+    toggleBpForm();
+  });
+  await settle(page);
+  await page.fill('#bpDate', '2026-09-10');
+  await page.fill('#bpSys', '119');
+  await page.fill('#bpDia', '78');
+  const bpSaved = await page.evaluate(() => {
+    saveBpReading();
+    return {
+      panels: allLabPanels().length,          // still none: no panel was invented
+      log: STATE.life.dailyLog['2026-09-10'],
+      history: labHistory('bpSystolic').length,
+      closed: !UI.bpFormOpen,
+    };
+  });
+  console.log('bp-only entry:', JSON.stringify(bpSaved));
+  if (bpSaved.panels !== 0) throw new Error('A BP reading must not create a lab panel, got ' + bpSaved.panels);
+  if (!bpSaved.log || bpSaved.log.bpSystolic !== 119 || bpSaved.log.bpDiastolic !== 78) {
+    throw new Error('...it writes to the daily log: ' + JSON.stringify(bpSaved.log));
+  }
+  if (bpSaved.history !== 1) throw new Error('...and shows up in the marker history: ' + bpSaved.history);
+  if (!bpSaved.closed) throw new Error('...then closes the form');
+
+  // Both halves or neither: a lone systolic is not a blood pressure.
+  await page.evaluate(() => { STATE.life.dailyLog = {}; toggleBpForm(); });
+  await settle(page);
+  await page.fill('#bpDate', '2026-09-11');
+  await page.fill('#bpSys', '120');
+  const halfBp = await page.evaluate(() => {
+    saveBpReading();
+    return { wrote: !!STATE.life.dailyLog['2026-09-11'], stillOpen: UI.bpFormOpen };
+  });
+  console.log('half a reading:', JSON.stringify(halfBp));
+  if (halfBp.wrote) throw new Error('Half a blood pressure is not a reading and must not save');
+  if (!halfBp.stillOpen) throw new Error('...and the form stays open so the refusal is visible');
+  await page.evaluate(() => { UI.bpFormOpen = false; STATE.life.dailyLog = {}; saveState(); });
+
   await page.evaluate(() => {
     STATE.labs = [];
     STATE.labSettings = { extended: false, sort: 'group', ranges: {}, custom: [] };

@@ -31,7 +31,34 @@ const LAB_GROUPS = [
   { key: 'vitamins',     label: 'Vitamins & Minerals' },
   { key: 'organ',        label: 'Organ & Thyroid' },
   { key: 'blood',        label: 'Blood Count' },
+  { key: 'vitals',       label: 'Vitals' },
 ];
+
+// ---- Blood pressure, which is a lab marker with an extra door ----
+//
+// BP moved here from the daily log for a simple reason: most people don't take it at home, they get
+// it taken at the doctor -- in the same appointment the blood is drawn. So it belongs beside the
+// panel, not on a morning chip next to sleep and steps.
+//
+// But SOME people do check routinely, and that history is worth more than a once-a-year reading. So
+// BP has two sources and they coexist:
+//   * inside a lab panel, like any other marker (`values.bpSystolic`)
+//   * standalone dated readings in `STATE.life.dailyLog[date].bpSystolic/bpDiastolic`
+//
+// The daily log stays exactly where it is on purpose. It is already a dated store of BP readings,
+// so keeping it means no migration and no history lost -- and crucially, no turning sixty days of
+// home readings into sixty one-marker "lab panels" that would bury your actual bloodwork.
+//
+// A PANEL WINS ON A SHARED DATE, and only shadows the standalone reading rather than deleting it:
+// the drawn-blood reading is the one taken with a cuff by someone doing it for a living, and a
+// destructive override would throw away a reading to express a preference.
+const BP_MARKER_KEYS = { bpSystolic: true, bpDiastolic: true };
+function bpStandaloneReadings(key) {
+  const log = (STATE.life && STATE.life.dailyLog) || {};
+  return Object.keys(log)
+    .filter(d => log[d] && log[d][key] != null)
+    .map(d => ({ date: d, value: Number(log[d][key]) }));
+}
 
 // `core: true` ships visible; the rest appear once the extended panel is switched on. A null bound
 // means unbounded on that side -- ApoB has a ceiling and no floor worth stating, HDL the reverse.
@@ -115,6 +142,16 @@ const LAB_MARKERS = [
     ref: { low: 36, high: 52 }, target: { low: null, high: null } },
   { key: 'platelets', label: 'Platelets', unit: 'K/µL', group: 'blood', core: false,
     ref: { low: 150, high: 400 }, target: { low: null, high: null } },
+
+  // ---- Vitals ----
+  // Two markers, not one paired reading: systolic and diastolic have genuinely different reference
+  // numbers, and splitting them means each gets its own bar, trail and movement colouring for free
+  // rather than needing a paired special case through all of it. `core` because when blood is being
+  // drawn the cuff has usually already been on.
+  { key: 'bpSystolic', label: 'BP Systolic', unit: 'mmHg', group: 'vitals', core: true,
+    ref: { low: null, high: 130 }, target: { low: null, high: 120 } },
+  { key: 'bpDiastolic', label: 'BP Diastolic', unit: 'mmHg', group: 'vitals', core: true,
+    ref: { low: null, high: 85 }, target: { low: null, high: 80 } },
 ];
 
 function labSettings() {
@@ -200,9 +237,18 @@ function latestLabValue(key) {
 // panel in March, lipids only in September, a CBC from urgent care in between), so two arbitrary
 // draws routinely share a handful of markers. A single marker's own history has no such gaps.
 function labHistory(key) {
-  return labPanelsSorted()
+  const fromPanels = labPanelsSorted()
     .filter(p => p.values && p.values[key] != null)
     .map(p => ({ date: p.date, value: p.values[key] }));
+  // BP is the one marker with a second source -- standalone readings in the daily log. Unioned
+  // here, in the ONE function every bar, trail, chart and history list already reads, so the
+  // two-source-ness exists in exactly this spot and nowhere else.
+  if (!BP_MARKER_KEYS[key]) return fromPanels;
+  const claimed = {};
+  fromPanels.forEach(r => { claimed[r.date] = true; });
+  return fromPanels
+    .concat(bpStandaloneReadings(key).filter(r => !claimed[r.date]))
+    .sort((a, b) => b.date.localeCompare(a.date));
 }
 
 // How many earlier readings ride along on the bar, and how solid each one is. The ramp runs newest
@@ -481,8 +527,10 @@ function renderLabPanels() {
   const list = labPanelsSorted();
   const form = UI.labFormOpen ? renderLabForm()
     : UI.labRangesOpen ? renderLabRanges()
+    : UI.bpFormOpen ? renderBpForm()
     : `<div class="row" style="gap:8px;">
         <button class="btn btn-primary" style="flex:1;" onclick="toggleLabForm()">+ ADD A PANEL</button>
+        <button class="btn" style="flex:none;" onclick="toggleBpForm()">+ BP</button>
         <button class="btn" style="flex:none;" onclick="toggleLabRanges()">RANGES</button>
       </div>`;
   const cards = list.map(p => {
@@ -960,5 +1008,55 @@ function applyLabPaste() {
 function clearLabPaste() {
   VIEW.labPasteDraft = null;
   VIEW.labPasteReport = null;
+  render();
+}
+
+// ---- The BP-only door ----
+// A reading on its own, without pretending a panel was drawn. Someone who checks at home shouldn't
+// have to invent bloodwork to record it, and the panel list shouldn't fill with one-marker entries.
+// Writes to the daily log, which is where BP readings already lived -- see BP_MARKER_KEYS above.
+function toggleBpForm() {
+  UI.bpFormOpen = !UI.bpFormOpen;
+  UI.labFormOpen = false;
+  UI.labRangesOpen = false;
+  render();
+}
+function renderBpForm() {
+  const today = todayStr();
+  const log = (STATE.life.dailyLog && STATE.life.dailyLog[today]) || {};
+  return `
+    <div class="panel">
+      <div class="subtle-label" style="margin-bottom:8px;">LOG A BLOOD PRESSURE</div>
+      <p style="font-size:11px; color:var(--text-dim); line-height:1.5; margin:0 0 12px;">
+        A reading on its own &mdash; no panel needed. If you record one inside a lab panel for the
+        same day, that one takes precedence and this stays as it is.
+      </p>
+      <label class="field"><span class="lbl">Date</span><input type="date" id="bpDate" value="${today}"></label>
+      <div class="field-row">
+        <label class="field"><span class="lbl">Systolic <i class="lab-unit">mmHg</i></span>
+          <input type="number" id="bpSys" step="1" inputmode="numeric" placeholder="120" value="${log.bpSystolic != null ? log.bpSystolic : ''}"></label>
+        <label class="field"><span class="lbl">Diastolic <i class="lab-unit">mmHg</i></span>
+          <input type="number" id="bpDia" step="1" inputmode="numeric" placeholder="80" value="${log.bpDiastolic != null ? log.bpDiastolic : ''}"></label>
+      </div>
+      <button class="btn btn-primary btn-block" onclick="saveBpReading()">SAVE READING</button>
+      <button class="btn btn-block" style="margin-top:8px;" onclick="toggleBpForm()">CANCEL</button>
+    </div>`;
+}
+function saveBpReading() {
+  const date = inputVal('bpDate') || todayStr();
+  const sys = inputVal('bpSys'), dia = inputVal('bpDia');
+  // Both halves or neither: a lone systolic isn't a blood pressure, the same rule the daily-log
+  // chip enforced when this lived there.
+  if (sys === '' || dia === '' || !isFinite(Number(sys)) || !isFinite(Number(dia))) {
+    showToast('Enter both numbers');
+    return;
+  }
+  if (!STATE.life.dailyLog) STATE.life.dailyLog = {};
+  if (!STATE.life.dailyLog[date]) STATE.life.dailyLog[date] = {};
+  STATE.life.dailyLog[date].bpSystolic = Number(sys);
+  STATE.life.dailyLog[date].bpDiastolic = Number(dia);
+  UI.bpFormOpen = false;
+  saveState();
+  showToast('Reading saved');
   render();
 }

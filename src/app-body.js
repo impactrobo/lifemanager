@@ -390,20 +390,11 @@ const WEIGHT_METRICS = [
     has: l => l.steps != null, get: l => l.steps, suffix: () => '' },
   { key: 'restingHR', label: 'Resting Heart Rate', source: 'dailyLog',
     has: l => l.restingHR != null, get: l => l.restingHR, suffix: () => ' bpm' },
-  // The one metric that isn't a scalar. `parts` is what makes that work without every other metric
-  // growing a special case: a metric with parts draws one line per part and no trailing average,
-  // because two lines plus two averages is four lines saying very little. Everything else here is
-  // unchanged -- `has`/`get` still exist so the length checks and the empty state need no branch.
-  //
-  // A day counts only when BOTH halves were recorded: a lone systolic isn't a blood pressure, and
-  // plotting one line's point with a gap in the other would be drawing a reading nobody took.
-  { key: 'bloodPressure', label: 'Blood Pressure', source: 'dailyLog',
-    has: l => l.bpSystolic != null && l.bpDiastolic != null,
-    get: l => l.bpSystolic, suffix: () => ' mmHg',
-    parts: [
-      { label: 'Systolic', get: l => l.bpSystolic, color: '--accent' },
-      { label: 'Diastolic', get: l => l.bpDiastolic, color: '--good' },
-    ] },
+  // BP was the one metric here that wasn't a scalar -- one field with two `parts` drawing two
+  // lines. It moved to Labs, where systolic and diastolic are two ordinary markers with their own
+  // reference ranges, position bars and trails, and where COMPARE already picks them up under its
+  // LABS group. The `parts` machinery is deliberately left in place below: it is what any future
+  // paired metric would use, and tearing it out to save a branch would mean rebuilding it verbatim.
 ];
 // The one place either source turns into the {date, value} list every chart/trailingAverage() call
 // already expects. weightLog is an array of dated entries; dailyLog is an object keyed BY date, so

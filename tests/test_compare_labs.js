@@ -61,8 +61,11 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
       lab: shape(compareMetricDescriptor('lab:apoB')),
       steps: shape(compareMetricDescriptor('body:steps')),
       rhr: shape(compareMetricDescriptor('body:restingHR')),
-      bp: shape(compareMetricDescriptor('body:bloodPressure')),
-      bpPart: (compareMetricDescriptor('body:bloodPressure') || {}).partLabel,
+      // BP left the daily-log metrics for Labs, so it resolves as a LAB marker now — and as two of
+      // them, since systolic and diastolic have their own reference ranges.
+      bpSys: shape(compareMetricDescriptor('lab:bpSystolic')),
+      bpDia: shape(compareMetricDescriptor('lab:bpDiastolic')),
+      bpOffBody: compareMetricDescriptor('body:bloodPressure'),
       // The legacy id has to keep resolving: it is COMPARE's default selection.
       legacy: shape(compareMetricDescriptor('bodyweight')),
       unknownMarker: compareMetricDescriptor('lab:nope'),
@@ -79,9 +82,10 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (desc.steps.first !== 6000 || desc.steps.last !== 9000) throw new Error('Steps are steps, not pounds: ' + JSON.stringify(desc.steps));
   if (desc.rhr.unit.trim() !== 'bpm' || desc.rhr.last !== 55) throw new Error('Resting HR keeps its own unit: ' + JSON.stringify(desc.rhr));
   if (desc.steps.hasBands || desc.rhr.hasMove) throw new Error('Nothing outside labs states a range, so none claims a direction');
-  // Blood pressure is the one non-scalar metric; on a small multiple it charts one part, named.
-  if (desc.bp.n !== 2 || desc.bp.first !== 128) throw new Error('BP charts its first part here: ' + JSON.stringify(desc.bp));
-  if (desc.bpPart !== 'Systolic') throw new Error('...and says which, got ' + desc.bpPart);
+  // BP is two lab markers now, each with its own bands — no `parts` special case left.
+  if (desc.bpOffBody !== null) throw new Error('BP should no longer resolve as a body metric');
+  if (!desc.bpSys || !desc.bpDia) throw new Error('...it resolves as two lab markers instead');
+  if (!desc.bpSys.hasBands || !desc.bpDia.hasBands) throw new Error('...each carrying its own range');
   if (!desc.legacy || desc.legacy.label !== 'Weight') throw new Error('The legacy `bodyweight` id still resolves: ' + JSON.stringify(desc.legacy));
   if (desc.unknownMarker !== null || desc.unknownMetric !== null) throw new Error('An id naming nothing resolves to null, not a broken descriptor');
 
@@ -103,11 +107,15 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // No lifts are tracked in this fixture, so LIFTS is omitted rather than rendered as an empty
   // heading over nothing. Source order is fixed; only the populated groups appear.
   if (groups.keys.join(',') !== 'body,lab') throw new Error('Populated groups only, in source order: ' + groups.keys);
-  if (!groups.body.includes('bodyweight') || !groups.body.includes('body:steps') || !groups.body.includes('body:bloodPressure')) {
+  if (!groups.body.includes('bodyweight') || !groups.body.includes('body:steps') || !groups.body.includes('body:restingHR')) {
     throw new Error('The daily-log metrics moved into COMPARE: ' + groups.body);
   }
   if (groups.body.includes('body:weight')) throw new Error('Body weight appears once, under its legacy id');
-  if (groups.labs.join(',') !== 'lab:hdl,lab:apoB,lab:vitD') throw new Error('Only markers with readings are offered, in catalogue order: ' + groups.labs);
+  // BP is here because this fixture's DAILY LOG carries readings — which is the union doing its
+  // job: a marker is offered when it has readings, whichever of its two sources they came from.
+  if (groups.labs.join(',') !== 'lab:hdl,lab:apoB,lab:vitD,lab:bpSystolic,lab:bpDiastolic') {
+    throw new Error('Only markers with readings are offered, in catalogue order: ' + groups.labs);
+  }
   if (groups.catalogue < 28) throw new Error('fixture: the full catalogue should be much bigger than what is offered');
   if (groups.headings.join(',') !== 'BODY,LABS') throw new Error('...and the picker is visibly grouped: ' + groups.headings);
 
