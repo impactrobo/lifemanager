@@ -212,7 +212,10 @@ let NAV = {
   skillId: null,
   skillSubtab: 'log',
   notesSubtab: 'write',
-  scheduleSubtab: 'today',
+  // 'calendar' | 'setup'. Was 'today' long after that subtab was folded into Calendar's Day zoom,
+  // and 'agenda' was a third value until the Agenda retired -- renderSchedule() treats anything
+  // that isn't 'setup' as the calendar, so a stale value from a nav snapshot lands somewhere real.
+  scheduleSubtab: 'calendar',
   budgetSubtab: 'overview',
   scheduleSetupSubtab: 'anchors',
   healthSetupSubtab: 'builder',
@@ -537,15 +540,14 @@ function goSchedule(subtab) {
 }
 function renderTabbar() {
   const homeBtn = `<button class="${NAV.currentTab === 'home' ? 'active' : ''}" onclick="switchTab('home')"><span class="ic">${icon('home')}</span>HOME</button>`;
-  // Home used to be the one screen with no bottom bar, which is why Calendar and Agenda cost two
-  // taps from it -- you had to go through the SCHEDULE tile. Home shows the day now, so it carries
-  // the day's own screens. The word stays HOME on every bar including this one: the screen changed,
-  // the name for "the screen you start on" didn't, and the date line under the title already says
-  // which day you are looking at.
+  // Home used to be the one screen with no bottom bar, which is why Calendar cost two taps from it
+  // -- you had to go through the SCHEDULE tile. Home shows the day now, so it carries the day's own
+  // screens. The word stays HOME on every bar including this one: the screen changed, the name for
+  // "the screen you start on" didn't, and the date line under the title already says which day you
+  // are looking at.
   if (NAV.currentTab === 'home') {
     return homeBtn + `
       <button onclick="goSchedule('calendar')"><span class="ic">${icon('schedule')}</span>CALENDAR</button>
-      <button onclick="goSchedule('agenda')"><span class="ic">${icon('flag')}</span>AGENDA</button>
       <button onclick="goSchedule('setup')"><span class="ic">${icon('setup')}</span>SETUP</button>`;
   }
   let sectionBtns = '';
@@ -589,8 +591,7 @@ function renderTabbar() {
     // TODAY used to be its own subtab here — folded into Calendar's Day zoom (defaults to today
     // on every fresh visit, see switchTab()) so the bottom bar has one less button.
     sectionBtns = `
-      <button class="${NAV.scheduleSubtab==='calendar'?'active':''}" onclick="setScheduleSubtab('calendar')"><span class="ic">${icon('schedule')}</span>CALENDAR</button>
-      <button class="${NAV.scheduleSubtab==='agenda'?'active':''}" onclick="setScheduleSubtab('agenda')"><span class="ic">${icon('flag')}</span>AGENDA</button>
+      <button class="${NAV.scheduleSubtab!=='setup'?'active':''}" onclick="setScheduleSubtab('calendar')"><span class="ic">${icon('schedule')}</span>CALENDAR</button>
       <button class="${NAV.scheduleSubtab==='setup'?'active':''}" onclick="setScheduleSubtab('setup')"><span class="ic">${icon('setup')}</span>SETUP</button>`;
   } else if (NAV.currentTab === 'budget') {
     sectionBtns = `

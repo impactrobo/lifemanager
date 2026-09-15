@@ -507,6 +507,38 @@ on an architecture split + a large wave of Maximalist aesthetics.
   - **Still open:** comparison — see "Lab comparison, agreed direction" under Ideas worth
     considering for the shape that was settled on and why a panel-vs-panel compare isn't it.
 
+- **Calendar and Agenda harmonised; Agenda retired (2026-09-15).** Asked as "weekly view kind of
+  shows the same thing — is there a reason to have Agenda?" They weren't the same, and the gap was
+  the actual bug: **Week and Month rendered only the selected day's reminders, while Day rendered
+  its whole schedule.** One tap, two different answers, and the shallower one was on the two zooms
+  you tap days from most.
+  - **`renderSelectedDayDetail()`** is now the one block for the selected day — exception control,
+    schedule timeline, untimed items, reminders — and Day, Week and Month all render it. A zoom
+    owns only its own grid now.
+  - **ADD REMINDER leads the block**, above the schedule rather than under it. It's the one thing
+    you come to a day to *do*, and on a busy day it sat below a full timeline — reachable only by
+    scrolling past the very content you were trying to add to.
+  - The day label is suppressed in Day zoom only: the header directly above already names the day,
+    and saying it twice was the one thing sharing the block made worse. Week and Month keep it,
+    because their headers name a *range*, not the selected day.
+  - **Agenda removed** — subtab, `renderAgenda()`, `AGENDA_DAYS`, its CSS and `test_agenda.js`.
+    Schedule's bar is HOME/CALENDAR/SETUP, and Home's matches.
+    - **What was genuinely lost, stated plainly:** the rolling next-7-days view with item *names*.
+      Week is calendar-aligned (Sun–Sat, so on a Friday it shows four days already lived) and its
+      cells show density, not "Dentist 2pm". Nothing replaces "what's coming up this week" at a
+      glance; the harmonisation only means tapping a day now shows that day in full. Revisit as a
+      Calendar zoom (`YEAR / MONTH / WEEK / NEXT 7 / DAY`) if the loss is felt — the precedent is
+      the old TODAY subtab, which folded into Day zoom the same way.
+  - `NAV.scheduleSubtab` had drifted to a stale default of `'today'`, a subtab that stopped existing
+    two refactors ago. It's `'calendar'` now, and `renderSchedule()` treats **anything that isn't
+    `'setup'`** as the calendar — this value rides in nav snapshots and has now outlived two of its
+    own values, so an unknown one has to land somewhere real rather than render nothing.
+  - Four tests referenced `renderAgenda()` as a surface to assert against. They point at
+    `renderSelectedDayDetail()` now, which is a *stronger* check than before: it's the block all
+    three zooms share, so the structural guards ("no surface re-derives the day behind
+    `dayModel()`'s back", "no surface hardcodes a section hex") now cover more ground than the
+    Agenda ever did.
+
 - **The midnight test failures: pinned, and guarded against coming back (2026-09-15).** Found by
   running the suite at 00:02 — `test_day_fold.js` failed and looked exactly like a regression from
   the COMPARE work. It wasn't: stashing the working tree and running at HEAD failed identically.

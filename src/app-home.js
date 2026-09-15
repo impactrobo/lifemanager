@@ -1,4 +1,4 @@
-// app-home.js -- The Home screen and the day model behind it: time categories, overlap detection, exceptions, quick-log strips, Home edit-mode drag, and the Agenda.
+// app-home.js -- The Home screen and the day model behind it: time categories, overlap detection, exceptions, quick-log strips, Home edit-mode drag.
 //
 // One part of the former single app.js (see docs/ARCHITECTURE.md > "Source layout"). These are
 // plain classic <script>s loaded in a fixed order by index.html -- NOT modules. Top-level
@@ -463,8 +463,8 @@ function currentScheduleBlock() {
   return best;
 }
 // ---- The day model: one answer to "what is on this day" ----
-// Home's TODAY'S WORKOUTS box, Home's HABITS box, the Agenda and the Calendar Day view all used to
-// derive this independently, and they disagreed. Measured before this existed: on a day marked off,
+// Home's TODAY'S WORKOUTS box, Home's HABITS box, the (since-retired) Agenda and the Calendar Day
+// view all used to derive this independently, and they disagreed. Measured before this existed: on a day marked off,
 // Home showed "TODAY'S WORKOUTS: Lower Body" and prompted its habits while the Calendar Day view for
 // that same date said the plan was paused. Nothing made them agree -- each surface just happened to
 // apply (or forget) the exception rule on its own.
@@ -1190,12 +1190,10 @@ function renderHome() {
 }
 function renderSchedule() {
   if (NAV.scheduleSubtab === 'setup') return renderScheduleSetup(); // already a full .screen with its own header — don't double-wrap
-  if (NAV.scheduleSubtab === 'agenda') {
-    return `<div class="screen">
-      <div class="section-title">Agenda</div>
-      ${renderAgenda()}
-    </div>`;
-  }
+  // Anything that isn't Setup is the Calendar. Deliberately not an equality check on 'calendar':
+  // this value is carried in nav snapshots and has twice outlived a subtab ('today', then
+  // 'agenda'), so an unknown value must land on a real screen rather than render nothing.
+  //
   // Calendar's Day zoom absorbed the old dedicated "Today" subtab (see renderCalDay() /
   // renderDailySchedule()), which is why the bottom bar has Calendar rather than Today.
   return `<div class="screen">
@@ -1204,76 +1202,4 @@ function renderSchedule() {
   </div>`;
 }
 
-// ---- Agenda: the next 7 days, forward-looking ----
-// Every other calendar view answers "what does this one day look like" — you had to walk forward a
-// day at a time to find out what's coming. This answers "what's coming up".
-//
-// Deliberately shows only what's *distinctive* about each day. Listing every anchor for all seven
-// days would repeat your morning routine seven times and bury the one dentist appointment that's
-// actually news; the recurring baseline is summarised as a single schedule-name + booked-hours
-// line instead, and the Day view remains the place to see a day in full.
-const AGENDA_DAYS = 7;
-function renderAgenda() {
-  const today = todayStr();
-  const start = new Date(today + 'T00:00:00');
-  let cards = '';
-  for (let i = 0; i < AGENDA_DAYS; i++) {
-    const d = new Date(start);
-    d.setDate(start.getDate() + i);
-    const dateStr = dateKey(d.getFullYear(), d.getMonth(), d.getDate());
-    const day = dayModel(dateStr);
-    const ex = day.exception;
-    const sched = day.schedule;
-    const isDayOff = day.isDayOff;
-    const blocks = day.blocks;
-    const booked = day.bookedMinutes;
-    const reminders = day.reminders;
-    const planned = day.workouts;
-
-    const items = [
-      ...reminders.map(r => ({
-        sort: r.time || '99:99',
-        html: `<div class="agenda-item ${reminderIsDone(r) ? 'reminder-done' : ''}">
-          <span class="agenda-time mono">${r.time ? fmtReminderTime(r.time) : 'all day'}</span>
-          <span class="agenda-label">${escapeHtml(r.title)}${r.endTime ? `<span class="day-chip" style="background:${BLOCK_KIND_META.event.color}22; color:${BLOCK_KIND_META.event.color};">EVENT</span>` : ''}${r.recurrence ? `<span class="agenda-repeat">${icon('repeat')}</span>` : ''}</span>
-        </div>`,
-      })),
-      ...planned.map(w => ({
-        sort: '~', // after timed items — a planned workout has no time of its own
-        html: `<div class="agenda-item">
-          <span class="agenda-time mono" style="color:${entityColor('workout')};">workout</span>
-          <span class="agenda-label">${escapeHtml(w.name)}</span>
-        </div>`,
-      })),
-      ...day.charges.map(c => ({
-        sort: '~',
-        html: `<div class="agenda-item">
-          <span class="agenda-time mono" style="color:${entityColor('charge')};">due</span>
-          <span class="agenda-label">${escapeHtml(c.name)} <span class="mono" style="color:var(--text-faint);">${fmtMoney(c.amount)}</span></span>
-        </div>`,
-      })),
-    ].sort((a, b) => a.sort.localeCompare(b.sort));
-
-    const label = i === 0 ? 'TODAY' : (i === 1 ? 'TOMORROW' : d.toLocaleDateString(undefined, { weekday: 'long' }).toUpperCase());
-    const dateLabel = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-    // An excepted day still shows its booked time — a day off with anchors left running isn't
-    // empty, and dropping the figure would hide that.
-    const bookedNote = booked ? ` &middot; ${fmtDuration(booked)} booked` : '';
-    const context = ex
-      ? `<span style="color:var(--warn);">${escapeHtml(ex.label || 'Marked different')}</span>${bookedNote}`
-      : `${sched ? escapeHtml(sched.name || 'Untitled schedule') : 'No schedule'}${bookedNote}`;
-
-    cards += `
-      <div class="panel agenda-day ${i === 0 ? 'agenda-today' : ''}" onclick="calSelectDayAndZoom('${dateStr}','day')" style="cursor:pointer;">
-        <div class="row" style="align-items:baseline;">
-          <div><span class="agenda-daylabel">${label}</span> <span class="agenda-date">${dateLabel}</span></div>
-          <div style="font-size:11px; color:var(--text-dim); text-align:right; min-width:0;">${context}</div>
-        </div>
-        ${items.length ? `<div class="agenda-items">${items.map(x => x.html).join('')}</div>` : ''}
-      </div>`;
-  }
-  return `
-    <div style="font-size:11px; color:var(--text-faint); margin:0 0 12px;">The next ${AGENDA_DAYS} days — what's actually coming up, not your day-to-day routine. Tap any day to open it in full.</div>
-    <div class="stack">${cards}</div>`;
-}
 function setScheduleSubtab(t) { NAV.scheduleSubtab = t; render(); }

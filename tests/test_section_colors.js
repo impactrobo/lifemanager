@@ -72,23 +72,26 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     STATE.life.scheduleExceptions = [];
     saveState();
     const untimed = renderDayUntimedItems(today);
-    const agenda = renderAgenda();
+    // The Agenda retired into the Calendar; its colour duty passed to the shared selected-day
+    // block, which Day, Week and Month all render.
+    NAV.calSelectedDate = today;
+    const dayDetail = renderSelectedDayDetail();
     return {
       untimedHasWorkout: untimed.includes(entityColor('workout')),
       untimedHasMeal: untimed.includes(entityColor('meal')),
       untimedHasHabit: untimed.includes(entityColor('habit')),
-      agendaHasWorkout: agenda.includes(entityColor('workout')),
-      // The colour it used to wear in the Agenda: the generic anchor blue, which said "schedule
-      // block" about something that is not one.
-      agendaStillAnchorColored: agenda.includes(`color:${BLOCK_KIND_META.anchor.color};">workout`),
+      dayDetailHasWorkout: dayDetail.includes(entityColor('workout')),
+      // The colour it used to wear: the generic anchor blue, which said "schedule block" about
+      // something that is not one.
+      dayDetailStillAnchorColored: dayDetail.includes(`color:${BLOCK_KIND_META.anchor.color};">workout`),
     };
   });
   console.log('rendered surfaces:', surfaces);
   if (!surfaces.untimedHasWorkout) throw new Error("The Day view's planned workouts should carry the Exercise colour");
   if (!surfaces.untimedHasMeal) throw new Error("The Day view's planned meals should carry the Health colour");
   if (!surfaces.untimedHasHabit) throw new Error("The Day view's habits should carry the Schedule colour");
-  if (!surfaces.agendaHasWorkout) throw new Error("The Agenda's planned workouts should carry the Exercise colour");
-  if (surfaces.agendaStillAnchorColored) throw new Error('The Agenda workout marker still wears the generic anchor colour');
+  if (!surfaces.dayDetailHasWorkout) throw new Error("The selected-day block's planned workouts should carry the Exercise colour");
+  if (surfaces.dayDetailStillAnchorColored) throw new Error('The workout marker still wears the generic anchor colour');
 
   // ---- 4. No surface hand-copies a section hex any more ----
   // This is what stops the drift coming back: the colours exist once, in HOME_SECTION_META, and
@@ -103,7 +106,8 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     return src.slice(start, end);
   };
   const offenders = [];
-  for (const fn of ['renderDayUntimedItems', 'renderAgenda', 'renderLinkChips', 'renderHomeDayBox']) {
+  // renderSelectedDayDetail replaced renderAgenda here when the Agenda retired into the Calendar.
+  for (const fn of ['renderDayUntimedItems', 'renderSelectedDayDetail', 'renderLinkChips', 'renderHomeDayBox']) {
     const body = bodyOf(fn);
     hexes.forEach(h => { if (body.includes(h)) offenders.push(`${fn} hardcodes ${h}`); });
   }

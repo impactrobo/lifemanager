@@ -66,7 +66,10 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     const normal = {
       inDayModel: dayModel(today).charges.length,
       untimed: renderDayUntimedItems(today).includes('Rent'),
-      agenda: renderAgenda().includes('Rent'),
+      // The Agenda used to be the second surface here. It retired into the Calendar, and the
+      // shared selected-day block replaced it -- a better check, since Day, Week and Month all
+      // render this one function now.
+      dayDetail: (NAV.calSelectedDate = today, renderSelectedDayDetail().includes('Rent')),
       monthCell: (renderCalCell(new Date(today + 'T00:00:00'), today).match(/cal-charge-mark/g) || []).length,
       color: entityColor('charge'),
     };
@@ -81,7 +84,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   console.log('surfaces:', surfaces);
   if (surfaces.normal.inDayModel !== 1) throw new Error('dayModel() should carry the due charge');
   if (!surfaces.normal.untimed) throw new Error("The Day view's untimed band should show the due charge");
-  if (!surfaces.normal.agenda) throw new Error('The Agenda should show the due charge');
+  if (!surfaces.normal.dayDetail) throw new Error("The selected-day block (Day/Week/Month) should show the due charge");
   if (surfaces.normal.monthCell !== 1) throw new Error('The month cell should carry a due-charge marker');
   if (surfaces.normal.color.startsWith('var(')) throw new Error('The due charge should carry a real section colour');
   if (surfaces.dayOff.inDayModel !== 1 || !surfaces.dayOff.untimed) {

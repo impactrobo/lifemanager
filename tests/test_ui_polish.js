@@ -51,8 +51,9 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   }));
   console.log('Home bottom bar:', homeBar);
   if (homeBar.hidden) throw new Error('Expected #tabbar to be revealed on Home');
-  if (JSON.stringify(homeBar.labels) !== JSON.stringify(['HOME', 'CALENDAR', 'AGENDA', 'SETUP'])) {
-    throw new Error(`Expected Home's bar to be HOME/CALENDAR/AGENDA/SETUP, got ${JSON.stringify(homeBar.labels)}`);
+  // Three since AGENDA retired into the Calendar — see test_cal_day_detail.js.
+  if (JSON.stringify(homeBar.labels) !== JSON.stringify(['HOME', 'CALENDAR', 'SETUP'])) {
+    throw new Error(`Expected Home's bar to be HOME/CALENDAR/SETUP, got ${JSON.stringify(homeBar.labels)}`);
   }
   if (!homeBar.activeIsHome) throw new Error("Home's own bar button should read as the active one");
 

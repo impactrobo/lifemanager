@@ -54,7 +54,8 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
       // same timeline + untimed band the Day view does), so both now come from one call.
       homeWorkout: /Lower Body/.test(renderHomeDayBox()),
       homeHabit: /Stretches/.test(renderHomeDayBox()),
-      agendaWorkout: /Lower Body/.test(renderAgenda()),
+      // The Agenda retired into the Calendar; the shared selected-day block is the surface now.
+      dayDetailWorkout: (NAV.calSelectedDate = today, /Lower Body/.test(renderSelectedDayDetail())),
       dayWorkout: /Lower Body/.test(untimed),
       dayMeal: /Oats/.test(untimed),
       dayHabit: /Stretches/.test(untimed),
@@ -65,7 +66,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // ---- 1. A normal day: everything on, everywhere ----
   const normal = await probe();
   console.log('normal day:  ', normal);
-  for (const k of ['homeWorkout', 'homeHabit', 'agendaWorkout', 'dayWorkout', 'dayMeal', 'dayHabit']) {
+  for (const k of ['homeWorkout', 'homeHabit', 'dayDetailWorkout', 'dayWorkout', 'dayMeal', 'dayHabit']) {
     if (!normal[k]) throw new Error(`${k} should show on an ordinary day`);
   }
   if (normal.pausedNotice) throw new Error('An ordinary day must not claim anything is paused');
@@ -81,7 +82,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   });
   const off = await probe();
   console.log('day marked off:', off);
-  const stillPlanned = ['homeWorkout', 'agendaWorkout', 'dayWorkout', 'dayMeal'].filter(k => off[k]);
+  const stillPlanned = ['homeWorkout', 'dayDetailWorkout', 'dayWorkout', 'dayMeal'].filter(k => off[k]);
   if (stillPlanned.length) throw new Error(`A day off must pause the weekday template everywhere, but these still showed it: ${stillPlanned.join(', ')}`);
   if (!off.homeHabit || !off.dayHabit) throw new Error('A day off must NOT pause habits — the day is off, the streak is not');
   if (!off.pausedNotice) throw new Error('A day off that actually cancelled something should say so, not just render empty');
@@ -164,7 +165,10 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   };
   const raw = [/STATE\.exercisePlan\[/, /STATE\.diet\.mealPlan\[/, /habitIsActiveOn\(/, /scheduleExceptionForDate\(/];
   const offenders = [];
-  for (const fn of ['renderHomeDayBox', 'renderAgenda', 'renderDayUntimedItems', 'renderDailySchedule']) {
+  // renderAgenda was on this list until the Agenda retired into the Calendar. renderSelectedDayDetail
+  // takes its place: it is the block Day, Week and Month all render, so it is now the surface with
+  // the most to lose by re-deriving the day itself.
+  for (const fn of ['renderHomeDayBox', 'renderSelectedDayDetail', 'renderDayUntimedItems', 'renderDailySchedule']) {
     const body = bodyOf(fn);
     raw.forEach(re => { if (re.test(body)) offenders.push(`${fn} still reads ${re.source}`); });
   }

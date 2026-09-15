@@ -692,17 +692,6 @@ button.hit-mark { padding: 0; background: none; font: inherit; color: inherit; c
 .rollup-track { height: 6px; border-radius: 3px; background: var(--surface2); overflow: hidden; }
 .rollup-fill { height: 100%; border-radius: 3px; }
 
-/* ---------- Agenda: the next 7 days (renderAgenda()) ---------- */
-.agenda-day { cursor: pointer; }
-.agenda-today { border-color: var(--accent); }
-.agenda-daylabel { font-size: 13px; font-weight: 800; letter-spacing: 0.04em; }
-.agenda-date { font-size: 11px; color: var(--text-faint); }
-.agenda-items { margin-top: 8px; border-top: 1px solid var(--border-soft); }
-.agenda-item { display: flex; gap: 10px; align-items: baseline; padding: 6px 0; }
-.agenda-item + .agenda-item { border-top: 1px solid var(--border-soft); }
-.agenda-time { font-size: 10px; color: var(--text-faint); flex: 0 0 58px; }
-.agenda-label { font-size: 13px; font-weight: 600; flex: 1; min-width: 0; }
-.agenda-repeat { margin-left: 5px; color: var(--text-faint); font-size: 11px; vertical-align: middle; }
 
 /* A genuine collision between two blocks neither of which is marked "open" (see
    dayOverlapWarnings()). --warn, matching the app's other "pay attention" signals. */

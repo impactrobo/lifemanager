@@ -60,9 +60,9 @@ function calSelectDayAndZoom(dateStr, zoom) {
   NAV.calZoom = zoom;
   UI.reminderFormOpen = false;
   UI.exceptionFormOpen = false;
-  // The Agenda calls this too, from its own subtab — without this it would set the zoom and then
-  // render the Agenda again, looking like the tap did nothing. Harmless from the Year grid, which
-  // is already on the Calendar subtab.
+  // Kept after the Agenda retired: this is called from anywhere a day is tapped, and a caller that
+  // is not already on the Calendar subtab would otherwise set the zoom and then render a different
+  // screen — looking like the tap did nothing. Harmless when already on Calendar.
   NAV.scheduleSubtab = 'calendar';
   render();
 }
@@ -144,7 +144,7 @@ function reminderDueContext(r) {
   const days = Math.round((new Date(r.dueDate + 'T00:00:00').getTime() - new Date(r.date + 'T00:00:00').getTime()) / 86400000);
   return { dueDate: r.dueDate, daysAway: days };
 }
-// Shown everywhere a lead-time reminder appears -- the reminder card, the Agenda, and (via
+// Shown everywhere a lead-time reminder appears -- the reminder card and (via
 // reminderPushPayload()) the push notification itself. A reminder that arrives before the thing
 // it's about needs to say so, or it just reads as wrong rather than early.
 function reminderDueBadge(r) {
@@ -237,7 +237,7 @@ function renderCalMonth() {
     </div>
     <div class="cal-grid">${weekdayHeaders}${cells}</div>
     <div class="divider"></div>
-    ${renderSelectedDayReminders()}`;
+    ${renderSelectedDayDetail()}`;
 }
 function renderCalWeek() {
   ensureCalState();
@@ -260,7 +260,7 @@ function renderCalWeek() {
     <div class="cal-grid">${weekdayHeaders}${cells}</div>
     ${renderWeekTimeRollup(days)}
     <div class="divider"></div>
-    ${renderSelectedDayReminders()}`;
+    ${renderSelectedDayDetail()}`;
 }
 // Merged view — this used to be the standalone TODAY subtab (renderLifeDaily(), today-only) plus
 // this Calendar's own reminders panel; folding both under one zoom level is the whole point of
@@ -277,11 +277,7 @@ function renderCalDay() {
         <button onclick="calGoToDay(1)">&#8250;</button>
       </div>
     </div>
-    ${renderDayExceptionControl(NAV.calSelectedDate)}
-    ${renderDailySchedule(NAV.calSelectedDate)}
-    ${renderDayUntimedItems(NAV.calSelectedDate)}
-    <div class="divider"></div>
-    ${renderSelectedDayReminders()}`;
+    ${renderSelectedDayDetail()}`;
 }
 function renderCalYear() {
   ensureCalState();
@@ -323,17 +319,37 @@ function renderCalMiniMonth(year, month, today) {
     <div class="cal-mini-grid">${cells}</div>
   </div>`;
 }
-function renderSelectedDayReminders() {
+// EVERYTHING ABOUT THE SELECTED DAY, identical whichever zoom you reached it from.
+//
+// Week and Month used to render only this day's reminders, so tapping a day answered "what have I
+// noted here" while the same tap in Day view answered "what does this day actually look like" --
+// two different answers to one gesture, and the shallower one was on the two zooms you tap days
+// from most. They share this block now; the only thing a zoom still owns is its own grid.
+//
+// ADD REMINDER leads, before the schedule rather than under it. It is the one thing you come to a
+// day to DO, and on a busy day it used to sit below a full timeline -- reachable only by scrolling
+// past the very content you were trying to add to.
+function renderSelectedDayDetail() {
   ensureCalState();
-  const list = remindersOn(NAV.calSelectedDate);
-  const d = new Date(NAV.calSelectedDate + 'T00:00:00');
+  const dateStr = NAV.calSelectedDate;
+  const list = remindersOn(dateStr);
+  const d = new Date(dateStr + 'T00:00:00');
   const label = d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+  // Which day this is about, except in Day zoom -- there the header directly above already names
+  // it, and saying it twice in a row was the one thing sharing this block made worse rather than
+  // better. Week and Month genuinely need it: their header names a range, not the selected day.
+  const showLabel = NAV.calZoom !== 'day';
   return `
     <div class="row" style="margin-bottom:10px; align-items:flex-start;">
-      <div class="subtle-label" style="margin-bottom:0; padding-top:8px;">${label.toUpperCase()}</div>
+      ${showLabel ? `<div class="subtle-label" style="margin-bottom:0; padding-top:8px;">${label.toUpperCase()}</div>` : '<span></span>'}
       <button class="btn btn-primary btn-sm" onclick="toggleReminderForm()">${UI.reminderFormOpen ? 'CANCEL' : '+ ADD REMINDER'}</button>
     </div>
     ${UI.reminderFormOpen ? renderReminderForm() : ''}
+    ${renderDayExceptionControl(dateStr)}
+    ${renderDailySchedule(dateStr)}
+    ${renderDayUntimedItems(dateStr)}
+    <div class="divider"></div>
+    <div class="subtle-label">REMINDERS</div>
     <div class="entry-list">${list.length ? list.map(renderReminderCard).join('') : emptyState('No reminders for this day.')}</div>`;
 }
 // ---- Recurring reminders (annual / monthly) ----

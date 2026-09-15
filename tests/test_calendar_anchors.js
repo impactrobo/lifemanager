@@ -32,8 +32,9 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // The exact set, not a bare count: a count was really just shorthand for "TODAY is gone" (the
   // assertion above says that properly) and blocked any later addition to this bar -- which is
   // what happened when AGENDA was added. Listing them makes a nav change a deliberate edit here
-  // and still catches an accidental removal.
-  const expectedBar = ['HOME', 'CALENDAR', 'AGENDA', 'SETUP'];
+  // and still catches an accidental removal. AGENDA then retired the same way TODAY did, once
+  // Week and Month started rendering the same selected-day block Day does.
+  const expectedBar = ['HOME', 'CALENDAR', 'SETUP'];
   if (JSON.stringify(bottomBarLabels) !== JSON.stringify(expectedBar)) {
     throw new Error(`Expected the Schedule bottom bar to be ${JSON.stringify(expectedBar)}, got ${JSON.stringify(bottomBarLabels)}`);
   }

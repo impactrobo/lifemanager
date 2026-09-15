@@ -36,14 +36,16 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   }));
   console.log('Home bar:', bar);
   if (!bar.revealed) throw new Error('Home should have a bottom bar now');
-  if (JSON.stringify(bar.labels) !== JSON.stringify(['HOME', 'CALENDAR', 'AGENDA', 'SETUP'])) {
-    throw new Error(`Expected HOME/CALENDAR/AGENDA/SETUP, got ${JSON.stringify(bar.labels)}`);
+  // Three, not four: AGENDA retired into the Calendar when Week and Month started rendering the
+  // same selected-day block Day does, which is what it was really for.
+  if (JSON.stringify(bar.labels) !== JSON.stringify(['HOME', 'CALENDAR', 'SETUP'])) {
+    throw new Error(`Expected HOME/CALENDAR/SETUP, got ${JSON.stringify(bar.labels)}`);
   }
   if (bar.active !== 'HOME') throw new Error('Home’s own button should be the active one');
 
   const dests = await page.evaluate(() => {
     const out = [];
-    ['calendar', 'agenda', 'setup'].forEach(sub => {
+    ['calendar', 'setup'].forEach(sub => {
       switchTab('home');
       goSchedule(sub);
       out.push({ sub, tab: NAV.currentTab, at: NAV.scheduleSubtab });
@@ -126,10 +128,10 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   console.log('bar inside Schedule:', fromSchedule);
   if (fromSchedule.tab !== 'schedule') throw new Error('Expected to be on Schedule for this check');
   if (fromSchedule.labels[0] !== 'HOME') throw new Error('Every other screen keeps HOME as its first button');
-  if (JSON.stringify(fromSchedule.labels) !== JSON.stringify(['HOME', 'CALENDAR', 'AGENDA', 'SETUP'])) {
-    throw new Error(`Schedule's own bar should be unchanged, got ${JSON.stringify(fromSchedule.labels)}`);
+  if (JSON.stringify(fromSchedule.labels) !== JSON.stringify(['HOME', 'CALENDAR', 'SETUP'])) {
+    throw new Error(`Schedule's own bar should match Home's, got ${JSON.stringify(fromSchedule.labels)}`);
   }
-  // Home's bar and Schedule's are the same four buttons; what differs is which reads as active.
+  // Home's bar and Schedule's are the same three buttons; what differs is which reads as active.
   if (fromSchedule.active !== 'CALENDAR') throw new Error(`Inside Calendar, CALENDAR should be the active button, got ${fromSchedule.active}`);
 
   // ---- 5. Saved layouts naming a retired tile ----
