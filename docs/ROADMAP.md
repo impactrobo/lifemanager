@@ -88,6 +88,19 @@ before starting any of these.
      regardless of when each was actually measured** (next, wants mock-ups first). The last clause
      is the whole design: it compares *first reading in range vs last reading in range, per marker*,
      which is what dissolves the sparsity problem — no two markers need share a draw date.
+     - **Four design decisions taken 2026-09-15, each on the recommended option:**
+       1. **Placement: BODY → COMPARE, as more series.** Lab markers join weight, sleep, steps,
+          RHR and BP in the existing compare screen and its picker. One place for every health
+          series, one chart pattern; a future marker or wearable metric drops in the same way.
+       2. **Scale: small multiples.** One chart per marker with its own axis and its ref/target
+          bands shaded behind the line, stacked. Rejected: a single band-normalised chart (abstract
+          y-axis) and dual-axis (dies at the third series).
+       3. **Range: presets (3M / 6M / 1Y / ALL) plus custom start/end** — presets for most days,
+          custom for "since I started the statin".
+       4. **A first→last summary row per marker**, first reading in range vs last, coloured by
+          movement toward/away from your band. This IS the "regardless of when each was measured"
+          comparison; the chart shows the trend, the row states the answer.
+       Mock-up first, then build.
      - **Render it as a graph, reusing the exercise-progress machinery rather than inventing a
        lab-specific one** (decided 2026-09-15). `WEIGHT_METRICS` / `metricSeries()` / the compare
        mini-charts in `app-body.js` already do date-ranged multi-series charting with a metric
