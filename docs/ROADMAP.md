@@ -56,6 +56,56 @@ These are **not** requested features — they're natural extensions given the cu
 app, logged here so they're not lost, not so they get built unprompted. Confirm with the person
 before starting any of these.
 
+- **NetNavi / PET companions — discussed 2026-09-15, nothing built.** The app is already called
+  LIFEMan.EXE, which is a Mega Man Battle Network reference, and that is where the idea came from.
+  - **The source material is a real spec, not a sketch.** A "PET Device — Transfer Package" artifact
+    holds six fully-written Navis, each with identity, backstory, appearance, personality,
+    nicknames, favourites, relationships with the other five, domains of expertise, and a hex colour
+    signature: <https://claude.ai/code/artifact/f9a2805a-4df9-407f-8286-a14c50c0f746>
+    - Crucially the personalities include **formatting contracts**, not just flavour. StrikeMan's
+      reads: `bro` always and only, `##` headers for hype moments, multiple exclamation points on
+      high-energy lines, normal prose otherwise. That is implementable with no model involved.
+  - **The roster already maps onto `HOME_SECTION_META`** — six Navis, six sections. That mapping is
+    the integration seam and it exists already:
+
+    | Navi | Colour | Domain | Section |
+    |---|---|---|---|
+    | StrikeMan | `#1D9E75` | Fitness & Social | `train` — WELLNESS |
+    | Vitalya | `#C2185B` | nutrition, mobility | `health` — DIET / Labs |
+    | Wenceslas | `#7F77DD` | money, non-judgmental | `budget` — FINANCIAL |
+    | Muze | `#CA6A00` | creative | `hobbies` — Skills |
+    | DigiMan | `#378ADD` | tech / systems | `schedule`, sync, data |
+    | ClayMan | `#8B0000` | workouts, *real talk* | the hard-truths counterpart |
+
+    The written relationships even encode app behaviour: *"his neglect of mobility work gets him in
+    trouble with Vitalya"* is a cross-section interaction between the workout planner and Labs.
+  - **A colour collision to decide before building.** Sections own identity colours already
+    (`train` is `#FF9191`) and link chips derive from them — `test_home_bar.js` asserts a meal chip
+    and a workout chip stay visually distinct. A Navi's colour therefore cannot simply override its
+    section's. Either the Navi colour is used only for *the Navi* (portrait, name, speech), or the
+    sections get recoloured to the roster and that test moves with them.
+  - **Where a Navi should actually speak** — not everywhere, which is how this would get annoying
+    fast:
+    - **The weekly review** (still the top unbuilt item). Its premise is *process* metrics reflected
+      back, and a Navi delivering your week beats a table of counts. Needs no model.
+    - **Streak and PR moments** — StrikeMan's stated job is consistency, and the app already knows
+      when a streak lands or a PR is set.
+    - **"Bad-day" mode** — ClayMan is written for precisely this, and it is already a scoped
+      backlog item under the Best Shape list.
+  - **THE LINE THIS HAS TO HOLD, and it is the important part.** This list already rules out
+    "points, badges, streak-shaming — the app instruments the plan and doesn't second-guess the
+    person, and gamification would be a different product." A cheering companion sits close to that
+    line. The roster mostly resolves it on its own (StrikeMan is *"honest when honesty is needed…
+    from a place of total belief"*; Wenceslas *"understands without judgment"*), but state it as a
+    rule rather than discover it later:
+    > **A Navi reacts to what you did. It never asks you to do it for the Navi.** Instrumentation
+    > with a voice, not a pet to keep alive.
+  - **Templates first, Claude second — and not only because of the `window.claude` problem.** A
+    template layer forces the voice rules to be explicit and testable, which makes swapping in a
+    model later a *content* change rather than an architecture one. Built prompt-first, the
+    personalities bake into strings that can't be tested offline. (The hosting constraint is real
+    too — see the Claude-assisted lab entry entry below for why a Worker proxy is the only route.)
+
 - **Health & Wellness's bottom tabbar overruns on a real device (reported 2026-09-15, not fixed).**
   Was WORKOUTS/GOAL/BODY/DIET/LONGEVITY/SETUP — six subtabs plus HOME, seven buttons — when
   reported. Longevity's retirement (see Recently Shipped) took it to **six buttons**
