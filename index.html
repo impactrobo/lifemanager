@@ -7,7 +7,7 @@
      app.js re-fetches this page on launch + on foreground and reloads if this value moved —
      that's what lets an installed iOS PWA self-update instead of getting stuck on a snapshot.
      Format is just a sortable stamp; the value only has to differ from the last deploy. -->
-<meta name="app-build" content="2026.09.15-33">
+<meta name="app-build" content="2026.09.15-34">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#15171a">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -31,7 +31,10 @@
     <button class="icon-btn back-btn disabled" onclick="goBack()" title="Back" id="backBtn"></button>
     <button class="icon-btn forward-btn disabled" onclick="goForward()" title="Forward" id="forwardBtn"></button>
   </div>
-  <div class="brand"><span>L</span>IFE<span>M</span>an<span>.EXE</span></div>
+  <!-- The wordmark IS the home button. It is on every screen already, so routing home through it
+       costs no chrome and buys back a slot on the bottom bar, which is the strip with the logged
+       overflow problem. A <button> rather than a styled div so it takes keyboard focus. -->
+  <button class="brand" onclick="switchTab('home')" title="Home" aria-label="Home"><span>L</span>IFE<span>M</span>an<span>.EXE</span></button>
   <div class="nav-btns-right">
     <button class="icon-btn hidden" onclick="toggleHomeEditMode()" title="Edit layout" id="homeEditBtn"></button>
     <button class="icon-btn settings-btn" onclick="openSetup('home')" title="Settings" id="settingsBtn"></button>

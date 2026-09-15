@@ -47,13 +47,14 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   const homeBar = await page.evaluate(() => ({
     hidden: document.getElementById('tabbar').classList.contains('hidden'),
     labels: Array.from(document.querySelectorAll('#tabbar button')).map(b => b.textContent.trim()),
-    activeIsHome: (document.querySelector('#tabbar button.active') || {}).textContent === 'HOME',
+    // Nothing on Home's own bar is active any more: HOME moved to the wordmark.
+    activeIsHome: !document.querySelector('#tabbar button.active'),
   }));
   console.log('Home bottom bar:', homeBar);
   if (homeBar.hidden) throw new Error('Expected #tabbar to be revealed on Home');
   // Three since AGENDA retired into the Calendar — see test_cal_day_detail.js.
-  if (JSON.stringify(homeBar.labels) !== JSON.stringify(['HOME', 'CALENDAR', 'SETUP'])) {
-    throw new Error(`Expected Home's bar to be HOME/CALENDAR/SETUP, got ${JSON.stringify(homeBar.labels)}`);
+  if (JSON.stringify(homeBar.labels) !== JSON.stringify(['CALENDAR', 'SETUP'])) {
+    throw new Error(`Expected Home's bar to be CALENDAR/SETUP, got ${JSON.stringify(homeBar.labels)}`);
   }
   if (!homeBar.activeIsHome) throw new Error("Home's own bar button should read as the active one");
 

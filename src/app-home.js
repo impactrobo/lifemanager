@@ -748,7 +748,13 @@ function logChip(field) {
     ? `<i class="log-chip-dot ${waterColorIsStale() ? 'log-chip-dot-stale' : ''}" style="background:${waterColorHex(colorVal)};" title="Colour ${colorVal} &middot; ${waterColorAge()}"></i>` : '';
   // Both a/b chips take the narrower value font -- "120/80" needs the same room "1250/2000" does.
   const wide = field === 'water' || field === 'bloodPressure';
-  return `<button class="log-chip ${logged ? 'log-chip-set' : ''} ${wide ? 'log-chip-wide' : ''}" onclick="${onclick}">
+  // CONSUMED HERE, which is a renderer touching state and worth the note: the pulse is a CSS
+  // animation, so it plays when the class is present as the element mounts. Clearing the flag as
+  // the markup is built means exactly one render carries it -- the one addWater() queued. Left set,
+  // it would replay on the next unrelated render, which is the failure mode this avoids.
+  const pulse = field === 'water' && UI.waterPulse;
+  if (pulse) UI.waterPulse = false;
+  return `<button class="log-chip ${logged ? 'log-chip-set' : ''} ${wide ? 'log-chip-wide' : ''} ${field === 'water' ? 'log-chip-water' : ''} ${pulse ? 'log-chip-pulse' : ''}" onclick="${onclick}">
     <span class="log-chip-label">${label}</span>
     <span class="log-chip-value">${logFieldDisplay(field)}${field === 'water' ? '<i class="log-chip-plus">+</i>' : ''}${dot}</span>
   </button>`;
@@ -768,6 +774,11 @@ function closeLogPopup() { UI.logPopup = null; render(); }
 function addWater(servings) {
   const log = todayLifeLog();
   log.waterMl = Math.max(0, (log.waterMl || 0) + servings * waterServingMl());
+  // Flags the pulse for the render this queues. Water is the one chip tapped several times a day,
+  // so the confirmation has to be instant and then get out of the way -- a colour that STAYS put
+  // says "logged today", which every other chip already says, and tells you nothing about the tap
+  // you just made.
+  UI.waterPulse = true;
   saveState();
   render();
 }

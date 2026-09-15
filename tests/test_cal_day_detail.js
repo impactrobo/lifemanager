@@ -126,7 +126,8 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   console.log('agenda removal:', JSON.stringify({ ...gone, barText: undefined }));
   if (gone.fn !== 'undefined') throw new Error('renderAgenda should no longer exist, got ' + gone.fn);
   if (/AGENDA/.test(gone.barText)) throw new Error('The bottom bar should no longer offer AGENDA');
-  if (gone.scheduleBar !== 3 || gone.homeBar !== 3) throw new Error('Both bars are three buttons now: ' + JSON.stringify(gone));
+  // Two, not three: HOME moved to the wordmark on top (see renderTabbar()).
+  if (gone.scheduleBar !== 2 || gone.homeBar !== 2) throw new Error('Both bars are two buttons now: ' + JSON.stringify(gone));
   // NAV.scheduleSubtab rides in nav snapshots and has now outlived two of its own values ('today',
   // then 'agenda'), so an unknown one must render the calendar rather than nothing at all.
   if (!gone.staleRenders || !gone.staleIsCalendar) throw new Error('A stale subtab value must fall back to the calendar, not render an empty screen');

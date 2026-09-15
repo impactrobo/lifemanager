@@ -2417,3 +2417,25 @@ button.lift-note-head {
    metrics still have to beat the base's own padding and font-size. */
 textarea.lift-note-input { font-size: 12px; min-height: 42px; margin-bottom: 4px; }
 .lift-note-hint { font-size: 10px; color: var(--text-faint); line-height: 1.4; }
+
+/* ---- Water chip: a pulse on tap, not a colour that stays ---- */
+/* Water is the one chip tapped several times a day, so the confirmation has to be instant and then
+   get out of the way. A colour that STAYS says "logged today" -- which the border already says --
+   and tells you nothing about the tap you just made. */
+@keyframes water-pulse {
+  from { color: var(--accent); }
+  to   { color: var(--text); }
+}
+/* The border keeps carrying "logged today"; only the value gives up its permanent accent. */
+.log-chip-set.log-chip-water .log-chip-value { color: var(--text); }
+.log-chip-pulse .log-chip-value { animation: water-pulse 0.75s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .log-chip-pulse .log-chip-value { animation: none; }
+}
+
+/* The wordmark is the home button -- a real <button>, reset back to looking like the text it was. */
+button.brand {
+  background: none; border: none; padding: 0; cursor: pointer;
+  color: inherit; font: inherit;
+}
+button.brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 3px; }

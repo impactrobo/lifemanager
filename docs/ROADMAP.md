@@ -468,6 +468,27 @@ on an architecture split + a large wave of Maximalist aesthetics.
   - **Still open:** comparison — see "Lab comparison, agreed direction" under Ideas worth
     considering for the shape that was settled on and why a panel-vs-panel compare isn't it.
 
+- **The water chip pulses; HOME moves to the wordmark (2026-09-15).** Two small ones asked together.
+  - **Water's accent is a pulse now, not a state.** It jumps to `--accent` on tap and fades to
+    `--text` over 0.75s. Water is the one chip tapped several times a day, so the confirmation has
+    to be instant and then get out of the way — a colour that *stays* says "logged today", which the
+    chip's border already says, and tells you nothing about the tap you just made. Measured across
+    the animation: `rgb(254,50,216)` → `rgb(238,166,243)` → `--text`.
+    - The flag is **consumed inside `logChip()`** as the markup is built, so exactly one render
+      carries it — the one `addWater()` queued. Left set, it would replay on the next unrelated
+      render, which is the failure this avoids. A renderer touching state is worth the comment it
+      has. `prefers-reduced-motion` drops the animation.
+  - **HOME left the bottom bar for the wordmark.** LIFEMan.EXE is on every screen already, so
+    routing home through it costs no chrome and buys back a slot on the strip with the logged
+    overflow problem. Health & Wellness is now **five buttons** (WORKOUTS/GOAL/BODY/DIET/SETUP),
+    down from seven when the overrun was first reported — Longevity's retirement took one, this
+    took another. A real `<button>`, so it takes keyboard focus.
+    - **The tradeoff, taken knowingly:** home is a reach to the top of the screen rather than a
+      thumb-height tap. Worth it for the room, and the wordmark is a bigger target than the button
+      it replaced.
+    - Four tests asserted the bar's exact labels; all updated. Home's own bar now has *nothing*
+      marked active, which is its own small assertion.
+
 - **Setup notes that belong to the lift, so they outlive the phase (2026-09-15).** Asked as "if you
   do an incline curl again a year later, your note of 'Bench incline 30 degrees' stays".
   - **The existing `notes` field could never have done this.** It lives on the workout *log*, keyed

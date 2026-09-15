@@ -38,10 +38,11 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (!bar.revealed) throw new Error('Home should have a bottom bar now');
   // Three, not four: AGENDA retired into the Calendar when Week and Month started rendering the
   // same selected-day block Day does, which is what it was really for.
-  if (JSON.stringify(bar.labels) !== JSON.stringify(['HOME', 'CALENDAR', 'SETUP'])) {
-    throw new Error(`Expected HOME/CALENDAR/SETUP, got ${JSON.stringify(bar.labels)}`);
+  if (JSON.stringify(bar.labels) !== JSON.stringify(['CALENDAR', 'SETUP'])) {
+    throw new Error(`Expected CALENDAR/SETUP, got ${JSON.stringify(bar.labels)}`);
   }
-  if (bar.active !== 'HOME') throw new Error('Home’s own button should be the active one');
+  // HOME moved to the wordmark, so Home's own bar has nothing on it to mark active.
+  if (bar.active) throw new Error('Nothing on Home’s bar should read as active, got ' + bar.active);
 
   const dests = await page.evaluate(() => {
     const out = [];
@@ -114,9 +115,9 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (identity.mealChipColor === identity.workoutChipColor) throw new Error('meal and workout chips should stay visually distinct');
   if (identity.tilesOnHome !== 4) throw new Error(`Expected 4 section tiles, got ${identity.tilesOnHome}`);
 
-  // ---- 4. Schedule is still reachable, and its own bar still says HOME ----
+  // ---- 4. Schedule is still reachable, and its bar matches Home's ----
   // Navigate, settle, THEN read: reading inside the same evaluate gets the pre-render tabbar, which
-  // here is Home's — and since both bars start with HOME, a first-button check would have passed
+  // here is Home's — and since both bars are now identical, a first-button check would have passed
   // without ever looking at Schedule's bar at all.
   await page.evaluate(() => goSchedule('calendar'));
   await settle(page);
@@ -127,8 +128,8 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   }));
   console.log('bar inside Schedule:', fromSchedule);
   if (fromSchedule.tab !== 'schedule') throw new Error('Expected to be on Schedule for this check');
-  if (fromSchedule.labels[0] !== 'HOME') throw new Error('Every other screen keeps HOME as its first button');
-  if (JSON.stringify(fromSchedule.labels) !== JSON.stringify(['HOME', 'CALENDAR', 'SETUP'])) {
+  if (fromSchedule.labels.indexOf('HOME') >= 0) throw new Error('HOME left the bar for the wordmark: ' + fromSchedule.labels);
+  if (JSON.stringify(fromSchedule.labels) !== JSON.stringify(['CALENDAR', 'SETUP'])) {
     throw new Error(`Schedule's own bar should match Home's, got ${JSON.stringify(fromSchedule.labels)}`);
   }
   // Home's bar and Schedule's are the same three buttons; what differs is which reads as active.

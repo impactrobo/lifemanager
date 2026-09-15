@@ -34,7 +34,8 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // what happened when AGENDA was added. Listing them makes a nav change a deliberate edit here
   // and still catches an accidental removal. AGENDA then retired the same way TODAY did, once
   // Week and Month started rendering the same selected-day block Day does.
-  const expectedBar = ['HOME', 'CALENDAR', 'SETUP'];
+  // HOME left the bar for the wordmark -- see renderTabbar(). Two buttons here now.
+  const expectedBar = ['CALENDAR', 'SETUP'];
   if (JSON.stringify(bottomBarLabels) !== JSON.stringify(expectedBar)) {
     throw new Error(`Expected the Schedule bottom bar to be ${JSON.stringify(expectedBar)}, got ${JSON.stringify(bottomBarLabels)}`);
   }

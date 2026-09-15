@@ -85,6 +85,7 @@ function defaultTransientUi() {
     labFormOpen: false,
     labRangesOpen: false,
     labPasteOpen: false,
+    waterPulse: false,                 // one render's worth of "you just tapped +" on the water chip
     // The AM/PM quick-log sheet: { group: 'am'|'pm', focus: <field id> } or null. Lives in UI so
     // navigating away closes it, same as every other transient panel.
     logPopup: null,
@@ -544,12 +545,18 @@ function goSchedule(subtab) {
   if (subtab && subtab !== 'calendar') setScheduleSubtab(subtab);
 }
 function renderTabbar() {
-  const homeBtn = `<button class="${NAV.currentTab === 'home' ? 'active' : ''}" onclick="switchTab('home')"><span class="ic">${icon('home')}</span>HOME</button>`;
+  // HOME MOVED TO THE WORDMARK. It sat first on every bar, on every screen, costing a slot on the
+  // strip with the logged overflow problem -- and the topbar already shows LIFEMan.EXE everywhere,
+  // so routing home through that costs no chrome at all. Health & Wellness drops from six buttons
+  // to five as a result.
+  //
+  // The tradeoff, taken knowingly: home is now a reach to the top of the screen rather than a
+  // thumb-height tap. Worth it for the room, and the wordmark is a bigger target than the button
+  // it replaced.
+  const homeBtn = '';
   // Home used to be the one screen with no bottom bar, which is why Calendar cost two taps from it
   // -- you had to go through the SCHEDULE tile. Home shows the day now, so it carries the day's own
-  // screens. The word stays HOME on every bar including this one: the screen changed, the name for
-  // "the screen you start on" didn't, and the date line under the title already says which day you
-  // are looking at.
+  // screens.
   if (NAV.currentTab === 'home') {
     return homeBtn + `
       <button onclick="goSchedule('calendar')"><span class="ic">${icon('schedule')}</span>CALENDAR</button>

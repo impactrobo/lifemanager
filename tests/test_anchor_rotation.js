@@ -166,9 +166,11 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   }
   if (!retired.rendered) throw new Error('...rendering a real screen, not a blank one');
   if (retired.bar.indexOf('LONGEVITY') >= 0) throw new Error('LONGEVITY should be off the bar: ' + retired.bar);
-  // Six, not seven. The bar's overflow bug is logged against exactly this screen, so the count is
-  // worth asserting rather than just observing.
-  if (retired.bar.length !== 6) throw new Error('Health & Wellness should be six buttons now, got ' + retired.bar.length + ': ' + retired.bar);
+  // FIVE now. The bar's overflow bug is logged against exactly this screen, so the count is worth
+  // asserting rather than just observing -- it has come down twice for different reasons and both
+  // should stay: Longevity retiring took one button, HOME moving to the wordmark took another.
+  if (retired.bar.indexOf('HOME') >= 0) throw new Error('HOME belongs on the wordmark, not this bar: ' + retired.bar);
+  if (retired.bar.length !== 5) throw new Error('Health & Wellness should be five buttons now, got ' + retired.bar.length + ': ' + retired.bar);
 
   await page.evaluate((snap) => {
     const s = JSON.parse(snap);
