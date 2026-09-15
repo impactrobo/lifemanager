@@ -57,63 +57,22 @@ app, logged here so they're not lost, not so they get built unprompted. Confirm 
 before starting any of these.
 
 - **Health & Wellness's bottom tabbar overruns on a real device (reported 2026-09-15, not fixed).**
-  Six subtabs (WORKOUTS/GOAL/BODY/DIET/LONGEVITY/SETUP) plus HOME is seven buttons in `.tabbar`, and
-  a phone screenshot showed the labels running into each other — worse than the 390px headless
-  viewport every test in this suite runs at, which only shows the bar scrolling with **SETUP**
-  clipped at the edge and no hint that it's scrollable.
+  Was WORKOUTS/GOAL/BODY/DIET/LONGEVITY/SETUP — six subtabs plus HOME, seven buttons — when
+  reported. Longevity's retirement (see Recently Shipped) took it to **six buttons**
+  (WORKOUTS/GOAL/BODY/DIET/SETUP + HOME), which may or may not still overrun on the real device this
+  was seen on; unconfirmed until it's checked there again.
   - `.tabbar` (`styles.css`) already has `overflow-x:auto` and `min-width:58px` per button — a
     comment on it even predicts this exact case ("once a section has enough sub-tabs to exceed the
     viewport (e.g. Health & Diet's 7)"). But unlike `.subnav` (the in-screen sub-tab strips), it has
     **no scroll-chevron affordance** (`subnav-more-l`/`-r`) — nothing tells you there's more to the
     right. At a real device's system font size (Dynamic Type), `.tabbar button` labels use
-    `white-space: nowrap` with no truncation, which could let a long label like LONGEVITY visually
-    bleed past its own 58px box into its neighbour rather than wrapping or clipping.
+    `white-space: nowrap` with no truncation, which could let a long label bleed past its own 58px
+    box into its neighbour rather than wrapping or clipping.
   - Likely fix shape: give `.tabbar` the same chevron-affordance system `.subnav` already has (see
     `subnav-scroll-affordances` in project memory), and/or clip/ellipsis long labels. Worth checking
-    on a real device before assuming which of the two is actually happening.
+    on the real device first — six buttons may already fit, and the fix (if still needed) is small
+    either way.
 
-
-- **Lab comparison — agreed direction, not yet built (2026-09-15).** Discussed and settled on a
-  shape; recorded here so the reasoning isn't re-derived. **Marker-first, not panel-first.** The
-  obvious move is to copy `renderCompareBlock()` (pick date A, pick date B, show deltas), and it's
-  the wrong shape for labs: panels are *sparse and irregular* — March was a full panel, September
-  was lipids only, the urgent-care draw was a CBC — so two arbitrary dates routinely share four
-  markers out of thirty. The measurements compare already needs a "no overlapping fields" fallback;
-  labs would live in it. A marker's own history is dense even when panels are sparse, and
-  "is my ApoB coming down?" is the question people actually ask.
-  1. ~~**Ghost dots on the existing bar**~~ — **shipped 2026-09-15**, along with the axis reframe
-     that stopped them overlapping and tap-to-open history, which gives the dots the dates they
-     can't show themselves. See Recently Shipped.
-  2. ~~**Pick a date range and a set of markers, then see how they all moved over that period,
-     regardless of when each was actually measured**~~ — **shipped 2026-09-15**, see Recently
-     Shipped. The last clause was the whole design: *first reading in range vs last reading in
-     range, per marker*, which is what dissolves the sparsity problem — no two markers need share a
-     draw date.
-     - **Four design decisions taken 2026-09-15, each on the recommended option:**
-       1. **Placement: BODY → COMPARE, as more series.** Lab markers join weight, sleep, steps,
-          RHR and BP in the existing compare screen and its picker. One place for every health
-          series, one chart pattern; a future marker or wearable metric drops in the same way.
-       2. **Scale: small multiples.** One chart per marker with its own axis and its ref/target
-          bands shaded behind the line, stacked. Rejected: a single band-normalised chart (abstract
-          y-axis) and dual-axis (dies at the third series).
-       3. **Range: presets (3M / 6M / 1Y / ALL) plus custom start/end** — presets for most days,
-          custom for "since I started the statin".
-       4. **A first→last summary row per marker**, first reading in range vs last, coloured by
-          movement toward/away from your band. This IS the "regardless of when each was measured"
-          comparison; the chart shows the trend, the row states the answer.
-       Mock-up first, then build.
-     - **Render it as a graph, reusing the exercise-progress machinery rather than inventing a
-       lab-specific one** (decided 2026-09-15). `WEIGHT_METRICS` / `metricSeries()` / the compare
-       mini-charts in `app-body.js` already do date-ranged multi-series charting with a metric
-       picker; labs are another series source, not a new problem. Note that Chart.js comes from the
-       CDN and is blocked in the test harness, so chart *drawing* can't be asserted — put the range
-       and series selection in pure functions that can be, the way `metricSeries()` already is.
-  - **The directionality question, and the line that keeps it honest:** a delta needs to know which
-    way is good — −14 on ApoB is progress, −14 on HDL is not — and this feature has refused to
-    interpret results from the start. Resolution: colour by **movement relative to the bands you
-    set**, never by raw sign. "Moved into your target range" is arithmetic against a number you
-    typed yourself, not the app's opinion, and it's what `inTarget`/`inRef` already do on a single
-    reading. A marker with no bounds stated gets a plain uncoloured number, same as it gets no bar.
 
 - ~~`test_day_fold.js` fails when run within a few minutes of midnight~~ — **fixed the same day**,
   see Recently Shipped.
@@ -149,9 +108,11 @@ before starting any of these.
   3. ~~**Lab biomarkers**~~ — **shipped 2026-09-15**: 32 markers, two ranges, the position bar, and
      pasting a report to fill the form (see Recently Shipped). A time-series chart with the same
      bands behind it is the remaining tail, and needs several draws before it says anything.
-  4. **Editable, dosed supplement stack + adherence** (M) — `SUPPLEMENTS` is a hardcoded list of 7,
-     not editable, no dosing, no trend. Link a supplement to the lab marker it's meant to move and
-     the budget line it costs.
+  4. ~~**Editable, dosed supplement stack + adherence**~~ — **shipped 2026-09-15** as part of
+     dissolving Longevity (see Recently Shipped): editable regimen, real stacks, per-day adherence,
+     the old 7 as an installable preset. **Not built:** linking a supplement to the lab marker it's
+     meant to move or the budget line it costs — that cross-linking was never scoped, only the
+     regimen itself was.
   5. **Cost of the meal plan vs the Groceries budget** (M) — where money and health meet; optional
      price on foods, same shape as nutrition.
   6. **Beginner on-ramp template + "bad-day" mode** (S–M) — a shipped first-block template
