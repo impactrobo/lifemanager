@@ -2209,3 +2209,38 @@ input[type="number"].lab-filled {
    A marker with no bounds stated keeps the inherited dim colour. */
 .lab-move-toward .mono { color: var(--good); }
 .lab-move-away .mono { color: var(--bad); }
+
+/* ---- Tap a marker to open its full history ---- */
+/* A real <button> so it takes keyboard focus, stripped back to the block layout the row already
+   had. Element+class throughout: a bare class loses to `.panel button` and friends. */
+button.lab-stand-toggle {
+  display: block; width: 100%; padding: 0; margin: 0;
+  background: none; border: none; border-radius: var(--radius);
+  color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+button.lab-stand-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.lab-stand-caret {
+  font-style: normal; font-size: 9px; color: var(--text-faint);
+  margin-left: 5px; display: inline-block; transition: transform 0.15s ease;
+}
+.lab-stand-caret.open { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) { .lab-stand-caret { transition: none; } }
+.lab-hist {
+  margin: 6px 0 2px; padding: 6px 8px;
+  background: var(--surface2); border-radius: var(--radius);
+}
+.lab-hist-row {
+  display: flex; align-items: baseline; gap: 8px;
+  font-size: 11px; padding: 3px 0;
+}
+.lab-hist-row + .lab-hist-row { border-top: 1px solid var(--border-soft); }
+.lab-hist-date { flex: 1 1 auto; min-width: 0; color: var(--text-dim); }
+.lab-hist-val { flex: none; font-weight: 700; }
+/* Fixed width so the deltas line up in a column down the list rather than ragging off each value. */
+.lab-hist-delta { flex: none; width: 52px; text-align: right; color: var(--text-faint); }
+/* The delta chip above puts .mono on a CHILD, so `.lab-move-toward .mono` reaches it. Here the two
+   classes land on the same element, where a descendant selector matches nothing -- the colouring
+   went silently missing until a screenshot showed a column of grey. Same-element rules, at (0,2,0)
+   so they beat .lab-hist-delta's own colour. */
+.lab-hist-delta.lab-move-toward { color: var(--good); }
+.lab-hist-delta.lab-move-away { color: var(--bad); }

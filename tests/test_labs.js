@@ -851,6 +851,152 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (delta.coloured !== 2) throw new Error('Only the two markers with bounds get a direction, got ' + delta.coloured);
   if (delta.firstEver) throw new Error('A first-ever reading has nothing to compare against and gets no chip');
 
+  // ---- 13. The axis is framed on the data and the bands, not on zero ----
+  // The bar used to run 0 -> hi. HbA1c lives between about 4 and 6, so four fifths of the track went
+  // to values the marker cannot have and every reading piled into the right-hand edge -- where the
+  // trail dots overlapped into an unreadable smudge. Dropping zero is safe because this bar has no
+  // tick labels: it is a position strip with a "Ref / Target" key underneath, and it never claimed
+  // the left edge was zero.
+  await reset();
+  const framed = await page.evaluate(() => {
+    // Five draws of a marker whose whole span sits far from zero.
+    const trail = [{ date: '2026-06-01', value: 5.5 }, { date: '2026-03-01', value: 5.6 },
+                   { date: '2025-09-01', value: 5.8 }, { date: '2025-03-01', value: 5.9 }];
+    const z = labBarZones('hba1c', 5.4, trail);
+    const at = [5.4, 5.5, 5.6, 5.8, 5.9].map(v => z.pct(v));
+    // The gap between the two closest dots, as a share of the track. A 7px dot on a ~325px bar is
+    // about 2.2% wide, so anything under that is a collision.
+    const gaps = at.slice(1).map((p, i) => Math.abs(p - at[i]));
+    return {
+      lo: z.lo, hi: z.hi,
+      spread: Math.max(...at) - Math.min(...at),
+      tightest: Math.min(...gaps),
+      kinds: z.segs.map(sg => sg.kind).join('>'),
+      // Every band still has width on the track -- the point of pinning `lo` to the lowest BOUND
+      // rather than the lowest reading.
+      widths: z.segs.map(sg => +(z.pct(sg.to) - z.pct(sg.from)).toFixed(1)),
+    };
+  });
+  console.log('framed axis (hba1c):', JSON.stringify(framed));
+  if (framed.lo <= 0) throw new Error('The axis no longer starts at zero, got ' + framed.lo);
+  if (framed.lo > 5.4 || framed.hi < 5.9) throw new Error('...but still contains every reading: ' + JSON.stringify(framed));
+  if (framed.spread < 70) throw new Error('Five readings should use most of the track, got ' + framed.spread + '%');
+  if (framed.tightest < 2.2) throw new Error('...with no two dots colliding, tightest gap ' + framed.tightest + '%');
+  if (framed.kinds !== 'target>in>out') throw new Error('The bands are unchanged by the reframe: ' + framed.kinds);
+  if (framed.widths.some(w => w < 1)) throw new Error('Every band keeps real width on the track: ' + framed.widths);
+
+  const bands = await page.evaluate(() => {
+    // THE TRAP THE `lo` RULE EXISTS FOR. ApoB's target is <=80 and these readings are all above it.
+    // Framing on the readings alone would put `lo` at ~86 and push the entire target band off the
+    // left edge -- a band you cannot see is a band that isn't doing its job.
+    const trail = [{ date: 'b', value: 108 }, { date: 'c', value: 120 }];
+    const z = labBarZones('apoB', 96, trail);
+    const target = z.segs.find(sg => sg.kind === 'target');
+    return {
+      lo: z.lo,
+      hasTarget: !!target,
+      targetWidth: target ? +(z.pct(target.to) - z.pct(target.from)).toFixed(1) : 0,
+      // A floor marker keeps its out-of-range band below the floor for the same reason.
+      hdl: (() => {
+        const zz = labBarZones('hdl', 58, [{ date: 'x', value: 52 }]);
+        const out = zz.segs.find(sg => sg.kind === 'out');
+        return { lo: zz.lo, hasOut: !!out, width: out ? +(zz.pct(out.to) - zz.pct(out.from)).toFixed(1) : 0 };
+      })(),
+      // hs-CRP reads low and its target is <=1; the floor at zero keeps the axis off negatives,
+      // which no assay reports.
+      floorAtZero: labBarZones('hscrp', 0.2).lo,
+    };
+  });
+  console.log('bands survive the reframe:', JSON.stringify(bands));
+  if (!bands.hasTarget) throw new Error('The target band must survive even when every reading is above it');
+  if (bands.lo > 80) throw new Error('...which means lo is pinned at or below the lowest BOUND, got ' + bands.lo);
+  if (bands.targetWidth < 1) throw new Error('...with visible width, got ' + bands.targetWidth + '%');
+  if (!bands.hdl.hasOut || bands.hdl.width < 1) throw new Error('A floor marker keeps its below-range band: ' + JSON.stringify(bands.hdl));
+  if (bands.floorAtZero < 0) throw new Error('The axis never opens below zero -- no assay reports a negative, got ' + bands.floorAtZero);
+
+  // A marker whose bounds and readings are all the same number still needs a track with width.
+  const degenerate = await page.evaluate(() => {
+    STATE.labSettings.custom = [{ key: 'c8', label: 'Flat', unit: '', group: 'custom', core: true,
+                                  ref: { low: null, high: 5 }, target: { low: null, high: null } }];
+    const z = labBarZones('c8', 5);
+    const out = { lo: z && z.lo, hi: z && z.hi, segs: z && z.segs.length, pct: z && z.pct(5) };
+    STATE.labSettings.custom = [];
+    return out;
+  });
+  console.log('degenerate axis:', JSON.stringify(degenerate));
+  if (!(degenerate.hi > degenerate.lo)) throw new Error('One bound and one equal reading still yields a track: ' + JSON.stringify(degenerate));
+  if (!(degenerate.pct > 0 && degenerate.pct < 100)) throw new Error('...with the reading placed inside it, got ' + degenerate.pct);
+
+  // ---- 13b. Tapping a marker opens its full dated history ----
+  // The dots answer "which way", but they carry no time axis -- two draws a week apart and two
+  // years apart render identically. The list is where the dates live. Deliberately on the ROW and
+  // not on the dots: a dot is 7px against a 24px minimum target, so hit areas big enough to land on
+  // would overlap and make "which reading did I just tap" ambiguous.
+  await reset();
+  await page.evaluate(() => {
+    STATE.labs = [
+      { id: 'a', date: '2025-03-01', notes: '', values: { apoB: 180, ferritin: 22 } },
+      { id: 'b', date: '2026-03-01', notes: '', values: { apoB: 120 } },
+      { id: 'c', date: '2026-06-01', notes: '', values: { apoB: 108 } },
+      { id: 'd', date: '2026-09-01', notes: '', values: { apoB: 96 } },
+    ];
+    switchTab('train'); setFitnessSubtab('body'); NAV.bodySubtab = 'labs';
+    UI.labFormOpen = false;
+  });
+  await settle(page);
+  const collapsed = await page.evaluate(() => ({
+    toggles: document.querySelectorAll('.lab-stand-toggle').length,
+    open: document.querySelectorAll('.lab-hist').length,
+    expanded: [...document.querySelectorAll('.lab-stand-toggle')].map(b => b.getAttribute('aria-expanded')),
+    // Ferritin has ONE reading, so there is nothing to open and it must not look tappable.
+    ferritinIsButton: [...document.querySelectorAll('.lab-stand-toggle')]
+      .some(b => b.textContent.indexOf('Ferritin') >= 0),
+    carets: document.querySelectorAll('.lab-stand-caret').length,
+  }));
+  console.log('history collapsed:', JSON.stringify(collapsed));
+  if (collapsed.toggles !== 1) throw new Error('Only the marker with history is a control, got ' + collapsed.toggles);
+  if (collapsed.ferritinIsButton) throw new Error('A single reading has nothing to open and must not look tappable');
+  if (collapsed.carets !== 1) throw new Error('...and only it gets a caret, got ' + collapsed.carets);
+  if (collapsed.open !== 0) throw new Error('Nothing is expanded until asked');
+  if (collapsed.expanded[0] !== 'false') throw new Error('aria-expanded starts false, got ' + collapsed.expanded[0]);
+
+  await page.evaluate(() => toggleLabHistory('apoB'));
+  await settle(page);
+  const opened2 = await page.evaluate(() => {
+    const rows = [...document.querySelectorAll('.lab-hist-row')];
+    return {
+      rows: rows.length,
+      dates: rows.map(r => r.querySelector('.lab-hist-date').textContent.trim()),
+      values: rows.map(r => r.querySelector('.lab-hist-val').textContent.replace(/[^\d.]/g, '')),
+      deltas: rows.map(r => r.querySelector('.lab-hist-delta').textContent.trim()),
+      expanded: document.querySelector('.lab-stand-toggle').getAttribute('aria-expanded'),
+      caretOpen: !!document.querySelector('.lab-stand-caret.open'),
+      // The bar caps at 4 dots; the list does not cap.
+      dots: document.querySelectorAll('.lab-bar-ghost').length,
+      // The delta chip puts .mono on a child, so `.lab-move-toward .mono` reaches it; here both
+      // classes sit on the SAME element, where that selector matches nothing. It rendered a column
+      // of grey until a screenshot caught it, so the computed colour is asserted rather than the class.
+      coloured: rows.slice(0, 3).every(r => {
+        const el = r.querySelector('.lab-hist-delta');
+        return el.className.indexOf('lab-move-') >= 0 &&
+               getComputedStyle(el).color !== getComputedStyle(r.querySelector('.lab-hist-date')).color;
+      }),
+    };
+  });
+  console.log('history opened:', JSON.stringify(opened2));
+  if (opened2.rows !== 4) throw new Error('Every reading is listed, not just the four the bar draws, got ' + opened2.rows);
+  if (opened2.values.join(',') !== '96,108,120,180') throw new Error('Newest first, with values: ' + opened2.values);
+  if (!/2025/.test(opened2.dates[3])) throw new Error('...and real dates, which is what the dots cannot show: ' + opened2.dates);
+  if (opened2.deltas[3] !== '') throw new Error('The oldest reading has nothing before it to compare against');
+  if (!/12/.test(opened2.deltas[0])) throw new Error('...and each newer one shows its step, got ' + opened2.deltas);
+  if (opened2.expanded !== 'true' || !opened2.caretOpen) throw new Error('The control reports its state: ' + JSON.stringify(opened2));
+  if (!opened2.coloured) throw new Error('Each step in the list is coloured by direction, like the chip above it');
+
+  await page.evaluate(() => toggleLabHistory('apoB'));
+  await settle(page);
+  const reclosed = await page.evaluate(() => document.querySelectorAll('.lab-hist').length);
+  if (reclosed !== 0) throw new Error('Tapping again closes it, got ' + reclosed + ' still open');
+
   await page.evaluate(() => {
     STATE.labs = [];
     STATE.labSettings = { extended: false, sort: 'group', ranges: {}, custom: [] };

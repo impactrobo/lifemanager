@@ -81,9 +81,9 @@ before starting any of these.
   markers out of thirty. The measurements compare already needs a "no overlapping fields" fallback;
   labs would live in it. A marker's own history is dense even when panels are sparse, and
   "is my ApoB coming down?" is the question people actually ask.
-  1. ~~**Ghost dots on the existing bar**~~ — **shipped 2026-09-15**, see Recently Shipped. Carries
-     one accepted limitation: dots have no time axis, so two readings a week apart and two years
-     apart render identically. (2) is where that gets addressed.
+  1. ~~**Ghost dots on the existing bar**~~ — **shipped 2026-09-15**, along with the axis reframe
+     that stopped them overlapping and tap-to-open history, which gives the dots the dates they
+     can't show themselves. See Recently Shipped.
   2. **Pick a date range and a set of markers, then see how they all moved over that period,
      regardless of when each was actually measured** (next, wants mock-ups first). The last clause
      is the whole design: it compares *first reading in range vs last reading in range, per marker*,
@@ -490,6 +490,42 @@ on an architecture split + a large wave of Maximalist aesthetics.
   - **Still open:** comparison — see "Lab comparison, agreed direction" under Ideas worth
     considering for the shape that was settled on and why a panel-vs-panel compare isn't it.
 
+- **Lab bars stop starting at zero, and a marker's history opens on tap (2026-09-15).** Both came
+  out of looking at the shipped trail: the dots on HbA1c were an unreadable smudge, and the first
+  question asked about the bar was what the bold white line was.
+  - **The axis is framed on the data and the bands.** It ran `0 → hi`, which spent most of the track
+    on values a marker can't have — HbA1c lives between about 4 and 6, so five readings landed at
+    79.6 / 81 / 82.5 / 85.5 / 91.7%, all inside 24px of a 325px bar. Now it runs
+    `min(bounds, readings) → max(bounds, readings)` with 12% padding: the same five readings land at
+    8 / 25 / 42 / 75 / 92%, tightest gap 16% of the track against the ~2.2% a dot occupies.
+    - **Safe to drop zero because this bar has no tick labels.** It's a position strip with coloured
+      zones and a Ref/Target key underneath; it never claimed the left edge was zero.
+    - **`lo` is pinned at or below the lowest stated BOUND, not the lowest reading.** Framing on the
+      readings alone would put an ApoB axis at ~86 and push the whole target band (≤80) off the left
+      edge. A band you can't see isn't doing its job. Tests assert every band keeps real width.
+    - Floored at zero, since no assay reports a negative concentration.
+    - **An axis break was the alternative and was rejected**: it's a *chart* convention, and this is
+      11px tall with no ticks, so a break glyph would be the first tick-like mark on it — spending
+      pixels to signal the absence of a region that was never labelled. Reframing gets the same
+      result with nothing added. Also rejected: nudging colliding dots apart (in a positional
+      display, moving a mark off its value is the one thing you can't do), and switching axis rules
+      only when compressed (two markers on one screen would silently use different rules).
+  - **Tap a marker row to open its full dated history** — every reading, not the four the bar draws,
+    with per-step deltas coloured by the same band-movement rule. This also answers the limitation
+    the dots shipped with: they carry no time axis, so two draws a week apart and two years apart
+    render identically. A list has dates in it.
+    - **The tap is on the row, not the dots**, which is what was asked for and is the wrong target:
+      a dot is 7px against WCAG's 24px minimum, so hit areas big enough to land on would overlap
+      their neighbours' — reintroducing the collision problem, invisibly, as "which reading did I
+      just tap". A marker with only one reading stays a plain row rather than a control that does
+      nothing. Real `<button>`, so it takes keyboard focus and reports `aria-expanded`.
+  - **A specificity bug a screenshot caught**, and a new variant of the family: the delta chip puts
+    `.mono` on a *child*, so `.lab-move-toward .mono` reaches it. In the history list both classes
+    land on the *same element*, where that descendant selector matches nothing — the direction
+    colouring went silently missing and rendered a column of grey. Fixed with same-element rules at
+    (0,2,0). The test asserts the computed colour rather than the class, since the class was present
+    and correct the whole time.
+
 - **The trail: earlier lab readings as fading dots on the same bar (2026-09-15).** Comparison, built
   marker-first for the reason recorded under Ideas: panels are sparse and irregular, so two
   arbitrary draws share a handful of markers, while one marker's own history has no gaps.
@@ -519,12 +555,10 @@ on an architecture split + a large wave of Maximalist aesthetics.
     shapes reads as two unrelated things, and the rule was the first thing asked about on sight.
     Removing it outright was the other option and would have been wrong: the dots are *prior*
     readings, so dropping it takes "where you stand right now" off the panel named WHERE YOU STAND.
-  - **Known limitation, deliberately not fixed here:** the axis starts at zero, so a marker whose
-    whole meaningful span sits far from zero (HbA1c 5.4–5.9, creatinine, albumin) squeezes every dot
-    into the right fifth of the track, where they overlap and can't be told apart. The bar has
-    always been zero-based and a single mark was fine there; four marks are not. Fixing it means
-    deciding whether a lab bar should start at zero at all — a real design call about what the bar
-    claims, not a tweak, so it's the person's to make rather than one to slip in.
+  - ~~Known limitation: the zero-based axis squeezes markers whose span sits far from zero (HbA1c,
+    creatinine, albumin) into an overlapping smudge~~ — **fixed the same day**, see the axis reframe
+    above. Worth noting it was found by *looking at the screenshot*, not by any collision check:
+    nothing in the code knew or knows whether two dots touch.
   - My own wrong test expectation, again, and the same marker as last time: WBC states a reference
     interval of 4–11, so two readings inside it are `level`, not "no opinion". An *unbounded* marker
     is a custom one you added, which starts with no bounds at all.

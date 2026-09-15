@@ -135,6 +135,7 @@ let VIEW = {
   labPasteDraft: null,               // {markerKey: number} parsed out of a pasted report, unsaved
   labPasteReport: null,              // {matched, unmatched} counts from that parse
   labEditing: null,                  // id of the panel the lab form is editing; null = adding a new one
+  labExpanded: {},                   // markerKey -> true: that marker's full dated history is open
   selectedWeightMetric: 'weight',
   selectedMeasurementField: 'weight',
   notesSelectedTag: 'general',       // tag for a new note; saveNote() puts this back to 'general'

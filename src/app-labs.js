@@ -597,11 +597,33 @@ function labBarZones(key, value, trail) {
   // well above a ceiling of 130, and leaving it out of `hi` would clamp that dot to the right edge
   // -- drawing the single most dramatic improvement in the series as no movement at all.
   const past = (trail || []).map(t => Number(t.value)).filter(v => isFinite(v));
-  const hi = Math.max(Number(value) || 0, ...past, ...bounds) * 1.15;
-  if (!(hi > 0)) return null;
+  const readings = [Number(value)].filter(v => isFinite(v)).concat(past);
+
+  // THE AXIS IS FRAMED ON THE DATA AND THE BANDS, NOT ON ZERO.
+  //
+  // It used to run 0 -> hi, which wasted most of the track on values the marker can't have. HbA1c
+  // lives between about 4 and 6, so a zero-based axis spent four fifths of the bar on nothing and
+  // crammed every reading into the right-hand edge, where the trail dots overlapped into a smudge.
+  //
+  // Safe to drop zero because this bar has no tick labels: it is a position strip with coloured
+  // zones and a "Ref / Target" key underneath, and it never claimed the left edge was zero.
+  //
+  // `lo` is pinned at or below the lowest stated BOUND, not merely the lowest reading -- otherwise
+  // an ApoB of 96 against a target of <=80 would push the entire target band off the left edge, and
+  // a band you can't see is a band that isn't doing its job.
+  const rawLo = Math.min(...bounds, ...readings);
+  const rawHi = Math.max(...bounds, ...readings);
+  const span = rawHi - rawLo;
+  // A marker whose bounds and readings are all one number still needs a track with width.
+  const pad = span > 0 ? span * 0.12 : (Math.abs(rawHi) * 0.12 || 1);
+  // Floored at zero: no assay reports a negative concentration, so an axis that opens below it
+  // would be showing a region that cannot exist.
+  const lo = Math.max(0, rawLo - pad);
+  const hi = rawHi + pad;
+  if (!(hi > lo)) return null;
 
   const segs = [];
-  let cursor = 0;
+  let cursor = lo;
   const push = (to, kind) => { if (to > cursor) { segs.push({ from: cursor, to, kind }); cursor = to; } };
   // Walked in axis order, so a one-sided marker simply skips the zones it doesn't state: ApoB has
   // no floor and gets no leading out-of-range band, HDL has no ceiling and gets no trailing one.
@@ -613,7 +635,7 @@ function labBarZones(key, value, trail) {
   if (r.ref.high != null) push(r.ref.high, 'in');
   push(hi, r.ref.high != null ? 'out' : 'in');
 
-  return { hi, segs, pct: v => Math.max(0, Math.min(100, (v / hi) * 100)) };
+  return { lo, hi, segs, pct: v => Math.max(0, Math.min(100, ((v - lo) / (hi - lo)) * 100)) };
 }
 
 function renderLabBar(key, value, trail) {
@@ -672,18 +694,60 @@ function renderLabStanding() {
           const latest = hist[0];
           const trail = hist.slice(1);
           const s = labStatus(m.key, latest.value);
-          return `
-          <div class="lab-stand">
+          const open = !!(VIEW.labExpanded && VIEW.labExpanded[m.key]);
+          const body = `
             <div class="lab-stand-head">
-              <span class="lab-stand-name">${escapeHtml(m.label)}</span>
+              <span class="lab-stand-name">${escapeHtml(m.label)}${trail.length ? `<i class="lab-stand-caret ${open ? 'open' : ''}">▾</i>` : ''}</span>
               <span class="lab-stand-val mono ${s && s.inRef === false ? 'lab-out-text' : ''}">${latest.value}<i class="lab-unit">${escapeHtml(labRange(m.key).unit)}</i></span>
               <span class="lab-stand-when">${fmtGoalDate(latest.date)}</span>
             </div>
             ${renderLabBar(m.key, latest.value, trail)}
-            ${renderLabDelta(m.key, latest, trail[0])}
+            ${renderLabDelta(m.key, latest, trail[0])}`;
+          // A single reading has no history to open, so it stays a plain row rather than a control
+          // that looks tappable and then does nothing.
+          return `
+          <div class="lab-stand">
+            ${trail.length
+              ? `<button class="lab-stand-toggle" onclick="toggleLabHistory('${m.key}')" aria-expanded="${open}">${body}</button>`
+              : body}
+            ${open ? renderLabHistory(m.key, hist) : ''}
           </div>`;
         }).join('')}`).join('')}
     </div>`;
+}
+
+// Tapping the row opens that marker's full history. Deliberately NOT tapping the dots themselves:
+// a dot is 7px, WCAG's minimum target is 24px and the comfortable figure is 44px, so a hit area big
+// enough to land on would overlap its neighbours' -- reintroducing the collision problem, invisibly,
+// as a question about which reading you just selected.
+//
+// It also answers the limitation the dots ship with: they carry no time axis, so two draws a week
+// apart and two years apart look identical. A list has dates in it.
+function toggleLabHistory(key) {
+  if (!VIEW.labExpanded) VIEW.labExpanded = {};
+  if (VIEW.labExpanded[key]) delete VIEW.labExpanded[key];
+  else VIEW.labExpanded[key] = true;
+  render();
+}
+
+// Every reading, not the four the bar has room for. The dots are a glance; this is the record.
+function renderLabHistory(key, hist) {
+  const unit = labRange(key).unit;
+  const rows = hist.map((h, i) => {
+    const older = hist[i + 1];
+    const s = labStatus(key, h.value);
+    const d = older ? Number(h.value) - Number(older.value) : null;
+    const move = older ? labMovement(key, older.value, h.value) : null;
+    return `
+      <div class="lab-hist-row">
+        <span class="lab-hist-date">${fmtGoalDate(h.date)}</span>
+        <span class="lab-hist-val mono ${s && s.inRef === false ? 'lab-out-text' : ''}">${h.value}<i class="lab-unit">${escapeHtml(unit)}</i></span>
+        <span class="lab-hist-delta mono ${move ? `lab-move-${move}` : ''}">${
+          d == null ? '' : d === 0 ? '→ 0' : `${d > 0 ? '↑' : '↓'} ${fmt(Math.abs(d), Math.abs(d) < 10 ? 1 : 0)}`
+        }</span>
+      </div>`;
+  }).join('');
+  return `<div class="lab-hist">${rows}</div>`;
 }
 
 // The number the dots are showing, said once in words. Only against the immediately previous
