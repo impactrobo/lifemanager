@@ -24,7 +24,9 @@ const DESTINATIONS = {
 // that boundary. Read as `${NAV.fitnessSubtab}/${NAV.setupPanel}`.
 const SUBTAB_DESTINATIONS = {
   workout: 'workouts/workouts',
-  meal: 'setup/meals',
+  // 'builder', not 'setup': SETUP became BUILDER when the tab split by what you're DOING (building a
+  // reusable thing) rather than by subject. Editing a meal still lands on the meals panel of it.
+  meal: 'builder/meals',
 };
 
 (async () => {
@@ -90,18 +92,18 @@ const SUBTAB_DESTINATIONS = {
   const editors = await page.evaluate(() => {
     const out = {};
     switchTab('budget'); editNote('n1');    out.editNote = { tab: NAV.currentTab, editing: VIEW.noteEditId };
-    // Both land in the same tab AND the same subtab now — the SETUP panel is what separates them.
+    // Both land in the same tab AND the same subtab now — the BUILDER panel is what separates them.
     switchTab('budget'); editMeal('m1');    out.editMeal = { tab: NAV.currentTab, sub: NAV.fitnessSubtab, panel: NAV.setupPanel };
     switchTab('budget'); editWorkout('w1'); out.editWorkout = { tab: NAV.currentTab, sub: NAV.fitnessSubtab, panel: NAV.setupPanel };
     return out;
   });
   console.log('editors called from budget:', editors);
   if (editors.editNote.tab !== 'notes' || editors.editNote.editing !== 'n1') throw new Error('editNote() must navigate to Notes AND still load the note');
-  if (editors.editMeal.tab !== 'train' || editors.editMeal.sub !== 'setup' || editors.editMeal.panel !== 'meals') {
-    throw new Error(`editMeal() must land on Setup's MEALS panel, got ${editors.editMeal.sub}/${editors.editMeal.panel}`);
+  if (editors.editMeal.tab !== 'train' || editors.editMeal.sub !== 'builder' || editors.editMeal.panel !== 'meals') {
+    throw new Error(`editMeal() must land on Builder's MEALS panel, got ${editors.editMeal.sub}/${editors.editMeal.panel}`);
   }
-  if (editors.editWorkout.tab !== 'train' || editors.editWorkout.sub !== 'setup' || editors.editWorkout.panel !== 'workouts') {
-    throw new Error(`editWorkout() must land on Setup's WORKOUTS panel, got ${editors.editWorkout.sub}/${editors.editWorkout.panel}`);
+  if (editors.editWorkout.tab !== 'train' || editors.editWorkout.sub !== 'builder' || editors.editWorkout.panel !== 'workouts') {
+    throw new Error(`editWorkout() must land on Builder's WORKOUTS panel, got ${editors.editWorkout.sub}/${editors.editWorkout.panel}`);
   }
 
   // ---- 3. ensureTab() is a no-op when you're already there ----

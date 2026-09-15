@@ -765,7 +765,7 @@ function renderPrLog() {
     .filter(r => r.lift && r.best)
     .sort((a, b) => b.best.lastDate.localeCompare(a.best.lastDate));
   if (!rows.length) {
-    return emptyState('No PRs yet. Link your exercises to lifts in Setup → Exercise → LIFTS, then log some sets — a PR needs a durable name to hang off.');
+    return emptyState('No PRs yet. Link your exercises to lifts in Builder → Workouts → Lifts, then log some sets — a PR needs a durable name to hang off.');
   }
   return `
     <div style="font-size:11px; color:var(--text-dim); margin:14px 0; line-height:1.6;">

@@ -749,7 +749,7 @@ function renderCompareView() {
     <div style="font-size:11px; color:var(--text-dim); margin-bottom:8px;">Pick up to ${COMPARE_MAX_METRICS} to compare side by side. A lift charts the heaviest completed set logged that session, not just the programmed target — a <b style="color:var(--text)">(T1)</b>/<b style="color:var(--text)">(T2)</b> entry is that tier's slot specifically. A lab marker charts every draw that included it, against the ranges you set.</div>
     ${picker}
     <div style="font-size:10px; color:var(--text-faint); margin-top:6px;">${VIEW.compareSelected.length} of ${COMPARE_MAX_METRICS} selected</div>
-    ${liftCount === 0 ? `<div style="font-size:11px; color:var(--text-faint); margin:8px 0 0;">No lifts tracked yet — assign a category to a T1/T2 slot, or link an exercise to a lift under Setup &rarr; Workouts &rarr; Lifts, then log some sets.</div>` : ''}
+    ${liftCount === 0 ? `<div style="font-size:11px; color:var(--text-faint); margin:8px 0 0;">No lifts tracked yet — assign a category to a T1/T2 slot, or link an exercise to a lift under Builder &rarr; Workouts &rarr; Lifts, then log some sets.</div>` : ''}
     ${renderCompareRange()}
     ${renderCompareSummary()}
     <div style="margin-top:14px;">${charts || emptyState('Pick at least one metric above to see its chart.')}</div>`;
@@ -981,11 +981,11 @@ function renderVolume() {
         <button onclick="changeVolumeCycle(1)" ${NAV.volumeCycle >= STATE.program.cycles ? 'disabled style="opacity:.3"' : ''}>&#8250;</button>
       </div>
     </div>
-    ${!anyTagged ? `<div class="panel" style="border-color:var(--accent-dim); background:var(--accent-soft);"><div style="font-size:12px;">No exercises are tagged with a muscle group yet. Add one under <b>Setup &rarr; Training Max</b> (per category) or <b>Setup &rarr; Workout Builder</b> (per exercise/accessory) to start seeing volume here.</div></div>` : ''}
+    ${!anyTagged ? `<div class="panel" style="border-color:var(--accent-dim); background:var(--accent-soft);"><div style="font-size:12px;">No exercises are tagged with a muscle group yet. Add one under <b>Builder &rarr; Workouts &rarr; Maxes</b> (per category) or <b>Builder &rarr; Workouts &rarr; Workout</b> (per exercise/accessory) to start seeing volume here.</div></div>` : ''}
     <div class="panel">
       ${bars}
     </div>
-    <div style="font-size:11px; color:var(--text-faint); margin-top:4px;">Counts every set with reps logged that week, tagged to whichever muscle group is assigned to that exercise. Where a muscle group has MEV/MAV/MRV landmarks set (Setup &rarr; Volume Landmarks), the marker line shows where this week's sets fall against them.</div>
+    <div style="font-size:11px; color:var(--text-faint); margin-top:4px;">Counts every set with reps logged that week, tagged to whichever muscle group is assigned to that exercise. Where a muscle group has MEV/MAV/MRV landmarks set (Builder &rarr; Workouts &rarr; Maxes), the marker line shows where this week's sets fall against them.</div>
   `;
 }
 function changeVolumeCycle(delta) {

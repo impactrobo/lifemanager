@@ -7,7 +7,7 @@
      app.js re-fetches this page on launch + on foreground and reloads if this value moved —
      that's what lets an installed iOS PWA self-update instead of getting stuck on a snapshot.
      Format is just a sortable stamp; the value only has to differ from the last deploy. -->
-<meta name="app-build" content="2026.09.15-36">
+<meta name="app-build" content="2026.09.15-37">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#15171a">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -81,6 +81,10 @@
       <label class="field"><span class="lbl">Seconds</span><input type="number" id="restCustomSeconds" min="0" max="59" step="1" placeholder="0"></label>
     </div>
     <button class="btn btn-primary btn-block" onclick="startCustomRestTimer()">START</button>
+    <!-- Rest behaviour lives HERE, not in a settings tab: it only ever fires while you're logging a
+         set, and this picker is the one surface that appears exactly then. Filled by
+         renderRestPickerOptions() on open (see openRestPicker). -->
+    <div id="restPickerOptions"></div>
     <button class="btn btn-block" style="margin-top:8px;" onclick="closeRestPicker()">CANCEL</button>
   </div>
 </div>

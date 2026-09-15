@@ -13,20 +13,23 @@ function setHealthSetupSubtab(t) {
   UI.customFoodFormOpen = false; UI.customFoodEditId = null; // don't resume a stale add/edit form across subtab switches
   render();
 }
-// Health's own Setup: MEAL BUILDER (build/edit one meal from the FOOD_DB categories, with a
-// running Metric/Imperial-aware macro total), ALL MEALS (saved meals, editable), MEAL PLAN
-// (assign saved meals to days of the week), and MY FOODS (this person's own added foods).
-// Nothing here applies outside Health & Diet.
+// The MEALS half of BUILDER: MEAL (build/edit one meal from the FOOD_DB categories, with a running
+// Metric/Imperial-aware macro total), ALL MEALS (saved meals, editable), and MY FOODS (this person's
+// own added foods). Every one of them makes a REUSABLE THING -- a meal built once is available to
+// every phase that wants it, which is exactly why MEAL PLAN left for PHASES: assigning a meal to a
+// Tuesday is planning, not building, and the plan it writes into belongs to a phase.
 function renderHealthSetup() {
+  // 'plan' rides in on saved nav snapshots from when MEAL PLAN lived here. It lands on the builder
+  // rather than rendering nothing; PHASES is where that pane went.
+  const sub = NAV.healthSetupSubtab === 'plan' ? 'builder' : NAV.healthSetupSubtab;
   return `<div class="screen">
-    <div class="section-title">Setup</div>
+    <div class="section-title">Builder</div>
     ${subNav(`
-      <button class="${NAV.healthSetupSubtab==='builder'?'active':''}" onclick="setHealthSetupSubtab('builder')">MEAL BUILDER</button>
-      <button class="${NAV.healthSetupSubtab==='meals'?'active':''}" onclick="setHealthSetupSubtab('meals')">ALL MEALS</button>
-      <button class="${NAV.healthSetupSubtab==='plan'?'active':''}" onclick="setHealthSetupSubtab('plan')">MEAL PLAN</button>
-      <button class="${NAV.healthSetupSubtab==='myfoods'?'active':''}" onclick="setHealthSetupSubtab('myfoods')">MY FOODS</button>
+      <button class="${sub==='builder'||!sub?'active':''}" onclick="setHealthSetupSubtab('builder')">MEAL</button>
+      <button class="${sub==='meals'?'active':''}" onclick="setHealthSetupSubtab('meals')">ALL MEALS</button>
+      <button class="${sub==='myfoods'?'active':''}" onclick="setHealthSetupSubtab('myfoods')">MY FOODS</button>
     `)}
-    ${NAV.healthSetupSubtab === 'meals' ? renderAllMeals() : NAV.healthSetupSubtab === 'plan' ? renderMealPlanTab() : NAV.healthSetupSubtab === 'myfoods' ? renderMyFoodsTab() : renderMealBuilderTab()}
+    ${sub === 'meals' ? renderAllMeals() : sub === 'myfoods' ? renderMyFoodsTab() : renderMealBuilderTab()}
   </div>`;
 }
 function roundMacro(n) { return Math.round((n || 0) * 10) / 10; }
@@ -54,9 +57,9 @@ function startNewMeal() {
 function editMeal(id) {
   const meal = STATE.diet.meals.find(m => m.id === id);
   if (!meal) return;
-  // One tab now -- the meal library is a PANEL of Health & Wellness's Setup, not its own tab's.
+  // One tab now -- the meal library is a PANEL of Health & Wellness's BUILDER, not its own tab's.
   ensureTab('train');
-  NAV.fitnessSubtab = 'setup';
+  NAV.fitnessSubtab = 'builder';
   NAV.setupPanel = 'meals';
   VIEW.mealBuilderDraft = { id: meal.id, name: meal.name, items: meal.items.map(it => Object.assign({}, it)), activeCategory: null, searchQuery: '' };
   NAV.healthSetupSubtab = 'builder';

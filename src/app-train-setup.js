@@ -376,7 +376,7 @@ function editWorkout(id) {
   const w = getWorkout(id);
   if (!w) return;
   ensureTab('train');
-  NAV.fitnessSubtab = 'setup';
+  NAV.fitnessSubtab = 'builder';
   NAV.setupPanel = 'workouts';
   VIEW.builderType = w.type;
   VIEW.builderSelected[w.type] = w.id;
@@ -384,7 +384,7 @@ function editWorkout(id) {
   setSetupSubtab('builder');
 }
 
-// ---------------- EXERCISE PLANNER (Setup -> Exercise -> Planner) ----------------
+// ---------------- EXERCISE PLANNER (Phases -> Workout Plan) ----------------
 // Weekday assignment for saved workouts of any type — mirrors Meal Plan's day-slot pattern
 // (see addPlanMealSlot/renderMealPlanDay et al) but for STATE.exercisePlan. This sits alongside
 // the cycle-based Train Grid rather than replacing it: Train Grid is still where you log a

@@ -213,6 +213,9 @@ function openRestPicker() {
   const seed = Math.max(0, Math.round(rt.lastUsedSeconds ?? rt.defaultSeconds ?? 90));
   document.getElementById('restCustomMinutes').value = Math.floor(seed / 60);
   document.getElementById('restCustomSeconds').value = seed % 60;
+  // Filled on every open rather than once at boot: a checkbox reflects stored state, and toggling
+  // one saves without a render(), so re-rendering here is what keeps the two in step.
+  document.getElementById('restPickerOptions').innerHTML = renderRestPickerOptions();
   document.getElementById('restPickerOverlay').classList.remove('hidden');
 }
 function closeRestPicker() {
@@ -237,40 +240,33 @@ function toggleRestSetting(key, checked) {
   STATE.settings.restTimer[key] = checked;
   saveState();
 }
-function setRestDefaultSeconds(val) {
-  if (!STATE.settings.restTimer) STATE.settings.restTimer = defaultRestTimerSettings();
-  STATE.settings.restTimer.defaultSeconds = Number(val);
-  saveState();
-}
-// Lives in Exercise's own Setup -> General (not the app-wide Settings overlay) since it's a
-// training-specific behavior, not a global app preference.
-function renderRestSettingsPanel() {
+// setRestDefaultSeconds() lived here until the "Default length" select was retired -- nothing could
+// call it any more. `defaultSeconds` itself stays: startRestTimer() still falls back to it the very
+// first time, before `lastUsedSeconds` exists to answer instead.
+// Rest behaviour lives in the rest picker overlay, which only opens on a workout log screen -- the
+// one place these settings can ever take effect. They used to sit in the exercise section's General
+// pane, two navigations away from the set you'd want them for.
+//
+// No "Default length" control here any more, deliberately. openRestPicker() already seeds from
+// `lastUsedSeconds`, so the timer holds whatever you rested last until you change it -- a stored
+// default was a second answer to a question the picker already answers better, and one of them was
+// always going to be the stale one.
+function renderRestPickerOptions() {
   const rt = restTimerSettings();
+  const row = (key, label, on) => `
+    <div class="row" style="margin-bottom:8px;">
+      <span style="font-size:13px;">${label}</span>
+      <input type="checkbox" ${on ? 'checked' : ''} onchange="toggleRestSetting('${key}', this.checked)">
+    </div>`;
   return `
-    <div class="subtle-label" style="margin:20px 0 6px;">REST TIMER</div>
-    <div class="panel">
-      <div class="row" style="margin-bottom:10px;">
-        <span style="font-size:13px;">Auto-start after set</span>
-        <input type="checkbox" ${rt.autoStart ? 'checked' : ''} onchange="toggleRestSetting('autoStart', this.checked)">
-      </div>
-      <div style="font-size:11px; color:var(--text-faint); margin:-6px 0 12px;">Starts rest the instant a set (or a full superset round) is logged, instead of only when you tap the timer yourself.</div>
-      <div class="row" style="margin-bottom:10px;">
-        <span style="font-size:13px;">Sound</span>
-        <input type="checkbox" ${rt.sound ? 'checked' : ''} onchange="toggleRestSetting('sound', this.checked)">
-      </div>
-      <div class="row" style="margin-bottom:10px;">
+    <div class="subtle-label" style="margin:18px 0 6px;">WHEN A SET IS LOGGED</div>
+    <div class="panel" style="margin-bottom:8px;">
+      ${row('autoStart', 'Auto-start rest', rt.autoStart)}
+      <div style="font-size:11px; color:var(--text-faint); margin:-4px 0 10px;">Starts rest the instant a set (or a full superset round) is logged, instead of only when you tap the timer yourself.</div>
+      ${row('sound', 'Sound', rt.sound)}
+      <div class="row" style="margin-bottom:0;">
         <span style="font-size:13px;">Vibration</span>
         <input type="checkbox" ${rt.vibrate ? 'checked' : ''} onchange="toggleRestSetting('vibrate', this.checked)">
-      </div>
-      <div class="row">
-        <span style="font-size:13px;">Default length</span>
-        <select onchange="setRestDefaultSeconds(this.value)" style="width:auto;">
-          <option value="60" ${rt.defaultSeconds === 60 ? 'selected' : ''}>1:00</option>
-          <option value="90" ${rt.defaultSeconds === 90 ? 'selected' : ''}>1:30</option>
-          <option value="120" ${rt.defaultSeconds === 120 ? 'selected' : ''}>2:00</option>
-          <option value="180" ${rt.defaultSeconds === 180 ? 'selected' : ''}>3:00</option>
-          <option value="300" ${rt.defaultSeconds === 300 ? 'selected' : ''}>5:00</option>
-        </select>
       </div>
     </div>`;
 }

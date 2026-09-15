@@ -7,29 +7,33 @@
 // file is being evaluated -- a `const` initializer, an addEventListener call -- since that can
 // only reach what earlier files have already defined. src/app-boot.js runs the startup sequence
 // and must stay last.
-// ================= PLAN =================
+// ================= PROGRAM STRUCTURE (Builder -> Workouts -> General) =================
 // Program Style (weights) and cardio's own style are now per-workout choices made in Workout
-// Builder, not a single Plan-tab setting — see DATA_MODEL.md / createWorkout(). Plan just holds
-// what's genuinely global: Units/Rounding and the program cycle length everything else follows.
+// Builder, not a single Plan-tab setting — see DATA_MODEL.md / createWorkout().
+//
+// What's left here is the program cycle length alone. Units moved to the app-wide Settings screen
+// (they govern labs and body weight as much as a barbell) and the rounding increment moved to lead
+// MAXES (it exists solely to turn a training max into a loadable bar, so it belongs beside the
+// number it rounds). Each aspect went to where it's actually used rather than staying in a drawer
+// named after none of them.
+// Leads the MAXES pane (see renderExerciseSetup). Its own function rather than inline markup so the
+// label stays honest: it rounds TARGET weights, which only exist because a training max computed
+// them, and it follows the display unit rather than being a second place to choose one.
+function renderRoundingPanel() {
+  return `
+    <div class="subtle-label" style="margin-bottom:10px;">ROUNDING</div>
+    <div class="panel">
+      <label class="field" style="margin-bottom:0;">
+        <span class="lbl">Rounding increment (${weightUnitLabel()})</span>
+        <input type="number" step="0.25" value="${fmt(lbToDisplay(STATE.rounding),2)}" onchange="updateRounding(this.value)">
+      </label>
+      <div style="font-size:11px;color:var(--text-faint); margin-top:8px;">Every target weight below rounds to the nearest increment — e.g. 2.5 lb or 1 kg plates. Change units in Settings.</div>
+    </div>`;
+}
 function renderPlan() {
   const c25kTooShort = programWorkouts('C25K').length > 0 && STATE.program.cycles < C25K_TOTAL_WEEKS;
   const c2triTooShort = programWorkouts('C2Triathlon').length > 0 && STATE.program.cycles < C2TRI_TOTAL_WEEKS;
   return `
-    <div class="subtle-label" style="margin-bottom:10px;">UNITS &amp; ROUNDING</div>
-    <div class="panel">
-      <div class="row" style="margin-bottom:12px;">
-        <span class="lbl" style="margin-bottom:0;">Units</span>
-        <div class="unit-toggle">
-          <button class="${STATE.units === 'lb' ? 'active' : ''}" onclick="setUnits('lb')">LB</button>
-          <button class="${STATE.units === 'kg' ? 'active' : ''}" onclick="setUnits('kg')">KG</button>
-        </div>
-      </div>
-      <label class="field">
-        <span class="lbl">Rounding Increment (${weightUnitLabel()})</span>
-        <input type="number" step="0.25" value="${fmt(lbToDisplay(STATE.rounding),2)}" onchange="updateRounding(this.value)">
-      </label>
-      <div style="font-size:11px;color:var(--text-faint);">Target weights round to the nearest increment — e.g. 2.5 lb or 1 kg plates.</div>
-    </div>
     <div class="subtle-label" style="margin-bottom:10px;">PROGRAM STRUCTURE</div>
     <div class="panel">
       <label class="field">
@@ -40,7 +44,7 @@ function renderPlan() {
       ${c25kTooShort ? `<div style="font-size:11px; color:var(--accent); font-weight:600; margin-top:6px;">Your program is only ${STATE.program.cycles} week${STATE.program.cycles===1?'':'s'} — your C25K workouts need ${C25K_TOTAL_WEEKS} weeks to complete. Increase Cycles above to run the full program, or it'll hold at Week ${STATE.program.cycles}'s pace once your program ends.</div>` : ''}
       ${c2triTooShort ? `<div style="font-size:11px; color:var(--accent); font-weight:600; margin-top:6px;">Your program is only ${STATE.program.cycles} week${STATE.program.cycles===1?'':'s'} — your C2Triathlon workouts need ${C2TRI_TOTAL_WEEKS} weeks to complete. Increase Cycles above to run the full program, or it'll hold at Week ${STATE.program.cycles}'s pace once your program ends.</div>` : ''}
     </div>
-    <div class="empty-state" style="padding:14px 10px;"><div style="font-size:12px;">Weights/Cardio/Mobility/Warmup workouts, and each one's own style, are built under <b style="color:var(--text)">Setup &rarr; Workout Builder</b> — there's no per-cycle slot count anymore, just add what you use.</div></div>`;
+    <div class="empty-state" style="padding:14px 10px;"><div style="font-size:12px;">Weights/Cardio/Mobility/Warmup workouts, and each one's own style, are built under <b style="color:var(--text)">Builder &rarr; Workouts &rarr; Workout</b> — there's no per-cycle slot count anymore, just add what you use.</div></div>`;
 }
 
 
@@ -86,7 +90,7 @@ function rpWorkoutIcon(workout) {
 function renderTrainSection(type, list, cycle, openFn) {
   if (list.length === 0) {
     return `<div class="empty-state" style="padding:16px 10px;">
-      <div style="font-size:12px;">No ${WORKOUT_TYPE_LABELS[type].toLowerCase()} workouts yet — add one under <b style="color:var(--text)">Setup &rarr; Workout Builder</b>.</div>
+      <div style="font-size:12px;">No ${WORKOUT_TYPE_LABELS[type].toLowerCase()} workouts yet — add one under <b style="color:var(--text)">Builder &rarr; Workouts &rarr; Workout</b>.</div>
     </div>`;
   }
   if (type === 'cardio') {
@@ -140,7 +144,7 @@ function renderTrainGrid() {
         <div class="empty-state">
           <div class="big">${icon('lock')}</div>
           No workouts yet.<br>
-          Head to <b style="color:var(--text)">Setup &rarr; Workout Builder</b> to build your first one.
+          Head to <b style="color:var(--text)">Builder &rarr; Workouts &rarr; Workout</b> to build your first one.
         </div>
       </div>`;
   }
@@ -464,7 +468,7 @@ function renderRpWorkoutLog(workoutId) {
 
   let blocks = workout.exercises.map(ex => renderRpExerciseBlock(workout, cycle, log, ex)).join('');
   if (!blocks) {
-    blocks = `<div class="empty-state"><div class="big">${icon('lock')}</div>No exercises assigned to this slot yet.<br>Go to Setup &rarr; Workout Builder to configure it.</div>`;
+    blocks = `<div class="empty-state"><div class="big">${icon('lock')}</div>No exercises assigned to this slot yet.<br>Go to Builder &rarr; Workouts &rarr; Workout to configure it.</div>`;
   }
 
   return `
@@ -637,7 +641,7 @@ function renderWorkoutLog(workoutId) {
   });
 
   if (!tierBlocks) {
-    tierBlocks = `<div class="empty-state"><div class="big">${icon('lock')}</div>No movements assigned to this slot yet.<br>Go to Setup &rarr; Workout Builder to configure it.</div>`;
+    tierBlocks = `<div class="empty-state"><div class="big">${icon('lock')}</div>No movements assigned to this slot yet.<br>Go to Builder &rarr; Workouts &rarr; Workout to configure it.</div>`;
   }
 
   return `
@@ -1247,54 +1251,68 @@ function renderSetup() {
 // Hypertrophy-style workouts, and both kinds of target need somewhere to live.
 function renderExerciseSetup() {
   let body = '';
-  if (NAV.setupSubtab === 'tm') body = `<div class="subtle-label" style="margin-bottom:10px;">TRAINING MAXES BY CATEGORY</div>${renderTMSetup()}<div class="divider"></div>${renderVolumeLandmarksSetup()}`;
+  // Rounding LEADS this pane. It exists only to turn a training max into a weight you can actually
+  // load on a bar, so every number below it is computed through it -- reading it first tells you
+  // what the targets underneath are rounded to, instead of leaving you to find that in a drawer.
+  if (NAV.setupSubtab === 'tm') body = `${renderRoundingPanel()}<div class="subtle-label" style="margin-bottom:10px;">TRAINING MAXES BY CATEGORY</div>${renderTMSetup()}<div class="divider"></div>${renderVolumeLandmarksSetup()}`;
   else if (NAV.setupSubtab === 'builder') body = renderWorkoutBuilder();
-  else if (NAV.setupSubtab === 'plan') body = renderPlan();
   else if (NAV.setupSubtab === 'viewWorkouts') body = renderViewWorkouts();
   else if (NAV.setupSubtab === 'lifts') body = renderLiftReview();
-  else if (NAV.setupSubtab === 'planner') body = renderExercisePlanTab();
-  else body = renderRestSettingsPanel();
+  // GENERAL, and the two stale values that now land on it. 'plan' merged into it; 'planner' moved
+  // out to PHASES entirely -- a saved nav snapshot can still carry either, so neither may render
+  // nothing. 'planner' would be better served by PHASES, but a subtab value can't switch tabs
+  // without fighting whatever navigation put you here, so it settles on the pane it's nearest.
+  else body = renderPlan();
 
-  // PLAN/MAXES/BUILDER/VIEW WORKOUTS/PLANNER/GENERAL switch here, as a subnav across the top of
-  // the screen, rather than in the bottom NavBar — the bottom bar is shared across every Setup
-  // page and just shows HOME + CLOSE (see renderTabbar()). `.subnav` scrolls horizontally once it
-  // has more buttons than fit a narrow viewport (see ARCHITECTURE.md).
+  // MAXES/BUILDER/VIEW WORKOUTS/LIFTS/GENERAL switch here, as a subnav across the top of the screen,
+  // rather than in the bottom NavBar. `.subnav` scrolls horizontally once it has more buttons than
+  // fit a narrow viewport (see ARCHITECTURE.md).
+  //
+  // PLANNER left for PHASES, where mapping workouts onto weekdays belongs -- it was always a plan,
+  // not a build. PLAN (units, rounding, cycle length) folded into GENERAL: two settings panes with
+  // one named after the thing it wasn't was a tab spent on nothing.
   return `<div class="screen">
-    <div class="section-title">Setup</div>
+    <div class="section-title">Builder</div>
     ${subNav(`
-      <button class="${NAV.setupSubtab==='plan'?'active':''}" onclick="setSetupSubtab('plan')">PLAN</button>
+      <button class="${NAV.setupSubtab==='builder'?'active':''}" onclick="setSetupSubtab('builder')">WORKOUT</button>
+      <button class="${NAV.setupSubtab==='viewWorkouts'?'active':''}" onclick="setSetupSubtab('viewWorkouts')">ALL WORKOUTS</button>
       <button class="${NAV.setupSubtab==='tm'?'active':''}" onclick="setSetupSubtab('tm')">MAXES</button>
-      <button class="${NAV.setupSubtab==='builder'?'active':''}" onclick="setSetupSubtab('builder')">BUILDER</button>
-      <button class="${NAV.setupSubtab==='viewWorkouts'?'active':''}" onclick="setSetupSubtab('viewWorkouts')">VIEW WORKOUTS</button>
       <button class="${NAV.setupSubtab==='lifts'?'active':''}" onclick="setSetupSubtab('lifts')">LIFTS</button>
-      <button class="${NAV.setupSubtab==='planner'?'active':''}" onclick="setSetupSubtab('planner')">PLANNER</button>
       <button class="${NAV.setupSubtab==='general'?'active':''}" onclick="setSetupSubtab('general')">GENERAL</button>
     `)}
     ${body}
   </div>`;
 }
 
-// SETUP for the merged tab. Two PANELS rather than two tabs: workout configuration and meal
-// configuration are both "set up the thing you'll be doing daily", and they were only ever separate
-// screens because they lived under separate tabs.
+// BUILDER for the merged tab. Two PANELS rather than two tabs: building a workout and building a
+// meal are the same act on different material, and they were only ever separate screens because
+// they lived under separate tabs.
 //
 // Neither panel's own contents change -- each still renders its existing screen, with its existing
 // subnav and its own existing subtab state (setupSubtab / healthSetupSubtab). Only the switch above
 // them is new, which is why this merge costs no churn inside either one.
 function renderFitnessSetup() {
   const panel = NAV.setupPanel === 'meals' ? 'meals' : 'workouts';
+  // A segmented toggle, not two loose buttons -- the same `.unit-toggle` control LB/KG uses. Two
+  // buttons sitting side by side read as two independent actions; a segmented control reads as one
+  // choice with two positions, which is what this is. It also does the real work of the screen: it
+  // halves how many subnav buttons you're choosing between at any moment.
   const btn = (key, label) =>
-    `<button class="btn btn-sm ${panel === key ? 'btn-primary' : ''}" onclick="setSetupPanel('${key}')">${label}</button>`;
-  const switcher = `<div style="display:flex; gap:8px; margin:16px 0 4px;">${btn('workouts', 'WORKOUTS')}${btn('meals', 'MEALS')}</div>`;
+    `<button class="${panel === key ? 'active' : ''}" onclick="setSetupPanel('${key}')">${label}</button>`;
+  const switcher = `<div class="unit-toggle" style="margin:16px 0 4px; width:fit-content;">${btn('workouts', 'WORKOUTS')}${btn('meals', 'DIET')}</div>`;
   // Both inner renderers return a complete `.screen` with their own title -- splice the switcher in
   // just after that title rather than wrapping, so there's one header on the page, not two.
   const inner = panel === 'meals' ? renderHealthSetup() : renderExerciseSetup();
   return inner.replace('</div>', '</div>' + switcher);
 }
 function setSetupPanel(p) { NAV.setupPanel = p; render(); }
-// Home's own Setup: a full page (not a popup) for the app-wide Aesthetic/Accent Color choice
-// and the Data controls (backup export/import, full reset) — nothing section-specific belongs
-// here, only things that apply to the whole app.
+// Home's own Setup: a full page (not a popup) for the app-wide Aesthetic/Accent Color choice, the
+// LB/KG units choice and the Data controls (backup export/import, full reset) — nothing
+// section-specific belongs here, only things that apply to the whole app.
+//
+// Units earned their place by that exact test: STATE.units governs body weight, measurements, lab
+// results and barbell loads alike, so living under the exercise section's General pane meant an
+// app-wide switch was reachable only from one section that happened to have a settings drawer.
 function renderHomeSetup() {
   const defaultPage = STATE.settings.defaultPage || 'home';
   // No SCHEDULE entry: Home opens on the day, so "open to Schedule" and "open to Home" are the
@@ -1315,6 +1333,17 @@ function renderHomeSetup() {
           ${pageOptions.map(([val, label]) => `<option value="${val}" ${defaultPage === val ? 'selected' : ''}>${label}</option>`).join('')}
         </select>
       </label>
+    </div>
+    <div class="subtle-label" style="margin:18px 0 10px;">UNITS</div>
+    <div class="panel">
+      <div class="row" style="margin-bottom:0;">
+        <span class="lbl" style="margin-bottom:0;">Weight &amp; length</span>
+        <div class="unit-toggle">
+          <button class="${STATE.units === 'lb' ? 'active' : ''}" onclick="setUnits('lb')">LB</button>
+          <button class="${STATE.units === 'kg' ? 'active' : ''}" onclick="setUnits('kg')">KG</button>
+        </div>
+      </div>
+      <div style="font-size:11px; color:var(--text-faint); margin-top:8px;">Applies everywhere a weight or a measurement is shown — body weight, measurements, lab results and lifts alike. Stored values never change; only how they're displayed.</div>
     </div>
     <div class="subtle-label" style="margin:18px 0 10px;">AESTHETIC</div>
     <div class="stack" id="aestheticOptions"></div>

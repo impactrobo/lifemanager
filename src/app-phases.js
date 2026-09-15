@@ -959,7 +959,7 @@ function renderExercisePhaseBody(entry) {
       </div>
       <div class="phase-cal-note">
         ${entry.state === 'current'
-          ? 'This is the plan in effect. Edit it in Setup &rarr; Workouts &rarr; Planner.'
+          ? 'This is the plan in effect. Edit it in Phases &rarr; Workout Plan.'
           : entry.state === 'future'
             ? `Takes over on ${fmtGoalDate(entry.startDate)}.`
             : 'Finished, and kept as it was — starting a new block never overwrites an old one.'}
@@ -1067,4 +1067,34 @@ function renderPhaseSummary(goal, s) {
         ${weeksNote ? ' · ' + weeksNote : ''}
       </div>
     </div>`;
+}
+
+// ---------------- The PHASES screen ----------------
+//
+// PHASES is where a goal is set and then MAPPED ONTO TIME: the goal itself, which workouts land on
+// which weekday, and which meals do. BUILDER is the other half -- constructing the individual
+// workouts and meals that these plans point AT. The split is "what am I doing and when" versus
+// "what is the thing", and it's why a workout built once can be reused by every phase that wants it.
+//
+// This replaces the old GOAL tab and absorbs two subtabs that were buried inside SETUP (PLANNER and
+// MEAL PLAN). Both of those were already phase-owned in the data -- exercisePlan since the phases
+// work, mealPlan as of this change -- so they were sitting under a heading that no longer described
+// them. Nothing inside any of the three panes changed; only where you reach them from.
+const PHASES_SUBTABS = [
+  ['goal', 'GOAL'],
+  ['workouts', 'WORKOUT PLAN'],
+  ['meals', 'MEAL PLAN'],
+];
+function setPhasesSubtab(t) { NAV.phasesSubtab = t; render(); }
+function renderPhasesScreen() {
+  const sub = PHASES_SUBTABS.some(([k]) => k === NAV.phasesSubtab) ? NAV.phasesSubtab : 'goal';
+  const body = sub === 'workouts' ? renderExercisePlanTab()
+             : sub === 'meals' ? renderMealPlanTab()
+             : renderGoalTab();
+  return `<div class="screen">
+    <div class="section-title">Phases</div>
+    ${subNav(PHASES_SUBTABS.map(([key, label]) =>
+      `<button class="${sub === key ? 'active' : ''}" onclick="setPhasesSubtab('${key}')">${label}</button>`).join(''))}
+    ${body}
+  </div>`;
 }

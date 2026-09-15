@@ -173,7 +173,7 @@ let VIEW = {
 const NAV_SNAPSHOT_KEYS = [
   'currentTab', 'fitnessSubtab', 'skillId', 'skillSubtab', 'setupPanel', 'setupSubtab', 'setupContext',
   'notesSubtab', 'scheduleSubtab', 'budgetSubtab', 'scheduleSetupSubtab', 'healthSetupSubtab',
-  'dietSubtab',
+  'dietSubtab', 'phasesSubtab',
 ];
 // Which tab to boot into. Validated rather than read straight out of settings, because this runs
 // at NAV's declaration -- top-level, in source order -- which is BEFORE loadState()'s migrations
@@ -203,10 +203,14 @@ let NAV = {
   currentTab: initialTab(), // Settings -> Default Page, not always Home
   /** @type {{ mode: string, workoutId?: any, cardioId?: any }} */
   trainView: { mode: 'grid', workoutId: null }, // {mode:'grid'} | {mode:'log', workoutId} | {mode:'cardioLog', cardioId}
-  // The one subtab key for the whole Health & Wellness tab: 'goal' | 'workouts' | 'body' | 'diet' |
-  // 'longevity' | 'setup'. Replaced trainTopSubtab + healthSubtab when Exercise and Health & Diet
-  // merged -- they described a split that no longer exists.
+  // The one subtab key for the whole Health & Wellness tab: 'workouts' | 'phases' | 'builder' |
+  // 'body' | 'diet'. Replaced trainTopSubtab + healthSubtab when Exercise and Health & Diet merged
+  // -- they described a split that no longer exists. 'goal', 'setup' and 'longevity' are retired
+  // values that still ride in on saved nav snapshots; _doRender() lands each on its successor.
   fitnessSubtab: 'workouts',
+  // PHASES' own subnav: 'goal' | 'workouts' | 'meals' -- the goal, and the two weekday plans that
+  // belong to a phase.
+  phasesSubtab: 'goal',
   setupSubtab: 'tm',
   setupContext: 'train',
   // BODY's own subnav. Same five values progressSubtab carried, with the two chart views renamed
@@ -572,14 +576,24 @@ function renderTabbar() {
     // and Health & Diet merged into one tab. Six buttons where there
     // used to be eight across two tabs -- BODY absorbed Specs and Progress, SETUP absorbed both
     // sections' Setup screens as panels. `.tabbar` scrolls horizontally past what fits.
+    // Retired values map onto their successors before the active check, or a nav snapshot carrying
+    // 'goal' would render PHASES' contents with no button lit -- the bar and the screen disagreeing
+    // about where you are.
+    const cur = { goal: 'phases', setup: 'builder', longevity: 'diet' }[NAV.fitnessSubtab] || NAV.fitnessSubtab;
     const fb = (key, ic, label) =>
-      `<button class="${NAV.fitnessSubtab===key?'active':''}" onclick="setFitnessSubtab('${key}')"><span class="ic">${icon(ic)}</span>${label}</button>`;
+      `<button class="${cur===key?'active':''}" onclick="setFitnessSubtab('${key}')"><span class="ic">${icon(ic)}</span>${label}</button>`;
+    // PHASES and BUILDER replaced GOAL and SETUP (2026-09-15), same five buttons. The old pair split
+    // by SUBJECT -- your goal over here, the screens that configure things over there -- which put
+    // "assign workouts to weekdays" and "build a workout" side by side under SETUP even though one
+    // is a plan and the other is a thing. The new pair splits by WHAT YOU'RE DOING: PHASES sets the
+    // goal and maps workouts and meals onto time, BUILDER constructs the workouts and meals those
+    // plans point at. Builds are standalone and reusable; plans belong to a phase.
     sectionBtns =
       fb('workouts', 'exercise', 'WORKOUTS') +
-      fb('goal', 'flag', 'GOAL') +
+      fb('phases', 'planner', 'PHASES') +
+      fb('builder', 'setup', 'BUILDER') +
       fb('body', 'progress', 'BODY') +
-      fb('diet', 'drumstick', 'DIET') +
-      fb('setup', 'setup', 'SETUP');
+      fb('diet', 'drumstick', 'DIET');
   } else if (NAV.currentTab === 'hobbies') {
     // Inside a Skill the bottom bar stays at TWO fixed buttons, because that skill's list strip is
     // variable-width and lives in the in-screen .subnav instead -- the strip that has scroll
@@ -628,10 +642,13 @@ function _doRender() {
       app.innerHTML = renderBody();
       attachBodyHandlers();
       if (NAV.bodySubtab === 'measurements' && UI.measureFormOpen) renderMeasurePhotoRow();
-    } else if (NAV.fitnessSubtab === 'setup') {
+    } else if (NAV.fitnessSubtab === 'builder' || NAV.fitnessSubtab === 'setup') {
+      // 'setup' is the old name for this tab, still riding in on saved nav snapshots.
       app.innerHTML = renderFitnessSetup();
-    } else if (NAV.fitnessSubtab === 'goal') {
-      app.innerHTML = renderFitnessScreen(renderGoalTab());
+    } else if (NAV.fitnessSubtab === 'phases' || NAV.fitnessSubtab === 'goal') {
+      // 'goal' likewise: PHASES absorbed it whole, so the old value lands on the screen that
+      // contains what it used to show rather than on nothing.
+      app.innerHTML = renderPhasesScreen();
     } else if (NAV.fitnessSubtab === 'diet') {
       app.innerHTML = renderFitnessScreen(renderDietSetup());
     } else if (NAV.fitnessSubtab === 'longevity') {

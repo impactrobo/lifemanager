@@ -487,6 +487,48 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **PHASES and BUILDER replaced GOAL and SETUP (2026-09-15).** The second half of the restructure,
+  and the reason the meal-plan work above came first. Same five bottom-bar buttons:
+  `WORKOUTS / PHASES / BUILDER / BODY / DIET`.
+  - **The old pair split by SUBJECT** — your goal over here, the screens that configure things over
+    there — which filed "assign workouts to weekdays" and "build a workout" side by side under
+    SETUP even though one is a plan and the other is a thing. **The new pair splits by what you're
+    doing.** PHASES sets the goal and maps workouts and meals onto time; BUILDER constructs the
+    workouts and meals those plans point at. Builds are standalone and reusable; plans belong to a
+    phase.
+  - PHASES: `GOAL / WORKOUT PLAN / MEAL PLAN`. The two plan panes moved in whole from SETUP —
+    both were already phase-owned in the data, so they were sitting under a heading that had
+    stopped describing them.
+  - BUILDER keeps the WORKOUTS/DIET panel switch, now a real segmented toggle (`.unit-toggle`,
+    the control LB/KG uses) rather than two loose buttons — it halves how many subnav buttons
+    you're choosing between at once. `VIEW WORKOUTS` became `ALL WORKOUTS` to parallel `ALL MEALS`.
+  - **Retired subtab values land on their successors** rather than rendering nothing: `goal` →
+    PHASES, `setup` → BUILDER, `longevity` → DIET, in both the router and the tabbar's active
+    check — a nav snapshot carrying `goal` must not render PHASES with no button lit.
+  - Ten in-app breadcrumbs pointing at "Setup → …" were rewritten; they were directions to a tab
+    that no longer exists.
+
+- **GENERAL was dissolved into where each part is used (2026-09-15).** It held four unrelated
+  things behind one heading that described none of them.
+  - **Units (LB/KG) → the app-wide Settings screen.** `STATE.units` governs body weight,
+    measurements, lab results and barbell loads alike; living under the exercise section meant an
+    app-wide switch was reachable only from the one section that happened to have a drawer.
+  - **Rounding increment → leads MAXES.** It exists solely to turn a training max into a loadable
+    bar, so it reads first and every target below it is rounded by it.
+  - **Rest behaviour → the rest picker overlay.** It only ever fires while you're logging a set,
+    and the picker is the one surface that appears exactly then. The stored "Default length"
+    select was dropped entirely: `openRestPicker()` already seeds from `lastUsedSeconds`, so the
+    timer holds whatever you rested last — a stored default was a second answer to a question the
+    picker already answered, and one of them was always going to be the stale one.
+  - **Program cycle length stayed put**, and is the open question. It's the last survivor of the
+    pre-phases model — a single global "the program is N weeks long" — while a training block now
+    carries its own `weeks` and `phaseSchedule()` derives every date from those. Two competing
+    notions of program length, one of which doesn't know goals exist. Moving it would only put the
+    contradiction on a nicer screen; it likely wants subsuming into phases instead.
+  - `tests/test_settings_placement.js` pins all four, including that no LB/KG switch remains
+    reachable inside the exercise section — a settings control that moves to the wrong screen is
+    invisible rather than broken, so nothing would throw.
+
 - **Meal plans became phase-owned (2026-09-15).** The first step of the PHASES/BUILDER
   restructure, and the one genuine gap it exposed. A weight phase already carried its own
   `calorieTarget`, but `STATE.diet.mealPlan` was global — so Phase 1 at 2,100 cal and Phase 2 at
