@@ -133,6 +133,7 @@ let VIEW = {
   compareSelected: ['bodyweight'],
   compareRange: null,                // {preset, from, to} for COMPARE; null until first read
   calCompare: null,                  // [dateStr, ...] while comparing days; null = not comparing
+  supplementEditing: null,           // id of the regimen item whose editor is open
   measureDraftPhotos: [],            // draft photos on an unsaved measurement
   labPasteDraft: null,               // {markerKey: number} parsed out of a pasted report, unsaved
   labPasteReport: null,              // {matched, unmatched} counts from that parse
@@ -166,6 +167,7 @@ let VIEW = {
 const NAV_SNAPSHOT_KEYS = [
   'currentTab', 'fitnessSubtab', 'skillId', 'skillSubtab', 'setupPanel', 'setupSubtab', 'setupContext',
   'notesSubtab', 'scheduleSubtab', 'budgetSubtab', 'scheduleSetupSubtab', 'healthSetupSubtab',
+  'dietSubtab',
 ];
 // Which tab to boot into. Validated rather than read straight out of settings, because this runs
 // at NAV's declaration -- top-level, in source order -- which is BEFORE loadState()'s migrations
@@ -218,6 +220,7 @@ let NAV = {
   // that isn't 'setup' as the calendar, so a stale value from a nav snapshot lands somewhere real.
   scheduleSubtab: 'calendar',
   budgetSubtab: 'overview',
+  dietSubtab: 'food',                // 'food' | 'supplements' -- an in-screen strip, not a bar button
   scheduleSetupSubtab: 'anchors',
   healthSetupSubtab: 'builder',
   calZoom: 'month',

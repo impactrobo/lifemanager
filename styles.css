@@ -2337,3 +2337,40 @@ button.lab-stand-toggle:focus-visible { outline: 2px solid var(--accent); outlin
 /* A row every day agrees on is context for the rows that differ, so it steps back -- but only
    slightly, since it compounds with the ditto's own dimming. */
 .cmpd-uniform td, .cmpd-uniform .cmpd-rowlbl { opacity: 0.78; }
+
+/* ---- Supplements & medicine ---- */
+.supp-slot { margin-bottom: 14px; }
+.supp-row { background: var(--surface); border: 1px solid var(--border-soft); border-radius: var(--radius); margin-bottom: 6px; }
+.supp-row-main { display: flex; align-items: center; gap: 10px; padding: 9px 10px; }
+.supp-row-text { flex: 1 1 auto; min-width: 0; cursor: pointer; }
+.supp-name { font-size: 13px; font-weight: 600; }
+.supp-dose { font-size: 11px; color: var(--text-faint); margin-top: 1px; }
+.supp-row-done .supp-name, .supp-row-done .supp-dose { opacity: 0.55; }
+/* Medicine reads differently from a supplement at a glance without being a whole separate list. */
+.supp-kind {
+  font-size: 8px; font-weight: 800; letter-spacing: 0.06em; margin-left: 6px;
+  padding: 1px 4px; border-radius: 3px; background: var(--accent-soft); color: var(--accent);
+  vertical-align: middle;
+}
+/* A stack is the superset of this screen: one tap covers the group, and its members sit inside it
+   so the bundle reads as one object rather than a heading over loose rows. */
+.supp-stack {
+  border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 8px; margin-bottom: 8px; background: var(--surface2);
+}
+.supp-stack-done { border-color: var(--good); }
+.supp-stack-head { display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 2px 2px 8px; }
+.supp-stack-name { flex: 1 1 auto; min-width: 0; font-size: 13px; font-weight: 700; }
+.supp-stack-count { font-size: 11px; color: var(--text-faint); flex: none; }
+.supp-row-member { margin-bottom: 4px; }
+.supp-row-member:last-child { margin-bottom: 0; }
+.supp-edit { padding: 0 10px 10px; border-top: 1px solid var(--border-soft); margin-top: 2px; }
+.supp-edit .field { margin-top: 10px; }
+.supp-hint { font-size: 10px; color: var(--text-faint); margin: 6px 0 10px; }
+.supp-preset {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--surface2); border: 1px dashed var(--border); border-radius: var(--radius);
+  padding: 10px; margin-top: 12px;
+}
+.supp-preset-name { font-size: 12px; font-weight: 700; }
+.supp-preset-blurb { font-size: 11px; color: var(--text-dim); margin-top: 2px; line-height: 1.4; }

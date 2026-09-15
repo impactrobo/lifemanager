@@ -630,6 +630,9 @@ function migrateState() {
   migrateGuitarToSkill();
   if (STATE.life.skinCycleStart === undefined) STATE.life.skinCycleStart = null;
   if (!STATE.life.supplementLog) STATE.life.supplementLog = {};
+  // Must run AFTER supplementLog exists -- it re-keys that log from names onto ids. Idempotent; the
+  // marker is STATE.supplements existing at all. See src/app-supplements.js.
+  migrateSupplements();
   if (!Array.isArray(STATE.life.anchors)) STATE.life.anchors = DEFAULT_DAILY_ANCHORS.map(a => Object.assign({}, a));
   if (!Array.isArray(STATE.life.periodic)) STATE.life.periodic = DEFAULT_PERIODIC_ANCHORS.map(a => Object.assign({}, a));
   if (!Array.isArray(STATE.life.habits)) STATE.life.habits = [];

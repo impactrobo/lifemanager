@@ -507,6 +507,39 @@ on an architecture split + a large wave of Maximalist aesthetics.
   - **Still open:** comparison — see "Lab comparison, agreed direction" under Ideas worth
     considering for the shape that was settled on and why a panel-vs-panel compare isn't it.
 
+- **Supplements become a real regimen; the hardcoded seven become a preset (2026-09-15).** Step 1 of
+  dissolving the Longevity section, proposed as "supplements should be able to be consolidated into
+  a separate section like a Meal planner… this current supplements regime can be a preset".
+  - **What was wrong with it:** `SUPPLEMENTS` was seven hardcoded rows in `app-data.js` you could
+    tick and nothing else — no adding, no editing, no dose of your own, no sense of *when* anything
+    was taken. A reference card with checkboxes, which is why the section it lived in never grew.
+  - `SUPPLEMENT_PRESETS` mirrors `SKILL_TEMPLATES` (key / name / blurb / `build()`), so the seven
+    install in one tap into a list you then own. Appending, not replacing — installing on top of an
+    existing regimen is a real thing to want — but a re-install **asks first**, since tapping ADD
+    twice would otherwise quietly give you two of everything.
+  - **Stacks are this screen's supersets**, which is what was asked for: a named bundle taken at one
+    slot, ticked in one tap. The stack owns the slot, so moving the group moves its members;
+    deleting the stack keeps them and just clears `stackId`, because a bundle is a convenience and
+    the things in it are the data. Members keep their own tick — the bundle exists to make the
+    common case one tap, not to stop you recording that you skipped one today. A tap on a *partly*
+    done stack finishes it rather than resetting it: the gesture reads as "take the rest".
+  - **Medicine is the same model with a `kind` field**, not a parallel one — the same call the plan
+    entries made with `{kind, refId}`. A `photo` slot exists on every item but capture is a
+    deliberate later step: base64 rides to localStorage *and* on to Firestore through Cloud Sync, so
+    ~20 items × ~100KB is a cost to add on purpose rather than discover.
+  - **THE LOG IS KEYED BY ID, and that is load-bearing.** The old log keyed ticks by *name*, which
+    was safe only while the list could never change. The moment it became editable, renaming
+    "Vitamin D3" would have silently orphaned every tick of it. `migrateSupplements()` re-keys
+    existing history onto ids by name, and is idempotent. A save that never ticked anything starts
+    **empty** with the preset on offer — assuming a regimen nobody used would be putting words in
+    their mouth.
+  - **Placed under DIET rather than taking a bar button**, on an in-screen `unit-toggle` strip
+    (FOOD & TARGETS / SUPPLEMENTS). The bar it would have joined is the one with the logged overflow
+    bug; a test asserts it adds no button there.
+  - Still to come: anchors gain an optional rotation so skin cycling survives as a *computed* thing,
+    the circadian reference becomes an anchor preset, and Longevity retires — which takes that bar
+    from seven buttons to six.
+
 - **Compare days: what the Agenda was for, with the day set made explicit (2026-09-15).** Proposed
   immediately after retiring the Agenda — "this can all be built back with a compare-days button…
   similar to the agenda but simpler" — and it is strictly more capable than what it replaces. The

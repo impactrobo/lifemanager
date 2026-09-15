@@ -927,6 +927,10 @@ function updateTdeeWindowWeeks(val) {
 }
 
 function renderDietSetup() {
+  // Supplements share this tab rather than taking a bottom-bar button: the bar they would have
+  // joined is the one with a logged overflow bug, and "things you take on a schedule" is a fair
+  // neighbour for the meal planner. Two long screens, so they get an in-screen strip.
+  if (NAV.dietSubtab === 'supplements') return `${renderDietSubnav()}${renderSupplements()}`;
   const calc = STATE.diet.calc;
   const hasAllInputs = calc.weight && calc.height && calc.age && calc.sex && calc.heightUnit && calc.weightUnit && calc.activity;
   const result = hasAllInputs ? computeTDEE(calc) : null;
@@ -982,6 +986,7 @@ function renderDietSetup() {
     </div>` : '';
 
   return `
+    ${renderDietSubnav()}
     <div class="panel">
       <div class="subtle-label" style="margin-bottom:8px;">TDEE</div>
       <label class="field">
