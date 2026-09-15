@@ -134,6 +134,7 @@ let VIEW = {
   compareRange: null,                // {preset, from, to} for COMPARE; null until first read
   calCompare: null,                  // [dateStr, ...] while comparing days; null = not comparing
   supplementEditing: null,           // id of the regimen item whose editor is open
+  liftNoteEditing: null,             // liftId whose setup-note editor is open
   measureDraftPhotos: [],            // draft photos on an unsaved measurement
   labPasteDraft: null,               // {markerKey: number} parsed out of a pasted report, unsaved
   labPasteReport: null,              // {matched, unmatched} counts from that parse

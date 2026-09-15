@@ -388,6 +388,9 @@ function migrateState() {
   if (!Array.isArray(STATE.goals)) STATE.goals = [];
   if (!Array.isArray(STATE.phases)) STATE.phases = [];
   if (!Array.isArray(STATE.lifts)) STATE.lifts = [];
+  // Setup notes keyed by liftId -- sparse, and deliberately not on the lift itself, since
+  // LIFT_LIBRARY is a source constant. See liftNote() in src/app-lifts.js.
+  if (!STATE.liftNotes || typeof STATE.liftNotes !== 'object') STATE.liftNotes = {};
   if (!Array.isArray(STATE.exTargets)) STATE.exTargets = [];
   if (!Array.isArray(STATE.skills)) STATE.skills = [];
   if (!Array.isArray(STATE.skillTargets)) STATE.skillTargets = [];

@@ -507,6 +507,33 @@ on an architecture split + a large wave of Maximalist aesthetics.
   - **Still open:** comparison — see "Lab comparison, agreed direction" under Ideas worth
     considering for the shape that was settled on and why a panel-vs-panel compare isn't it.
 
+- **Setup notes that belong to the lift, so they outlive the phase (2026-09-15).** Asked as "if you
+  do an incline curl again a year later, your note of 'Bench incline 30 degrees' stays".
+  - **The existing `notes` field could never have done this.** It lives on the workout *log*, keyed
+    by cycle and workout — right for "how did it feel today", wrong for a fact about the exercise
+    that was true last year and will be true next year. A new phase, a program rewrite or a cleared
+    log takes it with them.
+  - So a setup note hangs off the **liftId** — the only identity here that survives any of that. A
+    test wipes `STATE.logs`, jumps the cycle forward by twelve, empties `exercisePlan` and `phases`,
+    then reloads, and the note is still there.
+  - **Stored in a sparse `STATE.liftNotes` map, not on the lift.** `LIFT_LIBRARY` is a source
+    constant, so a shipped lift has nowhere to keep one — the same reason lab range overrides are a
+    sparse map beside the catalogue rather than fields on it. Clearing a note deletes the key rather
+    than storing `''`, since every caller reads it as `liftNote(id) ?`.
+  - **The second payoff, which falls out for free:** the same movement as a T3 in one workout and an
+    RP exercise in another shows one note, because it was keyed on the identity they share rather
+    than on either of them. Wired into all three exercise block types (RP, GZCL tier, T3).
+  - Rendered **above the sets** — it is what you read while setting the bench up, not something to
+    review afterwards. A test asserts its position in the markup precedes the first set row.
+  - **An exercise with no lift linked gets no note row at all.** There is no identity to hang one
+    on, and offering it there would be a second, silent way to create a lift — where linking is a
+    deliberate screen with its own "did you mean" guard, precisely because a wrong link fuses two
+    exercises' histories. The cost is discoverability: you only learn setup notes exist on an
+    exercise that is already linked.
+  - Two things the tests caught, both mine: §4 originally *skipped itself* when no workout had an
+    enabled T3 — and `STATE.workouts` is empty on a fresh save, so it reported PASS having checked
+    nothing. And counting `/lift-note/g` counted three class names inside one rendered row.
+
 - **Supplements become a real regimen; the hardcoded seven become a preset (2026-09-15).** Step 1 of
   dissolving the Longevity section, proposed as "supplements should be able to be consolidated into
   a separate section like a Meal planner… this current supplements regime can be a preset".

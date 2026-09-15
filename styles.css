@@ -2390,3 +2390,26 @@ button.lab-stand-toggle:focus-visible { outline: 2px solid var(--accent); outlin
   background: var(--surface); color: var(--text-faint); border: 1px solid var(--border-soft);
 }
 .anchor-rot-step.on { background: var(--accent-soft); color: var(--accent); border-color: var(--accent-dim); }
+
+/* ---- Setup notes on a lift ---- */
+/* Sits above the sets, because it is what you read while setting the bench up -- not a review. */
+.lift-note {
+  display: flex; align-items: flex-start; gap: 7px;
+  background: var(--surface2); border-left: 3px solid var(--accent-dim);
+  border-radius: var(--radius); padding: 7px 9px; margin-bottom: 10px;
+  font-size: 12px; line-height: 1.45; cursor: pointer;
+}
+.lift-note-icon { flex: none; color: var(--text-faint); display: flex; }
+.lift-note-icon svg { width: 11px; height: 11px; }
+.lift-note-text { flex: 1 1 auto; min-width: 0; white-space: pre-wrap; }
+.lift-note-editing { display: block; cursor: default; }
+/* Element+class so the base form block's padding/size don't win; the base is :where()'d now, but
+   the textarea still needs its own metrics here. */
+textarea.lift-note-input { font-size: 12px; min-height: 42px; margin-bottom: 4px; }
+.lift-note-hint { font-size: 10px; color: var(--text-faint); line-height: 1.4; }
+.lift-note-add {
+  background: none; border: 1px dashed var(--border); color: var(--text-faint);
+  border-radius: var(--radius); padding: 4px 9px; margin-bottom: 10px;
+  font-size: 9px; font-weight: 700; letter-spacing: 0.04em; cursor: pointer;
+}
+.lift-note-add:hover { color: var(--text-dim); border-color: var(--accent-dim); }

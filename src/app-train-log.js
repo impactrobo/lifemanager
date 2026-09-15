@@ -407,6 +407,7 @@ function renderRpExerciseBlock(workout, cycle, log, ex) {
         </div>
       </div>
       <div class="tier-body">
+        ${renderLiftNoteRow(ex.liftId)}
         ${needsSeed && !isBand && !isBW
           ? `<div class="target-line" style="color:var(--reset-text); font-weight:600;">First time logging this — enter your working weight for Set 1; the rest will match it.</div>`
           : `<div class="target-line">Target: <span class="tv">${tSets}&times;${tRepMin}-${tRepMax}</span> @ RIR ${fmt(ex.targetRIR,1)}${
@@ -763,6 +764,7 @@ function renderTierBlock(workout, cycle, log, tierKey, categoryId) {
         <div class="plate-row">${plates}</div>
       </div>
       <div class="tier-body">
+        ${renderLiftNoteRow(cat && cat.liftId)}
         ${needsReset
           ? `<div class="target-line" style="color:var(--reset-text); font-weight:600;">Reset triggered — missed Stage 3 last time. Enter a fresh working weight for Set 1; the rest will match it. Back to Stage 1: ${stageDef.sets}&times;${stageDef.reps}${stageDef.amrapLast ? ' (last set AMRAP)' : ''}</div>`
           : `<div class="target-line">Target: <span class="tv">${fmtWeight(targetLb)} ${weightUnitLabel()}</span> &middot; ${tSets}&times;${tReps}${(stageDef.amrapLast && !dl.on) ? ' (last set AMRAP)' : ''}${stageDef.testNote ? ' &mdash; ' + stageDef.testNote : ''}${
@@ -973,6 +975,7 @@ function renderT3Block(workout, cycle, log, idx, name) {
         <div class="plate-row">${plates}</div>
       </div>
       <div class="tier-body">
+        ${renderLiftNoteRow(t3def.liftId)}
         ${needsSeed ? `<div class="target-line" style="color:var(--reset-text); font-weight:600;">${stageNeedsReset ? 'Reset triggered — needed myoreps at Stage 3 last time. Enter a fresh working weight for Set 1; the rest will match it. Back to Stage 1.' : 'First time logging this — enter your working weight for Set 1; the rest will match it.'}</div>` : `<div class="target-line">Target: <span class="tv">${stageTarget}</span> total reps (Stage ${t3StageIdx + 1})${
               dl.on ? ` <span class="deload-flag">DELOAD</span> <span style="color:var(--text-faint); font-weight:500;">was ${baseStageTarget}</span>` : ''}</div>`}
         <div class="set-row" style="margin-bottom:8px; opacity:.6;">

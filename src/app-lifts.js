@@ -796,3 +796,70 @@ function renderPrLog() {
       }).join('')}
     </div>`;
 }
+
+// ---- Setup notes, which belong to the LIFT and therefore outlive everything else ----
+//
+// A workout log already has a `notes` field, and it is the right field for "how did it feel today".
+// It is the wrong field for "bench at 30 degrees, seat position 4" -- a fact about the exercise that
+// was true last year and will be true next year, written into one session's log where the next
+// phase, cycle or program will never look for it.
+//
+// So a setup note hangs off the liftId. That is the only identity in this app that survives a phase
+// change, a program rewrite, or the same movement appearing as a T3 in one workout and an RP
+// exercise in another: link both to Incline Curl and both show the note, because it was never
+// attached to either of them.
+//
+// Stored in its own sparse map rather than on the lift, because LIFT_LIBRARY is a source constant
+// -- a shipped lift has nowhere to keep one. Same shape as the lab range overrides for the same
+// reason: shipped defaults you can annotate without owning the object.
+function liftNotes() {
+  if (!STATE.liftNotes || typeof STATE.liftNotes !== 'object') STATE.liftNotes = {};
+  return STATE.liftNotes;
+}
+function liftNote(liftId) { return (liftId && liftNotes()[liftId]) || ''; }
+function setLiftNote(liftId, text) {
+  if (!liftId) return;
+  const t = String(text == null ? '' : text).trim();
+  // Cleared means gone, not stored as an empty string: the map is read with `liftNote(id) ?` all
+  // over, and a lingering '' would keep an empty note row on screen forever.
+  if (t) liftNotes()[liftId] = t;
+  else delete liftNotes()[liftId];
+  saveState();
+}
+function toggleLiftNoteEditor(liftId) {
+  VIEW.liftNoteEditing = VIEW.liftNoteEditing === liftId ? null : liftId;
+  render();
+}
+function saveLiftNoteFrom(liftId, value) {
+  setLiftNote(liftId, value);
+  VIEW.liftNoteEditing = null;
+  render();
+}
+
+// Shown at the top of an exercise while logging it -- before the sets, because it is what you read
+// while setting the bench up, not something to review afterwards.
+//
+// An exercise with no lift linked yet gets nothing at all: there is no identity to hang a note on,
+// and inventing one here would create a second, silent way to make a lift. Linking is a deliberate
+// act with its own screen (Setup -> Workouts -> Lifts) and its own "did you mean" guard, precisely
+// because a wrong link fuses two exercises' histories.
+function renderLiftNoteRow(liftId) {
+  if (!liftId) return '';
+  const note = liftNote(liftId);
+  if (VIEW.liftNoteEditing === liftId) {
+    return `
+      <div class="lift-note lift-note-editing">
+        <textarea class="lift-note-input" rows="2" placeholder="Bench at 30°, seat 4, EZ bar…"
+          onblur="saveLiftNoteFrom('${liftId}', this.value)">${escapeHtml(note)}</textarea>
+        <div class="lift-note-hint">Kept with this exercise, not this workout — it follows the lift into any phase.</div>
+      </div>`;
+  }
+  if (!note) {
+    return `<button class="lift-note-add" onclick="toggleLiftNoteEditor('${liftId}')">+ SETUP NOTE</button>`;
+  }
+  return `
+    <div class="lift-note" onclick="toggleLiftNoteEditor('${liftId}')">
+      <span class="lift-note-icon">${icon('pencil')}</span>
+      <span class="lift-note-text">${escapeHtml(note)}</span>
+    </div>`;
+}
