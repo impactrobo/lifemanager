@@ -567,7 +567,6 @@ function renderTabbar() {
       fb('goal', 'flag', 'GOAL') +
       fb('body', 'progress', 'BODY') +
       fb('diet', 'drumstick', 'DIET') +
-      fb('longevity', 'infinity', 'LONGEVITY') +
       fb('setup', 'setup', 'SETUP');
   } else if (NAV.currentTab === 'hobbies') {
     // Inside a Skill the bottom bar stays at TWO fixed buttons, because that skill's list strip is
@@ -624,7 +623,13 @@ function _doRender() {
     } else if (NAV.fitnessSubtab === 'diet') {
       app.innerHTML = renderFitnessScreen(renderDietSetup());
     } else if (NAV.fitnessSubtab === 'longevity') {
-      app.innerHTML = renderFitnessScreen(renderLifeLongevity());
+      // Longevity retired: its supplements became an editable regimen under DIET, and its skin
+      // cycling and circadian guidance became anchor presets. A stale subtab value rides in nav
+      // snapshots, so it lands on the screen that inherited the thing you were most likely after
+      // rather than rendering nothing.
+      NAV.fitnessSubtab = 'diet';
+      NAV.dietSubtab = 'supplements';
+      app.innerHTML = renderFitnessScreen(renderDietSetup());
     } else if (NAV.trainView.mode === 'grid') app.innerHTML = renderTrainGrid();
     else if (NAV.trainView.mode === 'cardioLog') app.innerHTML = renderCardioLog(NAV.trainView.cardioId);
     else if (NAV.trainView.mode === 'rpLog') app.innerHTML = renderRpWorkoutLog(NAV.trainView.workoutId);

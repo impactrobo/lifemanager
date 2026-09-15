@@ -2374,3 +2374,19 @@ button.lab-stand-toggle:focus-visible { outline: 2px solid var(--accent); outlin
 }
 .supp-preset-name { font-size: 12px; font-weight: 700; }
 .supp-preset-blurb { font-size: 11px; color: var(--text-dim); margin-top: 2px; line-height: 1.4; }
+
+/* ---- A rotating anchor ---- */
+.anchor-rot {
+  margin-top: 12px; padding: 10px; border-radius: var(--radius);
+  background: var(--surface2); border: 1px solid var(--border-soft);
+}
+.anchor-rot-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.anchor-rot-now { font-size: 12px; font-weight: 600; }
+.anchor-rot-n { font-size: 10px; color: var(--text-faint); margin-left: 4px; }
+.anchor-rot-steps { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+.anchor-rot-step {
+  font-size: 9px; font-weight: 700; letter-spacing: 0.03em;
+  padding: 3px 7px; border-radius: 10px;
+  background: var(--surface); color: var(--text-faint); border: 1px solid var(--border-soft);
+}
+.anchor-rot-step.on { background: var(--accent-soft); color: var(--accent); border-color: var(--accent-dim); }

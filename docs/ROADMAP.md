@@ -536,9 +536,37 @@ on an architecture split + a large wave of Maximalist aesthetics.
   - **Placed under DIET rather than taking a bar button**, on an in-screen `unit-toggle` strip
     (FOOD & TARGETS / SUPPLEMENTS). The bar it would have joined is the one with the logged overflow
     bug; a test asserts it adds no button there.
-  - Still to come: anchors gain an optional rotation so skin cycling survives as a *computed* thing,
-    the circadian reference becomes an anchor preset, and Longevity retires — which takes that bar
-    from seven buttons to six.
+  - Steps 2 and 3 followed the same day — see below.
+
+- **Anchors can rotate; Longevity retires (2026-09-15).** Steps 2 and 3 of the same restructure.
+  - **Skin cycling was the only thing in Longevity that actually computed anything**
+    (`daysSince(start) % 4` → "tonight is Night 2, Retinoid"); the rest was static reference text.
+    Folding it into a plain anchor would have thrown that away, so an anchor can now carry
+    `rotation: { start, steps[] }` and shows whichever step applies to the day being rendered.
+    Skin cycling is the first user; anything on a repeating N-day cycle gets it free.
+  - **It is a DISPLAY rule, not a second kind of anchor.** `anchorTextFor()` changes only the label
+    and detail; times, category, the open flag and how exceptions treat the block are untouched, and
+    a rotation-less anchor falls straight through. That is what stops every surface downstream of
+    `scheduleBlocksForDate()` from having to learn rotations exist — a test asserts the block's
+    `start`/`kind`/`anchorId` are unchanged.
+  - A date **before** the start returns `null`, not a negative index — "night −2 of 4" isn't a
+    thing, and browsing back through the calendar past the start is the ordinary way to hit it. The
+    anchor still renders, as itself.
+  - The label **keeps the anchor and appends the step** ("PM skin routine — Retinoid"). Replacing it
+    outright would make the timeline read as a different block every night.
+  - **The circadian block was a shadow copy of anchors that already existed** — `wake`'s detail is
+    `SLEEP_PROTOCOLS[0]` almost verbatim, two copies of one piece of advice free to drift. The
+    anchors are the copy that can be scheduled and ticked, so they win; `SLEEP_PROTOCOL_ANCHORS` is
+    the installable version for anyone whose schedule no longer has them. Presets install additively
+    and skip by label, because topping up an edited schedule is the common case.
+  - `migrateSkinCycleToAnchor()` moves `skinCycleStart` onto the PM skin anchor, so **anyone
+    mid-cycle keeps their place** — tonight is the same night it was before the change. With no PM
+    skin anchor to carry it, nothing is invented on their schedule and the date is left alone.
+  - **The Health & Wellness bar went from seven buttons to six**, which is a real dent in the
+    reported overflow bug as a side effect rather than a fix aimed at it. A stale `longevity` subtab
+    (it rides in nav snapshots) lands on DIET → SUPPLEMENTS, the screen that inherited what you were
+    most likely after. `src/app-hobbies.js` is deleted — it was named for the guitar catalogues that
+    became the first Skill, and Longevity was the last tenant.
 
 - **Compare days: what the Agenda was for, with the day set made explicit (2026-09-15).** Proposed
   immediately after retiring the Agenda — "this can all be built back with a compare-days button…

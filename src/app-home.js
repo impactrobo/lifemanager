@@ -404,7 +404,15 @@ function scheduleBlocksForDate(dateObj) {
   const ex = exceptionCoversDateObj(dateObj);
   // Anchors survive an exception by default — they're the permanent baseline, and a holiday still
   // has a morning routine. skipAnchors is the opt-in for a genuinely blank day.
-  const blocks = (ex && ex.skipAnchors) ? [] : STATE.life.anchors.map(a => ({ id: 'anchor:' + a.id, start: a.start, end: a.end, label: a.label, detail: a.detail, kind: 'anchor', anchorId: a.id, open: !!a.open, category: a.category || null }));
+  // anchorTextFor() applies a rotation if the anchor has one and falls straight through if it
+  // doesn't, so a rotating anchor is a display difference here and nothing more -- times, category,
+  // the open flag and how exceptions treat it are all unchanged. That is what keeps every surface
+  // downstream from having to learn that rotations exist.
+  const anchorDateStr = dateKey(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate());
+  const blocks = (ex && ex.skipAnchors) ? [] : STATE.life.anchors.map(a => {
+    const t = anchorTextFor(a, anchorDateStr);
+    return { id: 'anchor:' + a.id, start: a.start, end: a.end, label: t.label, detail: t.detail, kind: 'anchor', anchorId: a.id, open: !!a.open, category: a.category || null };
+  });
   if (sched) {
     if (sched.wakeStart && sched.wakeEnd) blocks.push({ id: 'wake:' + sched.id, start: sched.wakeStart, end: sched.wakeEnd, label: 'Wake-Up', detail: '', kind: 'wake', category: sched.wakeCategory || null });
     if (sched.bedStart && sched.bedEnd) blocks.push({ id: 'bed:' + sched.id, start: sched.bedStart, end: sched.bedEnd, label: 'Bed Time', detail: '', kind: 'bed', category: sched.bedCategory || null });
@@ -419,7 +427,7 @@ function scheduleBlocksForDate(dateObj) {
   // merging it here means it lands in the Day timeline and in currentScheduleBlock() (so Home's
   // RIGHT NOW can say "Dentist") without either of them needing to know reminders exist.
   // A reminder with no endTime stays a point in time: list + push only, exactly as before.
-  const dStr = dateKey(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate());
+  const dStr = anchorDateStr;
   STATE.reminders.forEach(r => {
     if (r.date !== dStr || !r.time || !r.endTime) return;
     blocks.push({ id: 'event:' + r.id, start: r.time, end: r.endTime, label: r.title || 'Untitled event', detail: r.notes || '', kind: 'event', reminderId: r.id });

@@ -634,6 +634,9 @@ function migrateState() {
   // marker is STATE.supplements existing at all. See src/app-supplements.js.
   migrateSupplements();
   if (!Array.isArray(STATE.life.anchors)) STATE.life.anchors = DEFAULT_DAILY_ANCHORS.map(a => Object.assign({}, a));
+  // Must run AFTER anchors exist -- it moves skinCycleStart onto the PM skin anchor so anyone
+  // mid-rotation keeps their place in it. See src/app-anchor-rotation.js.
+  migrateSkinCycleToAnchor();
   if (!Array.isArray(STATE.life.periodic)) STATE.life.periodic = DEFAULT_PERIODIC_ANCHORS.map(a => Object.assign({}, a));
   if (!Array.isArray(STATE.life.habits)) STATE.life.habits = [];
   if (!STATE.life.habitLog || typeof STATE.life.habitLog !== 'object') STATE.life.habitLog = {};

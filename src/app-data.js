@@ -108,7 +108,9 @@ const DEFAULT_DAILY_ANCHORS = [
   { id: 'dinner',      start: '18:30', end: '19:15', label: 'Dinner', detail: 'Protein at this meal too; magnesium pairs well here or near bed.' },
   { id: 'guitarpractice', start: '19:15', end: '19:35', label: 'Guitar practice', detail: "15-20 min, current tier — see the Hobbies tab." },
   { id: 'sauna',       start: '19:35', end: '19:55', label: 'Sauna (optional)', detail: '15-20 min if you have access.' },
-  { id: 'pmskin',      start: '19:55', end: '20:15', label: 'PM skin + dental hygiene', detail: "Skin cycling night (see Health &amp; Wellness &rarr; Longevity) + floss/brush." },
+  // No longer points at a Longevity screen to look the night up on: an anchor can rotate now, so
+  // the night lives on this anchor itself -- see ANCHOR_PRESETS.skinCycling.
+  { id: 'pmskin',      start: '19:55', end: '20:15', label: 'PM skin + dental hygiene', detail: 'Tonight\'s skin-cycling step, plus floss/brush.' },
   { id: 'winddown',    start: '20:15', end: '21:00', label: 'Wind-down', detail: 'Dim lights, reduce screens, low-key activity.' },
   { id: 'mindfulness', start: '21:00', end: '21:15', label: 'Mindfulness / breathing', detail: '5-10 min of slow breathing or a short guided session.' },
   { id: 'bed',         start: '21:30', end: '22:00', label: 'Bed', detail: 'Cool, dark room — consistent even on weekends.' },
@@ -444,6 +446,20 @@ const SLEEP_PROTOCOLS = [
   { name: 'Consistent sleep/wake times', how: 'Same wake time daily, including weekends.' },
   { name: 'Dim / reduce light in the evening', how: 'Lower lighting and screen brightness ~1-2 hrs before bed.' },
   { name: 'Cool, dark bedroom', how: 'Lower the thermostat; blackout curtains or a sleep mask if needed.' },
+];
+// The same guidance as SLEEP_PROTOCOLS, as anchors that occupy real time on a real day.
+//
+// It used to exist twice: as the reference list above, printed on the Longevity screen, and as
+// DEFAULT_DAILY_ANCHORS entries saying nearly the same words -- `wake`'s detail is SLEEP_PROTOCOLS[0]
+// almost verbatim. Two copies of one piece of advice, free to drift apart. The anchors are the copy
+// that can actually be scheduled and ticked, so they win; this is the installable version for
+// anyone whose schedule no longer has them. Labels match DEFAULT_DAILY_ANCHORS so installing over
+// an untouched schedule adds nothing.
+const SLEEP_PROTOCOL_ANCHORS = [
+  { start: '05:30', end: '05:35', label: 'Wake + morning light', detail: 'Get outside (or a light lamp) for 2-10 min within 30-60 min of waking. Same wake time daily, including weekends.' },
+  { start: '18:00', end: '18:30', label: 'Evening light anchor', detail: '5-10 min outside when the sun is low (seasonal).' },
+  { start: '20:15', end: '21:00', label: 'Wind-down', detail: 'Lower lighting and screen brightness ~1-2 hrs before bed.' },
+  { start: '21:30', end: '22:00', label: 'Bed', detail: 'Cool, dark room — lower the thermostat, blackout curtains or a mask if needed. Consistent even on weekends.' },
 ];
 function defaultLifeState() {
   return {

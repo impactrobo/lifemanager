@@ -89,9 +89,18 @@ function renderSetAnchors() {
       <div class="subtle-label" style="margin-bottom:0;">DAILY ANCHORS</div>
       <button class="btn btn-sm btn-primary" onclick="addAnchor()">+ ADD ANCHOR</button>
     </div>
-    <div class="stack" style="margin-bottom:20px;">
+    <div class="stack" style="margin-bottom:12px;">
       ${STATE.life.anchors.length ? STATE.life.anchors.map(renderAnchorEditRow).join('') : emptyState('No anchors yet — add one above.')}
     </div>
+    ${ANCHOR_PRESETS.map(p => `
+      <div class="supp-preset">
+        <div style="flex:1; min-width:0;">
+          <div class="supp-preset-name">${escapeHtml(p.name)}</div>
+          <div class="supp-preset-blurb">${escapeHtml(p.blurb)}</div>
+        </div>
+        <button class="btn btn-sm" onclick="installAnchorPreset('${p.key}')">ADD</button>
+      </div>`).join('')}
+    <div style="height:20px;"></div>
     <div class="row" style="margin-bottom:6px;">
       <div class="subtle-label" style="margin-bottom:0;">WEEKLY &amp; PERIODIC</div>
       <button class="btn btn-sm btn-primary" onclick="addPeriodic()">+ ADD</button>
@@ -118,7 +127,30 @@ function renderAnchorEditRow(a) {
     </label>
     ${timeCategorySelect(a.category, `updateAnchorField('${a.id}','category',this.value)`)}
     <label class="field" style="margin-bottom:0;"><span class="lbl">Detail (optional)</span><textarea onchange="updateAnchorField('${a.id}','detail',this.value)">${escapeHtml(a.detail || '')}</textarea></label>
+    ${renderAnchorRotationRow(a)}
   </div>`;
+}
+// An anchor's rotation is shown but not built here: the steps come from a preset, and a general
+// step editor is a whole screen for something only skin cycling uses so far. What this does give
+// you is the two things you actually need once it is running -- where you are, and a way to stop.
+function renderAnchorRotationRow(a) {
+  if (!a.rotation) return '';
+  const r = anchorRotationStep(a, todayStr());
+  return `
+    <div class="anchor-rot">
+      <div class="anchor-rot-head">
+        <span class="subtle-label" style="margin:0;">ROTATES &middot; ${a.rotation.steps.length} DAYS</span>
+        <button class="btn btn-sm" onclick="clearAnchorRotation('${a.id}')">STOP</button>
+      </div>
+      <div class="anchor-rot-now">${r
+        ? `Today: ${escapeHtml(r.step.title)} <span class="mono anchor-rot-n">${r.index + 1}/${r.total}</span>`
+        : 'Starts on the date below.'}</div>
+      <div class="anchor-rot-steps">
+        ${a.rotation.steps.map((s, i) => `<span class="anchor-rot-step ${r && r.index === i ? 'on' : ''}">${escapeHtml(s.title)}</span>`).join('')}
+      </div>
+      <label class="field" style="margin:8px 0 0;"><span class="lbl">Cycle started</span>
+        <input type="date" value="${a.rotation.start}" onchange="updateAnchorRotationStart('${a.id}', this.value)"></label>
+    </div>`;
 }
 function addAnchor() {
   STATE.life.anchors.push({ id: uid(), start: '12:00', end: '12:15', label: 'New anchor', detail: '' });
