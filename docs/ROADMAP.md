@@ -525,6 +525,17 @@ on an architecture split + a large wave of Maximalist aesthetics.
     than on either of them. Wired into all three exercise block types (RP, GZCL tier, T3).
   - Rendered **above the sets** — it is what you read while setting the bench up, not something to
     review afterwards. A test asserts its position in the markup precedes the first set row.
+  - **Presented as a collapsible field with the header as the signal** (revised on the same day from
+    an always-visible inline note). Collapsed, an exercise with nothing written costs one quiet
+    line; the "NOTES" header is **lit in `--accent`** when there is something to open and muted
+    when there isn't, so the field can stay shut without hiding that it has contents. Taking the
+    colour from `--accent` means every aesthetic gets its own version of "look at me" for free —
+    verified as `rgb(99,80,143)` unlit vs `rgb(255,43,214)` lit.
+    - Open state is a **map** keyed by liftId, not a single id: a workout is several exercises and
+      opening one has no business closing another, since you might be comparing two setups.
+    - Saving on blur **keeps the field open**. Blur fires on every tap outside, not just on "done",
+      so collapsing there would snatch the note away at the least useful moment.
+    - The tradeoff, accepted: a written note now takes one tap to read rather than being on screen.
   - **An exercise with no lift linked gets no note row at all.** There is no identity to hang one
     on, and offering it there would be a second, silent way to create a lift — where linking is a
     deliberate screen with its own "did you mean" guard, precisely because a wrong link fuses two
@@ -533,6 +544,14 @@ on an architecture split + a large wave of Maximalist aesthetics.
   - Two things the tests caught, both mine: §4 originally *skipped itself* when no workout had an
     enabled T3 — and `STATE.workouts` is empty on a fresh save, so it reported PASS having checked
     nothing. And counting `/lift-note/g` counted three class names inside one rendered row.
+  - **Adding your own exercise already shipped and needed nothing** — worth recording, since it was
+    raised as a request. The lift picker has muscle-group chips (15 of them), a search across every
+    lift, and a "NOT IN THE LIST?" form taking name / short form / muscle that calls
+    `addCustomLift()`. A created lift lands in `STATE.lifts`, is returned by `allLifts()` and
+    `liftsByMuscle()` forever after, links itself to the slot that created it, and — because notes
+    key on liftId — takes its own notes exactly like a shipped one. Verified end to end through the
+    picker's real form rather than by reading the code. An exact-name match reuses the existing lift
+    instead of creating a duplicate.
 
 - **Supplements become a real regimen; the hardcoded seven become a preset (2026-09-15).** Step 1 of
   dissolving the Longevity section, proposed as "supplements should be able to be consolidated into

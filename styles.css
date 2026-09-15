@@ -2392,24 +2392,28 @@ button.lab-stand-toggle:focus-visible { outline: 2px solid var(--accent); outlin
 .anchor-rot-step.on { background: var(--accent-soft); color: var(--accent); border-color: var(--accent-dim); }
 
 /* ---- Setup notes on a lift ---- */
-/* Sits above the sets, because it is what you read while setting the bench up -- not a review. */
-.lift-note {
-  display: flex; align-items: flex-start; gap: 7px;
-  background: var(--surface2); border-left: 3px solid var(--accent-dim);
-  border-radius: var(--radius); padding: 7px 9px; margin-bottom: 10px;
-  font-size: 12px; line-height: 1.45; cursor: pointer;
+/* Collapsed by default so an exercise with nothing written costs one quiet line. The HEADER is the
+   signal: lit when there's a note to open, muted when there isn't. That is the whole reason the
+   field can stay shut without hiding that it has contents. */
+.lift-note { margin-bottom: 10px; }
+button.lift-note-head {
+  display: flex; align-items: center; gap: 6px;
+  background: none; border: none; padding: 2px 0; cursor: pointer;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--text-faint);
 }
-.lift-note-icon { flex: none; color: var(--text-faint); display: flex; }
-.lift-note-icon svg { width: 11px; height: 11px; }
-.lift-note-text { flex: 1 1 auto; min-width: 0; white-space: pre-wrap; }
-.lift-note-editing { display: block; cursor: default; }
-/* Element+class so the base form block's padding/size don't win; the base is :where()'d now, but
-   the textarea still needs its own metrics here. */
+.lift-note-caret {
+  display: inline-grid; place-items: center; width: 13px; height: 13px;
+  border: 1px solid currentColor; border-radius: 3px; font-size: 11px; line-height: 1;
+}
+/* Written-in: the accent, so every aesthetic gets its own "look at me" without a hardcoded colour. */
+.lift-note.has-note button.lift-note-head { color: var(--accent); }
+.lift-note-body {
+  margin-top: 6px; padding-left: 19px;   /* lines up under the label, past the caret */
+  border-left: 2px solid var(--border-soft);
+}
+.lift-note.has-note .lift-note-body { border-left-color: var(--accent-dim); }
+/* Element+class: the base form block is :where()'d so a class wins on specificity, but these
+   metrics still have to beat the base's own padding and font-size. */
 textarea.lift-note-input { font-size: 12px; min-height: 42px; margin-bottom: 4px; }
 .lift-note-hint { font-size: 10px; color: var(--text-faint); line-height: 1.4; }
-.lift-note-add {
-  background: none; border: 1px dashed var(--border); color: var(--text-faint);
-  border-radius: var(--radius); padding: 4px 9px; margin-bottom: 10px;
-  font-size: 9px; font-weight: 700; letter-spacing: 0.04em; cursor: pointer;
-}
-.lift-note-add:hover { color: var(--text-dim); border-color: var(--accent-dim); }

@@ -94,19 +94,31 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     const b = renderLiftNoteRow(liftId);
     return {
       sameMarkup: a === b,
-      showsNote: /Bench incline 30/.test(a),
+      // Collapsed, so the text is not in the markup — the LIT header is what says there is one.
+      lit: /has-note/.test(a),
+      hiddenWhenShut: !/Bench incline 30/.test(a),
+      showsNote: (toggleLiftNoteEditor(liftId), /Bench incline 30/.test(renderLiftNoteRow(liftId))),
+      shutAgain: (toggleLiftNoteEditor(liftId), !/Bench incline 30/.test(renderLiftNoteRow(liftId))),
       // An exercise with no lift linked has no identity to hang a note on, and inventing one here
       // would be a second, silent way to create a lift. Linking is its own deliberate screen.
       unlinked: renderLiftNoteRow(null),
       unlinkedUndef: renderLiftNoteRow(undefined),
       // With a lift but no note yet, the row is an invitation rather than an empty box.
       empty: (setLiftNote('some-lift', ''), renderLiftNoteRow('some-lift')),
+      emptyIsLit: /has-note/.test(renderLiftNoteRow('some-lift')),
     };
   });
   console.log('shared across surfaces:', JSON.stringify({ ...shared, empty: shared.empty.slice(0, 40) }));
-  if (!shared.sameMarkup || !shared.showsNote) throw new Error('Every surface for that lift shows the same note');
+  if (!shared.sameMarkup) throw new Error('Every surface for that lift renders identically');
+  if (!shared.lit) throw new Error('...and a lift WITH a note has its header lit: ' + JSON.stringify(shared.lit));
+  if (!shared.hiddenWhenShut) throw new Error('...while the text itself stays collapsed until asked for');
+  if (!shared.showsNote) throw new Error('...and opening it reveals the note');
+  if (!shared.shutAgain) throw new Error('...and closing hides it again');
   if (shared.unlinked !== '' || shared.unlinkedUndef !== '') throw new Error('No lift linked means no note row at all');
-  if (!/SETUP NOTE/.test(shared.empty)) throw new Error('A linked lift with no note offers one: ' + shared.empty);
+  // Collapsed by default, with the header as the only signal: lit when there is something to
+  // open, muted when there isn't.
+  if (!/Notes/.test(shared.empty)) throw new Error('A linked lift with no note still offers the field: ' + shared.empty);
+  if (shared.emptyIsLit) throw new Error('...but its header is NOT lit, since there is nothing to open');
 
   // ---- 4. It renders inside the workout log, above the sets ----
   // Builds its own T3 slot rather than hunting for an enabled one — the first version of this
@@ -123,12 +135,14 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     setLiftNote(LIFT_LIBRARY[0].id, 'Bench incline 30°');
     saveState();
     const html = renderWorkoutLog(w.id);
-    const notePos = html.indexOf('Bench incline 30');
+    // The collapsed header, not the text — the field only shows its contents once opened.
+    const notePos = html.indexOf('lift-note-head');
     const bodyPos = html.indexOf('tier-body');
     // The first set row after the body opens — the note has to come before it.
     const setPos = html.indexOf('set-row', bodyPos >= 0 ? bodyPos : 0);
     return {
       hasNote: notePos >= 0, notePos, setPos,
+      lit: /lift-note has-note/.test(html),
       beforeSets: notePos >= 0 && setPos >= 0 && notePos < setPos,
       // And an UNLINKED slot in the same log adds nothing. Counting `lift-note-text` and
       // `lift-note-add` rather than `lift-note`: one rendered note contains three classes sharing
@@ -137,14 +151,15 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
         w.t3[1] = Object.assign({}, w.t3[1], { enabled: true, name: 'Something Unlinked', liftId: null, adjustments: [] });
         const h2 = renderWorkoutLog(w.id);
         return {
-          notes: (h2.match(/lift-note-text/g) || []).length,
-          invites: (h2.match(/lift-note-add/g) || []).length,
+          notes: (h2.match(/lift-note-head/g) || []).length,
+          invites: 0,
         };
       })(),
     };
   });
   console.log('in the workout log:', JSON.stringify(inLog));
-  if (!inLog.hasNote) throw new Error('A linked T3 shows its lift note while logging: ' + JSON.stringify(inLog));
+  if (!inLog.hasNote) throw new Error('A linked T3 shows its Notes field while logging: ' + JSON.stringify(inLog));
+  if (!inLog.lit) throw new Error('...lit, because this one has a note written: ' + JSON.stringify(inLog));
   // It is what you read while setting the bench up, not something to review afterwards.
   if (!inLog.beforeSets) throw new Error('...above the sets, not below them: ' + JSON.stringify(inLog));
   // One note for the linked slot; the unlinked one contributes neither a note nor an invitation.
@@ -156,14 +171,26 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   const edited = await page.evaluate(() => {
     const liftId = LIFT_LIBRARY[0].id;
     toggleLiftNoteEditor(liftId);
-    const open = VIEW.liftNoteEditing === liftId && /textarea/.test(renderLiftNoteRow(liftId));
+    const open = liftNoteOpen(liftId) && /textarea/.test(renderLiftNoteRow(liftId));
     saveLiftNoteFrom(liftId, 'Seat 4, EZ bar');
-    return { open, closed: VIEW.liftNoteEditing, note: liftNote(liftId), inState: STATE.liftNotes[liftId] };
+    // Saving on blur must NOT collapse the field: blur fires on every tap outside, so closing
+    // there would snatch the note away at the least useful moment.
+    const stillOpen = liftNoteOpen(liftId);
+    const lit = /has-note/.test(renderLiftNoteRow(liftId));
+    // Opening one exercise's note must not close another's -- you might be comparing two setups.
+    const other = LIFT_LIBRARY[1].id;
+    toggleLiftNoteEditor(other);
+    const bothOpen = liftNoteOpen(liftId) && liftNoteOpen(other);
+    toggleLiftNoteEditor(liftId);
+    return { open, stillOpen, lit, bothOpen, closed: liftNoteOpen(liftId), note: liftNote(liftId), inState: STATE.liftNotes[liftId] };
   });
   console.log('editing:', JSON.stringify(edited));
   if (!edited.open) throw new Error('The editor opens on the row');
   if (edited.note !== 'Seat 4, EZ bar' || edited.inState !== 'Seat 4, EZ bar') throw new Error('...and saves onto the LIFT: ' + JSON.stringify(edited));
-  if (edited.closed !== null) throw new Error('...then closes');
+  if (!edited.stillOpen) throw new Error('...and stays open, since blur fires on any tap outside');
+  if (!edited.lit) throw new Error('...with the header now lit');
+  if (!edited.bothOpen) throw new Error('Two exercises can have their notes open at once');
+  if (edited.closed) throw new Error('...and tapping the header again closes that one');
 
   await page.evaluate((snap) => {
     const s = JSON.parse(snap);

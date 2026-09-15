@@ -826,13 +826,23 @@ function setLiftNote(liftId, text) {
   else delete liftNotes()[liftId];
   saveState();
 }
+// Which exercises have their note open right now. A map rather than a single id, because a workout
+// is several exercises and opening one has no business closing another -- you might be checking two
+// setups against each other.
+function liftNoteOpen(liftId) {
+  return !!(VIEW.liftNoteOpen && VIEW.liftNoteOpen[liftId]);
+}
 function toggleLiftNoteEditor(liftId) {
-  VIEW.liftNoteEditing = VIEW.liftNoteEditing === liftId ? null : liftId;
+  if (!VIEW.liftNoteOpen) VIEW.liftNoteOpen = {};
+  if (VIEW.liftNoteOpen[liftId]) delete VIEW.liftNoteOpen[liftId];
+  else VIEW.liftNoteOpen[liftId] = true;
   render();
 }
+// Saved on blur and the field STAYS OPEN. Collapsing on save would snatch the note away the moment
+// you tapped elsewhere to check something -- and blur fires on every tap outside, not just on
+// "done", so the close would land at the least useful moment.
 function saveLiftNoteFrom(liftId, value) {
   setLiftNote(liftId, value);
-  VIEW.liftNoteEditing = null;
   render();
 }
 
@@ -846,20 +856,22 @@ function saveLiftNoteFrom(liftId, value) {
 function renderLiftNoteRow(liftId) {
   if (!liftId) return '';
   const note = liftNote(liftId);
-  if (VIEW.liftNoteEditing === liftId) {
-    return `
-      <div class="lift-note lift-note-editing">
-        <textarea class="lift-note-input" rows="2" placeholder="Bench at 30°, seat 4, EZ bar…"
-          onblur="saveLiftNoteFrom('${liftId}', this.value)">${escapeHtml(note)}</textarea>
-        <div class="lift-note-hint">Kept with this exercise, not this workout — it follows the lift into any phase.</div>
-      </div>`;
-  }
-  if (!note) {
-    return `<button class="lift-note-add" onclick="toggleLiftNoteEditor('${liftId}')">+ SETUP NOTE</button>`;
-  }
+  const open = liftNoteOpen(liftId);
+  // The header IS the signal. Collapsed and quiet means nothing written here; collapsed and lit
+  // means there is something worth opening. That one piece of colour is what lets the field stay
+  // shut by default without hiding the fact that it has contents -- it takes its colour from
+  // --accent, so every aesthetic gets its own version of "look at me" for free.
   return `
-    <div class="lift-note" onclick="toggleLiftNoteEditor('${liftId}')">
-      <span class="lift-note-icon">${icon('pencil')}</span>
-      <span class="lift-note-text">${escapeHtml(note)}</span>
+    <div class="lift-note ${note ? 'has-note' : ''} ${open ? 'is-open' : ''}">
+      <button class="lift-note-head" onclick="toggleLiftNoteEditor('${liftId}')" aria-expanded="${open}">
+        <span class="lift-note-caret">${open ? '&minus;' : '+'}</span>
+        <span class="lift-note-label">Notes</span>
+      </button>
+      ${open ? `
+        <div class="lift-note-body">
+          <textarea class="lift-note-input" rows="2" placeholder="Bench at 30°, seat 4, EZ bar…"
+            onblur="saveLiftNoteFrom('${liftId}', this.value)">${escapeHtml(note)}</textarea>
+          <div class="lift-note-hint">Kept with this exercise, not this workout — it follows the lift into any phase.</div>
+        </div>` : ''}
     </div>`;
 }
