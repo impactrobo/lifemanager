@@ -261,6 +261,71 @@ function weekPlanCount(plan) {
   return { workouts, practice, days };
 }
 
+// ---- The meal plan in effect ----
+//
+// The same rule as the exercise plan above, applied to eating, and for the same reason: a weight
+// phase already owns a calorieTarget, so a single global meal plan could only ever match ONE phase's
+// number. Phase 1 at 2,100 and Phase 2 at 2,300 sharing one week of meals meant one of them was
+// always planning against the wrong target. A phase's plan now belongs to the phase, so the meals
+// are targeted at the goal the way the calories already were.
+//
+// It hangs off the WEIGHT goal, not the exercise one, because that is where calorieTarget lives --
+// calorieTargetForDate() resolves through phaseForDate(dateStr, 'weight') and this must agree with
+// it. A meal plan answering to a training block while its calorie target answered to a weight phase
+// would be two screens disagreeing about the same day.
+//
+// STATE.diet.mealPlan keeps its meaning as the plan in effect before any phase claims one, exactly
+// as STATE.exercisePlan does -- so nothing had to be migrated to ship this, and anyone who never
+// creates a weight goal sees the Meal Plan behave precisely as it always has.
+// A meal plan is { 0..6: [entry] }, and an entry is { id, mealId }.
+const EMPTY_MEAL_PLAN = () => ({ 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] });
+function mealPlanEntry(mealId) { return { id: uid(), mealId: mealId || null }; }
+
+// Which meal plan governs a given date, and why. Returns { plan, source, label, entry } with the
+// same three sources exercisePlanInEffect() uses -- 'phase', 'carried', 'global'.
+//
+// Deliberately NO active-rest branch, which is the one place this departs from the exercise rule.
+// A deload changes how MUCH you eat, not WHAT you eat, and calorieTargetForDate() already overrides
+// the number to maintenance for those weeks. Swapping the week's meals out as well would be the same
+// override applied twice, in two different units.
+function mealPlanInEffect(dateStr) {
+  let best = null;
+  for (const g of (STATE.goals || [])) {
+    if (g.kind !== 'weight') continue;
+    for (const s of phaseSchedule(g)) {
+      if (s.startDate > dateStr || !s.phase.mealPlan) continue;
+      // The latest phase to have STARTED by this date -- see exercisePlanInEffect() for why.
+      if (!best || s.startDate > best.startDate) best = s;
+    }
+  }
+  if (!best) return { plan: STATE.diet.mealPlan, source: 'global', label: null, entry: null };
+  return {
+    plan: best.phase.mealPlan,
+    source: dateStr <= best.endDate ? 'phase' : 'carried',
+    label: best.phase.label,
+    entry: best,
+  };
+}
+// The plan alone, for the callers that only want to read a weekday out of it.
+function activeMealPlan(dateStr) { return mealPlanInEffect(dateStr).plan; }
+
+// A deep copy, for the same reason copyWeekPlan() is one: a phase's plan must not alias the plan it
+// was seeded from, or editing the new block would silently rewrite the old one.
+function copyMealPlan(plan) {
+  const out = EMPTY_MEAL_PLAN();
+  for (let d = 0; d <= 6; d++) {
+    out[d] = ((plan && plan[d]) || []).map(e => mealPlanEntry(e.mealId));
+  }
+  return out;
+}
+// Every meal plan that exists, global and phase-owned alike -- for the sweeps that have to reach all
+// of them, the way deleteWorkout() reaches every exercise plan. Deleting a meal used to leave its id
+// behind in the one global plan; now that a plan exists per phase, one dangling reference would
+// become one per phase, so the sweep has to be exhaustive rather than incidental.
+function allMealPlans() {
+  return [STATE.diet.mealPlan].concat((STATE.phases || []).filter(p => p.mealPlan).map(p => p.mealPlan));
+}
+
 // ---- Deloads ----
 //
 // A deload is a training concept as much as a nutrition one: reduced volume AND maintenance
@@ -609,6 +674,8 @@ function addPhase(goalId) {
   const goal = (STATE.goals || []).find(g => g.id === goalId);
   if (!goal) return;
   if (goal.kind === 'exercise') return addExercisePhase(goal);
+  const existing = phaseSchedule(goal);
+  const startDate = existing.length ? shiftDate(existing[existing.length - 1].endDate, 1) : goal.startDate;
   const summary = phasePlanSummary(goal);
   const fromLb = summary ? summary.endWeightLb : Number(goal.startWeightLb);
   const goalWeeks = daysBetween(goal.startDate, goal.targetDate) / 7;
@@ -629,6 +696,12 @@ function addPhase(goalId) {
     // phase shouldn't quietly change what you're eating.
     calorieTarget: null,
     calorieSetOn: null,
+    // Seeded as a COPY of whatever plan is in effect where this phase starts, for the same reasons
+    // addExercisePhase() copies its week: blank means rebuilding six days to change two, and a
+    // shared reference would make editing this phase rewrite the one before it. Unlike the calorie
+    // target above, copying the plan changes nothing about what you eat -- the same meals on the
+    // same days -- so it can be seeded without quietly making a decision on your behalf.
+    mealPlan: copyMealPlan(mealPlanInEffect(startDate).plan),
     createdAt: Date.now(),
   });
   saveState();

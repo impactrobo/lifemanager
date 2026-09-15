@@ -121,6 +121,9 @@ let VIEW = {
   mealBuilderDraft: null,            // an in-progress meal; survives navigation on purpose
   mealPlanExpanded: {},
   mealPlanClipboard: null,
+  // Which date the Meal Plan is editing FOR -- the counterpart of plannerDate below, since a meal
+  // plan belongs to a weight phase the way a week of workouts belongs to a training block.
+  mealPlannerDate: null,
   dietLogActiveCategory: null,
   dietLogSearchQuery: '',
   exPlanExpanded: {},

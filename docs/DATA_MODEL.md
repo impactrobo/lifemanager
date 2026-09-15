@@ -209,6 +209,9 @@ STATE = {
     macro: { energy, energyUnit, weight, weightUnit, proteinPerUnit, fatPerUnit, carbPerUnit },  // macro calculator inputs
     meals: [ { id, name, unitSystem, items: [{id, foodId, qty, unit}], createdAt, updatedAt } ],  // saved meals, Meal Builder
     mealPlan: { 0: [], 1: [], ..., 6: [] },  // Sun=0..Sat=6 (matches Date.getDay()); each day is [{id, mealId}]
+                                             // NOTE: this is the plan in effect BEFORE any weight phase claims one.
+                                             // A weight phase carries its own `mealPlan` (see GoalPhase); read through
+                                             // activeMealPlan(date) / mealPlanInEffect(date), never this directly.
   },
 
   // ---------------- SCHEDULE / DAILY LIFE ----------------

@@ -444,6 +444,15 @@ function migrateState() {
     // Every block carries its OWN copy of a plan, so the entry conversion has to reach all of them.
     migrateWeekPlanEntries(p.exercisePlan);
   });
+  // The same normalisation for weight phases' meal plans, with one deliberate difference: a MISSING
+  // plan is left missing rather than created empty. mealPlanInEffect() treats "no mealPlan" as "this
+  // phase predates the feature, fall through to the global plan" -- so seeding an empty week here
+  // would silently replace the meal plan of everyone who already had a weight goal with a blank one.
+  // Only a plan that already exists gets its seven arrays guaranteed.
+  STATE.phases.forEach(p => {
+    if (p.kind !== 'weight' || !p.mealPlan || typeof p.mealPlan !== 'object') return;
+    for (let d = 0; d <= 6; d++) if (!Array.isArray(p.mealPlan[d])) p.mealPlan[d] = [];
+  });
   if (STATE.settings.waterTargetMl == null) {
     STATE.settings.waterTargetMl = STATE.settings.waterTarget != null
       ? Math.round(Number(STATE.settings.waterTarget) * 250) : 2000;

@@ -487,6 +487,38 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Meal plans became phase-owned (2026-09-15).** The first step of the PHASES/BUILDER
+  restructure, and the one genuine gap it exposed. A weight phase already carried its own
+  `calorieTarget`, but `STATE.diet.mealPlan` was global — so Phase 1 at 2,100 cal and Phase 2 at
+  2,300 shared a single week of meals that could only ever match one of them. `phase.mealPlan` now
+  mirrors `phase.exercisePlan` exactly.
+  - **It hangs off the WEIGHT phase, not the exercise one**, because that's where `calorieTarget`
+    lives. `calorieTargetForDate()` resolves through `phaseForDate(date, 'weight')` and the meal
+    plan has to agree with it — a week of meals answering to a training block while its calorie
+    target answered to a weight phase would be two screens disagreeing about the same day.
+  - **No migration, by the same trick the exercise plan used.** `STATE.diet.mealPlan` keeps its
+    meaning as the plan in effect before any phase claims one, so nothing had to move and anyone
+    who never creates a weight goal sees the Meal Plan behave exactly as it always has.
+  - **A phase with no `mealPlan` key falls through to global rather than resolving to an empty
+    week.** `loadState()` deliberately does *not* seed one, unlike its `exercisePlan` counterpart
+    which creates an empty plan when missing. Seeding here would have silently replaced the meal
+    plan of everyone who already had a weight goal with a blank one — the test pins this.
+  - **No active-rest branch**, the one place this departs from `exercisePlanInEffect()`. A deload
+    changes how *much* you eat, not *what* you eat, and `calorieTargetForDate()` already overrides
+    the number to maintenance for those weeks. Swapping the meals too would be the same override
+    applied twice in two different units.
+  - The editor routes through `mealPlannerPlan()`, the exact counterpart of `plannerPlan()`, so it
+    can never change a different week than the one it's showing you. `renderMealPlannerScope()`
+    reuses `.planner-scope` and adds the calorie target — seeing "Opening cut — 2,100 cal/day"
+    above the week is the difference between planning meals and planning meals FOR something.
+  - **Fixed a latent bug on the way past:** `deleteMeal()` swept no plan at all, so a deleted meal
+    left a blank slot in the plan forever. Harmless-ish with one global plan; one dangling
+    reference *per phase* once plans multiplied. Now sweeps `allMealPlans()`, matching
+    `deleteWorkout()`.
+  - `tests/test_phase_meal_plan.js` — five contracts, including the aliasing one asserted by
+    *mutating* one phase's plan and checking the other, since two plans can hold equal values and
+    still be the same object.
+
 - **Lab biomarkers, and where you stand (2026-09-15).** From the "Best Shape of Your Life" scope,
   ranked #3 — the actual missing piece for a longevity focus. New `src/app-labs.js`, a LABS subtab
   under BODY, `STATE.labs` shaped like `STATE.measurements` (sparse and dated: a marker that draw

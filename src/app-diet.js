@@ -434,7 +434,8 @@ function renderCustomFoodCard(f) {
 // What was actually logged eaten on a given date — STATE.diet.foodLog['YYYY-MM-DD'], an array of
 // {id, foodId, qty, unit} items, the SAME shape a saved Meal's items already use, so
 // computeMealTotals()/computeItemMacro() work on a day's log unchanged. This is deliberately a
-// separate thing from Meal Plan (STATE.diet.mealPlan): that's a reusable weekly TEMPLATE keyed by
+// separate thing from Meal Plan (activeMealPlan(date), which is a weight phase's own plan or
+// STATE.diet.mealPlan before any phase claims one): that's a reusable weekly TEMPLATE keyed by
 // weekday (0=Sun..6=Sat, recurring every week); this is keyed by real date and only ever holds
 // what actually got logged that day. Lives at the bottom of the DIET tab (renderDietSetup()),
 // under the TDEE/macro targets, so today's actual totals sit right next to what you're aiming for.
@@ -615,23 +616,42 @@ function renderMealCard(meal) {
 function deleteMeal(id) {
   showConfirm('Delete this meal?', () => {
     STATE.diet.meals = STATE.diet.meals.filter(m => m.id !== id);
+    // Every plan, not just the global one -- same rule as deleteWorkout(): a meal assigned inside a
+    // phase would otherwise survive its own deletion and render as a blank slot in that phase
+    // forever. (This swept nothing at all before meal plans became phase-owned, which is how the
+    // blank-row case existed unnoticed in the single global plan.)
+    allMealPlans().forEach(plan => {
+      for (let d = 0; d <= 6; d++) plan[d] = (plan[d] || []).filter(e => e.mealId !== id);
+    });
     saveState(); render();
   });
 }
 
 // ---------------- MEAL PLAN (Health -> Setup) ----------------
+// The Meal Plan edits THE PLAN IN EFFECT, which is a weight phase's own plan once a weight goal has
+// phases and STATE.diet.mealPlan otherwise. Every read and write below goes through this one call
+// rather than reaching for STATE.diet.mealPlan, so the editor can never end up changing a different
+// week than the one it's showing you. mealPlanInEffect() in app-phases.js decides which.
+function mealPlannerPlan() { return mealPlanInEffect(mealPlannerDate()).plan; }
+// Which date the Meal Plan is planning FOR. Today, unless you're looking at a future phase -- that's
+// what lets a phase that hasn't started yet be filled in ahead of time.
+function mealPlannerDate() { return VIEW.mealPlannerDate || todayStr(); }
+function setMealPlannerDate(dateStr) { VIEW.mealPlannerDate = dateStr || null; render(); }
+
 function addPlanMealSlot(day) {
-  if (!Array.isArray(STATE.diet.mealPlan[day])) STATE.diet.mealPlan[day] = [];
-  STATE.diet.mealPlan[day].push({ id: uid(), mealId: null });
+  const plan = mealPlannerPlan();
+  if (!Array.isArray(plan[day])) plan[day] = [];
+  plan[day].push(mealPlanEntry(null));
   saveState(); render();
 }
 function removePlanMealSlot(day, entryId) {
-  STATE.diet.mealPlan[day] = (STATE.diet.mealPlan[day] || []).filter(e => e.id !== entryId);
+  const plan = mealPlannerPlan();
+  plan[day] = (plan[day] || []).filter(e => e.id !== entryId);
   delete VIEW.mealPlanExpanded[entryId];
   saveState(); render();
 }
 function setPlanMealSlotMeal(day, entryId, mealId) {
-  const entry = (STATE.diet.mealPlan[day] || []).find(e => e.id === entryId);
+  const entry = (mealPlannerPlan()[day] || []).find(e => e.id === entryId);
   if (!entry) return;
   entry.mealId = mealId || null;
   saveState(); render();
@@ -642,7 +662,7 @@ function togglePlanMealExpanded(entryId) {
   render();
 }
 function copyDayPlan(day) {
-  const entries = (STATE.diet.mealPlan[day] || []).map(e => ({ mealId: e.mealId }));
+  const entries = (mealPlannerPlan()[day] || []).map(e => ({ mealId: e.mealId }));
   VIEW.mealPlanClipboard = { day, entries };
   showToast(MEAL_PLAN_DAY_LABELS[day] + "'s meal plan copied");
   render();
@@ -650,12 +670,12 @@ function copyDayPlan(day) {
 function pasteDayPlan(day) {
   if (!VIEW.mealPlanClipboard) return;
   const doPaste = () => {
-    STATE.diet.mealPlan[day] = VIEW.mealPlanClipboard.entries.map(e => ({ id: uid(), mealId: e.mealId }));
+    mealPlannerPlan()[day] = VIEW.mealPlanClipboard.entries.map(e => mealPlanEntry(e.mealId));
     saveState();
     showToast("Pasted into " + MEAL_PLAN_DAY_LABELS[day]);
     render();
   };
-  if ((STATE.diet.mealPlan[day] || []).length) {
+  if ((mealPlannerPlan()[day] || []).length) {
     showConfirm(`Replace ${MEAL_PLAN_DAY_LABELS[day]}'s existing meal plan with the copied one?`, doPaste);
   } else {
     doPaste();
@@ -667,6 +687,7 @@ function renderMealPlanTab() {
     : null;
   return `
     <div style="font-size:11px; color:var(--text-dim); margin:18px 0 14px;">Assign saved meals to each day of the week. Copy a day's plan to reuse it elsewhere.</div>
+    ${renderMealPlannerScope()}
     ${renderShoppingListGenerator()}
     ${clipboardLabel ? `<div class="panel" style="margin-bottom:14px; font-size:11px; color:var(--text-dim);">Clipboard: ${escapeHtml(clipboardLabel)}</div>` : ''}
     <div class="stack" style="margin-bottom:20px;">
@@ -674,6 +695,42 @@ function renderMealPlanTab() {
     </div>
   `;
 }
+// Names which week you're editing, and offers the phases you could be editing instead. The exact
+// counterpart of renderPlannerScope() in app-train-setup.js, down to reusing its .planner-scope
+// styling -- the two editors do the same job for different goals and shouldn't look like they don't.
+//
+// With no weight goal this renders nothing at all: there's exactly one plan, saying so would be
+// noise, and the Meal Plan looks precisely as it always has.
+//
+// The one addition over the exercise version is the calorie target, because that is the whole reason
+// a meal plan became phase-owned. Seeing "Phase 2 -- 2,300 cal/day" above the week is the difference
+// between planning meals and planning meals FOR something.
+function renderMealPlannerScope() {
+  const goal = activeWeightGoal();
+  const sched = goal ? phaseSchedule(goal) : [];
+  const eff = mealPlanInEffect(mealPlannerDate());
+  if (!sched.length && eff.source === 'global') return '';
+  const note = eff.source === 'phase'
+    ? `Editing <b style="color:var(--text)">${escapeHtml(eff.label)}</b>'s meal plan.`
+    : eff.source === 'carried'
+      ? `Still running <b style="color:var(--text)">${escapeHtml(eff.label)}</b>'s meal plan — no phase covers ${fmtGoalDate(mealPlannerDate())}.`
+      : `Editing the meal plan in effect before any phase starts.`;
+  // Read through calorieTargetForDate() rather than off the phase, so this can never disagree with
+  // what the rest of the app says you're eating against on that day.
+  const target = calorieTargetForDate(mealPlannerDate());
+  return `
+    <div class="planner-scope">
+      <div>${note}${target ? ` Planning against <b style="color:var(--text)">${target.calories.toLocaleString()} cal/day</b>${target.source === 'tdee' ? ' (maintenance)' : ''}.` : ''}</div>
+      ${sched.length > 1 || eff.source !== 'phase' ? `
+        <div class="planner-scope-tabs">
+          ${sched.map(s => `
+            <button class="btn btn-sm ${s.startDate <= mealPlannerDate() && mealPlannerDate() <= s.endDate ? 'btn-primary' : ''}"
+                    onclick="setMealPlannerDate('${s.state === 'current' ? todayStr() : s.startDate}')">${escapeHtml(s.phase.label)}</button>`).join('')}
+          <button class="btn btn-sm ${eff.source === 'global' ? 'btn-primary' : ''}" onclick="setMealPlannerDate(null)">TODAY</button>
+        </div>` : ''}
+    </div>`;
+}
+
 // ---- Shopping list: aggregates every food + quantity across the whole week's assigned meals
 // into one "what to buy" list, then saves it as a to-do-type Reminder (checklist items, one per
 // ingredient) on whichever date the person picks — from there it's just a normal to-do reminder,
@@ -684,8 +741,9 @@ function toggleShoppingListForm() { UI.shoppingListFormOpen = !UI.shoppingListFo
 // wrong unit conversion just to merge them into one.
 function generateShoppingListItems() {
   const totals = new Map();
+  const plan = mealPlannerPlan();   // the week you're looking at, not a global one
   for (let day = 0; day <= 6; day++) {
-    (STATE.diet.mealPlan[day] || []).forEach(entry => {
+    (plan[day] || []).forEach(entry => {
       if (!entry.mealId) return;
       const meal = STATE.diet.meals.find(m => m.id === entry.mealId);
       if (!meal) return;
@@ -739,7 +797,7 @@ function generateShoppingListReminder() {
   jumpToReminderDay(date); // same "land on Calendar's Day view for it" convenience as tapping a Home reminder
 }
 function renderMealPlanDay(day) {
-  const entries = STATE.diet.mealPlan[day] || [];
+  const entries = mealPlannerPlan()[day] || [];
   const assignedItems = entries.filter(e => e.mealId).flatMap(e => {
     const m = STATE.diet.meals.find(x => x.id === e.mealId);
     return m ? m.items : [];

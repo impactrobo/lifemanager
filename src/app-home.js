@@ -527,7 +527,10 @@ function dayModel(dateStr) {
       .filter(e => e.kind === 'skill' && e.refId)
       .map(e => { const skill = skillById(e.refId); return skill ? { skill, minutes: e.minutes || null } : null; })
       .filter(Boolean),
-    meals: isDayOff ? [] : (STATE.diet.mealPlan[weekday] || [])
+    // activeMealPlan(), for the same reason as activeExercisePlan() above: which week of meals
+    // governs a date depends on which weight phase covers it. With no phases this is still
+    // STATE.diet.mealPlan.
+    meals: isDayOff ? [] : (activeMealPlan(dateStr)[weekday] || [])
       .filter(e => e.mealId).map(e => STATE.diet.meals.find(m => m.id === e.mealId)).filter(Boolean),
     habits: (STATE.life.habits || []).filter(h => habitIsActiveOn(h, dateStr)),
     charges: chargesDueOn(dateStr),

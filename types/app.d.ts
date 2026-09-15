@@ -229,6 +229,11 @@ interface GoalPhase {
   /** When the target was last deliberately set, accepted or declined. The weekly drift re-check
    *  counts from here, so declining an offer isn't re-asked tomorrow. */
   calorieSetOn: string | null;
+  /** Weight phases only: this phase's own weekday -> meal-slot map, the eating counterpart of
+   *  `exercisePlan`. It lives on the WEIGHT phase because that is where `calorieTarget` lives -- a
+   *  meal plan and the number it's planned against have to answer to the same phase. Seeded as a
+   *  COPY, never a shared reference, for the same aliasing reason as `exercisePlan`. */
+  mealPlan?: { [weekday: number]: { id: string; mealId: string | null }[] };
   createdAt: number;
 }
 
