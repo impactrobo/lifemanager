@@ -521,16 +521,32 @@ on an architecture split + a large wave of Maximalist aesthetics.
        runs along a row and the difference is in line with itself. Stacked cards (the Agenda's own
        shape) put the two things being compared a screen apart. Rejected side-by-side full-detail
        columns: at 390px three are ~120px each, unusable at four.
-    3. **Content: only what's distinctive.** The Agenda's best idea, inherited deliberately. Meals
-       and habits are absent because both come from the weekday template or are standing
-       commitments — the same across most days by definition, which is the definition of *not*
-       distinctive. Their presence is the "seven identical morning routines burying one dentist
-       appointment" problem.
+    3. **Content: only what's distinctive** — *revised the same day, and the revision is the better
+       rule.* "Don't repeat the routine", taken literally, **deletes**: seven identical morning
+       routines become zero, and a quiet week compares as an empty table saying nothing at all.
+       Raised as "instead of removing everything that's the same (and potentially leaving nothing),
+       can we leave the first instance". So a repeat now **collapses** instead — the earliest day
+       of a run prints its value, the days after it carry a ditto — and meals and habits are rows
+       again, because repetition costs one glyph rather than a column of duplicated text.
     4. **Entry: a COMPARE DAYS button in the shared day block**, so it's reachable from Day, Week
        and Month and seeds with the day you were already on. No new zoom, no new bottom-bar button.
-  - **A row no column has anything for is not drawn at all** — otherwise comparing two quiet days is
-    six rows of dashes. The `SCHEDULE` getter returns `null` rather than `"None"` specifically so
-    that rule can fire: three cells agreeing about nothing is noise, not information.
+  - **A row no column has anything for is still not drawn** — nothing on every day is genuinely
+    nothing, and a ditto can't rescue it. The `SCHEDULE` getter returns `null` rather than `"None"`
+    specifically so that rule can fire: three cells agreeing about nothing is noise, not
+    information. A row that *repeats* is a different case and collapses rather than vanishing.
+  - **The ditto is not a blank, and that distinction is the feature.** A blank already means
+    "nothing on this day"; if a repeated `5h 30m` were blanked, one empty cell would mean both that
+    and "same as yesterday", which on a BOOKED row is not ambiguity but a wrong answer. It is also
+    deliberately sized *up* (17px, `--text-dim`) — the first attempt at 13px `--text-faint` read as
+    an empty cell in the screenshot, i.e. as exactly the thing it exists to prevent. A mark standing
+    in for a blank has to out-read the blank.
+  - **Compared against the left neighbour, not the first column.** For a value that returns after a
+    gap (workout on Mon and Wed but not Tue), the third day genuinely differs from the day beside
+    it; marking it "same" would point two columns back past a different value. A run keeps its
+    first instance either way — this only changes the A/B/A case, and it's the case that reads
+    wrong otherwise.
+  - A row every day agrees on is kept but dimmed: it is context for the rows that do differ. That
+    it is *kept* is the "never leaves you with nothing" property the collapse was asked for.
   - Starting from Day zoom switches to Week, because Day has no grid to pick further days from and a
     selection mode with nothing to select in it is a dead end.
   - Deselecting every day leaves the mode **on**. You're mid-reselection, and dropping out because

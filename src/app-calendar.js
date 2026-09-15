@@ -369,12 +369,13 @@ function renderCalMiniMonth(year, month, today) {
 // The comparison itself. Every row reads from dayModel(), so this agrees with Home, the Day view
 // and everything else by construction rather than by remembering to.
 //
-// ONLY WHAT IS DISTINCTIVE ABOUT A DAY, which was the Agenda's best idea and is worth restating:
-// your 7am routine appearing identically in every column is noise that pushes the one dentist
-// appointment off the screen. The recurring baseline is one SCHEDULE row and one BOOKED row; the
-// rows below it are the things that actually differ. Meals and habits are deliberately absent for
-// the same reason -- both come from the weekday template or are standing commitments, so they are
-// the same across most days by definition.
+// ONLY WHAT IS DISTINCTIVE, BUT NEVER NOTHING. The Agenda's rule was "don't repeat the routine",
+// and taken literally it deletes: seven identical morning routines become zero, and a quiet week
+// compares as an empty table that tells you nothing at all.
+//
+// So a repeat is COLLAPSED rather than removed -- the first day of a run prints the value and the
+// days after it carry a ditto (see cmpdCollapseRun below). You get the fact without seven copies of
+// it, which is why meals and habits can be rows again: they repeat, and repeating is now cheap.
 const CAL_COMPARE_ROWS = [
   // null, not "None", when a day has no schedule: the row-suppression rule below then drops the
   // whole row if none of the days have one, instead of printing "None / None / None" -- which is
@@ -391,7 +392,30 @@ const CAL_COMPARE_ROWS = [
       ? m.reminders.map(r => `${r.time ? `<span class="mono cmpd-sub">${fmtReminderTime(r.time)}</span> ` : ''}${escapeHtml(r.title)}`).join('<br>') : null },
   { label: 'DUE', get: m => m.charges.length
       ? m.charges.map(c => `<span style="color:${entityColor('charge')};">${escapeHtml(c.name)}</span> <span class="mono cmpd-sub">${fmtMoney(c.amount)}</span>`).join('<br>') : null },
+  // Back as rows now that a repeat costs one glyph instead of a whole column of duplicated text.
+  // These are the most repetitive things a day has, which makes them the best demonstration of the
+  // collapse -- and "same every day" is itself worth being able to see.
+  { label: 'MEALS', get: m => m.meals.length ? m.meals.map(x => escapeHtml(x.name)).join('<br>') : null },
+  { label: 'HABITS', get: m => m.habits.length ? m.habits.map(h => escapeHtml(h.name)).join('<br>') : null },
 ];
+
+// A run of identical cells keeps its FIRST (earliest, since columns are date-sorted) and dittos the
+// rest. Compared against the neighbour to the left rather than against the first cell in the row,
+// which matters for A/B/A: the third day genuinely differs from the day beside it, and marking it
+// "same" -- pointing two columns back past a different value -- would be a harder read than just
+// printing it again.
+//
+// THE DITTO IS NOT A BLANK, and that distinction is the whole point. A blank already means "nothing
+// on this day". If a repeated 5h 30m were blanked, the same empty cell would mean both "same as
+// yesterday" and "nothing booked", which on a BOOKED row is not ambiguity -- it is a wrong answer.
+const CMPD_DITTO = '<span class="cmpd-same" title="Same as the day before">&Prime;</span>';
+function cmpdCollapseRun(cells) {
+  return cells.map((c, i) => {
+    if (c == null || c === '') return '<span class="cmpd-none">&mdash;</span>';
+    if (i > 0 && cells[i - 1] === c) return CMPD_DITTO;
+    return c;
+  });
+}
 function renderDayCompare() {
   const days = (VIEW.calCompare || []).slice().sort();
   const head = days.map(dateStr => {
@@ -405,13 +429,18 @@ function renderDayCompare() {
       <button class="cmpd-drop" onclick="toggleCompareDay('${dateStr}')" aria-label="Remove this day">${icon('close')}</button>
     </th>`;
   }).join('');
-  // A row every column is empty for says nothing about any of these days, so it isn't drawn --
-  // otherwise comparing two quiet days is six rows of dashes.
+  // A row every column is empty for is still dropped: nothing on any of these days is genuinely
+  // nothing, and a ditto can't rescue it. That is a different thing from a row that repeats, which
+  // now collapses instead of vanishing.
   const models = days.map(dateStr => dayModel(dateStr));
   const rows = CAL_COMPARE_ROWS.map(r => {
     const cells = models.map(m => r.get(m));
     if (!cells.some(c => c != null && c !== '')) return '';
-    return `<tr><th class="cmpd-rowlbl">${r.label}</th>${cells.map(c => `<td>${c == null || c === '' ? '<span class="cmpd-none">&mdash;</span>' : c}</td>`).join('')}</tr>`;
+    const shown = cmpdCollapseRun(cells);
+    // A row where every day says the same thing is worth keeping but not worth leading with -- it
+    // is context for the rows that do differ, so it's dimmed rather than removed.
+    const uniform = cells.every(c => c === cells[0]);
+    return `<tr class="${uniform ? 'cmpd-uniform' : ''}"><th class="cmpd-rowlbl">${r.label}</th>${shown.map(c => `<td>${c}</td>`).join('')}</tr>`;
   }).join('');
   return `
     <div class="panel cmpd">

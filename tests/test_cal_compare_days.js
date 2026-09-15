@@ -28,8 +28,13 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   await page.goto(APP_PATH);
   await settle(page);
 
+  // Everything §5b mutates has to be in here, or this test quietly reshapes the day for every test
+  // that runs after it.
   const snapshot = await page.evaluate(() => JSON.stringify({
     reminders: STATE.reminders, recurring: STATE.budget.recurring,
+    habits: STATE.life.habits, meals: STATE.diet.meals, mealPlan: STATE.diet.mealPlan,
+    workouts: STATE.workouts, exercisePlan: STATE.exercisePlan,
+    exceptions: STATE.life.scheduleExceptions,
   }));
 
   await page.evaluate(() => {
@@ -185,16 +190,112 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (table.rows.indexOf('WORKOUT') >= 0) throw new Error('A row no column has anything for must not be drawn: ' + table.rows);
   if (table.rows.indexOf('SCHEDULE') >= 0) throw new Error('...including SCHEDULE when none of the days has one: ' + table.rows);
   if (table.rows.indexOf('REMINDERS') < 0 || table.rows.indexOf('DUE') < 0) throw new Error('...but a row SOME column has content for is kept: ' + table.rows);
-  // Meals and habits are deliberately absent: both come from the weekday template or are standing
-  // commitments, so they are the same across most days by definition — the definition of not
-  // distinctive. Their presence would be the "seven identical morning routines" problem again.
-  if (table.rows.indexOf('MEALS') >= 0 || table.rows.indexOf('HABITS') >= 0) {
-    throw new Error('Routine rows should not be here — that is what the Agenda got wrong: ' + table.rows);
-  }
+  // Meals and habits were excluded outright at first, on the Agenda's "don't repeat the routine"
+  // rule. Taken literally that rule DELETES — seven identical routines become zero — so they are
+  // rows again and repetition is handled by collapsing instead (§5b).
   if (!/Dentist/.test(table.reminders[0])) throw new Error('The 15th owns the Dentist reminder: ' + table.reminders);
   if (table.reminders[1] !== '—') throw new Error('A day with nothing shows a dash, not a blank: ' + JSON.stringify(table.reminders));
   if (!/Standup/.test(table.reminders[2])) throw new Error('The 18th owns Standup: ' + table.reminders);
   if (!/Rent/.test(table.due[0]) || table.due[1] !== '—') throw new Error('Rent falls on the 15th only: ' + JSON.stringify(table.due));
+
+  // ---- 5b. A repeat COLLAPSES to its first day; it does not disappear ----
+  // "Only what's distinctive", taken literally, deletes: a week of identical routine compares as an
+  // empty table saying nothing at all. So a run keeps its earliest day and dittos the rest.
+  //
+  // The ditto must never be a BLANK. A blank already means "nothing on this day", and one mark
+  // meaning both that and "same as yesterday" is not ambiguity on a BOOKED row — it is a wrong
+  // answer. Every assertion below is really about keeping those two apart.
+  await page.evaluate(() => {
+    STATE.life.habits = [{ id: 'h1', name: 'Stretches', startDate: '2020-01-01', endDate: null, createdAt: 1 }];
+    STATE.diet.meals = [{ id: 'mA', name: 'Oats', items: [] }, { id: 'mB', name: 'Chicken Rice', items: [] }];
+    STATE.diet.mealPlan = {};
+    STATE.diet.mealPlan[1] = [{ id: 'p1', mealId: 'mA' }];   // Mon 15
+    STATE.diet.mealPlan[2] = [{ id: 'p2', mealId: 'mA' }];   // Tue 16 — same as Monday
+    STATE.diet.mealPlan[3] = [{ id: 'p3', mealId: 'mB' }];   // Wed 17 — different
+    if (!STATE.workouts.find(w => w.id === 'wLower')) {
+      STATE.workouts.push({ id: 'wLower', name: 'Lower Body', type: 'weights', t1: {}, t2a: {}, t2b: {}, t2c: {} });
+    }
+    // Mon and Wed but NOT Tue: the A/B/A case.
+    STATE.exercisePlan = STATE.exercisePlan || {};
+    STATE.exercisePlan[1] = [planEntry('workout', 'wLower', null)];
+    STATE.exercisePlan[2] = [];
+    STATE.exercisePlan[3] = [planEntry('workout', 'wLower', null)];
+    STATE.life.scheduleExceptions = [];
+    saveState();
+    VIEW.calCompare = ['2026-06-15', '2026-06-16', '2026-06-17'];
+    render();
+  });
+  await settle(page);
+  const collapse = await page.evaluate(() => {
+    const rows = {};
+    [...document.querySelectorAll('.cmpd-table tbody tr')].forEach(tr => {
+      const label = (tr.querySelector('.cmpd-rowlbl') || {}).textContent.trim();
+      rows[label] = {
+        uniform: tr.classList.contains('cmpd-uniform'),
+        cells: [...tr.querySelectorAll('td')].map(td => ({
+          text: td.textContent.replace(/\s+/g, ' ').trim(),
+          ditto: !!td.querySelector('.cmpd-same'),
+          none: !!td.querySelector('.cmpd-none'),
+        })),
+      };
+    });
+    const dittoStyle = (() => {
+      const el = document.querySelector('.cmpd-same');
+      if (!el) return null;
+      const none = document.querySelector('.cmpd-none');
+      return { size: parseFloat(getComputedStyle(el).fontSize), noneSize: none ? parseFloat(getComputedStyle(none).fontSize) : 0 };
+    })();
+    return { rows, labels: Object.keys(rows), dittoStyle };
+  });
+  console.log('collapse:', JSON.stringify(collapse, null, 1));
+
+  // Routine rows exist again.
+  if (collapse.labels.indexOf('MEALS') < 0 || collapse.labels.indexOf('HABITS') < 0) {
+    throw new Error('Meals and habits are rows again, collapsed rather than deleted: ' + collapse.labels);
+  }
+  // A run keeps its FIRST (earliest) day and dittos the rest — the actual ask.
+  const meals = collapse.rows.MEALS.cells;
+  if (!/Oats/.test(meals[0].text) || meals[0].ditto) throw new Error('The earliest day of a run prints in full: ' + JSON.stringify(meals[0]));
+  if (!meals[1].ditto) throw new Error('A repeat collapses to a ditto: ' + JSON.stringify(meals[1]));
+  if (meals[1].none) throw new Error('...and a ditto is NOT the "nothing here" mark');
+  if (!/Chicken Rice/.test(meals[2].text) || meals[2].ditto) throw new Error('A change ends the run and prints in full: ' + JSON.stringify(meals[2]));
+
+  // A/B/A: the third day differs from the day BESIDE it, so it prints rather than dittoing back
+  // past a gap. This is why the comparison is against the left neighbour, not the first column.
+  const workout = collapse.rows.WORKOUT.cells;
+  if (!/Lower Body/.test(workout[0].text)) throw new Error('fixture: Monday should have the workout');
+  if (!workout[1].none) throw new Error('Tuesday genuinely has none — that is a dash, not a ditto: ' + JSON.stringify(workout[1]));
+  if (workout[2].ditto || !/Lower Body/.test(workout[2].text)) {
+    throw new Error('A value returning after a gap prints again; a ditto would point back past the gap: ' + JSON.stringify(workout[2]));
+  }
+
+  // A row every day agrees on is KEPT — this is the "never leaves nothing" property — but dimmed,
+  // because it is context for the rows that do differ.
+  const habits = collapse.rows.HABITS.cells;
+  if (!collapse.rows.HABITS.uniform) throw new Error('A row every day agrees on should be marked uniform');
+  if (!/Stretches/.test(habits[0].text)) throw new Error('...and still shows its value once, on the earliest day');
+  if (!habits[1].ditto || !habits[2].ditto) throw new Error('...with the rest collapsed: ' + JSON.stringify(habits));
+
+  // The ditto has to out-read the blank it stands in for. At 13px faint it looked like an empty
+  // cell, which is exactly the reading it exists to prevent.
+  if (!collapse.dittoStyle || !(collapse.dittoStyle.size >= 15)) {
+    throw new Error('The ditto must be legible enough not to read as an empty cell: ' + JSON.stringify(collapse.dittoStyle));
+  }
+
+  // A row no day has anything for is still dropped — nothing on every day is genuinely nothing,
+  // and a ditto cannot rescue it.
+  // render() is rAF-deferred, so the DOM read sits behind its own settle().
+  await page.evaluate(() => {
+    STATE.life.habits = []; STATE.diet.mealPlan = {}; STATE.exercisePlan = {};
+    saveState(); render();
+  });
+  await settle(page);
+  const dropped = await page.evaluate(() =>
+    [...document.querySelectorAll('.cmpd-rowlbl')].map(e => e.textContent.trim()));
+  console.log('rows once nothing is planned:', JSON.stringify(dropped));
+  if (dropped.indexOf('MEALS') >= 0 || dropped.indexOf('HABITS') >= 0 || dropped.indexOf('WORKOUT') >= 0) {
+    throw new Error('A row no day has anything for is still dropped: ' + dropped);
+  }
 
   // ---- 6. The comparison replaces the day block on every zoom, and DONE brings it back ----
   const zooms = await page.evaluate(() => {
@@ -230,6 +331,9 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   await page.evaluate((snap) => {
     const s = JSON.parse(snap);
     STATE.reminders = s.reminders; STATE.budget.recurring = s.recurring;
+    STATE.life.habits = s.habits; STATE.diet.meals = s.meals; STATE.diet.mealPlan = s.mealPlan;
+    STATE.workouts = s.workouts; STATE.exercisePlan = s.exercisePlan;
+    STATE.life.scheduleExceptions = s.exceptions;
     VIEW.calCompare = null;
     saveState();
   }, snapshot);

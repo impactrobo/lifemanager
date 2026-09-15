@@ -2324,3 +2324,16 @@ button.lab-stand-toggle:focus-visible { outline: 2px solid var(--accent); outlin
    "tappable set" without competing with the solid accent on the days actually chosen. */
 .cal-cell-comparing { border-style: dashed; }
 .cal-cell-comparing.cal-cell-selected { border-style: solid; }
+/* A repeated value collapses to a ditto rather than vanishing. Deliberately NOT a blank: a blank
+   already means "nothing on this day", and one mark meaning both that and "same as yesterday"
+   would make a BOOKED row read wrong rather than merely ambiguous. */
+/* Sized UP, not down. At 13px in --text-faint it read as an empty cell, which is precisely the
+   reading it exists to prevent -- a mark that means "same as yesterday" has to be more legible
+   than the blank it is standing in for, not less. */
+.cmpd-same {
+  color: var(--text-dim); font-size: 17px; line-height: 1;
+  display: inline-block; padding-top: 2px;
+}
+/* A row every day agrees on is context for the rows that differ, so it steps back -- but only
+   slightly, since it compounds with the ditto's own dimming. */
+.cmpd-uniform td, .cmpd-uniform .cmpd-rowlbl { opacity: 0.78; }
