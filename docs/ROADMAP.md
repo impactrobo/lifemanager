@@ -535,8 +535,24 @@ on an architecture split + a large wave of Maximalist aesthetics.
     selection mode with nothing to select in it is a dead end.
   - Deselecting every day leaves the mode **on**. You're mid-reselection, and dropping out because
     the list hit zero would be the app deciding you were finished.
-  - Capped at 4 (`CAL_COMPARE_MAX`): a label column plus four days already exceeds 390px, so the
-    table scrolls inside its own `overflow-x` box and the page body never scrolls sideways.
+  - **Capped at 7 (`CAL_COMPARE_MAX`), so a full week fits side by side.** It started at 4 — the
+    width at which a phone stops showing everything at once — and went to 7 once the table earned
+    the right to be wider than the screen. Two things bought that:
+    - **The row-label column pins** (`position: sticky; left: 0`). Without it, scrolling right
+      leaves four columns of numbers and no way to tell which row is which. It needs its own
+      background or the scrolling cells show through.
+    - **Day columns snap**, with `scroll-snap-type: x proximity` — *proximity*, not *mandatory*, so
+      it pulls toward the nearest column edge when you let go near one and still lets a deliberate
+      scroll to mid-week stay there. `scroll-padding-left` matches the sticky column's width, or a
+      snapped column parks underneath it.
+    - Still inside its own `overflow-x` box, so the page body never scrolls sideways — asserted.
+    - The test measures this rather than reading the stylesheet: it scrolls to 200px, waits, and
+      checks the rest position moved *and* that some column's left edge landed on the padding
+      boundary. Column widths are content-sized by the table, so asserting a fixed multiple was
+      wrong — the first version of that check failed for exactly that reason.
+    - Note that a computed `scroll-snap-type: x proximity` serialises as just `x`, since proximity
+      is the initial strictness. The assertion that carries meaning is that it is **not**
+      `mandatory`.
   - Every row reads from `dayModel()`, so this agrees with Home and the Day view by construction.
 
 - **Calendar and Agenda harmonised; Agenda retired (2026-09-15).** Asked as "weekly view kind of

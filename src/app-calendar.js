@@ -66,7 +66,11 @@ function calSelectDay(dateStr) {
 // Days are COLUMNS and kinds of thing are ROWS, because that is what makes a comparison read: the
 // eye runs along one row and the difference is in line with itself. Stacked cards (the Agenda's
 // shape) put the two things being compared a screen apart.
-const CAL_COMPARE_MAX = 4;   // at 390px a label column plus four days already scrolls sideways
+// Seven, so a full week can be laid side by side. Past about three the table is wider than a phone,
+// which is why the row-label column pins and the day columns snap -- see .cmpd-scroll in styles.css.
+// The cap is a readability limit, not a layout one: eight columns of 86px is a lot of swiping to
+// compare the two at either end, and a week is the natural unit anyway.
+const CAL_COMPARE_MAX = 7;
 function startDayCompare() {
   ensureCalState();
   VIEW.calCompare = [NAV.calSelectedDate];

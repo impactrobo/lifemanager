@@ -94,14 +94,74 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (emptied.mode === null) throw new Error('Deselecting every day must not silently exit compare mode');
   if (!emptied.renders) throw new Error('...and the panel still renders, so there is a way back');
 
-  // ---- 3. The cap ----
+  // ---- 3. The cap: a full week, and not one day more ----
   const capped = await page.evaluate(() => {
-    ['2026-06-16', '2026-06-17', '2026-06-19', '2026-06-20'].forEach(d => toggleCompareDay(d));
-    return { len: VIEW.calCompare.length, max: CAL_COMPARE_MAX, has20: VIEW.calCompare.indexOf('2026-06-20') >= 0 };
+    // Starts holding the 15th and 18th; this fills the rest of the week and then tries to overflow.
+    ['2026-06-14', '2026-06-16', '2026-06-17', '2026-06-19', '2026-06-20'].forEach(d => toggleCompareDay(d));
+    const full = VIEW.calCompare.slice();
+    toggleCompareDay('2026-06-21');   // an eighth
+    return { full: full.length, after: VIEW.calCompare.length, max: CAL_COMPARE_MAX, has21: VIEW.calCompare.indexOf('2026-06-21') >= 0 };
   });
   console.log('cap:', JSON.stringify(capped));
-  if (capped.len !== capped.max) throw new Error(`Should stop at ${capped.max}, got ${capped.len}`);
-  if (capped.has20) throw new Error('A day past the cap must not be added');
+  if (capped.max !== 7) throw new Error('A full week should fit, got a cap of ' + capped.max);
+  if (capped.full !== capped.max) throw new Error(`Should hold ${capped.max}, got ${capped.full}`);
+  if (capped.after !== capped.max || capped.has21) throw new Error('A day past the cap must not be added: ' + JSON.stringify(capped));
+
+  // ---- 3b. Seven columns stay usable on a 390px screen ----
+  // Past ~3 days the table is wider than the phone. Two things make that survivable, and both are
+  // asserted on the COMPUTED result rather than the stylesheet, because a rule that silently loses
+  // is the failure mode that matters (see test_css_contract.js).
+  await settle(page);
+  const wide = await page.evaluate(() => {
+    const box = document.querySelector('.cmpd-scroll');
+    const boxRect = box.getBoundingClientRect();
+    const before = getComputedStyle(document.querySelector('.cmpd-rowlbl'));
+    box.scrollLeft = 200;
+    return new Promise(resolve => setTimeout(() => {
+      const lbl = document.querySelector('.cmpd-rowlbl').getBoundingClientRect();
+      resolve({
+        cols: document.querySelectorAll('.cmpd-dn').length,
+        scrollW: box.scrollWidth, clientW: box.clientWidth,
+        // The page itself must never scroll sideways -- the table scrolls inside its own box.
+        bodyScrolls: document.body.scrollWidth > window.innerWidth,
+        labelPosition: before.position,
+        snapAlign: getComputedStyle(box.querySelector('tbody td')).scrollSnapAlign,
+        snapType: getComputedStyle(box).scrollSnapType,
+        scrollPad: getComputedStyle(box).scrollPaddingLeft,
+        // Where the scroll actually came to rest, and whether the labels are still on screen.
+        restedAt: Math.round(box.scrollLeft),
+        labelOffset: Math.round(lbl.left - boxRect.left),
+        // Every day column's left edge, relative to the scroll box. Measured rather than computed
+        // from a column width: a table sizes its columns to their content, so they are not uniform.
+        colEdges: [...box.querySelectorAll('thead th')].slice(1)
+          .map(th => Math.round(th.getBoundingClientRect().left - boxRect.left)),
+      });
+    }, 400));
+  });
+  console.log('wide table:', JSON.stringify(wide));
+  if (wide.cols !== 7) throw new Error('fixture: expected seven columns, got ' + wide.cols);
+  if (!(wide.scrollW > wide.clientW)) throw new Error('fixture: seven days should overflow a 390px screen');
+  if (wide.bodyScrolls) throw new Error('The PAGE must not scroll sideways — the table scrolls inside its own box');
+  // Without this you scroll right and get columns of numbers with no way to tell which row is which.
+  if (wide.labelPosition !== 'sticky') throw new Error('The row-label column must pin, got ' + wide.labelPosition);
+  if (wide.labelOffset !== 0) throw new Error('...and stay at the left edge once scrolled, got offset ' + wide.labelOffset);
+  if (wide.snapAlign !== 'start') throw new Error('Day columns should snap, got ' + wide.snapAlign);
+  // `x` is how a computed style serialises `x proximity` -- proximity is the initial strictness, so
+  // it is omitted. Asserting it is NOT `mandatory` is the real check: mandatory would fight every
+  // scroll, where the ask was a gentle pull toward the nearest column edge.
+  if (/mandatory/.test(wide.snapType)) throw new Error('Snapping should be gentle (proximity), got ' + wide.snapType);
+  if (!/^x/.test(wide.snapType)) throw new Error('...but it does have to snap on the x axis, got ' + wide.snapType);
+  if (wide.scrollPad !== '74px') throw new Error('Snap padding must clear the sticky column or a snapped column parks under it, got ' + wide.scrollPad);
+  // The proof it actually snapped: asked for 200, came to rest elsewhere...
+  if (wide.restedAt === 200) throw new Error('A scroll landing mid-column should be pulled to an edge, but it stayed at 200');
+  // ...and where it rests, some column's left edge sits exactly at the scroll-padding boundary —
+  // i.e. flush against the pinned label column rather than half-hidden behind it.
+  if (!wide.colEdges.some(e => Math.abs(e - 74) <= 1)) {
+    throw new Error('A snapped column should land flush beside the pinned labels; edges were ' + JSON.stringify(wide.colEdges));
+  }
+
+  await page.evaluate(() => { VIEW.calCompare = ['2026-06-15', '2026-06-18']; render(); });
+  await settle(page);
 
   // ---- 4. Columns are chronological, whatever order they were picked ----
   await page.evaluate(() => { VIEW.calCompare = ['2026-06-18', '2026-06-15', '2026-06-16']; render(); });

@@ -2264,9 +2264,29 @@ button.lab-stand-toggle:focus-visible { outline: 2px solid var(--accent); outlin
 
 /* ---- Comparing days: kinds as rows, days as columns ---- */
 .cmpd-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
-/* Wide content scrolls in its own box so the page body never scrolls sideways. A label column plus
-   four days exceeds 390px, which is the whole reason CAL_COMPARE_MAX stops at four. */
-.cmpd-scroll { overflow-x: auto; }
+/* Wide content scrolls in its own box so the page body never scrolls sideways. Past ~3 days the
+   table is wider than a phone, so two things keep it readable at seven:
+   1. the row-label column PINS (position:sticky below) -- scrolled right without it you get four
+      columns of numbers and no way to know which row is which;
+   2. day columns SNAP, so a swipe lands on a column edge instead of slicing one in half.
+   `proximity`, not `mandatory`: it only takes hold when you let go near a boundary, so a
+   deliberate scroll to the middle of the week is still allowed to stay there.
+   scroll-padding-left matches the sticky column's width, or the snapped column parks underneath it. */
+.cmpd-scroll {
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  scroll-padding-left: 74px;
+  -webkit-overflow-scrolling: touch;
+}
+.cmpd-table th:not(.cmpd-corner):not(.cmpd-rowlbl),
+.cmpd-table td { scroll-snap-align: start; }
+/* The pinned column. Needs its own background or the scrolling cells show through it, and a right
+   edge so it reads as a held-back column rather than text overlapping the data. */
+.cmpd-corner, .cmpd-rowlbl {
+  position: sticky; left: 0; z-index: 1;
+  background: var(--surface);
+  border-right: 1px solid var(--border-soft);
+}
 .cmpd-table { border-collapse: collapse; width: 100%; font-size: 12px; }
 .cmpd-table th, .cmpd-table td {
   text-align: left; vertical-align: top; padding: 7px 8px;
