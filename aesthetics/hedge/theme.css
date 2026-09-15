@@ -435,12 +435,12 @@
 }
 
 /* ---------- Inputs: wells cut into the plastic ---------- */
-[data-aesthetic="hedge"] input[type="text"],
+:where([data-aesthetic="hedge"] input[type="text"],
 [data-aesthetic="hedge"] input[type="number"],
 [data-aesthetic="hedge"] input[type="date"],
 [data-aesthetic="hedge"] input[type="time"],
 [data-aesthetic="hedge"] select,
-[data-aesthetic="hedge"] textarea,
+[data-aesthetic="hedge"] textarea),
 [data-aesthetic="hedge"] .note-editor {
   background: color-mix(in srgb, var(--bg) 80%, #000000);
   border: 2px solid var(--hg-ink);

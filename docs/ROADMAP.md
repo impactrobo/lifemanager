@@ -490,6 +490,45 @@ on an architecture split + a large wave of Maximalist aesthetics.
   - **Still open:** comparison — see "Lab comparison, agreed direction" under Ideas worth
     considering for the shape that was settled on and why a panel-vs-panel compare isn't it.
 
+- **The "my rule silently lost" CSS family: named, fixed at the source, and put under test
+  (2026-09-15).** Prompted by the grey history-delta column. Every member is one failure — a CSS
+  rule that didn't apply, with nothing saying so — and it kept recurring because CSS is the one
+  layer of this stack with no feedback channel: a bad reference throws, a type error fails `tsc`,
+  a losing declaration renders a plausible page. Four shapes, counted from the codebase:
+  1. `input[type="text"]` (0,1,1) beating a bare class (0,1,0) — bit three times, left **fifteen**
+     `input[type=…].class` selectors written purely to out-rank the base.
+  2. `.entry-card .ehead` scoping a reusable row's flex to one parent — **six** redeclarations
+     whose comments counted to "FIFTH time", plus **two more in the lifts screens nobody noticed**:
+     `.lift-muscle-chip` declared `flex: none` to a parent that wasn't flex, so the chip rendered
+     under the name. Found only because the fix made it visible.
+  3. A theme at (0,2,0) repainting a component's (0,1,0) — the `--rung` workaround's origin.
+  4. `.lab-move-toward .mono` — a descendant selector for classes on the same element.
+  - **A. Base form styles now carry zero specificity** via `:where()`. A plain class on an input
+    wins the way anyone writing one expects. The fifteen defensive selectors still work; they no
+    longer need to exist.
+  - **B. `.ehead` lays itself out.** Flex on the class, spacing on the contexts. Five duplicate
+    blocks and their counting comments deleted; the two silent lifts victims fixed as a side effect.
+  - **C. `tests/test_css_contract.js`** asserts *computed* styles — what the cascade produced, not
+    what was written — for 21 contracts under every one of the 23 aesthetics (483 checks). Add a
+    contract by appending one entry. Failures are collected, not thrown, and grouped by contract so
+    a rule broken under all 23 themes reads as one problem.
+    - **It found four live bugs on its first run.** Under all **eleven external themes**, the
+      `[data-aesthetic] input` list at (0,1,1) was beating `.lab-filled` (the paste highlight) and
+      `.skill-item-name` (the unboxed inline editor); `cartomancer` was also overriding number-input
+      fonts. None of it had been seen because nobody switches through eleven themes by hand —
+      precisely the case shape 3 hides in. Fixed by extending A into the themes: each generic
+      `input/select/textarea` list is now wrapped in `:where()`, with the `.note-editor` class that
+      ends every list deliberately left *outside* it so it keeps its specificity.
+    - One probe of mine was wrong (select `width` is floored by the base padding, which reads as
+      a specificity loss and isn't one) and the wrapping script skipped `y2k` because its key regex
+      was `[a-z]+` and the key has a digit — it said "no block" instead of failing. Both corrected;
+      both are the kind of thing the contract test exists to catch.
+  - **Not done, on purpose: full `@layer`.** It's the textbook cure for shapes 1 and 3, but themes
+    *legitimately* override component appearance (`.btn`, `.panel` borders) while component *state*
+    (`.lab-filled`, `.skill-target-hit`) must beat themes — and layers can't express "modifiers win,
+    base components lose" without classifying all 2,246 lines. After A+B+C the flat file may simply
+    stop hurting. The convention is written into CLAUDE.md so the next session inherits it.
+
 - **Lab bars stop starting at zero, and a marker's history opens on tap (2026-09-15).** Both came
   out of looking at the shipped trail: the dots on HbA1c were an unreadable smudge, and the first
   question asked about the bar was what the bold white line was.

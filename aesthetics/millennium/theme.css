@@ -515,12 +515,12 @@
 }
 
 /* ---------- Inputs: dark wells cut into the lit panel ---------- */
-[data-aesthetic="millennium"] input[type="text"],
+:where([data-aesthetic="millennium"] input[type="text"],
 [data-aesthetic="millennium"] input[type="number"],
 [data-aesthetic="millennium"] input[type="date"],
 [data-aesthetic="millennium"] input[type="time"],
 [data-aesthetic="millennium"] select,
-[data-aesthetic="millennium"] textarea,
+[data-aesthetic="millennium"] textarea),
 [data-aesthetic="millennium"] .note-editor {
   background: color-mix(in srgb, var(--bg) 82%, #000000);
   border: none;

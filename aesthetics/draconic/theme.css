@@ -210,10 +210,10 @@
 [data-aesthetic="draconic"] .subnav button.active > * { position: relative; z-index: 1; }
 
 /* ---------- Inputs ---------- */
-[data-aesthetic="draconic"] input[type="text"],
+:where([data-aesthetic="draconic"] input[type="text"],
 [data-aesthetic="draconic"] input[type="number"],
 [data-aesthetic="draconic"] select,
-[data-aesthetic="draconic"] textarea,
+[data-aesthetic="draconic"] textarea),
 [data-aesthetic="draconic"] .note-editor {
   background: linear-gradient(180deg, #120607 0%, #1d0b0d 100%);
   border: 1px solid #5e2020;

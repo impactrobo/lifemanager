@@ -219,10 +219,10 @@
 }
 
 /* ---------- Inputs: recessed rather than raised ---------- */
-[data-aesthetic="frutigeraero"] input[type="text"],
+:where([data-aesthetic="frutigeraero"] input[type="text"],
 [data-aesthetic="frutigeraero"] input[type="number"],
 [data-aesthetic="frutigeraero"] select,
-[data-aesthetic="frutigeraero"] textarea {
+[data-aesthetic="frutigeraero"] textarea) {
   background: linear-gradient(180deg, rgba(226, 243, 252, 0.95), rgba(255, 255, 255, 0.95));
   border: 1px solid rgba(126, 180, 208, 0.75);
   border-radius: 10px;

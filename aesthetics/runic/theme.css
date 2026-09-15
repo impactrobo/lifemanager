@@ -457,12 +457,12 @@
    Lighting inverted from the raised fittings above — shadow along the TOP inner
    edge, a lit line along the BOTTOM. That inversion is what makes a field look
    sunken rather than merely dark. */
-[data-aesthetic="runic"] input[type="text"],
+:where([data-aesthetic="runic"] input[type="text"],
 [data-aesthetic="runic"] input[type="number"],
 [data-aesthetic="runic"] input[type="date"],
 [data-aesthetic="runic"] input[type="time"],
 [data-aesthetic="runic"] select,
-[data-aesthetic="runic"] textarea,
+[data-aesthetic="runic"] textarea),
 [data-aesthetic="runic"] .note-editor {
   background: linear-gradient(180deg, #1c1309 0%, #241a0f 62%, #2b2013 100%);
   border: 1px solid #0d0905;

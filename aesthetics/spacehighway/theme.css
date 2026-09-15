@@ -478,12 +478,12 @@
 }
 
 /* ---------- Inputs: dark wells cut into the console ---------- */
-[data-aesthetic="spacehighway"] input[type="text"],
+:where([data-aesthetic="spacehighway"] input[type="text"],
 [data-aesthetic="spacehighway"] input[type="number"],
 [data-aesthetic="spacehighway"] input[type="date"],
 [data-aesthetic="spacehighway"] input[type="time"],
 [data-aesthetic="spacehighway"] select,
-[data-aesthetic="spacehighway"] textarea,
+[data-aesthetic="spacehighway"] textarea),
 [data-aesthetic="spacehighway"] .note-editor {
   background: color-mix(in srgb, var(--bg) 82%, #000000);
   border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--border));

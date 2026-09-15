@@ -148,11 +148,17 @@ input, select, textarea { font-family: var(--font-body); }
 /* ---------- Inputs ---------- */
 label.field { display: block; margin-bottom: 10px; }
 label.field .lbl { display: block; font-size: 12px; color: var(--text-dim); margin-bottom: 4px; font-weight: 500; }
-input[type="text"], input[type="number"], select, textarea {
+/* BASE FORM STYLES CARRY ZERO SPECIFICITY, ON PURPOSE.
+   `input[type="text"]` is (0,1,1) and silently beats any bare class at (0,1,0) -- so `.lab-filled`
+   or `.phase-label` on an input did nothing, and nothing said so. That bit three times and left
+   fifteen `input[type=...].class` selectors in this file written purely to out-rank this block.
+   `:where()` contributes no specificity at all, so a plain class now wins here the way anyone
+   writing one expects. Those defensive selectors still work; they just no longer have to exist. */
+:where(input[type="text"], input[type="number"], select, textarea) {
   width: 100%; background: var(--surface2); border: 1px solid var(--border); color: var(--text);
   border-radius: var(--radius); padding: 10px 11px; font-size: 15px;
 }
-input[type="number"] { font-family: var(--font-mono); }
+:where(input[type="number"]) { font-family: var(--font-mono); }
 /* No spin-button up/down control on number inputs — mobile never shows one, so the web version
    shouldn't either (matched by the wheel-scroll guard in JS, which stops scrolling over a
    focused number field from silently changing it too). */
@@ -160,7 +166,7 @@ input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 input[type="number"] { -moz-appearance: textfield; }
 input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
-textarea { resize: vertical; min-height: 50px; }
+:where(textarea) { resize: vertical; min-height: 50px; }
 .field-row { display: flex; gap: 8px; }
 .field-row > label.field { flex: 1; }
 select { -webkit-appearance: none; appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--text-dim) 50%), linear-gradient(135deg, var(--text-dim) 50%, transparent 50%); background-position: calc(100% - 16px) center, calc(100% - 11px) center; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; padding-right: 30px; }
@@ -371,7 +377,13 @@ button.hit-mark { padding: 0; background: none; font: inherit; color: inherit; c
 /* ---------- Measurement / weight tables ---------- */
 .entry-list { display: flex; flex-direction: column; gap: 8px; }
 .entry-card { background: var(--surface); border: 1px solid var(--border-soft); border-radius: var(--radius); padding: 12px; }
-.entry-card .ehead { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+/* .ehead IS the flex row. Its layout used to live only on `.entry-card .ehead`, so the bare class
+   got nothing and every other component had to redeclare it -- the comments counted to "FIFTH
+   time", and two more (.panel > .ehead in the lifts screens) were never noticed at all, rendering
+   the muscle chip under the name while .lift-muscle-chip sat there declaring `flex: none` to a
+   parent that wasn't flex. Layout is on the class now; contexts below add only spacing. */
+.ehead { display: flex; align-items: center; gap: 8px; }
+.entry-card .ehead { justify-content: space-between; margin-bottom: 6px; }
 .entry-card .edate { font-family: var(--font-mono); font-weight: 700; font-size: 13px; }
 .entry-card .estats { display: flex; flex-wrap: wrap; gap: 10px 16px; font-size: 12px; color: var(--text-dim); }
 .entry-card .estats b { color: var(--text); font-family: var(--font-mono); }
@@ -815,10 +827,7 @@ button.hit-mark { padding: 0; background: none; font: inherit; color: inherit; c
 .phase-state-current { border-left-color: var(--accent); }
 .phase-state-future  { border-left-color: var(--border-soft); }
 
-/* .ehead's flex layout is scoped to `.entry-card .ehead` in the entry-card block above, so a
-   phase card has to declare its own -- without this the chip drops onto its own line under a
-   full-width input, which is exactly what it did. */
-.phase-card .ehead { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.phase-card .ehead { justify-content: space-between; }
 
 /* Borderless so the label reads as a heading, not a form field, until you're in it. Same treatment
    as the goal name above it.
@@ -939,10 +948,7 @@ input[type="text"].phase-label {
 .lift-row-name { font-weight: 600; min-width: 0; }
 .lift-row-short { font-size: 10px; color: var(--text-faint); font-family: var(--font-mono); flex: none; }
 .lift-add { border-top: 1px solid var(--border-soft); margin-top: 10px; }
-/* `.ehead`'s flex layout is scoped to `.entry-card .ehead`, so anything else using that class has to
-   declare its own -- without this the delete button drops onto its own line under a full-width
-   select. Third time this has bitten (see .phase-card .ehead above). */
-.ex-target .ehead { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.ex-target .ehead { margin-bottom: 8px; }
 .ex-target .ehead select { min-width: 0; }
 
 /* A reached target turns green and stays -- monotonic by nature, and nothing un-achieves it. */
@@ -1032,9 +1038,7 @@ input[type="text"].skill-list-name:focus { outline: none; border-bottom-color: v
 .skill-add-row input { flex: 1 1 auto; min-width: 0; margin: 0; }
 .skill-add-row .btn { flex: none; }
 
-/* Fourth time: `.ehead`'s flex layout is scoped to `.entry-card .ehead`, so every other user of
-   the class declares its own (see .phase-card and .ex-target above). */
-.skill-item .ehead { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.skill-item .ehead { margin-bottom: 6px; }
 input[type="text"].skill-item-name {
   flex: 1 1 auto; min-width: 0; width: auto; padding: 2px 0;
   background: none; border: none; border-bottom: 1px solid transparent;
@@ -1181,10 +1185,7 @@ textarea.skill-item-detail + .skill-sched { margin-top: 0; }
 .skill-move-line { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; }
 .skill-move-arrow { color: var(--text-faint); font-size: 13px; }
 .skill-move-due { font-size: 11px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
-/* FIFTH time: `.ehead`'s flex layout is scoped to `.entry-card .ehead`, so every other user of
-   the class declares its own (see .phase-card, .ex-target and .skill-item above). Without it the
-   verdict chip drops onto its own line under the item name. */
-.skill-move .ehead { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
+.skill-move .ehead { margin-bottom: 7px; }
 /* The verdict is coloured by the RATING, not by where the item landed. Taking the band's colour
    meant two GOOD chips rendering differently depending on the rung underneath them, which reads
    as a distinction that isn't there. These match the four rating buttons in the runner. */
@@ -1234,7 +1235,7 @@ textarea.skill-item-detail + .skill-sched { margin-top: 0; }
 .skill-target::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--rung); }
 .skill-target-hit { --rung: var(--good); border-color: var(--good); }
 .skill-target-late { --rung: var(--warn); }
-.skill-target .ehead { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
+.skill-target .ehead { margin-bottom: 7px; }
 .skill-target-name { flex: 1 1 auto; min-width: 0; font-size: 14px; font-weight: 650; }
 .skill-target-bar { height: 6px; border-radius: 3px; background: var(--surface2); overflow: hidden; margin-bottom: 6px; }
 .skill-target-fill { height: 100%; background: var(--accent); }
@@ -1309,8 +1310,7 @@ textarea.skill-item-detail + .skill-sched { margin-top: 0; }
   background: var(--surface2); border: 1px solid var(--border-soft);
   font-size: 10px; line-height: 1.6; color: var(--text-faint);
 }
-/* .ehead's flex layout is scoped to `.entry-card .ehead`, and a lab card IS an entry card, so this
-   one needs nothing of its own -- noted because the last five components each did. */
+/* A lab card is an entry card and .ehead now lays itself out, so it needs nothing of its own. */
 
 /* The ranges editor. Two rows of two bounds per marker, and an empty box means "no bound on that
    side" -- which is also how you clear an override and fall back to the shipped default. */

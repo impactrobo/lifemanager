@@ -322,10 +322,10 @@
    silver, and the value gets far more contrast than dark-on-near-white managed. The lighting
    is deliberately inverted from the raised controls — shadow along the TOP inner edge, a thin
    highlight along the BOTTOM — which is what actually makes an element look sunken. */
-[data-aesthetic="y2k"] input[type="text"],
+:where([data-aesthetic="y2k"] input[type="text"],
 [data-aesthetic="y2k"] input[type="number"],
 [data-aesthetic="y2k"] select,
-[data-aesthetic="y2k"] textarea,
+[data-aesthetic="y2k"] textarea),
 [data-aesthetic="y2k"] .note-editor {
   background: linear-gradient(180deg, #0d1219 0%, #161d27 62%, #1b2430 100%);
   border: 1px solid #5c6875;
@@ -347,7 +347,7 @@
 /* styles.css draws the select chevron from two gradients tinted with --text-dim, which the
    silver-surface scope makes dark — invisible against a dark well. Restated light here, with
    the well's own gradient re-supplied as the bottom layer. */
-[data-aesthetic="y2k"] select {
+:where([data-aesthetic="y2k"] select) {
   background-image:
     linear-gradient(45deg, transparent 50%, #9fb2c6 50%),
     linear-gradient(135deg, #9fb2c6 50%, transparent 50%),

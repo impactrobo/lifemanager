@@ -409,12 +409,12 @@
 }
 
 /* ---------- Inputs: forms nobody will read ---------- */
-[data-aesthetic="liminal"] input[type="text"],
+:where([data-aesthetic="liminal"] input[type="text"],
 [data-aesthetic="liminal"] input[type="number"],
 [data-aesthetic="liminal"] input[type="date"],
 [data-aesthetic="liminal"] input[type="time"],
 [data-aesthetic="liminal"] select,
-[data-aesthetic="liminal"] textarea,
+[data-aesthetic="liminal"] textarea),
 [data-aesthetic="liminal"] .note-editor {
   background: #fbf8e6;
   border: 1px solid var(--border);

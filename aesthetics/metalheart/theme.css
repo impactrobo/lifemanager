@@ -380,12 +380,12 @@
    Lighting inverted from the raised plates above — shadow along the TOP inner edge,
    a thin lit line along the BOTTOM, plus an outer lip catching light from above.
    That inversion is what actually makes a field look sunken. */
-[data-aesthetic="metalheart"] input[type="text"],
+:where([data-aesthetic="metalheart"] input[type="text"],
 [data-aesthetic="metalheart"] input[type="number"],
 [data-aesthetic="metalheart"] input[type="date"],
 [data-aesthetic="metalheart"] input[type="time"],
 [data-aesthetic="metalheart"] select,
-[data-aesthetic="metalheart"] textarea,
+[data-aesthetic="metalheart"] textarea),
 [data-aesthetic="metalheart"] .note-editor {
   background: linear-gradient(180deg, #060d11 0%, #0d181e 62%, #111f26 100%);
   border: 1px solid #3f545e;

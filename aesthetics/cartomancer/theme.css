@@ -255,7 +255,10 @@
   color: color-mix(in srgb, var(--accent) 40%, var(--text-dim));
   text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700;
 }
-[data-aesthetic="cartomancer"] body, [data-aesthetic="cartomancer"] input, [data-aesthetic="cartomancer"] textarea, [data-aesthetic="cartomancer"] select {
+/* Element selectors carry no specificity (see the base form block in styles.css), so a component
+   class on an input always wins. `body` stays outside the :where() -- it has to keep beating the
+   base body rule. */
+[data-aesthetic="cartomancer"] body, :where([data-aesthetic="cartomancer"] input, [data-aesthetic="cartomancer"] textarea, [data-aesthetic="cartomancer"] select) {
   font-family: var(--font-body);
 }
 [data-aesthetic="cartomancer"] .empty-state { color: var(--text-dim); font-style: italic; }
@@ -343,12 +346,12 @@
 }
 
 /* ---------- Inputs: a well cut into the card stock ---------- */
-[data-aesthetic="cartomancer"] input[type="text"],
+:where([data-aesthetic="cartomancer"] input[type="text"],
 [data-aesthetic="cartomancer"] input[type="number"],
 [data-aesthetic="cartomancer"] input[type="date"],
 [data-aesthetic="cartomancer"] input[type="time"],
 [data-aesthetic="cartomancer"] select,
-[data-aesthetic="cartomancer"] textarea,
+[data-aesthetic="cartomancer"] textarea),
 [data-aesthetic="cartomancer"] .note-editor {
   background: color-mix(in srgb, var(--bg) 78%, #000000);
   border: 2px solid color-mix(in srgb, var(--accent) 45%, var(--border));

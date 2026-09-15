@@ -232,10 +232,10 @@
 [data-aesthetic="cream"] .unit-toggle button.active { background: var(--cream-gold); color: #2a1a02; }
 
 /* ---------- Inputs: recessed velvet ---------- */
-[data-aesthetic="cream"] input[type="text"],
+:where([data-aesthetic="cream"] input[type="text"],
 [data-aesthetic="cream"] input[type="number"],
 [data-aesthetic="cream"] select,
-[data-aesthetic="cream"] textarea,
+[data-aesthetic="cream"] textarea),
 [data-aesthetic="cream"] .note-editor {
   background: linear-gradient(180deg, var(--cream-well) 0%, color-mix(in srgb, var(--bg) 88%, #000000) 100%);
   border: 1px solid rgba(245, 197, 24, 0.30);

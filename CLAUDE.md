@@ -171,11 +171,40 @@ talons both pushed the third column off screen). Two things to budget for:
   box stays ~42px tall however small you make the SVG inside. That wrapper, not the icon, is
   what the vertical budget actually has to fit.
 
-### CSS gotcha that has bitten twice
-`[data-aesthetic="x"] .btn` and `[data-aesthetic="x"] .btn-primary` have **identical
-specificity** (0,2,0), and `.btn-primary` also carries `.btn` — so source order decides. Write
-the neutral `.btn` rule **first**, coloured variants after. Also: a theme's own `.btn` outranks
-`styles.css`'s `.btn-danger`/`.btn-good`, so if you style `.btn` you must restate those too.
+### CSS: the "my rule silently lost" family
+CSS has no failure mode for a declaration that loses. Every other layer here fails loudly (a
+bad reference is a `pageerror`, a type error fails `tsc`); a losing CSS rule renders a page
+that merely looks plausible. That's why the same bug kept recurring in four shapes:
+
+1. **An element+attribute base beat a bare class.** `input[type="text"]` is (0,1,1), `.lab-filled`
+   is (0,1,0). Bit three times; left fifteen `input[type=…].class` selectors written only to
+   out-rank the base.
+2. **A component's layout was scoped to one parent.** `.entry-card .ehead` meant `.ehead` alone
+   got nothing; six components redeclared flex, two more never did and were silently broken.
+3. **A theme rule outranked a component.** `[data-aesthetic="x"] input` at (0,1,1) repainted
+   `.lab-filled` under all eleven external themes.
+4. **A descendant selector for classes on the same element.** `.lab-move-toward .mono` matches
+   nothing when both classes sit on one `<span>`.
+
+**The convention, now enforced:**
+- **Bare element selectors carry no specificity.** The base form block in `styles.css` and every
+  external theme's generic `input/select/textarea` list are wrapped in `:where(…)`, so a plain
+  class always wins over them. Keep it that way when adding either. Pseudo-classes (`:focus`,
+  `::placeholder`) are deliberately left out — those are state styling and no class has needed
+  to beat them.
+- **A reusable class lays itself out.** `.ehead` owns its flex; parents add only spacing. Don't
+  scope a component's core layout to a parent.
+- **`tests/test_css_contract.js` asserts computed styles**, across every aesthetic, for the
+  cases above. It found four live bugs on its first run. When you write a rule that must win
+  (a state modifier, a signal that themes mustn't erase), add a one-line contract for it —
+  it's the only thing that will tell you when a theme quietly repaints it.
+- Themes legitimately restyle component *appearance* (`.panel`, `.btn`). A component *signal*
+  that must survive that goes through a custom property + `::before`, the way `--rung` does.
+
+Still true and separate: `[data-aesthetic="x"] .btn` and `[data-aesthetic="x"] .btn-primary`
+have **identical specificity** (0,2,0), and `.btn-primary` also carries `.btn` — so source order
+decides. Write the neutral `.btn` rule **first**, coloured variants after. And a theme's own
+`.btn` outranks `styles.css`'s `.btn-danger`/`.btn-good`, so if you style `.btn` restate those.
 
 ## Known issues (fixed)
 - ~~`exportData()` was broken outside the Claude Artifact runtime~~ — **fixed.** It used to
