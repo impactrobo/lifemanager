@@ -427,7 +427,7 @@
 }
 [data-aesthetic="hedge"] .plate,
 [data-aesthetic="hedge"] .pill,
-[data-aesthetic="hedge"] .tag-pill,
+[data-aesthetic="hedge"] .tag-pill:not(.active),
 [data-aesthetic="hedge"] .exercise-chip {
   background: var(--hg-plate);
   border: 2px solid var(--hg-ink-soft);

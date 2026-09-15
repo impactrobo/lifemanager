@@ -84,10 +84,11 @@ before starting any of these.
   1. ~~**Ghost dots on the existing bar**~~ — **shipped 2026-09-15**, along with the axis reframe
      that stopped them overlapping and tap-to-open history, which gives the dots the dates they
      can't show themselves. See Recently Shipped.
-  2. **Pick a date range and a set of markers, then see how they all moved over that period,
-     regardless of when each was actually measured** (next, wants mock-ups first). The last clause
-     is the whole design: it compares *first reading in range vs last reading in range, per marker*,
-     which is what dissolves the sparsity problem — no two markers need share a draw date.
+  2. ~~**Pick a date range and a set of markers, then see how they all moved over that period,
+     regardless of when each was actually measured**~~ — **shipped 2026-09-15**, see Recently
+     Shipped. The last clause was the whole design: *first reading in range vs last reading in
+     range, per marker*, which is what dissolves the sparsity problem — no two markers need share a
+     draw date.
      - **Four design decisions taken 2026-09-15, each on the recommended option:**
        1. **Placement: BODY → COMPARE, as more series.** Lab markers join weight, sleep, steps,
           RHR and BP in the existing compare screen and its picker. One place for every health
@@ -113,6 +114,20 @@ before starting any of these.
     set**, never by raw sign. "Moved into your target range" is arithmetic against a number you
     typed yourself, not the app's opinion, and it's what `inTarget`/`inRef` already do on a single
     reading. A marker with no bounds stated gets a plain uncoloured number, same as it gets no bar.
+
+- **`test_day_fold.js` fails when run within a few minutes of midnight (found 2026-09-15, not
+  fixed).** It asserts "a day with something behind and ahead folds into 2 bands", and just after
+  00:00 nothing is behind yet, so only one band renders and the assertion fails. Verified
+  pre-existing by stashing a working tree and running it at HEAD: fails identically either way.
+  `test_reminder_past_due.js` has a narrower version of the same fragility — it wants a time that
+  has already passed today, which at 00:00–00:01 there isn't.
+  - The file already carries a comment about midnight fragility for a *different* assertion, so
+    this is the second instance in one test.
+  - Fix shape: these tests derive their fixtures from `Date.now()` and should pin the clock instead
+    (inject a fixed "now" through the same seam `partitionDayBlocks(blocks, nowMin)` already
+    exposes — it takes `nowMin` as an argument, so the production code is already testable; it's
+    the fixture that reaches for the real clock). Worth doing before it wastes another debugging
+    session, since a midnight failure looks exactly like a real regression.
 
 - **Claude-assisted lab entry, if the paste-parser proves insufficient (2026-09-15).** The parser
   now shipping reads pasted *text*. It cannot read a photo of a printout or a PDF, and it will miss
@@ -502,6 +517,50 @@ on an architecture split + a large wave of Maximalist aesthetics.
     the card — while the delete confirm promised they would stay. They fall back to the raw key now.
   - **Still open:** comparison — see "Lab comparison, agreed direction" under Ideas worth
     considering for the shape that was settled on and why a panel-vs-panel compare isn't it.
+
+- **COMPARE stops being a lift screen: labs and the daily log chart there too (2026-09-15).** The
+  lab-comparison feature, built to the four decisions recorded under Ideas plus two answered while
+  mocking it up: the daily-log metrics **moved in**, and charts frame on **data + nearest bound**.
+  - **The conversion bug this had to fix first.** COMPARE charted lifts and body weight only, and
+    every series was weight-shaped: the draw code read `p.weightLb` and ran it through
+    `lbToDisplay()` *unconditionally*. Labs and the daily log break that outright — an HbA1c of 5.4
+    is not pounds, and 9,000 steps reported in kilograms would be a straight-faced lie. So a series
+    id now resolves to **one descriptor** (`{label, unit, decimals, format, points, bands,
+    movementFor}`) and nothing downstream branches on kind. A future source is a new resolver plus
+    a line in `compareMetricGroups()`; the chart, the range filter and the summary need no edit.
+  - The picker is **grouped by source** (BODY / LIFTS / LABS) — an undivided run of chips gave no
+    clue that "Steps" and "ApoB" come from different places. Empty groups are omitted. Labs are
+    **offered, not resolvable**: only markers you have readings for, because a picker listing all 32
+    would bury the four you track.
+  - **The chart frames differently from the bar, on purpose.** The bar shows every stated bound;
+    `labChartFrame()` frames on the data widened to the *nearest* bound each side. Vitamin D decided
+    it: ref 30–100 with readings 28–52, where showing every bound spends two thirds of the plot on
+    range the readings never enter (tested: the chart uses >2× the height the bar does). They may
+    differ but must not **disagree**, so the zone walk was extracted to `labZoneSegments(key, lo,
+    hi)` and both paint from it — with clamping, since a chart window can legitimately end below a
+    stated bound.
+  - **The y-axis ticks at band edges**, not round numbers: 80 and 130 are the only values on an ApoB
+    axis a reading is measured against, and 100/150 are noise that happen to divide evenly.
+  - Range presets fill the date fields (so custom starts from something real); editing either field
+    drops the preset chip, because a lit `1Y` next to hand-typed dates it doesn't describe is a lie.
+  - The summary is **first-in-range → last-in-range per metric**, which is what makes it work on
+    sparse draws: nothing is ever compared *across* series, so no two markers need share a date.
+    Direction comes from `labMovement()` — a lift or a step count gets its number and no verdict.
+  - Empty states distinguish "never logged" from "nothing in *this* window", since with a range
+    control on screen the second is self-inflicted and the fix is different.
+  - **Three bugs found by looking at it**, two of them pre-existing:
+    - `.tag-pill.active` fell back to `background: var(--tc, var(--surface2))` with hardcoded
+      near-black ink, so an untagged selected chip (COMPARE's whole picker) rendered dark-on-dark
+      and read as unselected. Fallback is `--accent` now, matching every other selected control.
+    - Seven external themes restyle `.tag-pill` and **beat the active state on source order** — the
+      exact `.btn`/`.btn-primary` trap CLAUDE.md documents. Their rules are scoped
+      `:not(.active)` so the resting look no longer claims the state. *The contract test caught
+      this one*, across all 23 themes, which is precisely what it was built for.
+    - A fixed y-window hands Chart.js fractional bounds, so a tick stringified as
+      `5.8000000000000001 %`. Rounded then stripped — `fmt()` alone removes only a single `.0`.
+  - Lab values print **as recorded** (`96`, not `96.00`): a result carries the assay's own
+    precision, and padding it invents confidence. The range header always carries the year, because
+    `fmtGoalDate()` drops it in the current year and "Jan 1 → Dec 31" names neither one.
 
 - **The "my rule silently lost" CSS family: named, fixed at the source, and put under test
   (2026-09-15).** Prompted by the grey history-delta column. Every member is one failure — a CSS

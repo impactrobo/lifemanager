@@ -338,7 +338,7 @@
 }
 [data-aesthetic="cartomancer"] .plate,
 [data-aesthetic="cartomancer"] .pill,
-[data-aesthetic="cartomancer"] .tag-pill,
+[data-aesthetic="cartomancer"] .tag-pill:not(.active),
 [data-aesthetic="cartomancer"] .exercise-chip {
   background: var(--surface2);
   border: 1px solid color-mix(in srgb, var(--accent) 50%, var(--border));

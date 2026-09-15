@@ -606,6 +606,103 @@ function compareMetricSeries(id) {
   const [, categoryId, tierKey] = id.split(':');
   return liftHistorySeries(categoryId, tierKey);
 }
+
+// ---- One descriptor shape for everything COMPARE can chart ----
+//
+// This screen used to chart lifts and body weight only, and every series was weight-shaped: the
+// draw code read `p.weightLb` and ran it through lbToDisplay() unconditionally. Labs and the daily
+// log break that outright -- an HbA1c of 5.4 is not pounds and must never be converted.
+//
+// So a series id now resolves to ONE descriptor and nothing downstream branches on what kind it is.
+// Adding a source later (a wearable feed, a new marker catalogue) means a new resolver and a new
+// entry in compareMetricGroups(); the chart, the range filter and the summary need no edit.
+//
+//   { id, label, unit, decimals, points: [{date, value}], bands, movement }
+//
+// `points` are already in DISPLAY units, because the conversion is a property of the source, not of
+// the chart. `bands`/`movement` are null for anything that states no range -- only labs have them.
+function compareMetricDescriptor(id) {
+  // Labs.
+  if (id.indexOf('lab:') === 0) {
+    const key = id.slice(4);
+    const m = labMarker(key);
+    if (!m) return null;
+    const r = labRange(key);
+    // labHistory() is newest-first; a chart reads left to right.
+    const points = labHistory(key).slice().reverse().map(h => ({ date: h.date, value: Number(h.value) }));
+    return {
+      id, label: m.label, unit: r.unit ? ' ' + r.unit : '', decimals: 2,
+      // Printed as recorded, the way every other lab surface prints it. A lab result carries its
+      // own precision -- HbA1c is 5.4 and ApoB is 96, and forcing either to a fixed two places
+      // ("96.00") invents confidence the assay didn't report.
+      format: v => String(v),
+      points, bands: { key }, movementFor: (a, b) => labMovement(key, a, b),
+    };
+  }
+  // The daily log and the scale -- everything WEIGHT_METRICS already describes. `bodyweight` keeps
+  // its legacy id: it is COMPARE's default selection and has been since this screen shipped.
+  const metricKey = id === 'bodyweight' ? 'weight' : (id.indexOf('body:') === 0 ? id.slice(5) : null);
+  if (metricKey) {
+    const metric = WEIGHT_METRICS.find(m => m.key === metricKey);
+    if (!metric) return null;
+    return {
+      id, label: metric.label, unit: metric.suffix(), decimals: 1, format: v => fmt(v, 1),
+      // A multi-part metric (blood pressure) charts its FIRST part here. The paired reading has its
+      // own two-line chart under WEIGHT; side by side with three other metrics, one line per series
+      // is what keeps a small multiple readable.
+      points: metricSeries(metric, metric.parts ? metric.parts[0].get : null),
+      partLabel: metric.parts ? metric.parts[0].label : null,
+      bands: null, movementFor: null,
+    };
+  }
+  // Lifts, still weight-shaped, converted here rather than in the draw code.
+  const lifts = compareMetricSeries(id);
+  return {
+    id, label: compareMetricLabel(id), unit: ' ' + weightUnitLabel(), decimals: 1, format: v => fmt(v, 1),
+    points: lifts.map(p => ({ date: p.date, value: lbToDisplay(p.weightLb) })),
+    bands: null, movementFor: null,
+  };
+}
+
+// ---- The date range ----
+// Presets for the common look, two date fields for the question that actually gets asked of labs
+// ("since I started the statin"). Picking a preset fills the fields, so the custom case starts from
+// something real rather than two empty boxes.
+const COMPARE_PRESETS = [
+  { key: '3m', label: '3M', months: 3 },
+  { key: '6m', label: '6M', months: 6 },
+  { key: '1y', label: '1Y', months: 12 },
+  { key: 'all', label: 'ALL', months: null },
+];
+function compareRange() {
+  if (!VIEW.compareRange) VIEW.compareRange = { preset: 'all', from: null, to: null };
+  return VIEW.compareRange;
+}
+function setComparePreset(key) {
+  const p = COMPARE_PRESETS.find(x => x.key === key) || COMPARE_PRESETS[3];
+  const r = compareRange();
+  r.preset = p.key;
+  if (p.months == null) { r.from = null; r.to = null; }
+  else {
+    const to = new Date();
+    const from = new Date(to.getFullYear(), to.getMonth() - p.months, to.getDate());
+    r.from = dateKeyOf(from); r.to = dateKeyOf(to);
+  }
+  render();
+}
+// Editing either field drops the preset -- the chips describe a window from today, and a hand-typed
+// span almost never is one. Leaving a chip lit next to dates it doesn't describe would be a lie.
+function setCompareRangeDate(which, value) {
+  const r = compareRange();
+  r[which] = value || null;
+  r.preset = null;
+  render();
+}
+function compareInRange(points) {
+  const r = compareRange();
+  if (!r.from && !r.to) return points;
+  return points.filter(p => (!r.from || p.date >= r.from) && (!r.to || p.date <= r.to));
+}
 const COMPARE_MAX_METRICS = 4; // small multiples stacked on a phone screen — more than this stops being scannable
 function toggleCompareMetric(id) {
   const idx = VIEW.compareSelected.indexOf(id);
@@ -622,34 +719,152 @@ function toggleCompareMetric(id) {
 // Charts share the same *formatting*, not a synced axis/crosshair — each one's own logged dates,
 // same as the existing single-metric charts above (no time-scale plugin loaded, see CLAUDE.md's
 // CDN allowlist).
-function renderCompareView() {
+// The picker is GROUPED by source, because it now offers three kinds of thing and an undivided run
+// of chips gives no clue that "Steps" and "ApoB" come from different places entirely. Each group
+// builds from its own list, so a new source appears here by adding one entry.
+function compareMetricGroups() {
   const liftSlots = trackedLiftSlots();
   const lifts = trackedLifts();
-  const chip = (id, label) =>
+  return [
+    { key: 'body', label: 'BODY', items: [
+      // Body weight keeps its legacy id; everything else the daily log records is now chartable
+      // here too, rather than only as a single-metric chart a tab away.
+      { id: 'bodyweight', label: 'Body Weight' },
+      ...WEIGHT_METRICS.filter(m => m.key !== 'weight').map(m => ({ id: 'body:' + m.key, label: m.label })),
+    ] },
+    { key: 'lift', label: 'LIFTS', items: [
+      ...liftSlots.map(s => ({ id: compareMetricId(s.categoryId, s.tierKey), label: s.label })),
+      // Lifts, from the library. Anything you've logged appears here regardless of workout style, so
+      // RP-style exercises and T3 accessories are chartable for the first time.
+      ...lifts.map(l => ({ id: liftMetricId(l.id), label: l.name })),
+    ] },
+    // Offered, not resolvable: only markers you have readings for. The full catalogue is 32 markers
+    // and a picker listing all of them would bury the four you actually track.
+    { key: 'lab', label: 'LABS', items: allLabMarkers()
+      .filter(m => labHistory(m.key).length)
+      .map(m => ({ id: 'lab:' + m.key, label: m.label })) },
+  ].filter(g => g.items.length);
+}
+function renderCompareView() {
+  const groups = compareMetricGroups();
+  const chip = ({ id, label }) =>
     `<button class="tag-pill ${VIEW.compareSelected.includes(id)?'active':''}" onclick="toggleCompareMetric('${id}')">${escapeHtml(label)}</button>`;
-  const chips = [
-    chip('bodyweight', 'Body Weight'),
-    ...liftSlots.map(s => chip(compareMetricId(s.categoryId, s.tierKey), s.label)),
-    // Lifts, from the library. Anything you've logged appears here regardless of workout style, so
-    // RP-style exercises and T3 accessories are chartable for the first time.
-    ...lifts.map(l => chip(liftMetricId(l.id), l.name)),
-  ].join('');
+  const picker = groups.map(g => `
+    <div class="subtle-label" style="margin-top:10px;">${g.label}</div>
+    <div class="tag-pill-row">${g.items.map(chip).join('')}</div>`).join('');
   const charts = VIEW.compareSelected.map(renderCompareMiniChart).join('');
+  const liftCount = (groups.find(g => g.key === 'lift') || { items: [] }).items.length;
   return `
-    <div style="font-size:11px; color:var(--text-dim); margin-bottom:8px;">Pick up to ${COMPARE_MAX_METRICS} to compare side by side. Each point is the heaviest completed set logged that session, not just the programmed target. A lift charts whatever style it was logged in; a <b style="color:var(--text)">(T1)</b>/<b style="color:var(--text)">(T2)</b> entry is that tier's slot specifically.</div>
-    <div class="tag-pill-row">${chips}</div>
-    ${(liftSlots.length + lifts.length) === 0 ? `<div style="font-size:11px; color:var(--text-faint); margin:8px 0 0;">Nothing tracked yet — assign a category to a T1/T2 slot, or link an exercise to a lift under Setup &rarr; Workouts &rarr; Lifts, then log some sets.</div>` : ''}
+    <div style="font-size:11px; color:var(--text-dim); margin-bottom:8px;">Pick up to ${COMPARE_MAX_METRICS} to compare side by side. A lift charts the heaviest completed set logged that session, not just the programmed target — a <b style="color:var(--text)">(T1)</b>/<b style="color:var(--text)">(T2)</b> entry is that tier's slot specifically. A lab marker charts every draw that included it, against the ranges you set.</div>
+    ${picker}
+    <div style="font-size:10px; color:var(--text-faint); margin-top:6px;">${VIEW.compareSelected.length} of ${COMPARE_MAX_METRICS} selected</div>
+    ${liftCount === 0 ? `<div style="font-size:11px; color:var(--text-faint); margin:8px 0 0;">No lifts tracked yet — assign a category to a T1/T2 slot, or link an exercise to a lift under Setup &rarr; Workouts &rarr; Lifts, then log some sets.</div>` : ''}
+    ${renderCompareRange()}
+    ${renderCompareSummary()}
     <div style="margin-top:14px;">${charts || emptyState('Pick at least one metric above to see its chart.')}</div>`;
 }
-function renderCompareMiniChart(id) {
-  const series = compareMetricSeries(id);
-  const label = compareMetricLabel(id);
-  const canvasId = compareCanvasId(id);
-  if (series.length < 2) {
-    return `<div style="margin-bottom:18px;"><div class="subtle-label" style="margin-bottom:6px;">${escapeHtml(label)}</div>${emptyState('Not enough data yet — needs at least 2 logged sessions.')}</div>`;
-  }
-  return `<div style="margin-bottom:22px;"><div class="subtle-label" style="margin-bottom:6px;">${escapeHtml(label)}</div><div class="chart-wrap"><canvas id="${canvasId}" height="120"></canvas></div></div>`;
+function renderCompareRange() {
+  const r = compareRange();
+  return `
+    <div class="cmp-range">
+      <div class="unit-toggle">
+        ${COMPARE_PRESETS.map(p => `<button class="${r.preset === p.key ? 'active' : ''}" onclick="setComparePreset('${p.key}')">${p.label}</button>`).join('')}
+      </div>
+      <div class="cmp-dates">
+        <input type="date" class="cmp-date" value="${r.from || ''}" aria-label="From" onchange="setCompareRangeDate('from', this.value)">
+        <span>&rarr;</span>
+        <input type="date" class="cmp-date" value="${r.to || ''}" aria-label="To" onchange="setCompareRangeDate('to', this.value)">
+      </div>
+    </div>`;
 }
+
+// FIRST READING IN RANGE vs LAST, per metric. This is the "how did they all move over that period,
+// regardless of when each was measured" comparison -- and the per-metric framing is exactly what
+// makes it work on sparse data: no two series need share a date, because nothing is ever compared
+// across series. The charts show the shape; this states the answer.
+function renderCompareSummary() {
+  const rows = VIEW.compareSelected.map(id => {
+    const d = compareMetricDescriptor(id);
+    if (!d) return '';
+    const pts = compareInRange(d.points);
+    if (pts.length < 2) return '';
+    const first = pts[0], last = pts[pts.length - 1];
+    const delta = last.value - first.value;
+    const dec = Math.abs(delta) < 10 ? d.decimals : 0;
+    // Direction is claimed only where a band exists to measure against -- the same line the bar
+    // holds. A lift or a step count gets its number and no verdict.
+    const move = d.movementFor ? d.movementFor(first.value, last.value) : null;
+    return `
+      <div class="cmp-sum-row">
+        <span class="cmp-sum-name">${escapeHtml(d.label)}</span>
+        <span class="cmp-sum-val mono">${d.format(first.value)} &rarr; ${d.format(last.value)}<i>${escapeHtml(d.unit.trim())}</i></span>
+        <span class="cmp-sum-delta mono ${move ? 'lab-move-' + move : ''}">${delta === 0 ? '&rarr; 0' : `${delta > 0 ? '↑' : '↓'} ${fmt(Math.abs(delta), dec)}`}</span>
+        <span class="cmp-sum-move ${move ? 'lab-move-' + move : ''}">${move && move !== 'level' ? move.toUpperCase() : ''}</span>
+      </div>`;
+  }).filter(Boolean).join('');
+  if (!rows) return '';
+  const r = compareRange();
+  // Always with the year. fmtGoalDate() drops it for the current year, which is right on a row that
+  // means "recently" and wrong on a span header -- "Jan 1 → Dec 31" over a range that crosses a
+  // new year names neither one.
+  const spanDate = s => new Date(s + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
+  const span = (r.from || r.to) ? `${r.from ? spanDate(r.from) : 'start'} &rarr; ${r.to ? spanDate(r.to) : 'now'}` : 'ALL TIME';
+  return `
+    <div class="panel" style="margin-top:14px;">
+      <div class="cmp-sum-head"><span class="subtle-label" style="margin:0;">OVER THIS PERIOD</span><span class="span mono">${span}</span></div>
+      ${rows}
+    </div>`;
+}
+function renderCompareMiniChart(id) {
+  const d = compareMetricDescriptor(id);
+  if (!d) return '';
+  const canvasId = compareCanvasId(id);
+  const pts = compareInRange(d.points);
+  const head = `<div class="subtle-label" style="margin-bottom:6px;">${escapeHtml(d.label)}${d.unit ? ` <span style="font-weight:400;">${escapeHtml(d.unit.trim())}</span>` : ''}${d.partLabel ? ` <span style="font-weight:400;">(${escapeHtml(d.partLabel)})</span>` : ''}</div>`;
+  if (pts.length < 2) {
+    // Distinguishes "never logged" from "nothing in THIS window", because with a range control on
+    // screen the second is a thing you did to yourself and the fix is different.
+    const msg = d.points.length >= 2
+      ? 'No two readings inside this date range — widen it to see the trend.'
+      : 'Not enough data yet — needs at least 2 readings.';
+    return `<div style="margin-bottom:18px;">${head}${emptyState(msg)}</div>`;
+  }
+  return `<div style="margin-bottom:22px;">${head}<div class="chart-wrap"><canvas id="${canvasId}" height="120"></canvas></div></div>`;
+}
+
+// Reference and target bands painted behind a lab line, from labChartFrame()'s own segments -- the
+// same walk the position bar uses, so the two can't disagree about where target sits. Drawn BEFORE
+// the datasets (beforeDatasetsDraw) so the line sits on top of its context, not under it.
+const labBandPlugin = {
+  id: 'labBands',
+  beforeDatasetsDraw(chart, args, opts) {
+    const segs = opts && opts.segs;
+    if (!segs || !segs.length) return;
+    const styles = getComputedStyle(document.documentElement);
+    const y = chart.scales.y, x = chart.scales.x, ctx = chart.ctx;
+    const tone = { out: '--bad-soft', in: '--surface2', target: '--good-soft' };
+    ctx.save();
+    segs.forEach(s => {
+      const top = y.getPixelForValue(s.to), bottom = y.getPixelForValue(s.from);
+      if (!isFinite(top) || !isFinite(bottom)) return;
+      ctx.fillStyle = styles.getPropertyValue(tone[s.kind] || '--surface2').trim();
+      ctx.fillRect(x.left, Math.min(top, bottom), x.right - x.left, Math.abs(bottom - top));
+    });
+    // Only the TARGET band is named. "Outside ref" is already legible as the red region, and three
+    // labels on a 120px chart is more ink than the line itself.
+    const target = segs.find(s => s.kind === 'target');
+    if (target) {
+      const top = y.getPixelForValue(target.to), bottom = y.getPixelForValue(target.from);
+      if (Math.abs(bottom - top) > 14) {
+        ctx.fillStyle = styles.getPropertyValue('--text-dim').trim();
+        ctx.font = '9px ' + styles.getPropertyValue('--font-mono').trim();
+        ctx.textAlign = 'right';
+        ctx.fillText('TARGET', x.right - 4, Math.min(top, bottom) + 10);
+      }
+    }
+    ctx.restore();
+  },
+};
 function compareCanvasId(id) { return 'cmp_' + id.replace(/[^a-zA-Z0-9]/g, '_'); }
 let compareChartInstances = {};
 function drawCompareCharts() {
@@ -663,18 +878,28 @@ function drawCompareCharts() {
   if (typeof Chart === 'undefined') return;
   const styles = getComputedStyle(document.documentElement);
   VIEW.compareSelected.forEach(id => {
-    const series = compareMetricSeries(id);
+    const d = compareMetricDescriptor(id);
+    if (!d) return;
+    const series = compareInRange(d.points);
     if (series.length < 2) return;
     const canvas = document.getElementById(compareCanvasId(id));
     if (!canvas) return;
     if (compareChartInstances[id]) compareChartInstances[id].destroy();
+    // A lab marker frames on its data widened to the nearest band on each side, and paints those
+    // bands behind the line. Everything else lets Chart.js pick its own scale -- there is no stated
+    // range for a step count to be positioned against.
+    const frame = d.bands ? labChartFrame(d.bands.key, series.map(p => p.value)) : null;
+    // A lab axis ticks at its BAND EDGES, not at round numbers. 80 and 130 are the only values on
+    // an ApoB axis anyone is checking a reading against; 100 and 150 are noise that happen to
+    // divide evenly. Falls back to Chart.js's own ticks if the window contains no edge at all.
+    const bandTicks = frame ? labBoundsWithin(d.bands.key, frame.lo, frame.hi) : null;
     compareChartInstances[id] = new Chart(canvas.getContext('2d'), {
       type: 'line',
       data: {
         labels: series.map(p => p.date.slice(5)),
         datasets: [{
-          label: compareMetricLabel(id),
-          data: series.map(p => Number(fmt(lbToDisplay(p.weightLb), 1))),
+          label: d.label,
+          data: series.map(p => Number(fmt(p.value, d.decimals))),
           borderColor: styles.getPropertyValue('--accent').trim(),
           backgroundColor: 'transparent',
           tension: 0.25,
@@ -683,13 +908,30 @@ function drawCompareCharts() {
       },
       options: {
         responsive: true,
-        plugins: { legend: { display: false }, phaseBoundaries: phaseBoundaryOpts(series) },
+        plugins: {
+          legend: { display: false },
+          phaseBoundaries: phaseBoundaryOpts(series),
+          labBands: frame ? { segs: frame.segs } : { segs: null },
+        },
         scales: {
           x: { ticks: { color: styles.getPropertyValue('--text-faint').trim(), font: {size: 10} }, grid: { color: styles.getPropertyValue('--border-soft').trim() } },
-          y: { ticks: { color: styles.getPropertyValue('--text-faint').trim(), font: {size: 10}, callback: v => v + ' ' + weightUnitLabel() }, grid: { color: styles.getPropertyValue('--border-soft').trim() } },
+          y: {
+            ...(frame ? { min: frame.lo, max: frame.hi } : {}),
+            ...(bandTicks ? { afterBuildTicks: axis => { axis.ticks = bandTicks.map(v => ({ value: v })); } } : {}),
+            ticks: {
+              color: styles.getPropertyValue('--text-faint').trim(), font: {size: 10},
+              // Rounded THEN stripped: a fixed y-window hands Chart.js fractional bounds, so the
+              // raw value stringifies as 5.8000000000000001, and fmt() only removes a single
+              // trailing '.0' so a 2-decimal metric would still read "130.00".
+              // No unit suffix -- the chart's own heading states it once, and repeating it down
+              // every tick was spending a quarter of a 390px plot on the same three characters.
+              callback: v => String(Number(Number(v).toFixed(d.decimals))),
+            },
+            grid: { color: styles.getPropertyValue('--border-soft').trim() },
+          },
         }
       },
-      plugins: [phaseBoundaryPlugin],
+      plugins: [phaseBoundaryPlugin, labBandPlugin],
     });
   });
 }

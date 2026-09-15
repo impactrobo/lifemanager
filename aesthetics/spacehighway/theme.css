@@ -471,7 +471,7 @@
 }
 [data-aesthetic="spacehighway"] .plate,
 [data-aesthetic="spacehighway"] .pill,
-[data-aesthetic="spacehighway"] .tag-pill,
+[data-aesthetic="spacehighway"] .tag-pill:not(.active),
 [data-aesthetic="spacehighway"] .exercise-chip {
   background: var(--sh-plate);
   border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border));

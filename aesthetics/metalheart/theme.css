@@ -370,7 +370,7 @@
   background: var(--mh-plate); border-color: #4d6470; color: var(--text-dim);
 }
 [data-aesthetic="metalheart"] .pill,
-[data-aesthetic="metalheart"] .tag-pill,
+[data-aesthetic="metalheart"] .tag-pill:not(.active),
 [data-aesthetic="metalheart"] .exercise-chip {
   background: var(--mh-plate); border-color: #4d6470;
   text-shadow: 0 1px 1px rgba(0, 0, 0, 0.85);

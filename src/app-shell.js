@@ -131,6 +131,7 @@ let VIEW = {
   compareA: null,
   compareB: null,
   compareSelected: ['bodyweight'],
+  compareRange: null,                // {preset, from, to} for COMPARE; null until first read
   measureDraftPhotos: [],            // draft photos on an unsaved measurement
   labPasteDraft: null,               // {markerKey: number} parsed out of a pasted report, unsaved
   labPasteReport: null,              // {matched, unmatched} counts from that parse

@@ -622,9 +622,27 @@ function labBarZones(key, value, trail) {
   const hi = rawHi + pad;
   if (!(hi > lo)) return null;
 
+  return {
+    lo, hi,
+    segs: labZoneSegments(key, lo, hi),
+    pct: v => Math.max(0, Math.min(100, ((v - lo) / (hi - lo)) * 100)),
+  };
+}
+
+// The zone walk, over whatever window it's given. Extracted so the position bar and the trend
+// chart paint the same bands from the same code -- two implementations of "where does target sit"
+// would drift, and the whole point of the chart is that it agrees with the bar.
+function labZoneSegments(key, lo, hi) {
+  const r = labRange(key);
   const segs = [];
   let cursor = lo;
-  const push = (to, kind) => { if (to > cursor) { segs.push({ from: cursor, to, kind }); cursor = to; } };
+  // Clamped to `hi` because a chart frames on the DATA and can legitimately end below a stated
+  // bound (vitamin D's ref ceiling of 100 with readings in the 30s). The bar always spans every
+  // bound, so there the clamp is a no-op.
+  const push = (to, kind) => {
+    const t = Math.min(hi, to);
+    if (t > cursor) { segs.push({ from: cursor, to: t, kind }); cursor = t; }
+  };
   // Walked in axis order, so a one-sided marker simply skips the zones it doesn't state: ApoB has
   // no floor and gets no leading out-of-range band, HDL has no ceiling and gets no trailing one.
   if (r.ref.low != null) push(r.ref.low, 'out');
@@ -634,8 +652,49 @@ function labBarZones(key, value, trail) {
   }
   if (r.ref.high != null) push(r.ref.high, 'in');
   push(hi, r.ref.high != null ? 'out' : 'in');
+  return segs;
+}
 
-  return { lo, hi, segs, pct: v => Math.max(0, Math.min(100, ((v - lo) / (hi - lo)) * 100)) };
+// The stated bounds falling strictly inside a window, ascending. What a chart's y-axis should tick
+// at: for ApoB those are 80 and 130, the only two numbers on that axis a reading is measured
+// against. Returns null when the window contains none, so a caller can fall back rather than
+// render an axis with no labels at all.
+function labBoundsWithin(key, lo, hi) {
+  const r = labRange(key);
+  const within = [r.ref.low, r.ref.high, r.target.low, r.target.high]
+    .filter(b => b != null && b > lo && b < hi)
+    .sort((a, b) => a - b)
+    .filter((b, i, a) => a.indexOf(b) === i);   // a marker can state the same number twice
+  return within.length ? within : null;
+}
+
+// The TREND CHART's y-window, which frames differently from the bar on purpose -- they answer
+// different questions. The bar asks "where does this reading sit among all your bands", so it shows
+// every bound. A chart asks "how has this moved", so a line squashed into the bottom third by a
+// distant ceiling has wasted the plot: vitamin D's reference tops out at 100 and readings live in
+// the 30s and 50s.
+//
+// So: frame on the data, then widen to the NEAREST bound on each side -- the ones the readings are
+// actually crossing. Distant bands fall outside the window and simply aren't drawn.
+function labChartFrame(key, values) {
+  const vals = (values || []).map(Number).filter(v => isFinite(v));
+  if (!vals.length) return null;
+  const r = labRange(key);
+  const bounds = [r.ref.low, r.ref.high, r.target.low, r.target.high].filter(b => b != null);
+  // Nothing stated means nothing to frame against -- same answer labBarZones() gives, and for the
+  // same reason. The chart still draws; it just lets the scale pick itself and paints no bands,
+  // rather than forcing a window and shading the whole plot one meaningless colour.
+  if (!bounds.length) return null;
+  const dataLo = Math.min(...vals), dataHi = Math.max(...vals);
+  const below = bounds.filter(b => b <= dataLo);
+  const above = bounds.filter(b => b >= dataHi);
+  const rawLo = below.length ? Math.max(...below) : dataLo;
+  const rawHi = above.length ? Math.min(...above) : dataHi;
+  const span = rawHi - rawLo;
+  const pad = span > 0 ? span * 0.12 : (Math.abs(rawHi) * 0.12 || 1);
+  const lo = Math.max(0, rawLo - pad), hi = rawHi + pad;
+  if (!(hi > lo)) return null;
+  return { lo, hi, segs: labZoneSegments(key, lo, hi) };
 }
 
 function renderLabBar(key, value, trail) {

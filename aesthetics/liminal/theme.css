@@ -402,7 +402,7 @@
 }
 [data-aesthetic="liminal"] .plate,
 [data-aesthetic="liminal"] .pill,
-[data-aesthetic="liminal"] .tag-pill,
+[data-aesthetic="liminal"] .tag-pill:not(.active),
 [data-aesthetic="liminal"] .exercise-chip {
   background: linear-gradient(180deg, #eee9c8 0%, #ddd6a8 100%);
   border-color: var(--border);

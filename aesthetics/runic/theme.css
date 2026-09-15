@@ -446,7 +446,7 @@
 }
 [data-aesthetic="runic"] .plate,
 [data-aesthetic="runic"] .pill,
-[data-aesthetic="runic"] .tag-pill,
+[data-aesthetic="runic"] .tag-pill:not(.active),
 [data-aesthetic="runic"] .exercise-chip {
   background: linear-gradient(180deg, #435057 0%, #283136 100%);
   border-color: #12181b;

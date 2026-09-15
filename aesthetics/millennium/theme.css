@@ -507,7 +507,7 @@
 }
 [data-aesthetic="millennium"] .plate,
 [data-aesthetic="millennium"] .pill,
-[data-aesthetic="millennium"] .tag-pill,
+[data-aesthetic="millennium"] .tag-pill:not(.active),
 [data-aesthetic="millennium"] .exercise-chip {
   background: var(--md-plate);
   border: none;

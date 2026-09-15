@@ -87,6 +87,27 @@ const CONTRACTS = [
     probe: '.lab-hist-delta',
     assert: (cs, ctx) => cs.color === ctx.color('--bad') ? null : `got ${cs.color}, want ${ctx.color('--bad')}` },
 
+  // A selected chip must not look unselected. COMPARE's picker sets no --tc, and the active
+  // fallback used to be --surface2 with hardcoded near-black ink: a selected chip rendered dark
+  // text on a dark chip. Contrast is asserted against the UNSELECTED chip rather than a colour,
+  // so it holds under every theme's palette.
+  { name: 'a selected chip is visibly different from an unselected one',
+    html: '<div class="tag-pill-row"><button class="tag-pill">Off</button><button class="tag-pill active">On</button></div>',
+    probe: '.tag-pill.active',
+    assert: (cs, ctx) => {
+      const off = getComputedStyle(ctx.el.previousElementSibling);
+      if (cs.backgroundColor === off.backgroundColor) return 'selected and unselected share a background';
+      return cs.color === off.color ? 'selected and unselected share a text colour' : null;
+    } },
+  { name: 'a selected chip\'s label contrasts with its own background',
+    html: '<div class="tag-pill-row"><button class="tag-pill active">On</button></div>',
+    probe: '.tag-pill.active',
+    assert: cs => {
+      const lum = s => { const [r, g, b] = (s.match(/[\d.]+/g) || [0, 0, 0]).map(Number); return (0.299 * r + 0.587 * g + 0.114 * b) / 255; };
+      return Math.abs(lum(cs.color) - lum(cs.backgroundColor)) > 0.25 ? null
+        : `ink ${cs.color} on ${cs.backgroundColor} is too close to read`;
+    } },
+
   // ---- Shape 3: a component's own signal survives the theme layer ----
   // Aesthetics restate .panel's border at (0,2,0). The rung tint moved to a custom property and a
   // ::before stripe precisely so a theme could repaint the border without erasing the signal.
