@@ -46,9 +46,49 @@ function calShiftSelectedDate(deltaDays) {
   render();
 }
 function calSelectDay(dateStr) {
+  // While comparing, a tap on the grid means "add this day to the comparison" rather than "look at
+  // this day". One gesture, two meanings -- which is only safe because the mode is explicit, the
+  // cells look different in it, and there is a visible way out.
+  if (VIEW.calCompare) return toggleCompareDay(dateStr);
   NAV.calSelectedDate = dateStr;
   UI.reminderFormOpen = false;
   UI.exceptionFormOpen = false;
+  render();
+}
+
+// ---- Comparing days ----
+//
+// What the retired Agenda was really for, with the day set made explicit instead of always being
+// "the next seven". It can still answer "what's coming up" -- pick the next few days -- but it can
+// also answer things the Agenda never could: this Tuesday against next Tuesday, or the three days
+// you actually train.
+//
+// Days are COLUMNS and kinds of thing are ROWS, because that is what makes a comparison read: the
+// eye runs along one row and the difference is in line with itself. Stacked cards (the Agenda's
+// shape) put the two things being compared a screen apart.
+const CAL_COMPARE_MAX = 4;   // at 390px a label column plus four days already scrolls sideways
+function startDayCompare() {
+  ensureCalState();
+  VIEW.calCompare = [NAV.calSelectedDate];
+  // You need a grid to pick further days from, and Day zoom has none. Week is the smallest zoom
+  // that has one, and keeps the day you started from on screen.
+  if (NAV.calZoom === 'day' || NAV.calZoom === 'year') NAV.calZoom = 'week';
+  UI.reminderFormOpen = false;
+  UI.exceptionFormOpen = false;
+  render();
+}
+function endDayCompare() { VIEW.calCompare = null; render(); }
+function toggleCompareDay(dateStr) {
+  if (!VIEW.calCompare) return;
+  const i = VIEW.calCompare.indexOf(dateStr);
+  if (i !== -1) {
+    VIEW.calCompare.splice(i, 1);
+    // Emptying the list leaves the mode on, not off: you are mid-reselection, and dropping you out
+    // of compare because you deselected everything would be the app deciding you were done.
+  } else {
+    if (VIEW.calCompare.length >= CAL_COMPARE_MAX) { showToast(`Up to ${CAL_COMPARE_MAX} days at once`); return; }
+    VIEW.calCompare.push(dateStr);
+  }
   render();
 }
 // Used from Year view, where a day cell has no reminders panel of its own to drop down into —
@@ -203,14 +243,17 @@ function renderCalCell(d /* Date */, today) {
   const dStr = dateKey(d.getFullYear(), d.getMonth(), d.getDate());
   const has = remindersOn(dStr).length > 0;
   const isToday = dStr === today;
-  const isSelected = dStr === NAV.calSelectedDate;
+  // While comparing, "selected" means "in the comparison" -- the single-selection highlight would
+  // otherwise sit on a day that has nothing to do with what is on screen below.
+  const comparing = VIEW.calCompare;
+  const isSelected = comparing ? comparing.indexOf(dStr) !== -1 : dStr === NAV.calSelectedDate;
   const sched = scheduleForDate(d);
   const schedMark = sched ? `<span class="cal-anchor-icon" style="color:${scheduleColorFor(sched.id)};">${icon('anchorMark')}</span>` : '';
   // Opposite corner from schedMark on purpose, so a scheduled day that's also a due day shows both
   // without collision — a colour swatch rather than an icon, matching the day-extra rows' own
   // pattern for a section identity that isn't tied to a specific glyph.
   const dueMark = chargesDueOn(dStr).length ? `<span class="cal-charge-mark" style="background:${entityColor('charge')};" title="Due this day"></span>` : '';
-  return `<button class="cal-cell ${isToday?'cal-cell-today':''} ${isSelected?'cal-cell-selected':''}" onclick="calSelectDay('${dStr}')">
+  return `<button class="cal-cell ${isToday?'cal-cell-today':''} ${isSelected?'cal-cell-selected':''} ${comparing?'cal-cell-comparing':''}" onclick="calSelectDay('${dStr}')">
     ${schedMark}
     ${dueMark}
     <span class="cal-daynum">${d.getDate()}</span>
@@ -237,7 +280,7 @@ function renderCalMonth() {
     </div>
     <div class="cal-grid">${weekdayHeaders}${cells}</div>
     <div class="divider"></div>
-    ${renderSelectedDayDetail()}`;
+    ${VIEW.calCompare ? renderDayCompare() : renderSelectedDayDetail()}`;
 }
 function renderCalWeek() {
   ensureCalState();
@@ -260,7 +303,7 @@ function renderCalWeek() {
     <div class="cal-grid">${weekdayHeaders}${cells}</div>
     ${renderWeekTimeRollup(days)}
     <div class="divider"></div>
-    ${renderSelectedDayDetail()}`;
+    ${VIEW.calCompare ? renderDayCompare() : renderSelectedDayDetail()}`;
 }
 // Merged view — this used to be the standalone TODAY subtab (renderLifeDaily(), today-only) plus
 // this Calendar's own reminders panel; folding both under one zoom level is the whole point of
@@ -277,7 +320,7 @@ function renderCalDay() {
         <button onclick="calGoToDay(1)">&#8250;</button>
       </div>
     </div>
-    ${renderSelectedDayDetail()}`;
+    ${VIEW.calCompare ? renderDayCompare() : renderSelectedDayDetail()}`;
 }
 function renderCalYear() {
   ensureCalState();
@@ -319,6 +362,68 @@ function renderCalMiniMonth(year, month, today) {
     <div class="cal-mini-grid">${cells}</div>
   </div>`;
 }
+// The comparison itself. Every row reads from dayModel(), so this agrees with Home, the Day view
+// and everything else by construction rather than by remembering to.
+//
+// ONLY WHAT IS DISTINCTIVE ABOUT A DAY, which was the Agenda's best idea and is worth restating:
+// your 7am routine appearing identically in every column is noise that pushes the one dentist
+// appointment off the screen. The recurring baseline is one SCHEDULE row and one BOOKED row; the
+// rows below it are the things that actually differ. Meals and habits are deliberately absent for
+// the same reason -- both come from the weekday template or are standing commitments, so they are
+// the same across most days by definition.
+const CAL_COMPARE_ROWS = [
+  // null, not "None", when a day has no schedule: the row-suppression rule below then drops the
+  // whole row if none of the days have one, instead of printing "None / None / None" -- which is
+  // three cells agreeing about nothing, the exact noise this view exists to strip out.
+  { label: 'SCHEDULE', get: m => m.isDayOff
+      ? `<span class="cmpd-off">${escapeHtml((m.exception && m.exception.label) || 'Day off')}</span>`
+      : (m.schedule ? escapeHtml(m.schedule.name) : null) },
+  { label: 'BOOKED', get: m => m.bookedMinutes ? `<span class="mono">${fmtDuration(m.bookedMinutes)}</span>` : null },
+  { label: 'WORKOUT', get: m => m.workouts.length
+      ? m.workouts.map(w => `<span style="color:${entityColor('workout')};">${escapeHtml(w.name)}</span>`).join('<br>') : null },
+  { label: 'PRACTICE', get: m => m.practice.length
+      ? m.practice.map(p => escapeHtml(p.skill.name) + (p.minutes ? ` <span class="mono cmpd-sub">${p.minutes}m</span>` : '')).join('<br>') : null },
+  { label: 'REMINDERS', get: m => m.reminders.length
+      ? m.reminders.map(r => `${r.time ? `<span class="mono cmpd-sub">${fmtReminderTime(r.time)}</span> ` : ''}${escapeHtml(r.title)}`).join('<br>') : null },
+  { label: 'DUE', get: m => m.charges.length
+      ? m.charges.map(c => `<span style="color:${entityColor('charge')};">${escapeHtml(c.name)}</span> <span class="mono cmpd-sub">${fmtMoney(c.amount)}</span>`).join('<br>') : null },
+];
+function renderDayCompare() {
+  const days = (VIEW.calCompare || []).slice().sort();
+  const head = days.map(dateStr => {
+    const d = new Date(dateStr + 'T00:00:00');
+    const isToday = dateStr === todayStr();
+    return `<th class="${isToday ? 'cmpd-today' : ''}">
+      <button class="cmpd-dayhead" onclick="calSelectDayAndZoom('${dateStr}','day')" title="Open this day">
+        <span class="cmpd-wd">${d.toLocaleDateString(undefined, { weekday: 'short' }).toUpperCase()}</span>
+        <span class="cmpd-dn">${d.getDate()}</span>
+      </button>
+      <button class="cmpd-drop" onclick="toggleCompareDay('${dateStr}')" aria-label="Remove this day">${icon('close')}</button>
+    </th>`;
+  }).join('');
+  // A row every column is empty for says nothing about any of these days, so it isn't drawn --
+  // otherwise comparing two quiet days is six rows of dashes.
+  const models = days.map(dateStr => dayModel(dateStr));
+  const rows = CAL_COMPARE_ROWS.map(r => {
+    const cells = models.map(m => r.get(m));
+    if (!cells.some(c => c != null && c !== '')) return '';
+    return `<tr><th class="cmpd-rowlbl">${r.label}</th>${cells.map(c => `<td>${c == null || c === '' ? '<span class="cmpd-none">&mdash;</span>' : c}</td>`).join('')}</tr>`;
+  }).join('');
+  return `
+    <div class="panel cmpd">
+      <div class="cmpd-head">
+        <span class="subtle-label" style="margin:0;">COMPARING ${days.length} DAY${days.length === 1 ? '' : 'S'}</span>
+        <button class="btn btn-sm" onclick="endDayCompare()">DONE</button>
+      </div>
+      ${days.length
+        ? `<div class="cmpd-scroll"><table class="cmpd-table"><thead><tr><th class="cmpd-corner"></th>${head}</tr></thead><tbody>${rows || `<tr><td colspan="${days.length + 1}" class="cmpd-quiet">Nothing out of the ordinary on ${days.length === 1 ? 'this day' : 'these days'} &mdash; just the usual schedule.</td></tr>`}</tbody></table></div>`
+        : ''}
+      <div class="cmpd-hint">${days.length >= CAL_COMPARE_MAX
+        ? `That's the maximum ${CAL_COMPARE_MAX}. Remove one to swap in another.`
+        : 'Tap days in the grid above to add or remove them.'}</div>
+    </div>`;
+}
+
 // EVERYTHING ABOUT THE SELECTED DAY, identical whichever zoom you reached it from.
 //
 // Week and Month used to render only this day's reminders, so tapping a day answered "what have I
@@ -342,7 +447,10 @@ function renderSelectedDayDetail() {
   return `
     <div class="row" style="margin-bottom:10px; align-items:flex-start;">
       ${showLabel ? `<div class="subtle-label" style="margin-bottom:0; padding-top:8px;">${label.toUpperCase()}</div>` : '<span></span>'}
-      <button class="btn btn-primary btn-sm" onclick="toggleReminderForm()">${UI.reminderFormOpen ? 'CANCEL' : '+ ADD REMINDER'}</button>
+      <div class="row" style="gap:6px; flex:none;">
+        <button class="btn btn-sm" onclick="startDayCompare()">COMPARE DAYS</button>
+        <button class="btn btn-primary btn-sm" onclick="toggleReminderForm()">${UI.reminderFormOpen ? 'CANCEL' : '+ ADD REMINDER'}</button>
+      </div>
     </div>
     ${UI.reminderFormOpen ? renderReminderForm() : ''}
     ${renderDayExceptionControl(dateStr)}

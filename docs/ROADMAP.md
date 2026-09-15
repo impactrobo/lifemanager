@@ -507,6 +507,38 @@ on an architecture split + a large wave of Maximalist aesthetics.
   - **Still open:** comparison — see "Lab comparison, agreed direction" under Ideas worth
     considering for the shape that was settled on and why a panel-vs-panel compare isn't it.
 
+- **Compare days: what the Agenda was for, with the day set made explicit (2026-09-15).** Proposed
+  immediately after retiring the Agenda — "this can all be built back with a compare-days button…
+  similar to the agenda but simpler" — and it is strictly more capable than what it replaces. The
+  Agenda could only ever answer "what's coming up in the next seven days". This answers that (pick
+  the next few) *and* things it never could: this Tuesday against next Tuesday, or the three days
+  you actually train.
+  - **Four design decisions, each taken on the recommended option:**
+    1. **Selection: tap cells to multi-select.** While comparing, a grid tap adds/removes a day
+       instead of selecting it. One gesture with two meanings, which is only safe because the mode
+       is explicit, the cells look different in it (dashed borders), and there's a visible way out.
+    2. **Layout: kinds as rows, days as columns.** This is what "compare" actually means — the eye
+       runs along a row and the difference is in line with itself. Stacked cards (the Agenda's own
+       shape) put the two things being compared a screen apart. Rejected side-by-side full-detail
+       columns: at 390px three are ~120px each, unusable at four.
+    3. **Content: only what's distinctive.** The Agenda's best idea, inherited deliberately. Meals
+       and habits are absent because both come from the weekday template or are standing
+       commitments — the same across most days by definition, which is the definition of *not*
+       distinctive. Their presence is the "seven identical morning routines burying one dentist
+       appointment" problem.
+    4. **Entry: a COMPARE DAYS button in the shared day block**, so it's reachable from Day, Week
+       and Month and seeds with the day you were already on. No new zoom, no new bottom-bar button.
+  - **A row no column has anything for is not drawn at all** — otherwise comparing two quiet days is
+    six rows of dashes. The `SCHEDULE` getter returns `null` rather than `"None"` specifically so
+    that rule can fire: three cells agreeing about nothing is noise, not information.
+  - Starting from Day zoom switches to Week, because Day has no grid to pick further days from and a
+    selection mode with nothing to select in it is a dead end.
+  - Deselecting every day leaves the mode **on**. You're mid-reselection, and dropping out because
+    the list hit zero would be the app deciding you were finished.
+  - Capped at 4 (`CAL_COMPARE_MAX`): a label column plus four days already exceeds 390px, so the
+    table scrolls inside its own `overflow-x` box and the page body never scrolls sideways.
+  - Every row reads from `dayModel()`, so this agrees with Home and the Day view by construction.
+
 - **Calendar and Agenda harmonised; Agenda retired (2026-09-15).** Asked as "weekly view kind of
   shows the same thing — is there a reason to have Agenda?" They weren't the same, and the gap was
   the actual bug: **Week and Month rendered only the selected day's reminders, while Day rendered
@@ -523,12 +555,11 @@ on an architecture split + a large wave of Maximalist aesthetics.
     because their headers name a *range*, not the selected day.
   - **Agenda removed** — subtab, `renderAgenda()`, `AGENDA_DAYS`, its CSS and `test_agenda.js`.
     Schedule's bar is HOME/CALENDAR/SETUP, and Home's matches.
-    - **What was genuinely lost, stated plainly:** the rolling next-7-days view with item *names*.
-      Week is calendar-aligned (Sun–Sat, so on a Friday it shows four days already lived) and its
-      cells show density, not "Dentist 2pm". Nothing replaces "what's coming up this week" at a
-      glance; the harmonisation only means tapping a day now shows that day in full. Revisit as a
-      Calendar zoom (`YEAR / MONTH / WEEK / NEXT 7 / DAY`) if the loss is felt — the precedent is
-      the old TODAY subtab, which folded into Day zoom the same way.
+    - **What was lost, and how it came back the same day:** the rolling next-7-days view with item
+      *names*. Week is calendar-aligned (Sun–Sat, so on a Friday it shows four days already lived)
+      and its cells show density, not "Dentist 2pm". ~~Nothing replaces "what's coming up this week"
+      at a glance~~ — **Compare days** does, and more besides, since the day set is chosen rather
+      than always being the next seven. See its entry above.
   - `NAV.scheduleSubtab` had drifted to a stale default of `'today'`, a subtab that stopped existing
     two refactors ago. It's `'calendar'` now, and `renderSchedule()` treats **anything that isn't
     `'setup'`** as the calendar — this value rides in nav snapshots and has now outlived two of its

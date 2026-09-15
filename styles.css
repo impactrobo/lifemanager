@@ -2261,3 +2261,46 @@ button.lab-stand-toggle:focus-visible { outline: 2px solid var(--accent); outlin
    descendant, and here the classes land together. */
 .cmp-sum-delta.lab-move-toward, .cmp-sum-move.lab-move-toward { color: var(--good); }
 .cmp-sum-delta.lab-move-away, .cmp-sum-move.lab-move-away { color: var(--bad); }
+
+/* ---- Comparing days: kinds as rows, days as columns ---- */
+.cmpd-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+/* Wide content scrolls in its own box so the page body never scrolls sideways. A label column plus
+   four days exceeds 390px, which is the whole reason CAL_COMPARE_MAX stops at four. */
+.cmpd-scroll { overflow-x: auto; }
+.cmpd-table { border-collapse: collapse; width: 100%; font-size: 12px; }
+.cmpd-table th, .cmpd-table td {
+  text-align: left; vertical-align: top; padding: 7px 8px;
+  border-top: 1px solid var(--border-soft);
+}
+.cmpd-table thead th { border-top: none; padding-top: 0; }
+.cmpd-corner { width: 74px; }
+/* The row label is the axis you read along, so it stays quiet -- the differences are in the cells. */
+.cmpd-rowlbl {
+  width: 74px; font-size: 9px; letter-spacing: 0.04em; font-weight: 700;
+  color: var(--text-faint); white-space: nowrap; padding-top: 9px;
+}
+.cmpd-table td { min-width: 86px; line-height: 1.45; }
+.cmpd-dayhead {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
+  background: none; border: none; padding: 0; color: inherit; font: inherit; cursor: pointer;
+}
+.cmpd-wd { font-size: 9px; letter-spacing: 0.04em; color: var(--text-faint); font-weight: 700; }
+.cmpd-dn { font-family: var(--font-mono); font-size: 17px; font-weight: 700; line-height: 1; }
+.cmpd-today .cmpd-dn { color: var(--accent); }
+/* Negative margins so the tap area is ~28px while the glyph still sits tight under the date --
+   an 11px icon is well under any sane minimum target, and this column has room to spare. */
+.cmpd-drop {
+  background: none; border: none; color: var(--text-faint); cursor: pointer;
+  display: block; opacity: 0.7; padding: 8px 10px; margin: 0 -10px -6px;
+}
+.cmpd-drop:hover, .cmpd-drop:focus-visible { opacity: 1; color: var(--bad); }
+.cmpd-drop svg { width: 11px; height: 11px; }
+.cmpd-none { color: var(--text-faint); }
+.cmpd-sub { font-size: 10px; color: var(--text-faint); }
+.cmpd-off { color: var(--warn); }
+.cmpd-quiet { color: var(--text-faint); font-size: 12px; padding: 10px 0; }
+.cmpd-hint { font-size: 10px; color: var(--text-faint); margin-top: 10px; }
+/* While comparing, every cell is a target rather than just the selected one -- a dashed edge says
+   "tappable set" without competing with the solid accent on the days actually chosen. */
+.cal-cell-comparing { border-style: dashed; }
+.cal-cell-comparing.cal-cell-selected { border-style: solid; }
