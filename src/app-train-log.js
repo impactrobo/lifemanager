@@ -456,13 +456,15 @@ function renderRpExerciseBlock(workout, cycle, log, ex) {
   const displayedDelta = entry.applied ? entry.appliedDeltaLb : null;
 
   return `
-    <div class="tier-block" ${mColor ? `style="border-left: 4px solid ${mColor};"` : ''}>
+    <div class="tier-block${exBlockCollapsed(workout.id, entryKey) ? ' tier-block-collapsed' : ''}" ${mColor ? `style="border-left: 4px solid ${mColor};"` : ''}>
       <div class="tier-head" ${mColor ? `style="background:${hexToRgba(mColor, 0.14)};"` : ''}>
+        ${exBlockHead(workout.id, entryKey, `
         <div>
           <div class="tname">${escapeHtml(ex.name || 'Untitled exercise')}</div>
           <div class="tmove">${setTypeInfo.label}${ex.muscle ? ` <span style="background:${mColor}; color:#1a1a1a; padding:1px 7px; border-radius:10px; font-size:10px; font-weight:700; margin-left:4px;">${ex.muscle}</span>` : ''}</div>
-        </div>
+        </div>`, entry, tSets)}
       </div>
+      ${exBlockCollapsed(workout.id, entryKey) ? '' : `
       <div class="tier-body">
         ${renderLiftNoteRow(ex.liftId)}
         ${needsSeed && !isBand && !isBW
@@ -496,7 +498,7 @@ function renderRpExerciseBlock(workout, cycle, log, ex) {
           </div>
         </div>`
         : `<div style="font-size:11px; ${sugg.missed ? 'color:var(--bad); font-weight:600;' : 'color:var(--text-faint);'} margin-top:6px;">${sugg.note}</div>`}
-      </div>
+      </div>`}
     </div>`;
 }
 function renderRpWorkoutLog(workoutId) {
@@ -535,10 +537,15 @@ function renderRpWorkoutLog(workoutId) {
       <div class="section-title" style="margin-top:6px;">${escapeHtml(workout.name)}</div>
       <div class="subtle-label">SESSION ${cycle} &middot; ${log.date || 'not dated'}</div>
       ${renderWorkoutDeloadControl(cycle, workoutId)}
+      ${renderWorkoutModdedControl(cycle, workoutId)}
       <label class="field" style="margin-top:10px;">
         <span class="lbl">Date</span>
         <input type="date" value="${log.date || todayStr()}" onchange="updateRpLogDate('${workoutId}', this.value)">
       </label>
+      <div class="row" style="margin:10px 0 0;">
+        <span class="subtle-label" style="margin:0;">EXERCISES</span>
+        ${renderCollapseAllControl(workoutId)}
+      </div>
       <div class="divider"></div>
       ${volLine}
       ${blocks}
@@ -668,6 +675,77 @@ function renderSingleExerciseBlock(workout, cycle, log, key) {
   }
   return '';
 }
+// ---- Collapsing an exercise block ----
+//
+// A long session is a lot of scrolling to reach the one movement you're on, which is exactly the
+// friction behind cutting a workout short in the first place. Collapsing folds a block down to its
+// header plus a progress summary.
+//
+// PER VIEW, not saved: this is "what's expanded on my screen right now", which is no more a fact
+// about the workout than a scroll position is. It lives on VIEW, so it survives re-renders and
+// navigating away and back within the session, and resets on reload.
+//
+// Supersets keep their container. The group box and its label are structural -- they say these
+// movements are performed together -- so collapsing happens to the MEMBERS inside it, never to the
+// group. A superset with both members collapsed still reads as one superset.
+function exBlockKey(workoutId, entryKey) { return workoutId + ':' + entryKey; }
+function exBlockCollapsed(workoutId, entryKey) { return !!VIEW.logCollapsed[exBlockKey(workoutId, entryKey)]; }
+function toggleExBlock(workoutId, entryKey) {
+  const k = exBlockKey(workoutId, entryKey);
+  if (VIEW.logCollapsed[k]) delete VIEW.logCollapsed[k]; else VIEW.logCollapsed[k] = true;
+  render();
+}
+// Collapse/expand every block in this session at once. The button offers whichever action would
+// change more blocks, so one tap always does something visible.
+function setAllExBlocks(workoutId, collapsed) {
+  const workout = getWorkout(workoutId) || getRpWorkout(workoutId);
+  if (!workout) return;
+  entryKeysOfWorkout(workout).forEach(k => {
+    if (collapsed) VIEW.logCollapsed[exBlockKey(workoutId, k)] = true;
+    else delete VIEW.logCollapsed[exBlockKey(workoutId, k)];
+  });
+  render();
+}
+// Every log-entry key a workout can produce, whatever its shape.
+function entryKeysOfWorkout(workout) {
+  if (Array.isArray(workout.exerciseOrder) && workout.exerciseOrder.length) {
+    return workout.exerciseOrder.reduce((a, line) => a.concat(line), []);
+  }
+  return (workout.exercises || []).map(e => e.id);
+}
+function renderCollapseAllControl(workoutId) {
+  const workout = getWorkout(workoutId) || getRpWorkout(workoutId);
+  if (!workout) return '';
+  const keys = entryKeysOfWorkout(workout);
+  if (keys.length < 2) return '';   // nothing to fold away
+  const openCount = keys.filter(k => !exBlockCollapsed(workoutId, k)).length;
+  const collapse = openCount > 0;
+  return `<button class="btn btn-ghost btn-sm" onclick="setAllExBlocks('${workoutId}',${collapse})">
+    ${collapse ? 'COLLAPSE ALL' : 'EXPAND ALL'}</button>`;
+}
+// What a folded block says about itself. Sets with reps filled in are the ones that happened, the
+// same definition countLoggedSets() uses everywhere else -- so a collapsed block can never disagree
+// with the one underneath it.
+function exBlockSummary(entry, targetSets) {
+  const done = countLoggedSets(entry);
+  const total = targetSets || ((entry && entry.sets) ? entry.sets.length : 0);
+  if (!done) return 'not started';
+  if (total && done >= total) return 'done &middot; ' + done + ' set' + (done === 1 ? '' : 's');
+  return done + (total ? ' of ' + total : '') + ' set' + (done === 1 ? '' : 's');
+}
+// Wraps a block's own head content with the fold control. Each renderer keeps its own header markup
+// -- the name, the muscle chip, the plate row -- and this only adds the chevron and the summary.
+function exBlockHead(workoutId, entryKey, inner, entry, targetSets) {
+  const collapsed = exBlockCollapsed(workoutId, entryKey);
+  return `${inner}
+    <div class="ex-fold" onclick="event.stopPropagation(); toggleExBlock('${workoutId}','${entryKey}')"
+         role="button" tabindex="0" aria-expanded="${!collapsed}" aria-label="${collapsed ? 'Expand' : 'Collapse'} this exercise"
+         onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleExBlock('${workoutId}','${entryKey}');}">
+      ${collapsed ? `<span class="ex-fold-sum">${exBlockSummary(entry, targetSets)}</span>` : ''}
+      <span class="ex-fold-chev">${collapsed ? '&#9662;' : '&#9652;'}</span>
+    </div>`;
+}
+
 function renderSupersetGroup(workout, cycle, log, keys, supersetNumber) {
   const showPrimary = hasMixedTiers(keys);
   const complete = isSupersetComplete(workout, cycle, log, keys);
@@ -708,10 +786,15 @@ function renderWorkoutLog(workoutId) {
       <div class="section-title" style="margin-top:6px;">${escapeHtml(workout.name)}</div>
       <div class="subtle-label">SESSION ${cycle} &middot; ${todayOrDate(log)}</div>
       ${renderWorkoutDeloadControl(cycle, workoutId)}
+      ${renderWorkoutModdedControl(cycle, workoutId)}
       <label class="field" style="margin-top:10px;">
         <span class="lbl">Date</span>
         <input type="date" id="logDate" value="${log.date || todayStr()}" onchange="updateLogDate('${workoutId}', this.value)">
       </label>
+      <div class="row" style="margin:10px 0 0;">
+        <span class="subtle-label" style="margin:0;">EXERCISES</span>
+        ${renderCollapseAllControl(workoutId)}
+      </div>
       <div class="divider"></div>
       ${tierBlocks}
       <div class="divider"></div>
@@ -819,14 +902,16 @@ function renderTierBlock(workout, cycle, log, tierKey, liftId) {
   const repeatIdx = nextRepeatableSetIndex(entry);
 
   return `
-    <div class="tier-block" ${blockStyle}>
+    <div class="tier-block${exBlockCollapsed(workout.id, entryKey) ? ' tier-block-collapsed' : ''}" ${blockStyle}>
       <div class="tier-head" ${headStyle}>
+        ${exBlockHead(workout.id, entryKey, `
         <div>
           <div class="tname">${escapeHtml(liftName(liftId, tierField))}</div>
           <div class="tmove">${scheme.label}${muscle ? ` <span style="background:${mColor}; color:#1a1a1a; padding:1px 7px; border-radius:10px; font-size:10px; font-weight:700; margin-left:4px;">${muscle}</span>` : ''}</div>
         </div>
-        <div class="plate-row">${plates}</div>
+        <div class="plate-row">${plates}</div>`, entry, tSets)}
       </div>
+      ${exBlockCollapsed(workout.id, entryKey) ? '' : `
       <div class="tier-body">
         ${renderLiftNoteRow(liftId)}
         ${needsReset
@@ -862,7 +947,7 @@ function renderTierBlock(workout, cycle, log, tierKey, liftId) {
         <div style="font-size:11px; color:var(--text-faint); margin-top:6px;">${sugg.note}</div>`
         : sugg.missed ? `<div style="font-size:11px; color:var(--bad); margin-top:6px; font-weight:600;">${sugg.note}</div>`
         : `<div style="font-size:11px; color:var(--text-faint); margin-top:6px;">${sugg.note}</div>`}
-      </div>
+      </div>`}
     </div>`;
 }
 
@@ -1031,14 +1116,16 @@ function renderT3Block(workout, cycle, log, idx, name) {
   }
 
   return `
-    <div class="tier-block" ${t3Mcolor ? `style="border-left: 4px solid ${t3Mcolor};"` : ''}>
+    <div class="tier-block${exBlockCollapsed(workout.id, entryKey) ? ' tier-block-collapsed' : ''}" ${t3Mcolor ? `style="border-left: 4px solid ${t3Mcolor};"` : ''}>
       <div class="tier-head" ${t3Mcolor ? `style="background:${hexToRgba(t3Mcolor, 0.14)};"` : ''}>
+        ${exBlockHead(workout.id, entryKey, `
         <div>
           <div class="tname">${escapeHtml(name)}</div>
           <div class="tmove">Accessory${t3def.muscle ? ` <span style="background:${t3Mcolor}; color:#1a1a1a; padding:1px 7px; border-radius:10px; font-size:10px; font-weight:700; margin-left:4px;">${t3def.muscle}</span>` : ''}</div>
         </div>
-        <div class="plate-row">${plates}</div>
+        <div class="plate-row">${plates}</div>`, entry, entry.sets.length)}
       </div>
+      ${exBlockCollapsed(workout.id, entryKey) ? '' : `
       <div class="tier-body">
         ${renderLiftNoteRow(t3def.liftId)}
         ${needsSeed ? `<div class="target-line" style="color:var(--reset-text); font-weight:600;">${stageNeedsReset ? 'Reset triggered — needed myoreps at Stage 3 last time. Enter a fresh working weight for Set 1; the rest will match it. Back to Stage 1.' : 'First time logging this — enter your working weight for Set 1; the rest will match it.'}</div>` : `<div class="target-line">Target: <span class="tv">${stageTarget}</span> total reps (Stage ${t3StageIdx + 1})${
@@ -1062,7 +1149,7 @@ function renderT3Block(workout, cycle, log, idx, name) {
           ${nextRepeatableSetIndex(entry) >= 0 ? `<button class="btn btn-ghost btn-sm" onclick="repeatLastSet('${workout.id}','${entryKey}')">${icon('repeat')} REPEAT LAST SET</button>` : ''}
         </div>
         ${suggestionHtml}
-      </div>
+      </div>`}
     </div>`;
 }
 

@@ -165,10 +165,10 @@ before starting any of these.
      regimen itself was.
   5. **Cost of the meal plan vs the Groceries budget** (M) — where money and health meet; optional
      price on foods, same shape as nutrition.
-  6. **Beginner on-ramp template + "bad-day" mode** (S–M) — a shipped first-block template
-     (walking + 2 full-body sessions + mobility) the way C25K already proves works for cardio; and an
-     unplanned-skip path distinct from a deload/active-rest, so silently skipping isn't how a block
-     dies.
+  6. **Beginner on-ramp template** (S–M) — a shipped first-block template (walking + 2 full-body
+     sessions + mobility) the way C25K already proves works for cardio. **The "bad-day mode" half
+     shipped 2026-09-16** as modded sessions (see Recently Shipped), and turned out to need no new
+     progression machinery at all — only a label and a way to fold a long session down.
   7. ~~**Skills, generalised**~~ — scoped as "Skills Own the Ladder", **all 6 steps shipped
      2026-09-15**, plus the four-step "Closing the Loop" punch list between 2 and 3 (see Recently
      Shipped). One optional tail remains: `exercisePlan` is now a misnomer, since it holds practice
@@ -486,6 +486,37 @@ on an architecture split + a large wave of Maximalist aesthetics.
   pattern.
 
 ### Feature changes
+
+- **"Modded" sessions, and collapsible exercise blocks (2026-09-16).** The bad-day half of the
+  on-ramp item, scoped from how the person already trains: when short on time they keep the T1 (or
+  the first hypertrophy exercise — in RP-style programming the ordering already encodes priority,
+  since you put the muscle you most want to grow first) and drop the tail.
+  - **The flag is a LABEL and changes no arithmetic anywhere**, which is the whole finding. Scoping
+    it turned up that the progression semantics it appeared to need **already existed**: both stage
+    walks skip an entry with no logged reps (`if (!hasData) continue`) and the weight walks look
+    back for the last entry that actually has one. An exercise you skip doesn't advance, doesn't
+    fail, and doesn't trip a reset — the chain isn't broken, it just doesn't move. Anything you DID
+    do progresses normally, and its sets count for PRs, because full-effort work is full-effort work
+    whatever else you skipped. Years of manual "modded" sessions had been handled correctly all
+    along; what was missing was only the **record**.
+  - So `log.modded` exists purely because the app otherwise cannot tell a session you cut short from
+    one you did in full — both are just "logged" — and that difference is the point of looking back
+    at a week. **Set by hand, never inferred:** deciding on your behalf that you had a bad day is
+    exactly the second-guessing this app doesn't do.
+  - **Deliberately not a deload.** A deload is scheduled, reduces load and volume across the whole
+    session, and is excluded from progression and PRs outright. A mod is unscheduled, keeps full
+    intensity on whatever you perform, and excludes nothing. Both can be true of one session.
+  - The weekly review counts a modded session **done** — you showed up, which is all it measures —
+    and marks it: a chip, a per-day tag, and *"Every planned session done. 1 of them modded."*
+  - **Exercise blocks fold shut**, which is the friction that drives cutting a session short in the
+    first place: a long session is a lot of scrolling to reach the movement you're on. A folded
+    block keeps its header and gains a progress summary, so a collapsed session still reads as a
+    list of what it contains rather than a stack of blank bars. **Supersets keep their container** —
+    the group box is structural, saying these are performed together, so folding happens to the
+    members inside it. Per-view state on `VIEW.logCollapsed`, never saved: what's expanded on your
+    screen is no more a fact about the workout than a scroll position is.
+  - `tests/test_modded_workout.js` pins seven contracts, the first of which is a **negative**: if a
+    future change quietly makes `modded` mean something to progression, that assertion fails.
 
 - **The weekly review (2026-09-16).** The Best Shape list's #1, and the top unbuilt item for two
   weeks. `src/app-review.js`, surfaced as a YOUR WEEK box on Home.

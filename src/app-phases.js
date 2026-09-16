@@ -654,6 +654,45 @@ function workoutOptsOutOfTrailingDeload(workout) {
 // corruption this whole section exists to prevent.
 function logIsDeload(log) { return !!(log && log.deload); }
 
+// ---- "Modded": a session you deliberately cut short ----
+//
+// A MOD IS A LABEL, NOT A MECHANISM, and that is the whole design. The progression semantics it
+// would seem to need already exist and always have: both stage walks skip an entry with no logged
+// reps (`if (!hasData) continue`), and the weight walks look back for the last entry that actually
+// has a weight. An exercise you didn't do doesn't advance, doesn't fail, and doesn't trip a reset --
+// the chain isn't broken, it just doesn't move. Anything you DID do progresses completely normally,
+// and its sets count for PRs, because full-effort work is full-effort work whatever else you skipped.
+//
+// So this flag changes NO arithmetic anywhere. It exists because the app otherwise cannot tell a
+// session you cut short from one you did in full -- both are simply "logged" -- and that difference
+// is the whole point of looking back at a week. It is also why it is set by hand and never inferred:
+// deciding on your behalf that you had a bad day is exactly the second-guessing this app doesn't do.
+//
+// Deliberately NOT a deload. A deload is scheduled, reduces load and volume across the session, and
+// is excluded from progression and PRs outright. A mod is unscheduled, keeps full intensity on
+// whatever you actually perform, and excludes nothing. They can both be true of one session.
+function logIsModded(log) { return !!(log && log.modded); }
+function setWorkoutModded(cycle, workoutId, on) {
+  const log = getLog(cycle, workoutId);
+  if (on) log.modded = true; else delete log.modded;
+  saveState(); render();
+}
+function renderWorkoutModdedControl(cycle, workoutId) {
+  const log = STATE.logs[logKey(cycle, workoutId)];
+  const on = logIsModded(log);
+  return `
+    <div class="deload-bar${on ? ' deload-bar-on' : ''}" style="margin-top:6px;">
+      <div class="deload-bar-head">
+        <span>${on ? '<span class="deload-flag">MODDED</span> short session, on purpose' : 'Full session'}</span>
+        <button class="btn btn-sm" onclick="setWorkoutModded(${cycle},'${workoutId}',${on ? 'false' : 'true'})">
+          ${on ? 'FULL SESSION' : 'MARK MODDED'}
+        </button>
+      </div>
+      ${on ? `<div class="phase-cal-note">Everything you actually log still progresses normally and still counts for PRs.
+        What you skip simply doesn't move — no stage lost, no reset. This only marks the session so your week reads honestly.</div>` : ''}
+    </div>`;
+}
+
 // THE choke point. All four cycle walks (t3HistoryBaseWeightLb, rpExHistoryBaseWeightLb,
 // computeStageState, computeT3StageState) reach for STATE.logs[logKey(c, id)] the same way, and
 // every one of them would be corrupted by a deload:

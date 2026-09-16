@@ -339,6 +339,25 @@ select { -webkit-appearance: none; appearance: none; background-image: linear-gr
 .tier-head .tname { font-family: var(--font-head); font-weight: 700; font-size: 16px; }
 .tier-head .tmove { font-size: 12px; color: var(--text-dim); }
 .tier-body { padding: 10px 12px; }
+/* The fold control on an exercise block header. Sits at the right of .tier-head, after whatever
+   that block already puts there (a plate row, or nothing). A collapsed block keeps its header --
+   the name, the muscle chip and the colour stripe -- so a folded session still reads as a list of
+   what it contains, not a stack of blank bars. */
+.ex-fold {
+  display: flex; align-items: center; gap: 8px; cursor: pointer;
+  margin-left: 10px; padding: 4px 2px 4px 6px; flex: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.ex-fold-sum { font-size: 11px; color: var(--text-faint); white-space: nowrap; }
+.ex-fold-chev { font-size: 11px; color: var(--text-dim); line-height: 1; }
+.ex-fold:hover .ex-fold-chev { color: var(--text); }
+.ex-fold:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+/* A collapsed block is the header alone, so the header keeps no bottom rule to divide it from a
+   body that is not there. */
+.tier-block-collapsed .tier-head { border-bottom: 0; }
+/* Folded, the stage pips stop earning their width: the summary already says where this block is,
+   and on a narrow screen the pips squeeze a two-word exercise name onto three lines. */
+.tier-block-collapsed .plate-row { display: none; }
 .target-line { font-size: 13px; color: var(--text-dim); margin-bottom: 10px; }
 .target-line .tv { color: var(--text); font-weight: 700; font-family: var(--font-mono); }
 

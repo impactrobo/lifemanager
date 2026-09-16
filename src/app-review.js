@@ -94,7 +94,7 @@ function sessionsLoggedBetween(fromDate, toDate) {
     Object.keys(log.entries || {}).forEach(ek => { sets += countLoggedSets(log.entries[ek]); });
     // The log itself rides along: a workout on a short rotation can be logged twice on one date,
     // so looking it back up by (workoutId, date) afterwards would be ambiguous.
-    if (sets > 0) out.push({ date: log.date, workoutId, sets, log });
+    if (sets > 0) out.push({ date: log.date, workoutId, sets, log, modded: logIsModded(log) });
   });
   return out.sort((a, b) => a.date.localeCompare(b.date));
 }
@@ -165,7 +165,9 @@ function weeklyReview(mondayStr) {
     const slots = model.workouts.map(w => {
       const hit = (loggedByDate[d] || []).find(s => s.workoutId === w.id && !claimed.has(s.workoutId + '@' + s.date));
       if (hit) claimed.add(hit.workoutId + '@' + hit.date);
-      return { workout: w, done: !!hit };
+      // A modded session is DONE. You showed up and trained, which is the only thing this review
+      // measures; the mark says the shape of it, not that it counted for less.
+      return { workout: w, done: !!hit, modded: !!(hit && hit.modded) };
     });
     // A day still ahead of today is neither done nor missed -- it hasn't happened. This only
     // matters when browsing forward into the week in progress.
@@ -180,6 +182,7 @@ function weeklyReview(mondayStr) {
     };
   });
   const extra = days.reduce((n, d) => n + d.extra.length, 0);
+  const modded = logged.filter(x => x.modded).length;
 
   // ---- Habits ----
   let kept = 0, broken = 0, unmarked = 0;
@@ -246,7 +249,7 @@ function weeklyReview(mondayStr) {
     isCurrent: mondayStr === mondayOf(today),
     hasFuture: days.some(d => d.inFuture),
     off: !!rec.off, note: rec.note || '',
-    training: { planned, done, extra, offDays, days, sessions: logged.length },
+    training: { planned, done, extra, modded, offDays, days, sessions: logged.length },
     habits: { kept, broken, unmarked, marked: kept + broken, perHabit },
     targets,
     weight,
@@ -271,7 +274,10 @@ function reviewHeadline(r) {
   if (r.isCurrent) return 'This week, so far.';
   if (!r.training.planned && !r.training.sessions) return 'Nothing was planned, and nothing was logged.';
   if (!r.training.planned) return r.training.sessions + ' session' + (r.training.sessions === 1 ? '' : 's') + ' logged, none of them planned.';
-  if (r.training.done === r.training.planned) return 'Every planned session done.';
+  // A modded session is not a caveat on "every session done" -- you did them. It's mentioned
+  // because the shape of the week is worth knowing, not to qualify the achievement.
+  const mod = r.training.modded ? ` ${r.training.modded} of them modded.` : '';
+  if (r.training.done === r.training.planned) return 'Every planned session done.' + mod;
   if (r.training.done === 0) return 'None of the ' + r.training.planned + ' planned sessions were logged.';
   return r.training.done + ' of ' + r.training.planned + ' planned sessions done.';
 }
@@ -294,6 +300,7 @@ function renderHomeReviewBox() {
   const tHit = r.targets.filter(x => x.logged && x.hit >= Math.ceil(x.logged / 2)).length;
   if (r.targets.some(x => x.logged)) chips.push(reviewChip(tHit + '/' + r.targets.filter(x => x.logged).length + ' targets on track', tHit ? 'good' : 'dim'));
   if (r.practice.sessions) chips.push(reviewChip(r.practice.sessions + ' practice', 'good'));
+  if (t.modded) chips.push(reviewChip(t.modded + ' modded', 'dim'));
   if (t.extra) chips.push(reviewChip(t.extra + ' unplanned', 'dim'));
 
   return `
@@ -354,7 +361,8 @@ function renderReviewTraining(r) {
       const mark = s.done ? '<span style="color:var(--good);">✓</span>'
                  : d.inFuture ? '<span style="color:var(--text-faint);">·</span>'
                  : '<span style="color:var(--text-faint);">—</span>';
-      bits.push(mark + ' ' + escapeHtml(s.workout.name));
+      bits.push(mark + ' ' + escapeHtml(s.workout.name) +
+        (s.modded ? ' <span style="color:var(--text-faint); font-size:10px;">modded</span>' : ''));
     });
     d.extra.forEach(s => {
       const w = getWorkout(s.workoutId);

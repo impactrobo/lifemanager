@@ -120,6 +120,10 @@ let VIEW = {
   scheduleBuilderEditing: null,
   mealBuilderDraft: null,            // an in-progress meal; survives navigation on purpose
   mealPlanExpanded: {},
+  // Which exercise blocks are folded shut on a session screen, keyed 'workoutId:entryKey'. Per view
+  // and never saved -- this is "what's on my screen right now", no more a fact about the workout
+  // than a scroll position is. See exBlockCollapsed() in app-train-log.js.
+  logCollapsed: {},
   mealPlanClipboard: null,
   // Which date the Meal Plan is editing FOR -- the counterpart of plannerDate below, since a meal
   // plan belongs to a weight phase the way a week of workouts belongs to a training block.
