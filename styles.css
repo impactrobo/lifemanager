@@ -1500,6 +1500,18 @@ input[type="number"].lab-range-in {
 .log-sheet-unit { flex: 0 0 auto; font-size: 11px; color: var(--text-faint); }
 .log-water-ctl { flex: 1; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .log-water-count { font-size: 16px; font-weight: 700; min-width: 2ch; text-align: center; }
+/* The count doubles as a drag handle for fine adjustment. touch-action:none is the load-bearing
+   line: without it iOS claims the gesture for page scrolling before a single pointermove fires,
+   and the drag silently never starts. Scoped to the number, so dragging elsewhere still scrolls
+   the sheet. */
+.water-scrub {
+  touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+  cursor: ns-resize; padding: 4px 6px; border-radius: 6px;
+  border: 1px dashed var(--border); min-width: 4ch;
+}
+.water-scrub:hover { border-color: var(--text-dim); }
+.water-scrub.water-scrubbing { border-style: solid; border-color: var(--accent); color: var(--accent); }
+.log-water-hint { font-size: 10px; color: var(--text-faint); margin: -2px 0 8px; }
 /* Beats input[type="number"] (0,1,1) -- a bare class would lose to it. Same trap as the recipe
    ingredient rows; see CLAUDE.md. */
 .log-sheet-row input[type="number"].log-water-target { flex: 0 0 56px; }

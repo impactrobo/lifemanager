@@ -98,5 +98,10 @@ inferred, not observed, so it needs your device to confirm.
 - [ ] Each chip now opens only its own field. Sleep opens with Quality; nothing else pairs.
 - [ ] Hydration colour: the scale should be **blank** each morning, with yesterday's average shown
       beneath it. Log two or three across a day and confirm tomorrow's reference is their average.
+- [ ] **Drag the water number with a finger.** Up adds, down subtracts, 50 mL a step (1 fl oz in
+      cups). This is the one thing here that can't be verified at all without a touchscreen — a mouse
+      drag passes in the sandbox and proves nothing about Safari's gesture handling. Watch for: the
+      page scrolling instead of the number changing (means `touch-action: none` isn't taking), the
+      drag dying after one step, or the value jumping when you lift your finger.
 
 ## Add future items below as new features ship

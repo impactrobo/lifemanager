@@ -519,6 +519,25 @@ on an architecture split + a large wave of Maximalist aesthetics.
     evening reading in a negative-offset zone would file under tomorrow, showing as "today" a day
     early and dropping out of yesterday's average.
 
+- **Drag the water number to adjust it (2026-09-16).** Replaces the type-an-amount box added hours
+  earlier, which cost a row and a keyboard to say "and 150 more". The count between the +/- buttons
+  is now a drag handle: pull up or down for 50 mL a step, or **one fluid ounce** in cups — the small
+  unit each system actually uses out loud. The +/- still add a whole serving, so coarse and fine
+  live side by side.
+  - **It works with a finger on iOS**, which was the open question. Pointer Events are supported
+    there and the app already drags this way (Home's edit mode reorders tiles with the same
+    `onpointerdown` + `setPointerCapture` pattern). The load-bearing line is **`touch-action: none`**
+    on the handle: without it Safari claims the gesture for page scrolling before a single
+    `pointermove` arrives, and the drag silently never starts. Scoped to the number, so dragging
+    anywhere else in the sheet still scrolls the sheet.
+  - The handle **writes its own text mid-drag** rather than calling `render()`, which replaces
+    `#app.innerHTML` wholesale and would destroy the element the pointer is captured on — ending the
+    drag on its first step. `saveState()` still runs per step, so an app killed mid-drag keeps what
+    you'd dialled in; the render happens once on release, which is when the chip behind the sheet
+    catches up. Same hazard as the log inputs, one layer down.
+  - Dragging is **absolute, not cumulative** — position maps to a value from where the drag began —
+    so going up four and back down two lands where arithmetic says it should. Floors at zero.
+
 - **The water chip opens its sheet (2026-09-16).** An access bug from the per-field sheets, caught
   immediately: the hydration colour scale lives in the water sheet, and it had only ever been
   reachable because the OLD pm sheet rendered *every* pm field — so you got to it through the

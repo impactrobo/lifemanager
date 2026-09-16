@@ -895,16 +895,57 @@ function saveLogField(field, raw, quiet) {
 }
 // Water increments straight off the chip. Clamped at zero so tapping past the bottom in the sheet
 // can't drive it negative; there's deliberately no upper clamp -- the target is a target, not a cap.
-// An arbitrary amount, in whatever unit is set. The +/- buttons add ONE serving, which is right for
-// a glass you drink all day; this is for the bottle that isn't a multiple of one.
-function addWaterAmount(raw) {
-  const ml = displayToMl(raw);
-  if (!ml || !isFinite(ml) || ml <= 0) return;
-  const log = todayLifeLog();
-  log.waterMl = Math.max(0, (log.waterMl || 0) + ml);
-  UI.waterPulse = true;
+// ---- Dragging the number to adjust it ----
+//
+// Replaces a type-an-amount box, which cost a row and a keyboard to say "and 150 more". The +/-
+// buttons add one SERVING, which is the right shape for a glass you refill; this is the fine
+// adjustment between glasses, and it needs no keyboard at all.
+//
+// Yes, this works with a finger on iOS. Pointer Events are supported there, and the app already
+// drags this way -- Home's edit mode reorders tiles with the same `onpointerdown` +
+// setPointerCapture pattern. The one non-obvious requirement is `touch-action: none` on the handle,
+// without which Safari claims the gesture for page scrolling before a single pointermove arrives.
+// It's scoped to the number itself, so dragging anywhere else in the sheet still scrolls the sheet.
+const ML_PER_FL_OZ = 29.5735;
+// One step per this many pixels. Small enough that a short drag does something, large enough that
+// you can stop on a value -- at 10px a thumb's natural jitter would skip through three of them.
+const WATER_SCRUB_PX = 14;
+// 50 mL, or one fluid ounce in imperial -- the small unit each system actually uses out loud.
+function waterScrubStepMl() { return waterUnit() === 'cup' ? ML_PER_FL_OZ : 50; }
+function waterScrubStepLabel() { return waterUnit() === 'cup' ? '1 fl oz' : '50 mL'; }
+
+let WATER_SCRUB = null;
+function startWaterScrub(evt, el) {
+  evt.preventDefault();
+  try { el.setPointerCapture(evt.pointerId); } catch (e) {}
+  WATER_SCRUB = { startY: evt.clientY, startMl: Number(todayLifeLog().waterMl) || 0, el, steps: 0 };
+  el.classList.add('water-scrubbing');
+  el.addEventListener('pointermove', onWaterScrubMove);
+  el.addEventListener('pointerup', endWaterScrub);
+  el.addEventListener('pointercancel', endWaterScrub);
+}
+function onWaterScrubMove(evt) {
+  if (!WATER_SCRUB) return;
+  const steps = Math.round((WATER_SCRUB.startY - evt.clientY) / WATER_SCRUB_PX);  // up adds
+  if (steps === WATER_SCRUB.steps) return;
+  WATER_SCRUB.steps = steps;
+  const ml = Math.max(0, WATER_SCRUB.startMl + steps * waterScrubStepMl());
+  todayLifeLog().waterMl = ml;
+  // Written in place rather than through render(), which replaces #app.innerHTML wholesale and
+  // would destroy the element the pointer is captured on -- ending the drag on its first step.
+  // saveState() still runs per step, so an app killed mid-drag keeps what you'd already dialled in.
+  WATER_SCRUB.el.textContent = fmtWater(ml);
   saveState();
-  render();   // the input is rebuilt empty, which is the "added, ready for the next one" signal
+}
+function endWaterScrub() {
+  if (!WATER_SCRUB) return;
+  const el = WATER_SCRUB.el;
+  el.classList.remove('water-scrubbing');
+  el.removeEventListener('pointermove', onWaterScrubMove);
+  el.removeEventListener('pointerup', endWaterScrub);
+  el.removeEventListener('pointercancel', endWaterScrub);
+  WATER_SCRUB = null;
+  render();   // now safe: the drag is over, and this brings the chip behind the sheet up to date
 }
 function addWater(servings) {
   const log = todayLifeLog();
@@ -968,29 +1009,23 @@ function renderLogPopup() {
   const rows = fields.map(f => {
     const v = logFieldValue(f);
     if (f === 'water') {
-      // Water is a counter, not a text field: the +/- add one serving, which is the right shape for
-      // a glass you refill all day. The box under it takes an amount that ISN'T a multiple of one
-      // -- a 600 mL bottle, the last third of a flask -- which counting glasses can't express.
+      // Water is a counter, not a text field: the +/- add one serving, the right shape for a glass
+      // you refill. The number between them is also a DRAG HANDLE for everything in between --
+      // pull up or down to adjust by 50 mL (or a fluid ounce), no keyboard involved.
       const cur = waterColorValue();
       return `
         <div class="log-sheet-row">
           <span class="log-sheet-label">Water</span>
           <div class="log-water-ctl">
             <button class="btn btn-sm" onclick="addWater(-1)">&minus;</button>
-            <span class="log-water-count mono">${fmtWater(v || 0)}</span>
+            <span class="log-water-count mono water-scrub" title="Drag up or down to adjust by ${waterScrubStepLabel()}"
+                  onpointerdown="startWaterScrub(event, this)">${fmtWater(v || 0)}</span>
             <button class="btn btn-sm" onclick="addWater(1)">+</button>
             <span class="log-sheet-unit">of ${fmtWater(waterTargetMl())}</span>
             <span class="log-sheet-unit">${waterUnitLabel()}</span>
           </div>
         </div>
-        <div class="log-sheet-row">
-          <span class="log-sheet-label">Add</span>
-          <input type="number" id="waterAddAmount" min="0" step="${waterUnit() === 'cup' ? '0.25' : '10'}"
-                 placeholder="0" inputmode="decimal"
-                 onkeydown="if(event.key==='Enter'){event.preventDefault();addWaterAmount(this.value);}">
-          <span class="log-sheet-unit">${waterUnitLabel()}</span>
-          <button class="btn btn-sm btn-primary" onclick="addWaterAmount(inputVal('waterAddAmount'))">+ ADD</button>
-        </div>
+        <div class="log-water-hint">&#9650;&#9660; Drag the number to adjust by ${waterScrubStepLabel()} &middot; &plusmn; adds a ${fmtWater(waterServingMl())} ${waterUnitLabel()} serving</div>
         <div class="log-sheet-row">
           <span class="log-sheet-label">Units</span>
           <div class="unit-toggle">

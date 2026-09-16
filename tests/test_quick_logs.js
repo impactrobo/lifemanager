@@ -96,7 +96,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     return {
       popupOpened: !!UI.logPopup, field: UI.logPopup && UI.logPopup.field,
       hasColorScale: !!document.querySelector('.log-color-scale'),
-      hasAddBox: !!document.getElementById('waterAddAmount'),
+      hasScrub: !!document.querySelector('.water-scrub'),
       before: logFieldValue('water'),
     };
   });
@@ -105,26 +105,53 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (!water.hasColorScale) throw new Error('...which is the only way to reach the hydration colour scale');
   if (water.before) throw new Error('Opening the sheet must not log anything by itself');
 
-  // +/- adds one serving; the box adds an amount that isn't a multiple of one.
-  const added = await page.evaluate(async () => {
+  // +/- adds one serving. The number between them is a DRAG HANDLE for everything in between --
+  // a real pointer drag, since that's the gesture that has to work on a phone.
+  const scrubbed = await page.evaluate(async () => {
     addWater(1);
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
     const oneServing = logFieldValue('water');
-    addWaterAmount('600');
-    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-    const custom = logFieldValue('water');
-    addWaterAmount('');            // nothing typed
-    addWaterAmount('0');
-    addWaterAmount('-50');         // no going backwards through the add box
-    return { oneServing, custom, afterJunk: logFieldValue('water'),
-             boxCleared: (document.getElementById('waterAddAmount') || {}).value };
+    const el = document.querySelector('.water-scrub');
+    const box = el.getBoundingClientRect();
+    const x = box.left + box.width / 2, y = box.top + box.height / 2;
+    const pd = (type, cy) => el.dispatchEvent(new PointerEvent(type, {
+      bubbles: true, cancelable: true, pointerId: 1, pointerType: 'touch', clientX: x, clientY: cy,
+    }));
+    pd('pointerdown', y);
+    const dragging = el.classList.contains('water-scrubbing');
+    pd('pointermove', y - 14 * 4);       // four steps UP
+    const up4 = { stored: logFieldValue('water'), shown: el.textContent.trim() };
+    pd('pointermove', y + 14 * 2);       // and back down past the start
+    const down2 = logFieldValue('water');
+    pd('pointerup', y + 14 * 2);
+    return { oneServing, dragging, up4, down2, released: !el.classList.contains('water-scrubbing'),
+             stepMl: waterScrubStepMl(), label: waterScrubStepLabel() };
   });
-  console.log('adding water:', JSON.stringify(added));
-  if (added.oneServing !== 250) throw new Error(`+ should add one serving, got ${added.oneServing}`);
-  if (added.custom !== 850) throw new Error(`The box should add exactly what you typed (250+600), got ${added.custom}`);
-  if (added.afterJunk !== 850) throw new Error('Blank, zero and negative amounts add nothing');
-  if (added.boxCleared !== '') throw new Error('The box empties after adding, ready for the next one');
-  await page.evaluate(() => { closeLogPopup(); todayLifeLog().waterMl = 0; saveState(); });
+  console.log('scrubbing:', JSON.stringify(scrubbed));
+  if (scrubbed.oneServing !== 250) throw new Error(`+ should add one serving, got ${scrubbed.oneServing}`);
+  if (!scrubbed.dragging) throw new Error('pointerdown on the number should start a drag');
+  if (scrubbed.stepMl !== 50 || scrubbed.label !== '50 mL') throw new Error('In millilitres a step is 50 mL');
+  if (scrubbed.up4.stored !== 450) throw new Error(`Four steps up from 250 is 450, got ${scrubbed.up4.stored}`);
+  // Written in place, because a render() would destroy the element the pointer is captured on.
+  if (scrubbed.up4.shown !== '450') throw new Error(`The handle must update itself mid-drag, got "${scrubbed.up4.shown}"`);
+  if (scrubbed.down2 !== 150) throw new Error(`Dragging back down is absolute, not cumulative: expected 150, got ${scrubbed.down2}`);
+  if (!scrubbed.released) throw new Error('pointerup should end the drag');
+
+  // It can't go negative, and in cups a step is a fluid ounce.
+  const bounds = await page.evaluate(() => {
+    todayLifeLog().waterMl = 20; saveState();
+    const el = document.querySelector('.water-scrub');
+    const b = el.getBoundingClientRect(), x = b.left + 1, y = b.top + 1;
+    const pd = (t, cy) => el.dispatchEvent(new PointerEvent(t, { bubbles: true, cancelable: true, pointerId: 2, pointerType: 'touch', clientX: x, clientY: cy }));
+    pd('pointerdown', y); pd('pointermove', y + 14 * 9); pd('pointerup', y + 14 * 9);
+    const floored = logFieldValue('water');
+    setWaterUnit('cup');
+    return { floored, cupStep: Math.round(waterScrubStepMl() * 100) / 100, cupLabel: waterScrubStepLabel() };
+  });
+  console.log('bounds:', JSON.stringify(bounds));
+  if (bounds.floored !== 0) throw new Error(`Water must floor at zero, got ${bounds.floored}`);
+  if (bounds.cupStep !== 29.57 || bounds.cupLabel !== '1 fl oz') throw new Error('In cups a step is one fluid ounce');
+  await page.evaluate(() => { setWaterUnit('ml'); closeLogPopup(); todayLifeLog().waterMl = 0; saveState(); });
   await settle(page);
   const water2 = await page.evaluate(async () => {
     addWater(1);
