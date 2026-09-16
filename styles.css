@@ -1492,6 +1492,18 @@ input[type="number"].lab-range-in {
 .log-trend { display: flex; align-items: center; gap: 8px; margin: 2px 0 6px; }
 .log-trend-cap { font-size: 9px; color: var(--text-faint); letter-spacing: 0.06em; text-transform: uppercase; flex: 0 0 auto; }
 .log-trend-dots { flex: 1; display: flex; align-items: center; gap: 4px; }
+/* Yesterday, folded into the strip: same dot, squared off and ringed so it reads as a reference
+   point rather than the oldest reading in the run. The divider is what separates the two claims. */
+.log-trend-yest { border-radius: 3px; box-shadow: 0 0 0 1px var(--border); }
+.log-trend-div { width: 1px; align-self: stretch; background: var(--border); flex: 0 0 auto; margin: 0 2px; }
+/* The clear, at the left of the colour scale. Sized to the swatches so the row stays one rhythm. */
+.log-color-clear {
+  flex: 0 0 auto; width: 22px; height: 22px; border-radius: 6px; cursor: pointer;
+  background: transparent; border: 1px solid var(--border); color: var(--text-faint);
+  font-size: 13px; line-height: 1; padding: 0; margin-right: 2px;
+  -webkit-tap-highlight-color: transparent;
+}
+.log-color-clear:hover { border-color: var(--bad); color: var(--bad); }
 /* Fixed swatch hex again, same reason as the scale itself: a physical reference must not follow
    the aesthetic's palette. */
 .log-trend-dot {

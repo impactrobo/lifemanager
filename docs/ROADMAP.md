@@ -519,6 +519,30 @@ on an architecture split + a large wave of Maximalist aesthetics.
     evening reading in a negative-offset zone would file under tomorrow, showing as "today" a day
     early and dropping out of yesterday's average.
 
+- **The hydration strip carries yesterday; habits know "do" from "don't" (2026-09-16).**
+  - **One strip instead of three rows.** `YEST ▪ | OLDER ▪▪▪▪▪▪▪▪ NOW`. Yesterday's reference used
+    to sit on its own line under the scale, so a swatch and a strip were both claiming to say where
+    you'd been. Folding it in puts the comparison where the eye already is; the divider is what
+    stops it reading as the oldest dot in the run. The run drops 10 → 8 to keep it on one line.
+    The two halves are decided independently — with exactly one reading ever logged, the swatch and
+    a one-dot run would be the same dot printed twice.
+  - **No scale number for hydration.** "4 of 8" is a position on a swatch strip, not a reading
+    anyone takes or repeats — you know your hydration by the colour, and printing an index invites
+    treating it as a score. The `aria-label` keeps the position for a screen reader, which has
+    nothing else to go on. The clear moved **inline, to the left of the swatches**, appearing only
+    when something is on the scale: the control that removes a reading now sits beside the reading
+    rather than as a button further down that shifts everything under it.
+  - **Where yesterday's average lives: nowhere.** It's derived on read by `scalePriorDay()` from the
+    timestamped readings in `waterColorLog` — the same reason `liftBaseTmLb` and the weekly review's
+    counts are derived. A stored average is a second copy that goes stale the moment you add,
+    correct or undo a reading.
+  - **Habits now carry a polarity**: `'do'` (kept = you did it) or `'avoid'` (kept = you didn't).
+    Until now the app couldn't tell — "Stretch daily" and "No drinking" both had a tick and a cross,
+    leaving the marks to mean whatever you remembered they meant. **`kept`/`broken` stay the stored
+    values either way**; polarity changes only the words on the buttons, so switching a habit's type
+    later can never invert its history. Absent on existing habits and read as `'do'`, which leaves
+    their marks meaning exactly what they meant.
+
 - **One reading per visit, an undo button, and the Bristol stool scale (2026-09-16).**
   - **Tap-to-toggle was deleting real data.** Tapping the shade you were already on removed that
     reading, on the reasoning that it was a toggle-off like the habit buttons. But two consecutive

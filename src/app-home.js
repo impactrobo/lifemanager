@@ -849,19 +849,8 @@ function shortDayLabel(dateStr) {
   const d = new Date(dateStr + 'T12:00:00');
   return MONTH_NAMES[d.getMonth()].slice(0, 3) + ' ' + d.getDate();
 }
-// Yesterday's average, shown UNDER the scale rather than on it: it's a reference point, not a
-// reading, and putting it on the scale itself would read as today's answer already filled in.
-function renderWaterColorPrior() {
-  const prior = waterColorPriorDay();
-  if (!prior) return '';
-  // Named, not "3 days ago": the gap is the point when you skipped a day, and a date says which.
-  const when = prior.isYesterday ? 'Yesterday' : shortDayLabel(prior.date);
-  return `
-    <div class="log-color-prior">
-      <i class="log-color-prior-sw" style="background:${waterColorHex(prior.value)};"></i>
-      <span>${when}: <b>${prior.value}</b> of 8${prior.readings > 1 ? ` <span class="log-insight-n">(avg of ${prior.readings})</span>` : ''}</span>
-    </div>`;
-}
+// renderWaterColorPrior() is gone: yesterday folded INTO the trend strip as a labelled swatch
+// before the divider, so one row carries both the reference and the run. See renderWaterColorTrend().
 // The most recent readings, oldest-first, for the trend strip.
 function waterColorTrend(n) {
   const log = STATE.life.waterColorLog || [];
@@ -1077,18 +1066,40 @@ function setOrClear(obj, key, raw) {
 }
 // The last ten readings, oldest to newest. Answers "which way is this going" at a glance, which
 // a single current swatch cannot -- one dark reading is a moment, four in a row is a direction.
+// One strip: yesterday's reference, a divider, then the recent run.
+//
+//     YEST [■] | OLDER [■■■■■■■■] NOW
+//
+// Yesterday used to sit on its own row underneath, which made two things claim the same job -- a
+// swatch saying "this is where you were" and a strip saying "this is where you've been". Folding it
+// in puts the comparison where the eye already is, and the divider is what keeps it from reading as
+// just the oldest dot in the run. The run drops from ten to eight so the whole thing still fits one
+// line on a phone with the label and the divider taking their share.
+const WATER_TREND_DOTS = 8;
 function renderWaterColorTrend() {
-  const trend = waterColorTrend(10);
-  if (trend.length < 2) return '';   // a single dot is not a trend, it's the marker again
+  const trend = waterColorTrend(WATER_TREND_DOTS);
+  const prior = waterColorPriorDay();
+  // The run needs at least two dots to BE a run -- one is the marker again. The two halves are
+  // decided independently, because with exactly one reading ever logged, yesterday's swatch and the
+  // run would otherwise be the same dot printed twice with a divider between them.
+  const hasRun = trend.length >= 2;
+  if (!prior && !hasRun) return '';
   const dots = trend.map(r => {
     const when = new Date(r.at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-    return `<i class="log-trend-dot" style="background:${waterColorHex(r.value)};" title="${r.value} of 8 &middot; ${when}"></i>`;
+    return `<i class="log-trend-dot" style="background:${waterColorHex(r.value)};" title="${when}"></i>`;
   }).join('');
+  const yest = prior
+    ? `<span class="log-trend-cap">${prior.isYesterday ? 'yest' : shortDayLabel(prior.date)}</span>
+       <i class="log-trend-dot log-trend-yest" style="background:${waterColorHex(prior.value)};"
+          title="${prior.isYesterday ? 'Yesterday' : shortDayLabel(prior.date)}${prior.readings > 1 ? ', average of ' + prior.readings : ''}"></i>
+       ${hasRun ? '<span class="log-trend-div"></span>' : ''}`
+    : '';
   return `
     <div class="log-trend">
-      <span class="log-trend-cap">older</span>
+      ${yest}
+      ${hasRun ? `<span class="log-trend-cap">older</span>
       <span class="log-trend-dots">${dots}</span>
-      <span class="log-trend-cap">now</span>
+      <span class="log-trend-cap">now</span>` : ''}
     </div>`;
 }
 // Two averages and the days behind them. No verdict, no advice -- urine colour carries real medical
@@ -1140,14 +1151,22 @@ function renderLogPopup() {
         <div class="log-sheet-row log-color-row">
           <span class="log-sheet-label">Color</span>
           <div class="log-color-scale">
-            ${WATER_COLORS.map((hex, i) => `<button class="log-color-sw ${cur === i + 1 ? 'log-color-sw-on' : ''}" style="background:${hex};" onclick="setWaterColor(${i + 1})" title="${i + 1}" aria-label="Color ${i + 1}"></button>`).join('')}
+            ${/* The clear sits at the LEFT of the scale and only once something is on it, so the
+                  control that removes a reading lives beside the reading -- not as a button that
+                  appears further down the sheet and shifts everything under it. Hidden rather than
+                  disabled when there's nothing to clear: a dead control still reads as an option. */''}
+            <button class="log-color-clear ${cur ? '' : 'hidden'}" onclick="undoScaleReading('waterColor')"
+                    title="Clear today's reading" aria-label="Clear today's reading">&#8630;</button>
+            ${WATER_COLORS.map((hex, i) => `<button class="log-color-sw ${cur === i + 1 ? 'log-color-sw-on' : ''}" style="background:${hex};" onclick="setWaterColor(${i + 1})" aria-label="Shade ${i + 1} of 8"></button>`).join('')}
           </div>
         </div>
         ${renderWaterColorTrend()}
-        ${renderScaleUndo('waterColor')}
-        ${renderWaterColorPrior()}
+        ${/* No number. "4 of 8" is a position on a swatch strip, not a reading anyone takes or
+              repeats -- you know your hydration by the colour, and printing an index invites
+              treating it as a score. The aria-label keeps the position available to a screen
+              reader, which genuinely has nothing else to go on. */''}
         <div class="log-color-note">${cur
-          ? `Today: <b>${cur}</b> of 8, ${waterColorAge()}. Tap another shade to correct it.`
+          ? `Logged ${waterColorAge()}. Tap another shade to correct it, or &#8630; to clear.`
           : 'Lighter is more hydrated. Tap a shade to log today’s first reading &mdash; it clears again tomorrow.'}</div>
         ${renderWaterColorInsight()}`;
     }

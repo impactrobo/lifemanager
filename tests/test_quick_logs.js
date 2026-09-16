@@ -459,27 +459,38 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (daily.prior.readings !== 3 || !daily.prior.isYesterday) throw new Error('...from three readings, and known to BE yesterday');
   if (!daily.gap || daily.gap.value !== 7 || daily.gap.isYesterday) throw new Error('A skipped day falls back to the last day that has readings, and says so');
   // ---- 8e. The trend strip ----
+  // One row carries both claims now: YEST [swatch] | OLDER [run] NOW. Yesterday used to sit on its
+  // own line underneath, which had a swatch and a strip competing to say where you'd been.
   const trend = await page.evaluate(() => {
     const dayAgo = d => new Date(Date.now() - d * 86400000).toISOString();
+    // Exactly one reading ever: yesterday's swatch is legitimate, but a one-dot "run" would just be
+    // that same dot printed again with a divider between them.
     STATE.life.waterColorLog = [{ value: 6, at: dayAgo(1) }];
-    const one = /class="log-trend-dot"/.test(renderWaterColorTrend());
+    const lone = renderWaterColorTrend();
+    const one = { yest: /log-trend-yest/.test(lone), run: /older/.test(lone), div: /log-trend-div/.test(lone) };
     STATE.life.waterColorLog = [6, 5, 4, 3, 2].map((v, i) => ({ value: v, at: dayAgo(5 - i) }));
     const html = renderWaterColorTrend();
-    // Oldest first: the strip reads left-to-right as time, so a reversed list would show the
-    // trend backwards while looking perfectly fine.
-    const order = (html.match(/title="(\d) of 8/g) || []).map(m => m.match(/(\d)/)[1]);
-    // 14 readings, only the last 10 kept on screen.
+    // Oldest first: the strip reads left-to-right as time, so a reversed list would show the trend
+    // backwards while looking perfectly fine. Read off the rendered COLOUR rather than a title,
+    // since the numbers came out of the tooltips — the swatch is a colour, not an index.
+    const order = (html.match(/class="log-trend-dot" style="background:(#[0-9A-Fa-f]{6})/g) || [])
+      .map(m => WATER_COLORS.indexOf(m.slice(m.indexOf('#'))) + 1);
+    const hasYest = /log-trend-yest/.test(html) && /log-trend-div/.test(html);
+    // 14 readings, only the last 8 on screen.
     STATE.life.waterColorLog = Array.from({ length: 14 }, (_, i) => ({ value: (i % 8) + 1, at: dayAgo(14 - i) }));
     // Exact class match: the container is `log-trend-dots`, which contains `log-trend-dot` as a
-    // substring and would inflate the count by one.
-    const capped = (renderWaterColorTrend().match(/class="log-trend-dot"/g) || []).length;
-    return { one, order, capped, kept: STATE.life.waterColorLog.length };
+    // substring and would inflate the count. The yesterday swatch carries an extra class, so it
+    // isn't caught by this either — the count is the run alone.
+    const capped = (renderWaterColorTrend().match(/class="log-trend-dot" /g) || []).length;
+    return { one, order, hasYest, capped, kept: STATE.life.waterColorLog.length, dots: WATER_TREND_DOTS };
   });
-  console.log('trend strip:', trend);
-  if (trend.one) throw new Error('A single reading is not a trend — it is the marker again');
+  console.log('trend strip:', JSON.stringify(trend));
+  if (!trend.one.yest) throw new Error('One prior reading is still a legitimate reference swatch');
+  if (trend.one.run || trend.one.div) throw new Error('...but a one-dot run is that same dot twice, so the run and its divider stay away');
+  if (!trend.hasYest) throw new Error('Yesterday folds into the strip, before a divider');
   if (trend.order.join('') !== '65432') throw new Error(`The strip should read oldest-to-newest, got ${trend.order.join('')}`);
-  if (trend.capped !== 10) throw new Error(`The strip shows the last 10, got ${trend.capped}`);
-  if (trend.kept !== 14) throw new Error('Showing 10 must not delete the rest of the log');
+  if (trend.capped !== 8 || trend.dots !== 8) throw new Error(`The run shows the last 8, got ${trend.capped}`);
+  if (trend.kept !== 14) throw new Error('Showing 8 must not delete the rest of the log');
 
   // ---- 8f. The water/colour association ----
   // Descriptive only: two averages and the day counts behind them. It must refuse to print until

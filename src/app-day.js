@@ -250,8 +250,12 @@ function renderDayUntimedItems(dateStr) {
     return `<div class="day-extra-row${status === 'unmarked' ? '' : ' is-done'}">
       <span class="day-extra-name">${escapeHtml(h.name)}</span>
       <span class="done-keep" style="display:flex; gap:6px; flex-shrink:0;">
-        <button class="btn btn-sm ${status==='kept'?'btn-good':''}" onclick="toggleHabitOn('${h.id}','kept','${dateStr}')" title="Kept">${icon('check')}</button>
-        <button class="btn btn-sm ${status==='broken'?'btn-danger':''}" onclick="toggleHabitOn('${h.id}','broken','${dateStr}')" title="Broke">${icon('close')}</button>
+        ${/* The tooltips say what the marks MEAN for this habit: "Did it / Skipped it" for one you
+              perform, "Avoided it / Gave in" for one you abstain from. Same two stored values
+              either way -- only the words change, so switching a habit's type never inverts its
+              history. */''}
+        <button class="btn btn-sm ${status==='kept'?'btn-good':''}" onclick="toggleHabitOn('${h.id}','kept','${dateStr}')" title="${habitMarkLabels(h).kept}">${icon('check')}</button>
+        <button class="btn btn-sm ${status==='broken'?'btn-danger':''}" onclick="toggleHabitOn('${h.id}','broken','${dateStr}')" title="${habitMarkLabels(h).broken}">${icon('close')}</button>
       </span>
     </div>`;
   }).join(''));
