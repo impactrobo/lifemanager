@@ -129,6 +129,10 @@ let VIEW = {
   scheduleBuilderEditing: null,
   mealBuilderDraft: null,            // an in-progress meal; survives navigation on purpose
   mealPlanExpanded: {},
+  // Which phase card is expanded on the Phases screen. Per view and never stored. Null means no
+  // choice yet, which falls back to the phase you are IN; '__none__' is an explicit DONE, which
+  // has to be distinguishable or closing the current phase would reopen it. See phaseCardIsOpen().
+  phaseOpen: null,
   // Which exercise blocks are folded shut on a session screen, keyed 'workoutId:entryKey'. Per view
   // and never saved -- this is "what's on my screen right now", no more a fact about the workout
   // than a scroll position is. See exBlockCollapsed() in app-train-log.js.

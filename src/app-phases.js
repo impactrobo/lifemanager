@@ -967,7 +967,10 @@ function addPhase() {
   const tl = phaseTimeline();
   const prev = tl[tl.length - 1];
   const startDate = prev ? shiftDate(prev.endDate, 1) : (STATE.phaseOrigin || todayStr());
-  appendSeededPhase(prev, startDate, { label: 'Phase ' + (STATE.phases.length + 1), weeks: PHASE_DEFAULT_WEEKS });
+  const added = appendSeededPhase(prev, startDate, { label: 'Phase ' + (STATE.phases.length + 1), weeks: PHASE_DEFAULT_WEEKS });
+  // Opens the one you just made: you added a phase in order to set it up, and leaving it folded
+  // would make the first act after ADD PHASE be finding and tapping it.
+  VIEW.phaseOpen = added.id;
   saveState();
   render();
 }
@@ -1303,6 +1306,34 @@ function renderPhaseCard(entry) {
     : `${fmtGoalDate(entry.startDate)} &ndash; ${fmtGoalDate(entry.endDate)} · ${entry.weeks} weeks`;
   const projection = (entry.startWeightLb == null || entry.endWeightLb == null) ? ''
     : ` · ${fmt(lbToDisplay(entry.startWeightLb), 1)} &rarr; ${fmt(lbToDisplay(entry.endWeightLb), 1)} ${weightUnitLabel()} projected`;
+  // ---- One card open at a time ----
+  //
+  // There is no SAVE here and there shouldn't be: every control commits on change, and a button that
+  // "saves" what is already saved teaches you the app needs permission to keep your work. But the
+  // thing that ASKS for is real -- a clear way to finish with a phase, be sure of it, and move to
+  // the next. That is closure, not committing, and the honest form of it is an action that actually
+  // does something: DONE folds the card shut.
+  //
+  // Folding also fixes the screen. Every phase used to render its whole editor at once -- two
+  // bodies, a rotation, a goal and six buttons each -- so a four-phase plan was a wall you scrolled
+  // through hunting for the one you meant. Closed, a phase is its name, its dates and a one-line
+  // summary of what it holds; open, it is the editor. Exactly one is open, because "move onto the
+  // next" is a sequence, and leaving five expanded behind you rebuilds the wall.
+  const open = phaseCardIsOpen(p.id, entry);
+  if (!open) {
+    return `
+      <div class="phase-card phase-card-closed phase-state-${entry.state}"
+           onclick="openPhaseCard('${p.id}')" role="button" tabindex="0"
+           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openPhaseCard('${p.id}');}">
+        <div class="ehead">
+          <span class="phase-label-static">${escapeHtml(p.label)}</span>
+          ${renderPhaseSavedChip(p.id)}
+          <span class="phase-chip phase-chip-${entry.state}">${stateLabel}</span>
+        </div>
+        <div class="phase-when">${when}${projection}</div>
+        <div class="phase-closed-sum">${phaseSummaryLine(entry)}</div>
+      </div>`;
+  }
   return `
     <div class="phase-card phase-state-${entry.state}">
       <div class="ehead">
@@ -1328,7 +1359,42 @@ function renderPhaseCard(entry) {
           : ''}
         <button class="btn btn-sm btn-danger" onclick="deletePhase('${p.id}')">DELETE</button>
       </div>
+      <button class="btn btn-primary btn-block phase-done" onclick="closePhaseCard()">DONE &mdash; EVERYTHING'S SAVED</button>
     </div>`;
+}
+
+// Which card is expanded. Per view and never stored: what's open on your screen is no more a fact
+// about the plan than a scroll position is.
+//
+// Nothing open falls back to the phase you're IN, so arriving at this screen lands you on the one
+// you almost certainly came for, and a fresh install -- one perpetual phase -- is simply open.
+function phaseCardIsOpen(id, entry) {
+  if (VIEW.phaseOpen) return VIEW.phaseOpen === id;
+  return entry.state === 'current';
+}
+function openPhaseCard(id) { VIEW.phaseOpen = id; render(); }
+function closePhaseCard() {
+  // A sentinel rather than null: null means "no choice made", which falls back to the current
+  // phase -- so DONE on the phase you're in would reopen it instantly.
+  VIEW.phaseOpen = '__none__';
+  showToast('Saved');
+  render();
+}
+
+// What a folded phase says about itself: enough to recognise it without opening it, and no more.
+function phaseSummaryLine(entry) {
+  const p = entry.phase;
+  const bits = [`${rotationDaysOf(p)}-day rotation`];
+  const n = weekPlanCount(p.exercisePlan);
+  const planned = (n.workouts || 0) + (n.practice || 0);
+  bits.push(planned ? `${planned} planned` : 'nothing planned yet');
+  const g = phaseWeightGoal(p);
+  if (g) {
+    const dir = g.direction === 'maintain' ? 'maintain'
+      : `${g.direction === 'deficit' ? '−' : '+'}${fmt(Math.abs(Number(g.ratePctPerWeek) || 0), 2)}%/wk`;
+    bits.push(dir);
+  }
+  return escapeHtml(bits.join(' · '));
 }
 
 // A block's plan is NOT edited here. The Planner already is that editor, and building a second one

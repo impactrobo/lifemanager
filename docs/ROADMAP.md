@@ -298,6 +298,28 @@ Newest first. Keep this reasonably current so a fresh session can see what alrea
 without re-reading the whole diff history. Roughly grouped: this project spent early Sept 2026
 on an architecture split + a large wave of Maximalist aesthetics.
 
+- **Phase cards fold; the planners name their target (2026-09-16).** Two asks that both came from
+  the same feeling — not being sure what you were editing or whether it stuck.
+  - **The ask was a SAVE button; what shipped is a DONE that folds the card.** Everything on a phase
+    already commits on change, and a button that "saves" what is already saved teaches you the app
+    needs permission to keep your work — then the day you leave without pressing it, you wonder. The
+    AM/PM logs were lost to exactly that shape. But the thing it asks for is real: *a clear way to
+    finish with a phase, be sure of it, and move to the next.* That's **closure, not committing**,
+    and the honest form of it is an action that genuinely does something.
+  - So cards fold, **one open at a time**. Closed, a phase is its name, dates and a one-line summary
+    (`5-day rotation · 2 planned · −0.75%/wk`); open, it's the editor. This also fixes the screen:
+    every phase used to render its whole editor at once, so a four-phase plan was a wall you
+    scrolled through hunting for the one you meant. "Move onto the next" is a sequence, and leaving
+    five expanded behind you rebuilds the wall.
+  - Nothing open falls back to the phase you're **in**, so arriving lands on the one you came for.
+    `'__none__'` is the explicit-DONE sentinel — distinct from `null`, or DONE on the current phase
+    would instantly reopen it. **+ ADD PHASE** opens what it just made.
+  - A card also flashes **"✓ saved"** for a moment when a field commits, then fades — the same
+    consumed-flag trick as the water pulse. A permanent SAVED badge is chrome once you've read it.
+  - **Both planners now name their target**: a select reading *"Adding to which phase"*, always
+    shown. Both had a scope control and both **hid it when you only had one phase**, so the
+    commonest case — every fresh install — answered the question by saying nothing.
+
 ### Architecture & infrastructure
 
 - **"MESO1" retired in favour of RP-Style; `STATE.meso` becomes `STATE.program` (2026-09-13).**

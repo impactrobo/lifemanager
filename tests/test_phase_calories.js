@@ -242,12 +242,21 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     switchTab('train'); setFitnessSubtab('goal');
   });
   await settle(page);
-  const ui = await page.evaluate(() => ({
-    calRows: document.querySelectorAll('.phase-cal').length,
-    driftBoxes: document.querySelectorAll('.phase-drift').length,
-    // Two buttons side by side, not stacked in a column beside the text.
-    driftButtons: document.querySelectorAll('.phase-drift-actions .btn').length,
-  }));
+  // Phase cards fold now — one open at a time, so the screen is a list you scan rather than every
+  // editor stacked at once. Counting across the whole screen would only ever see the open card, so
+  // this opens each phase in turn and sums what its own card renders.
+  const ui = await page.evaluate(async () => {
+    let calRows = 0, driftBoxes = 0, driftButtons = 0;
+    for (const ph of STATE.phases) {
+      openPhaseCard(ph.id);
+      await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+      calRows += document.querySelectorAll('.phase-cal').length;
+      driftBoxes += document.querySelectorAll('.phase-drift').length;
+      // Two buttons side by side, not stacked in a column beside the text.
+      driftButtons += document.querySelectorAll('.phase-drift-actions .btn').length;
+    }
+    return { calRows, driftBoxes, driftButtons };
+  });
   console.log('goal screen:', ui);
   if (ui.calRows !== 2) throw new Error('Every phase should carry a calorie row');
   if (ui.driftBoxes !== 1) throw new Error('Exactly one drift offer — only the current phase can have drifted');

@@ -224,13 +224,21 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // ---- 9. It renders, and survives a reload ----
   await page.evaluate(() => { switchTab('train'); setFitnessSubtab('goal'); });
   await settle(page);
-  const ui = await page.evaluate(() => ({
-    cards: document.querySelectorAll('.phase-card').length,
-    // Every phase carries BOTH bodies now: a stretch of time has a way you train AND a way you eat,
-    // so the old "an exercise block has no calorie target" split is gone by design.
-    calorieInputs: document.querySelectorAll('.phase-cal').length,
-    hasPlanRow: /PLAN/.test(document.getElementById('app').innerText),
-  }));
+  // Cards fold — one open at a time — so every phase still RENDERS but only the open one renders its
+  // editor. Opening each in turn is what checks the bodies; the card count checks the list.
+  const ui = await page.evaluate(async () => {
+    const cards = document.querySelectorAll('.phase-card').length;
+    let calorieInputs = 0, hasPlanRow = false;
+    for (const ph of STATE.phases) {
+      openPhaseCard(ph.id);
+      await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+      // Every phase carries BOTH bodies: a stretch of time has a way you train AND a way you eat,
+      // so the old "an exercise block has no calorie target" split is gone by design.
+      calorieInputs += document.querySelectorAll('.phase-cal').length;
+      if (/PLAN/.test(document.getElementById('app').innerText)) hasPlanRow = true;
+    }
+    return { cards, calorieInputs, hasPlanRow };
+  });
   console.log('phases screen:', ui);
   if (ui.cards !== 2) throw new Error('Both phases should render');
   if (ui.calorieInputs !== 2) throw new Error(`Every phase carries a calorie target, got ${ui.calorieInputs} inputs`);

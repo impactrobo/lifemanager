@@ -1513,6 +1513,14 @@ input[type="number"].lab-range-in {
   color: var(--good); animation: phase-saved-fade 2.2s ease-out forwards;
 }
 .phase-saved svg { width: 11px; height: 11px; }
+/* A folded phase: its name, its dates, and one line of what it holds. Enough to recognise without
+   opening, and no more -- the editor is what opening is for. */
+.phase-card-closed { cursor: pointer; }
+.phase-card-closed:hover { border-color: var(--accent-dim); }
+.phase-card-closed:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.phase-label-static { font-family: var(--font-head); font-weight: 700; font-size: 16px; flex: 1; min-width: 0; }
+.phase-closed-sum { font-size: 11px; color: var(--text-faint); margin-top: 6px; }
+.phase-done { margin-top: 12px; }
 @media (prefers-reduced-motion: reduce) { .phase-saved { animation: none; opacity: 1; } }
 /* ---------- Breaking a habit ---------- */
 /* A shake and a red wash, once, on an irreversible write. Deliberately short: it marks the moment
