@@ -522,6 +522,19 @@ on an architecture split + a large wave of Maximalist aesthetics.
     rate-band test (the goal record it tested is gone, the arithmetic under it isn't);
     `test_exercise_targets.js` keeps its `bestForLift()` coverage and drops the `exTargets` UI,
     which returns phase-owned in a later step.
+  - **A second-pass review found four more, none of which a green suite could see.** (1) The Body
+    Weight chart's phase-boundary plugin still read `m.kind` off `phaseBoundaryMarks()` to pick a
+    colour and a row — Chart.js is CDN-blocked in tests, so every mark silently drew in the wrong
+    colour on the wrong row. One timeline can't collide on a date, so it's one row now. (2) **The
+    projection chain compounded from the origin's weight**, so a perpetual block auto-created from
+    six-month-old workout logs — no weigh-in within 14 days of its start — poisoned every phase
+    after it with `null`, even with a fortnight of daily weights. A phase that has *started* now
+    reads the trend at its own start date; only future phases chain from the plan. (3) A perpetual
+    phase had `plannedLbPerWeek: null` because it has no end weight to average to — but its rate is
+    real, and `phaseCalorieSeed()` computed `null × CAL_PER_LB = 0` and would have seeded
+    *maintenance* calories for a phase that's cutting. It now reports the first week's change; the
+    seed returns null only when there's no start weight at all. (4) The PLANNED row printed
+    `+0.00 lb/wk` for that same null, which reads as a rate rather than the absence of one.
 
 - **PHASES and BUILDER replaced GOAL and SETUP (2026-09-15).** The second half of the restructure,
   and the reason the meal-plan work above came first. Same five bottom-bar buttons:

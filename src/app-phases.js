@@ -126,7 +126,14 @@ function phaseTimeline() {
     // distant one, because a sentinel date would sort and compare as though it meant something.
     const endDate = perpetual ? null : shiftDate(startDate, weeks * 7 - 1);
     cursor = endDate ? shiftDate(endDate, 1) : null;
-    const startWeightLb = weightLb;
+    // A phase that has already STARTED compounds from what you actually weighed when it began, not
+    // from what the previous phase planned to land on. That re-bases the projection on reality as
+    // you go, and it's what stops a stale origin from poisoning everything after it: a perpetual
+    // block auto-created from six-month-old workout logs has no weigh-in near its start, but the
+    // phase you add today reads today's trend and projects fine. Future phases have nothing real to
+    // read yet, so they chain from the plan.
+    const measured = startDate <= today ? trendWeightOn(startDate) : null;
+    const startWeightLb = measured ? measured.weightLb : weightLb;
     // Compounded, not multiplied out. The rate is a percent OF BODYWEIGHT and bodyweight is moving,
     // so 1%/wk off 232 lb is 2.32 lb this week and 2.30 lb the next. Ten weeks linear says 208.8 lb;
     // compounding says 209.8 lb, and the second one is what actually happens.
@@ -140,7 +147,13 @@ function phaseTimeline() {
     return {
       phase, index, weeks, startDate, endDate, perpetual,
       startWeightLb, endWeightLb,
-      plannedLbPerWeek: endWeightLb == null ? null : (endWeightLb - startWeightLb) / weeks,
+      // The average over the phase for a finite one (each week is slightly smaller than the last
+      // as bodyweight falls). A PERPETUAL phase has no end to average to, but its rate is still
+      // real: 0.75%/wk of what you weigh now is a number, and the calorie seed needs it -- so it
+      // reports the first week's change. Null only when there's no start weight at all.
+      plannedLbPerWeek: startWeightLb == null ? null
+        : endWeightLb == null ? startWeightLb * phaseSignedPct(phase) / 100
+        : (endWeightLb - startWeightLb) / weeks,
       state: today < startDate ? 'future' : (endDate && today > endDate) ? 'past' : 'current',
       band: goalRateBand(phaseSignedPct(phase), weeks),
     };
@@ -647,6 +660,9 @@ const PHASE_CALORIE_RECHECK_DAYS = 7;
 function phaseCalorieSeed(entry) {
   const rolling = rollingTdeeEstimate();
   if (!rolling) return null;
+  // No start weight means no planned lb/wk, and null * CAL_PER_LB is 0 -- which would seed
+  // maintenance for a phase that's actually cutting. Same "not yet" answer as no TDEE.
+  if (entry.plannedLbPerWeek == null) return null;
   const deltaPerDay = Math.round(entry.plannedLbPerWeek * CAL_PER_LB / 7);
   return {
     tdee: rolling.estimate,
@@ -1056,7 +1072,12 @@ function renderWeightPhaseBody(entry) {
       <div class="goal-rows">
         <div class="goal-row">
           <span class="goal-row-k">Planned</span>
-          <span class="goal-row-v mono">${maintain ? 'hold' : signedLb(entry.plannedLbPerWeek) + ' ' + u + '/wk'}</span>
+          <span class="goal-row-v mono">${maintain ? 'hold'
+            // A perpetual phase, or one with no weigh-in to compound from, has no planned lb/wk --
+            // and signedLb(null) would happily print "+0.00", which reads as a rate rather than as
+            // the absence of one.
+            : entry.plannedLbPerWeek == null ? '—'
+            : signedLb(entry.plannedLbPerWeek) + ' ' + u + '/wk'}</span>
           <span class="goal-row-x">${maintain
             ? 'a planned break from the deficit'
             : `${fmt(Math.abs(phaseSignedPct(p)), 2)} %bw/wk · <span class="goal-band goal-band-${entry.band.key}">${entry.band.label}</span>`}</span>

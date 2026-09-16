@@ -255,10 +255,10 @@ const phaseBoundaryPlugin = {
     const x = chart.scales.x, y = chart.scales.y;
     const ctx = chart.ctx;
     ctx.save();
-    // Two rows, one per goal kind, matching the line colours. Weight phases and training blocks run
-    // on independent timelines and regularly start on the same day, so a single row would guarantee
-    // a collision on exactly the dates that matter most.
-    const rowBottom = { weight: 0, exercise: 0 };
+    // One row. This used to be two -- one per goal kind -- because weight phases and training blocks
+    // ran on independent timelines and regularly started on the same day. Phases are one sequence
+    // now, so two can't share a date and there is nothing to separate into rows.
+    let rowBottom = 0;
     marks.forEach(m => {
       // The first point at or after the boundary. A block can start on a day you didn't weigh in,
       // so snapping to the next logged point is the honest placement -- the alternative is a line
@@ -269,7 +269,7 @@ const phaseBoundaryPlugin = {
       ctx.beginPath();
       ctx.setLineDash([3, 3]);
       ctx.lineWidth = 1;
-      ctx.strokeStyle = styles.getPropertyValue(m.kind === 'weight' ? '--accent' : '--good').trim();
+      ctx.strokeStyle = styles.getPropertyValue('--accent').trim();
       ctx.globalAlpha = 0.55;
       ctx.moveTo(px, y.top);
       ctx.lineTo(px, y.bottom);
@@ -283,11 +283,9 @@ const phaseBoundaryPlugin = {
       ctx.font = '9px system-ui, sans-serif';
       const label = m.label.length > 14 ? m.label.slice(0, 13) + '…' : m.label;
       const w = ctx.measureText(label).width;
-      const row = m.kind === 'exercise' ? 1 : 0;
-      const key = m.kind === 'exercise' ? 'exercise' : 'weight';
-      if (px + 3 >= rowBottom[key] && px + 3 + w < x.right) {
-        ctx.fillText(label, px + 3, y.top + 9 + row * 11);
-        rowBottom[key] = px + 3 + w + 6;
+      if (px + 3 >= rowBottom && px + 3 + w < x.right) {
+        ctx.fillText(label, px + 3, y.top + 9);
+        rowBottom = px + 3 + w + 6;
       }
     });
     ctx.restore();
