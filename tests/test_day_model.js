@@ -28,8 +28,8 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   await settle(page);
 
   const snapshot = await page.evaluate(() => JSON.stringify({
-    workouts: STATE.workouts, exercisePlan: STATE.exercisePlan, meals: STATE.diet.meals,
-    mealPlan: STATE.diet.mealPlan, habits: STATE.life.habits, exceptions: STATE.life.scheduleExceptions,
+    workouts: STATE.workouts, exercisePlan: currentPhase().phase.exercisePlan, meals: STATE.diet.meals,
+    mealPlan: currentPhase().phase.mealPlan, habits: STATE.life.habits, exceptions: STATE.life.scheduleExceptions,
   }));
 
   // A workout, a meal and a habit all live on today's weekday.
@@ -37,9 +37,9 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     const wd = new Date(todayStr() + 'T00:00:00').getDay();
     STATE.workouts = STATE.workouts.filter(w => w.id !== 'wX');
     STATE.workouts.push({ id: 'wX', name: 'Lower Body', type: 'weights', style: 'P-Zero (GZCL)', exercises: [] });
-    STATE.exercisePlan[wd] = [planEntry('workout', 'wX')];
+    currentPhase().phase.exercisePlan[wd] = [planEntry('workout', 'wX')];
     STATE.diet.meals = [{ id: 'mX', name: 'Oats', unitSystem: 'metric', items: [], createdAt: 1, updatedAt: 1 }];
-    STATE.diet.mealPlan[wd] = [{ id: 'mp1', mealId: 'mX' }];
+    currentPhase().phase.mealPlan[wd] = [{ id: 'mp1', mealId: 'mX' }];
     STATE.life.habits = [{ id: 'hX', name: 'Stretches', startDate: '2020-01-01', endDate: null, createdAt: 1 }];
     STATE.life.scheduleExceptions = [];
     saveState();
@@ -93,10 +93,10 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // announce a pause that cancelled nothing.
   const emptyDayOff = await page.evaluate(() => {
     const wd = new Date(todayStr() + 'T00:00:00').getDay();
-    const keptEx = STATE.exercisePlan[wd], keptMp = STATE.diet.mealPlan[wd];
-    STATE.exercisePlan[wd] = []; STATE.diet.mealPlan[wd] = [];
+    const keptEx = currentPhase().phase.exercisePlan[wd], keptMp = currentPhase().phase.mealPlan[wd];
+    currentPhase().phase.exercisePlan[wd] = []; currentPhase().phase.mealPlan[wd] = [];
     const html = renderDayUntimedItems(todayStr());
-    STATE.exercisePlan[wd] = keptEx; STATE.diet.mealPlan[wd] = keptMp;
+    currentPhase().phase.exercisePlan[wd] = keptEx; currentPhase().phase.mealPlan[wd] = keptMp;
     return { notice: /paused for this day/.test(html), habit: /Stretches/.test(html) };
   });
   console.log('day off with nothing planned:', emptyDayOff);
@@ -177,8 +177,8 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   await page.evaluate((snap) => {
     const s = JSON.parse(snap);
-    STATE.workouts = s.workouts; STATE.exercisePlan = s.exercisePlan; STATE.diet.meals = s.meals;
-    STATE.diet.mealPlan = s.mealPlan; STATE.life.habits = s.habits; STATE.life.scheduleExceptions = s.exceptions;
+    STATE.workouts = s.workouts; currentPhase().phase.exercisePlan = s.exercisePlan; STATE.diet.meals = s.meals;
+    currentPhase().phase.mealPlan = s.mealPlan; STATE.life.habits = s.habits; STATE.life.scheduleExceptions = s.exceptions;
     saveState();
   }, snapshot);
 

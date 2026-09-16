@@ -794,8 +794,12 @@ function defaultState() {
     // Inline rather than a defaultGoals() call: defaultState() runs during app-state.js's own
     // evaluation, so it can only reach functions from files loaded BEFORE it -- and app-goals.js
     // loads after. A [] costs nothing to write here and removes the cross-file load-time edge.
-    goals: [],
+    // Phases are the primary record: a PHASE owns a stretch of time, and a goal is something it
+    // optionally carries rather than the thing that owns it. STATE.goals used to be that owner and
+    // is gone -- see migratePhasesToOneTimeline(). phaseOrigin anchors the sequence, which runs back
+    // to back from it, so start dates stay derived rather than stored.
     phases: [],
+    phaseOrigin: null,
     // Lifts you ADDED. The shipped LIFT_LIBRARY is never copied in here -- allLifts()
     // concatenates them, so the shipped list can grow between releases with no migration.
     lifts: [],
@@ -825,7 +829,6 @@ function defaultState() {
     // migrateWeekPlanEntries() in app-phases.js for why it isn't a second nullable id beside the
     // first. `minutes` is meaningful only on a skill: a workout carries its own content, but the
     // practice block builder needs a budget before it can pick anything.
-    exercisePlan: { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] },
     notes: [],          // [{id, date, createdAt, title, bodyHtml, tag, photos}] — bodyHtml is sanitized rich text, photos is an array of resized data-URI JPEGs; older entries may only have a plain `text` field and/or no `photos`
     reminders: [],      // [{id, date, time, title, notes, createdAt}]
     diet: {
@@ -837,10 +840,9 @@ function defaultState() {
         proteinPerUnit: null, fatPerUnit: null, carbPerUnit: null, // fat/carb null = "Fill" (only one may be null at a time)
       },
       meals: [], // [{id, name, unitSystem, items:[{id, foodId, qty, unit}], createdAt, updatedAt}] — see Health -> Setup -> Meal Builder
-      // Day-of-week meal plan, keyed by Date.getDay() (0=Sun..6=Sat) to match the Schedule
-      // feature's own day convention. Each day is a list of slots: {id, mealId} — mealId is null
-      // until a saved meal (STATE.diet.meals) is picked for that slot. See Health -> Setup -> Meal Plan.
-      mealPlan: { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] },
+      // The day-of-week meal plan used to live here. It belongs to a PHASE now (phase.mealPlan) --
+      // a week of meals is planned FOR something, and the phase is what carries the calorie target
+      // it's planned against. See mealPlanInEffect() in app-phases.js.
       // User-added foods (added 2026-09-11) — same shape as a FOOD_DB entry plus `custom: true`,
       // picked from and searched alongside FOOD_DB via allFoods(). See "CUSTOM FOODS" section.
       customFoods: [],

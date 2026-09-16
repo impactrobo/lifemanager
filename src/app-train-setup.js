@@ -470,34 +470,31 @@ function renderExercisePlanTab() {
     </div>
   `;
 }
-// Names which week you're editing, and offers the blocks you could be editing instead.
+// Names which phase you're editing, and offers the others you could be editing instead.
 //
-// With no training goal this renders nothing at all — there's exactly one plan, saying so would be
-// noise, and the Planner looks precisely as it always has.
+// With a single perpetual phase — the state everyone is in before they plan anything — this renders
+// nothing at all. There's exactly one plan, naming it would be noise, and the Planner looks
+// precisely as it always has.
 function renderPlannerScope() {
-  const goal = activeExerciseGoal();
-  const sched = goal ? phaseSchedule(goal) : [];
+  const sched = phaseTimeline();
   const eff = exercisePlanInEffect(plannerDate());
-  if (!sched.length && eff.source === 'global') return '';
-  const note = eff.source === 'phase'
-    ? `Editing <b style="color:var(--text)">${escapeHtml(eff.label)}</b>'s plan.`
-    : eff.source === 'carried'
-      // Deliberate: a plan that was working doesn't stop working because a date passed. It carries
-      // on, and says that it's doing so rather than reverting you to a global plan you last touched
-      // months ago. (Once exercise targets land in step 8 this can also say whether the goal was
-      // actually MET -- today there is nothing to measure that against, so it doesn't claim to know.)
-      ? `Still running <b style="color:var(--text)">${escapeHtml(eff.label)}</b>'s plan — no block covers ${fmtGoalDate(plannerDate())}.`
-      : `Editing the plan in effect before any block starts.`;
+  if (sched.length < 2 && eff.source !== 'carried') return '';
+  const note = eff.source === 'carried'
+    // Deliberate: a plan that was working doesn't stop working because a date passed. It carries on,
+    // and says that it's doing so rather than reverting you to nothing.
+    ? `Still running <b style="color:var(--text)">${escapeHtml(eff.label)}</b>'s plan — no phase covers ${fmtGoalDate(plannerDate())}.`
+    : eff.source === 'none'
+      ? `No phase covers ${fmtGoalDate(plannerDate())}.`
+      : `Editing <b style="color:var(--text)">${escapeHtml(eff.label)}</b>'s plan.`;
   return `
     <div class="planner-scope">
       <div>${note}</div>
-      ${sched.length > 1 || eff.source !== 'phase' ? `
-        <div class="planner-scope-tabs">
-          ${sched.map(s => `
-            <button class="btn btn-sm ${s.startDate <= plannerDate() && plannerDate() <= s.endDate ? 'btn-primary' : ''}"
-                    onclick="setPlannerDate('${s.state === 'current' ? todayStr() : s.startDate}')">${escapeHtml(s.phase.label)}</button>`).join('')}
-          <button class="btn btn-sm ${eff.source === 'global' ? 'btn-primary' : ''}" onclick="setPlannerDate(null)">TODAY</button>
-        </div>` : ''}
+      <div class="planner-scope-tabs">
+        ${sched.map(s => `
+          <button class="btn btn-sm ${eff.entry && eff.entry.phase.id === s.phase.id ? 'btn-primary' : ''}"
+                  onclick="setPlannerDate('${s.state === 'current' ? todayStr() : s.startDate}')">${escapeHtml(s.phase.label)}</button>`).join('')}
+        <button class="btn btn-sm" onclick="setPlannerDate(null)">TODAY</button>
+      </div>
     </div>`;
 }
 

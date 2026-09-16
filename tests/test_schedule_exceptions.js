@@ -31,7 +31,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     schedules: JSON.parse(JSON.stringify(STATE.life.schedules)),
     exceptions: JSON.parse(JSON.stringify(STATE.life.scheduleExceptions || [])),
     reminders: JSON.parse(JSON.stringify(STATE.reminders)),
-    exercisePlan: JSON.parse(JSON.stringify(STATE.exercisePlan)),
+    exercisePlan: JSON.parse(JSON.stringify(currentPhase().phase.exercisePlan)),
     habits: JSON.parse(JSON.stringify(STATE.life.habits)),
   }));
 
@@ -53,7 +53,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     const wd = new Date('2026-10-06T00:00:00').getDay();
     STATE.workouts = STATE.workouts.filter(w => w.id !== 'wTest');
     STATE.workouts.push({ id: 'wTest', name: 'Lower Body', type: 'weights', style: 'P-Zero (GZCL)', exercises: [] });
-    STATE.exercisePlan[wd] = [planEntry('workout', 'wTest')];
+    currentPhase().phase.exercisePlan[wd] = [planEntry('workout', 'wTest')];
     STATE.life.habits = [{ id: 'h1', name: 'No drinking', startDate: '2026-01-01', endDate: null, createdAt: 1 }];
     saveState();
   });
@@ -219,7 +219,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     STATE.life.schedules = snap.schedules;
     STATE.life.scheduleExceptions = snap.exceptions;
     STATE.reminders = snap.reminders;
-    STATE.exercisePlan = snap.exercisePlan;
+    currentPhase().phase.exercisePlan = snap.exercisePlan;
     STATE.life.habits = snap.habits;
     STATE.workouts = STATE.workouts.filter(w => w.id !== 'wTest');
     saveState();

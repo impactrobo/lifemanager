@@ -28,9 +28,9 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   const snapshot = await page.evaluate(() => ({
     workouts: JSON.parse(JSON.stringify(STATE.workouts)),
     logs: JSON.parse(JSON.stringify(STATE.logs)),
-    exercisePlan: JSON.parse(JSON.stringify(STATE.exercisePlan)),
+    exercisePlan: JSON.parse(JSON.stringify(currentPhase().phase.exercisePlan)),
     meals: JSON.parse(JSON.stringify(STATE.diet.meals)),
-    mealPlan: JSON.parse(JSON.stringify(STATE.diet.mealPlan)),
+    mealPlan: JSON.parse(JSON.stringify(currentPhase().phase.mealPlan)),
     habits: JSON.parse(JSON.stringify(STATE.life.habits)),
     habitLog: JSON.parse(JSON.stringify(STATE.life.habitLog)),
     anchors: JSON.parse(JSON.stringify(STATE.life.anchors)),
@@ -40,8 +40,8 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // 1. With nothing planned, the band doesn't render at all — same conditional convention as the
   // Home boxes, rather than an empty panel on every day.
   const emptyBand = await page.evaluate(() => {
-    STATE.exercisePlan = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
-    STATE.diet.mealPlan = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
+    currentPhase().phase.exercisePlan = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
+    currentPhase().phase.mealPlan = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
     STATE.life.habits = []; STATE.life.habitLog = {};
     saveState();
     return renderDayUntimedItems(todayStr());
@@ -55,14 +55,14 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     STATE.life.anchors = []; STATE.life.schedules = [];
     const w1 = createWorkout('weights', 'P-Zero (GZCL)'); w1.name = 'Lower Body';
     const w2 = createWorkout('cardio', 'Time/Dist/Cal'); w2.name = 'Zone 2 Ride';
-    STATE.exercisePlan[weekday] = [planEntry('workout', w1.id), planEntry('workout', w2.id)];
+    currentPhase().phase.exercisePlan[weekday] = [planEntry('workout', w1.id), planEntry('workout', w2.id)];
     // Only the cardio one is logged, and it's logged *today*.
     STATE.logs[logKey(STATE.currentCycle, w2.id)] = { date: today, entries: {}, notes: '', complete: true };
     STATE.diet.meals = [
       { id: 'm1', name: 'Oats & Whey', unitSystem: 'metric', items: [], createdAt: 1, updatedAt: 1 },
       { id: 'm2', name: 'Chicken & Rice', unitSystem: 'metric', items: [], createdAt: 1, updatedAt: 1 },
     ];
-    STATE.diet.mealPlan[weekday] = [{ id: 'mp1', mealId: 'm1' }, { id: 'mp2', mealId: 'm2' }];
+    currentPhase().phase.mealPlan[weekday] = [{ id: 'mp1', mealId: 'm1' }, { id: 'mp2', mealId: 'm2' }];
     STATE.life.habits = [
       { id: 'h1', name: 'No drinking', startDate: '2026-09-01', endDate: null, createdAt: 1 },
       { id: 'h2', name: 'Read 20 min', startDate: '2026-09-01', endDate: null, createdAt: 2 },
@@ -150,9 +150,9 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   await page.evaluate((snap) => {
     STATE.workouts = snap.workouts;
     STATE.logs = snap.logs;
-    STATE.exercisePlan = snap.exercisePlan;
+    currentPhase().phase.exercisePlan = snap.exercisePlan;
     STATE.diet.meals = snap.meals;
-    STATE.diet.mealPlan = snap.mealPlan;
+    currentPhase().phase.mealPlan = snap.mealPlan;
     STATE.life.habits = snap.habits;
     STATE.life.habitLog = snap.habitLog;
     STATE.life.anchors = snap.anchors;

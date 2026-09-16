@@ -5,7 +5,7 @@
 // start without the new block secretly being the same object as the last one. Aliasing there would
 // be invisible until the day you looked back at what you used to be doing and found it rewritten.
 //
-// The second: with no training goal, nothing changes. STATE.exercisePlan keeps its exact meaning as
+// The second: with no training goal, nothing changes. currentPhase().phase.exercisePlan keeps its exact meaning as
 // the plan in effect before any block exists, so the Planner, Home and the Day view behave for a
 // non-user of this feature precisely as they did before it shipped.
 const { chromium } = require('playwright');
@@ -35,13 +35,11 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     const w = STATE.workouts.slice(-3).map(x => x.id);
     const mk = (map) => { const o = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
       Object.keys(map).forEach(d => { o[d] = map[d].map(id => planEntry('workout', id)); }); return o; };
-    STATE.exercisePlan = mk({ 1: [w[0]], 3: [w[1]] });
-    STATE.goals = [{ id: 'e1', kind: 'exercise', name: 'Build aerobic base',
-      startDate: shiftDate(t, -42), targetDate: shiftDate(t, 84), archived: false, createdAt: 1 }];
+    STATE.phaseOrigin = shiftDate(t, -42);
     STATE.phases = [
-      { id: 'b1', goalId: 'e1', kind: 'exercise', label: 'Hypertrophy', weeks: 6,
+      { id: 'b1', label: 'Hypertrophy', weeks: 6,
         exercisePlan: mk({ 1: [w[0]], 2: [w[1]], 4: [w[0]], 5: [w[2]] }), createdAt: 1 },
-      { id: 'b2', goalId: 'e1', kind: 'exercise', label: 'VO2 Max', weeks: 8,
+      { id: 'b2', label: 'VO2 Max', weeks: 8,
         exercisePlan: mk({ 1: [w[1]], 3: [w[1]], 6: [w[2]] }), createdAt: 2 },
     ];
     VIEW.plannerDate = null;
@@ -55,7 +53,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // ---- 1. Which plan governs a date, and why ----
   const eff = await page.evaluate(() => {
     const t = todayStr();
-    const s = phaseSchedule(activeExerciseGoal());
+    const s = phaseTimeline();
     const at = (d) => { const e = exercisePlanInEffect(d); return { src: e.source, label: e.label, n: weekPlanCount(e.plan).workouts }; };
     return {
       beforeAnyBlock: at(shiftDate(s[0].startDate, -10)),
@@ -66,19 +64,21 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     };
   });
   console.log('plan in effect:', eff);
-  if (eff.beforeAnyBlock.src !== 'global') throw new Error('Before any block, the global plan governs');
+  // Before the first phase begins there is no plan -- there is no global one to fall back to
+  // any more, and inventing workouts for days that predate the phase would be a fiction.
+  if (eff.beforeAnyBlock.src !== 'none') throw new Error('Before any phase, no plan governs');
   if (eff.firstDayOfBlock1.label !== 'Hypertrophy' || eff.firstDayOfBlock1.src !== 'phase') throw new Error('A block owns its own first day');
   if (eff.lastDayOfBlock1.label !== 'Hypertrophy') throw new Error("A block's last day still belongs to it, not the next block");
   if (eff.firstDayOfBlock2.label !== 'VO2 Max') throw new Error('The next block takes over the day after');
   // The deliberate one: a plan that was working doesn't stop working because a date passed.
   if (eff.afterEverything.src !== 'carried' || eff.afterEverything.label !== 'VO2 Max') {
-    throw new Error('Past every block, the last one carries on rather than reverting to the global plan');
+    throw new Error('Past every phase, the last one carries on rather than reverting to nothing');
   }
 
   // ---- 2. A new block COPIES the plan in effect — it must not alias it ----
   const copied = await page.evaluate(() => {
     const before = JSON.stringify(STATE.phases[1].exercisePlan);
-    const globalBefore = JSON.stringify(STATE.exercisePlan);
+    const globalBefore = JSON.stringify(currentPhase().phase.exercisePlan);
     addPhase('e1');                                  // seeded from block 2, which is in effect today
     const fresh = STATE.phases[2];
     const seededFrom = weekPlanCount(STATE.phases[1].exercisePlan);
@@ -89,7 +89,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     return {
       seededFrom, seededTo,
       sourceUntouched: JSON.stringify(STATE.phases[1].exercisePlan) === before,
-      globalUntouched: JSON.stringify(STATE.exercisePlan) === globalBefore,
+      globalUntouched: JSON.stringify(currentPhase().phase.exercisePlan) === globalBefore,
       // Entry ids must be fresh too, or a later edit by id could hit the wrong block's row.
       idsAreFresh: !STATE.phases[1].exercisePlan[6].some(e =>
         (STATE.phases[2].exercisePlan[6] || []).some(f => f.id === e.id)),
@@ -106,7 +106,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // ---- 3. The day's workouts follow the block covering that day ----
   const days = await page.evaluate((w) => {
-    const s = phaseSchedule(activeExerciseGoal());
+    const s = phaseTimeline();
     // Find a Monday inside each span — Monday is weekday 1, which all three plans assign.
     const mondayIn = (from, to) => {
       for (let d = from; d <= to; d = shiftDate(d, 1)) {
@@ -119,12 +119,13 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
       globalMonday: pick(mondayIn(shiftDate(s[0].startDate, -14), shiftDate(s[0].startDate, -1))),
       block1Monday: pick(mondayIn(s[0].startDate, s[0].endDate)),
       block2Monday: pick(mondayIn(s[1].startDate, s[1].endDate)),
-      expectGlobal: [w[0]], expectB1: [w[0]], expectB2: [w[1]],
+      expectB1: [w[0]], expectB2: [w[1]],
     };
   }, wIds);
   console.log('Monday workouts by era:', days);
   if (days.block2Monday.join() !== days.expectB2.join()) throw new Error('A day inside block 2 must use block 2\'s plan');
-  if (days.globalMonday.join() !== days.expectGlobal.join()) throw new Error('A day before every block uses the global plan');
+  // A day before the first phase gets NO workouts: there is no global plan behind it any more.
+  if (days.globalMonday.length !== 0) throw new Error('A day before every phase has no plan, got ' + JSON.stringify(days.globalMonday));
 
   // ---- 4. The Planner edits the plan it is showing ----
   const planner = await page.evaluate(() => {
@@ -133,18 +134,17 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     addPlanWorkoutSlot(0);                         // add an empty Sunday slot to block 2
     const b2Sunday = STATE.phases[1].exercisePlan[0].length;
     const b1Sunday = STATE.phases[0].exercisePlan[0].length;
-    const globalSunday = STATE.exercisePlan[0].length;
     // Page the Planner back into block 1 and edit THAT one.
-    setPlannerDate(phaseSchedule(activeExerciseGoal())[0].startDate);
+    setPlannerDate(phaseTimeline()[0].startDate);
     const editingThen = exercisePlanInEffect(plannerDate()).label;
     addPlanWorkoutSlot(0);
     const after = { b1: STATE.phases[0].exercisePlan[0].length, b2: STATE.phases[1].exercisePlan[0].length };
     setPlannerDate(null);
-    return { editingNow, editingThen, b2Sunday, b1Sunday, globalSunday, after };
+    return { editingNow, editingThen, b2Sunday, b1Sunday, after };
   });
   console.log('planner scope:', planner);
   if (planner.editingNow !== 'VO2 Max') throw new Error('By default the Planner edits the plan in effect today');
-  if (planner.b2Sunday !== 1 || planner.b1Sunday !== 0 || planner.globalSunday !== 0) {
+  if (planner.b2Sunday !== 1 || planner.b1Sunday !== 0) {
     throw new Error('An edit must land only on the plan the Planner is showing');
   }
   if (planner.editingThen !== 'Hypertrophy') throw new Error('setPlannerDate should move the Planner into that date\'s block');
@@ -157,7 +157,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     deleteWorkout(w[1]);                            // the cardio workout, used in both blocks
     const stillThere = (plan) => Object.keys(plan).some(d => (plan[d] || []).some(e => e.refId === w[1]));
     return {
-      global: stillThere(STATE.exercisePlan),
+      global: stillThere(currentPhase().phase.exercisePlan),
       b1: stillThere(STATE.phases[0].exercisePlan),
       b2: stillThere(STATE.phases[1].exercisePlan),
     };
@@ -168,60 +168,40 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   }
   wIds = await seed();
 
-  // ---- 6. One active goal per KIND, and the two kinds coexist ----
-  const kinds = await page.evaluate(() => {
-    const t = todayStr();
-    STATE.weightLog = [{ id: 'w1', date: t, weightLb: 200, calories: null, cardioCalories: null }];
-    STATE.goals.push({ id: 'g1', kind: 'weight', name: 'Cut', startDate: t, targetDate: shiftDate(t, 70),
-      startWeightLb: 200, targetWeightLb: 190, archived: false, createdAt: 3 });
-    const both = { weight: !!activeWeightGoal(), exercise: !!activeExerciseGoal() };
-    // A second goal of the SAME kind is refused...
-    STATE.goals.push({ id: 'e2', kind: 'exercise', name: 'Other', startDate: t, targetDate: shiftDate(t, 70),
-      archived: true, createdAt: 4 });
-    unarchiveGoal('e2');
-    const secondExercise = { active: activeExerciseGoal().id, stillArchived: STATE.goals.find(g => g.id === 'e2').archived };
-    // ...but archiving the weight goal must NOT block reactivating an exercise one, and vice versa.
-    archiveGoal('e1');
-    unarchiveGoal('e2');
-    const swapped = { active: activeExerciseGoal().id, weightUntouched: !!activeWeightGoal() };
-    return { both, secondExercise, swapped };
-  });
-  console.log('goal kinds:', kinds);
-  if (!kinds.both.weight || !kinds.both.exercise) throw new Error('A weight goal and a training goal must be able to run at once');
-  if (kinds.secondExercise.active !== 'e1' || !kinds.secondExercise.stillArchived) {
-    throw new Error('A second training goal must be refused while one runs');
-  }
-  if (kinds.swapped.active !== 'e2') throw new Error('After archiving the first, the second can be activated');
-  if (!kinds.swapped.weightUntouched) throw new Error('Archiving by kind must not disturb the other kind');
-  wIds = await seed();
-
-  // ---- 7. With no training goal, nothing changes ----
-  // The whole migration story: someone who never touches this feature sees the app they had.
-  const untouched = await page.evaluate((w) => {
-    STATE.goals = []; STATE.phases = []; VIEW.plannerDate = null;
+  // ---- 7. With a single perpetual phase, nothing changes ----
+  // The whole migration story, restated for the one-timeline model: someone who never plans a block
+  // has exactly one plan, and the app behaves as though phases weren't there. The old version of
+  // this section said "with no training goal" -- there is no goal to be without now, and the
+  // equivalent state is the auto-created perpetual phase everyone starts in.
+  const untouched = await page.evaluate(() => {
+    STATE.phases = []; ensurePerpetualPhase(); VIEW.plannerDate = null;
     const t = todayStr();
     const eff = exercisePlanInEffect(t);
     addPlanWorkoutSlot(0);
-    const wroteToGlobal = STATE.exercisePlan[0].length === 1;
-    STATE.exercisePlan[0] = [];
+    const wroteToPhase = STATE.phases[0].exercisePlan[0].length === 1;
+    STATE.phases[0].exercisePlan[0] = [];
     return {
       source: eff.source,
-      isTheGlobalObject: eff.plan === STATE.exercisePlan,
-      wroteToGlobal,
+      onlyOnePhase: STATE.phases.length === 1,
+      perpetual: phaseIsPerpetual(STATE.phases[0]),
+      // The resolver hands back the phase's own object, not a copy -- an edit has to land on it.
+      isThePhaseObject: eff.plan === STATE.phases[0].exercisePlan,
+      wroteToPhase,
       scopeBannerHidden: renderPlannerScope() === '',
       mondayStillWorks: dayModel(t).workouts.length >= 0,
     };
-  }, wIds);
-  console.log('no training goal:', untouched);
-  if (untouched.source !== 'global') throw new Error('With no goal the global plan is in effect');
-  if (!untouched.isTheGlobalObject) throw new Error('The resolver should hand back STATE.exercisePlan itself, not a copy');
-  if (!untouched.wroteToGlobal) throw new Error('With no goal the Planner writes to STATE.exercisePlan exactly as before');
+  });
+  console.log('single perpetual phase:', untouched);
+  if (!untouched.onlyOnePhase || !untouched.perpetual) throw new Error('Clearing phases should leave exactly one perpetual phase');
+  if (untouched.source !== 'phase') throw new Error('The perpetual phase governs — there is no global plan behind it');
+  if (!untouched.isThePhaseObject) throw new Error("The resolver should hand back the phase's own plan, not a copy");
+  if (!untouched.wroteToPhase) throw new Error('The Planner writes to the phase in effect');
   if (!untouched.scopeBannerHidden) throw new Error('With one plan there is nothing to disambiguate — the banner should not render');
   wIds = await seed();
 
   // ---- 8. The day-off notice asks the right week ----
   const dayOff = await page.evaluate((w) => {
-    const s = phaseSchedule(activeExerciseGoal());
+    const s = phaseTimeline();
     // Block 2 assigns nothing to Sunday (weekday 0); the global plan doesn't either. Block 1 does
     // not, but block 1 DOES assign Tuesday (2), which block 2 leaves empty.
     const inB1 = s[0].startDate, inB2 = s[1].startDate;
@@ -236,17 +216,18 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   await settle(page);
   const ui = await page.evaluate(() => ({
     cards: document.querySelectorAll('.phase-card').length,
-    // An exercise block has one control (weeks), not three — no rate, no direction.
-    oneControl: document.querySelectorAll('.phase-controls-1').length,
-    rateInputs: document.querySelectorAll('.phase-cal').length,
-    hasWeightSection: /WEIGHT GOAL/.test(document.getElementById('app').innerText),
-    hasTrainingSection: /TRAINING GOAL/.test(document.getElementById('app').innerText),
+    // Every phase carries BOTH bodies now: a stretch of time has a way you train AND a way you eat,
+    // so the old "an exercise block has no calorie target" split is gone by design.
+    calorieInputs: document.querySelectorAll('.phase-cal').length,
+    hasPlanRow: /PLAN/.test(document.getElementById('app').innerText),
   }));
-  console.log('goal screen:', ui);
-  if (ui.cards !== 2) throw new Error('Both blocks should render');
-  if (ui.oneControl !== 2) throw new Error('An exercise block gets the single-control layout');
-  if (ui.rateInputs !== 0) throw new Error('An exercise block has no calorie target — that belongs to the weight goal');
-  if (!ui.hasWeightSection || !ui.hasTrainingSection) throw new Error('Both goal sections should be on the screen');
+  console.log('phases screen:', ui);
+  if (ui.cards !== 2) throw new Error('Both phases should render');
+  if (ui.calorieInputs !== 2) throw new Error(`Every phase carries a calorie target, got ${ui.calorieInputs} inputs`);
+  // WEIGHT GOAL / TRAINING GOAL were two separate sections because there were two goal records that
+  // owned separate phase sequences. One timeline means one list of phases, each of which may carry
+  // a goal — so there is one section, not two.
+  if (!ui.hasPlanRow) throw new Error('The phase list should render');
 
   await page.evaluate(() => saveState());
   await page.reload();
@@ -281,8 +262,8 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (!fixed.resolverStillWorks) throw new Error('The resolver must survive a malformed save');
 
   await page.evaluate(() => {
-    STATE.goals = []; STATE.phases = []; STATE.workouts = []; STATE.weightLog = [];
-    STATE.exercisePlan = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
+    STATE.phases = []; ensurePerpetualPhase();
+    STATE.workouts = []; STATE.weightLog = [];
     saveState();
   });
 

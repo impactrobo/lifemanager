@@ -709,28 +709,29 @@ function renderMealPlanTab() {
 // a meal plan became phase-owned. Seeing "Phase 2 -- 2,300 cal/day" above the week is the difference
 // between planning meals and planning meals FOR something.
 function renderMealPlannerScope() {
-  const goal = activeWeightGoal();
-  const sched = goal ? phaseSchedule(goal) : [];
+  const sched = phaseTimeline();
   const eff = mealPlanInEffect(mealPlannerDate());
-  if (!sched.length && eff.source === 'global') return '';
-  const note = eff.source === 'phase'
-    ? `Editing <b style="color:var(--text)">${escapeHtml(eff.label)}</b>'s meal plan.`
-    : eff.source === 'carried'
-      ? `Still running <b style="color:var(--text)">${escapeHtml(eff.label)}</b>'s meal plan — no phase covers ${fmtGoalDate(mealPlannerDate())}.`
-      : `Editing the meal plan in effect before any phase starts.`;
+  // A single perpetual phase is the everyone-by-default state. Announcing "you are editing Current
+  // block's meal plan" when there is exactly one plan and no alternative is noise, so it stays quiet
+  // until there's actually a choice to describe.
+  if (sched.length < 2 && eff.source !== 'carried') return '';
+  const note = eff.source === 'carried'
+    ? `Still running <b style="color:var(--text)">${escapeHtml(eff.label)}</b>'s meal plan — no phase covers ${fmtGoalDate(mealPlannerDate())}.`
+    : eff.source === 'none'
+      ? `No phase covers ${fmtGoalDate(mealPlannerDate())}.`
+      : `Editing <b style="color:var(--text)">${escapeHtml(eff.label)}</b>'s meal plan.`;
   // Read through calorieTargetForDate() rather than off the phase, so this can never disagree with
   // what the rest of the app says you're eating against on that day.
   const target = calorieTargetForDate(mealPlannerDate());
   return `
     <div class="planner-scope">
       <div>${note}${target ? ` Planning against <b style="color:var(--text)">${target.calories.toLocaleString()} cal/day</b>${target.source === 'tdee' ? ' (maintenance)' : ''}.` : ''}</div>
-      ${sched.length > 1 || eff.source !== 'phase' ? `
-        <div class="planner-scope-tabs">
-          ${sched.map(s => `
-            <button class="btn btn-sm ${s.startDate <= mealPlannerDate() && mealPlannerDate() <= s.endDate ? 'btn-primary' : ''}"
-                    onclick="setMealPlannerDate('${s.state === 'current' ? todayStr() : s.startDate}')">${escapeHtml(s.phase.label)}</button>`).join('')}
-          <button class="btn btn-sm ${eff.source === 'global' ? 'btn-primary' : ''}" onclick="setMealPlannerDate(null)">TODAY</button>
-        </div>` : ''}
+      <div class="planner-scope-tabs">
+        ${sched.map(s => `
+          <button class="btn btn-sm ${eff.entry && eff.entry.phase.id === s.phase.id ? 'btn-primary' : ''}"
+                  onclick="setMealPlannerDate('${s.state === 'current' ? todayStr() : s.startDate}')">${escapeHtml(s.phase.label)}</button>`).join('')}
+        <button class="btn btn-sm" onclick="setMealPlannerDate(null)">TODAY</button>
+      </div>
     </div>`;
 }
 

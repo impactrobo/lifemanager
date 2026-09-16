@@ -487,6 +487,42 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Phases became the primary record — one timeline, goals optional (2026-09-16).** Commit 1 of the
+  phases/rotations arc. The model inverted: a **goal** used to be the record, with a `kind`
+  (`weight` / `exercise`) and phases hanging off it, so there were two independent sequences that
+  could overlap and *you could not create a phase without first inventing a goal*. Now a **phase**
+  owns a stretch of time and a goal is something it optionally carries. "Working out" with no goal
+  is a first-class state.
+  - **`phaseTimeline()` replaces `phaseSchedule(goal)`**, anchored at a single `STATE.phaseOrigin`.
+    `phaseForDate(date)` lost its `kind` argument — one sequence means at most one phase covers a
+    date, so there is nothing to disambiguate.
+  - **A PERPETUAL phase** (`weeks == null`) runs until something replaces it, has no end date, and
+    must be last. Clearing the Weeks field makes a phase perpetual again; `+1 WK` on one fixes its
+    length at however long it has *actually* run rather than starting from 1.
+  - **A perpetual phase is auto-created on first run**, which is what let both plan resolvers drop
+    their `'global'` branch entirely. `STATE.exercisePlan` and `STATE.diet.mealPlan` are **retired**
+    — they only ever existed as the "no phase covers this date" fallback. The origin is seeded from
+    the earliest logged date, so the phase covers existing history rather than starting today.
+  - **No target weight anywhere.** A phase owns a rate and a length; where you land is the OUTPUT.
+    That deleted `phasePlanSummary()`'s reaches-target / short-by-X reporting, the required-rate
+    line, and `addPhase()`'s gap-closing seed — which existed solely to solve
+    `start × (1+r)^weeks = target` and had nothing left to solve for.
+  - **Start weight comes from `trendWeightOn()`** — the 7-day trailing average, deliberately the
+    same line the Body Weight chart draws so a projection and the chart can never disagree. It
+    averages whatever falls in the window, so "a full week of weigh-ins" and "one weigh-in" are the
+    same operation. Falls back 14 days (`GOAL_RATE_MIN_DAYS`, already the app's "too stale to be
+    honest" bound), then returns null and the screen asks rather than guessing.
+  - **Two real bugs found by the tests**, both from the retirement: `deleteWorkout()` swept
+    `[STATE.exercisePlan]` and crashed on `undefined`, now sweeps `allExercisePlans()`; and
+    `loadState()`'s `STATE.exercisePlan` guard ran *after* the fold, re-creating the retired global
+    on every single load. The legacy entry conversion it did moved inside the fold, where it
+    happens before the copy — `copyWeekPlan()` reads `refId`, so copying an old-shape
+    `{id, workoutId}` entry first would have silently blanked every assignment.
+  - Ten test files rewritten against the new model. `test_weight_goals.js` became a focused trend +
+    rate-band test (the goal record it tested is gone, the arithmetic under it isn't);
+    `test_exercise_targets.js` keeps its `bestForLift()` coverage and drops the `exTargets` UI,
+    which returns phase-owned in a later step.
+
 - **PHASES and BUILDER replaced GOAL and SETUP (2026-09-15).** The second half of the restructure,
   and the reason the meal-plan work above came first. Same five bottom-bar buttons:
   `WORKOUTS / PHASES / BUILDER / BODY / DIET`.

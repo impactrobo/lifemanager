@@ -39,7 +39,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // 1. Add a slot to Monday, confirm it's an empty (unassigned) entry
   await page.evaluate((day) => addPlanMealSlot(day), MONDAY);
-  let mondayEntries = await page.evaluate((day) => STATE.diet.mealPlan[day], MONDAY);
+  let mondayEntries = await page.evaluate((day) => currentPhase().phase.mealPlan[day], MONDAY);
   console.log('Monday entries after addPlanMealSlot:', mondayEntries);
   if (mondayEntries.length !== 1 || mondayEntries[0].mealId !== null) {
     throw new Error(`Expected one empty slot on Monday, got ${JSON.stringify(mondayEntries)}`);
@@ -48,14 +48,14 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // 2. Assign the meal to that slot
   await page.evaluate(({ day, entryId, mId }) => setPlanMealSlotMeal(day, entryId, mId), { day: MONDAY, entryId: slotId, mId: mealId });
-  mondayEntries = await page.evaluate((day) => STATE.diet.mealPlan[day], MONDAY);
+  mondayEntries = await page.evaluate((day) => currentPhase().phase.mealPlan[day], MONDAY);
   console.log('Monday entries after assigning meal:', mondayEntries);
   if (mondayEntries[0].mealId !== mealId) throw new Error(`Expected slot assigned to ${mealId}, got ${JSON.stringify(mondayEntries[0])}`);
 
   // 3. Totals for the day should reflect the assigned meal's items (chicken_breast, 200g,
   //    165 cal/100g -> 330 cal for the day)
   const totals = await page.evaluate(() => {
-    const entries = STATE.diet.mealPlan[1] || [];
+    const entries = currentPhase().phase.mealPlan[1] || [];
     const items = entries.filter(e => e.mealId).flatMap(e => {
       const m = STATE.diet.meals.find(x => x.id === e.mealId);
       return m ? m.items : [];
@@ -74,9 +74,9 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   }
 
   // 5. Paste into Tuesday (currently empty) — should apply immediately, no confirm needed
-  const tuesdayBefore = await page.evaluate((day) => (STATE.diet.mealPlan[day] || []).length, TUESDAY);
+  const tuesdayBefore = await page.evaluate((day) => (currentPhase().phase.mealPlan[day] || []).length, TUESDAY);
   await page.evaluate((day) => pasteDayPlan(day), TUESDAY);
-  const tuesdayAfterFirstPaste = await page.evaluate((day) => STATE.diet.mealPlan[day], TUESDAY);
+  const tuesdayAfterFirstPaste = await page.evaluate((day) => currentPhase().phase.mealPlan[day], TUESDAY);
   console.log('Tuesday before/after first paste (should apply directly since it was empty):', tuesdayBefore, '/', tuesdayAfterFirstPaste);
   if (tuesdayAfterFirstPaste.length !== 1 || tuesdayAfterFirstPaste[0].mealId !== mealId) {
     throw new Error(`Expected Tuesday to receive the pasted entry immediately, got ${JSON.stringify(tuesdayAfterFirstPaste)}`);
@@ -86,11 +86,11 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   //    the confirm modal instead of applying immediately.
   await page.evaluate((day) => pasteDayPlan(day), TUESDAY);
   const tuesdayEntryIdBeforeConfirm = tuesdayAfterFirstPaste[0].id;
-  const stillOldEntry = await page.evaluate((id) => (STATE.diet.mealPlan[2] || []).some(e => e.id === id), tuesdayEntryIdBeforeConfirm);
+  const stillOldEntry = await page.evaluate((id) => (currentPhase().phase.mealPlan[2] || []).some(e => e.id === id), tuesdayEntryIdBeforeConfirm);
   console.log('Tuesday still has the pre-confirm entry (paste should be pending on confirm modal):', stillOldEntry);
   if (!stillOldEntry) throw new Error('Expected the second paste onto a non-empty day to wait for confirmYes(), not apply immediately');
   await page.evaluate(() => confirmYes());
-  const tuesdayAfterConfirm = await page.evaluate(() => STATE.diet.mealPlan[2]);
+  const tuesdayAfterConfirm = await page.evaluate(() => currentPhase().phase.mealPlan[2]);
   console.log('Tuesday after confirming the overwrite paste:', tuesdayAfterConfirm);
   if (tuesdayAfterConfirm.length !== 1 || tuesdayAfterConfirm[0].mealId !== mealId) {
     throw new Error(`Expected Tuesday to end with 1 fresh entry after confirmed paste, got ${JSON.stringify(tuesdayAfterConfirm)}`);
@@ -98,21 +98,21 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // 7. Removing the Monday slot clears it
   await page.evaluate(({ day, entryId }) => removePlanMealSlot(day, entryId), { day: MONDAY, entryId: slotId });
-  const mondayAfterRemove = await page.evaluate((day) => STATE.diet.mealPlan[day], MONDAY);
+  const mondayAfterRemove = await page.evaluate((day) => currentPhase().phase.mealPlan[day], MONDAY);
   console.log('Monday after removePlanMealSlot:', mondayAfterRemove);
   if (mondayAfterRemove.length !== 0) throw new Error(`Expected Monday's plan to be empty after removal, got ${JSON.stringify(mondayAfterRemove)}`);
 
   // 8. Persistence across reload
   await page.reload();
   await settle(page);
-  const persistedTuesday = await page.evaluate(() => STATE.diet.mealPlan[2]);
+  const persistedTuesday = await page.evaluate(() => currentPhase().phase.mealPlan[2]);
   console.log('Tuesday plan after reload:', persistedTuesday);
   if (!persistedTuesday || persistedTuesday.length !== 1 || persistedTuesday[0].mealId !== mealId) {
     throw new Error('Expected Tuesday\'s assigned meal plan to persist across reload');
   }
 
   // cleanup
-  await page.evaluate((day) => { STATE.diet.mealPlan[day] = []; }, TUESDAY);
+  await page.evaluate((day) => { currentPhase().phase.mealPlan[day] = []; }, TUESDAY);
   await page.evaluate((id) => { STATE.diet.meals = STATE.diet.meals.filter(m => m.id !== id); saveState(); }, mealId);
 
   await browser.close();

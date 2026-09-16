@@ -41,12 +41,11 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
         calories: 2400, cardioCalories: null });
     }
     STATE.diet.tdee = 2600;
-    STATE.goals = [{ id: 'g1', kind: 'weight', name: 'Cut', startDate: shiftDate(t, -70),
-      targetDate: shiftDate(t, 84), startWeightLb: 232, targetWeightLb: 190, archived: false, createdAt: 1 }];
+    STATE.phaseOrigin = shiftDate(t, -70);
     STATE.phases = [
-      { id: 'p1', goalId: 'g1', kind: 'weight', label: 'Opening cut', weeks: 10, direction: 'deficit',
+      { id: 'p1', label: 'Opening cut', weeks: 10, direction: 'deficit',
         ratePctPerWeek: 0.75, calorieTarget: 2400, calorieSetOn: shiftDate(t, -70), createdAt: 1 },
-      { id: 'p2', goalId: 'g1', kind: 'weight', label: 'Push to race', weeks: 12, direction: 'deficit',
+      { id: 'p2', label: 'Push to race', weeks: 12, direction: 'deficit',
         ratePctPerWeek: 0.9, calorieTarget: 2150, calorieSetOn: shiftDate(t, -12), createdAt: 2 },
     ];
     saveState();
@@ -56,7 +55,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // ---- 1. The resolver, and its order of precedence ----
   const resolved = await page.evaluate(() => {
     const t = todayStr();
-    const s = phaseSchedule(activeWeightGoal());
+    const s = phaseTimeline();
     const pick = (d) => { const r = calorieTargetForDate(d); return r && { cal: r.calories, src: r.source, label: r.label }; };
     const out = {
       today: pick(t),
@@ -90,7 +89,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // ---- 2. The seed is the rate converted to calories against the rolling TDEE ----
   const seedMath = await page.evaluate(() => {
-    const s = phaseSchedule(activeWeightGoal());
+    const s = phaseTimeline();
     const cur = s[1];
     const sd = phaseCalorieSeed(cur);
     return { ...sd, rolling: rollingTdeeEstimate().estimate,
@@ -105,7 +104,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // A maintain phase eats at maintenance — the delta is zero, not "no target".
   const maintainSeed = await page.evaluate(() => {
     STATE.phases[1].direction = 'maintain';
-    const s = phaseCalorieSeed(phaseSchedule(activeWeightGoal())[1]);
+    const s = phaseCalorieSeed(phaseTimeline()[1]);
     STATE.phases[1].direction = 'deficit';
     return s;
   });
@@ -117,7 +116,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   const noData = await page.evaluate(() => {
     const keep = STATE.weightLog;
     STATE.weightLog = keep.slice(-2);
-    const s = phaseCalorieSeed(phaseSchedule(activeWeightGoal())[1]);
+    const s = phaseCalorieSeed(phaseTimeline()[1]);
     let toasted = null;
     const realToast = showToast; showToast = (m) => { toasted = m; };
     const before = STATE.phases[1].calorieTarget;
@@ -134,7 +133,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // ---- 4. Drift: offered only where it's meaningful, and only once a week ----
   const drift = await page.evaluate(() => {
-    const s = () => phaseSchedule(activeWeightGoal());
+    const s = () => phaseTimeline();
     const out = {};
     out.current = phaseCalorieDrift(s()[1]);
     out.past = phaseCalorieDrift(s()[0]);          // a finished phase is history, not a decision
@@ -167,15 +166,15 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // ---- 5. Accepting and declining are both answers, and neither happens on its own ----
   const answers = await page.evaluate(() => {
     const t = todayStr();
-    const suggested = phaseCalorieDrift(phaseSchedule(activeWeightGoal())[1]).suggested;
+    const suggested = phaseCalorieDrift(phaseTimeline()[1]).suggested;
     // Declining keeps the number and resets the clock, so it isn't asked again tomorrow.
     dismissPhaseCalorieDrift('p2');
     const declined = { target: STATE.phases[1].calorieTarget, setOn: STATE.phases[1].calorieSetOn,
-                       reoffered: phaseCalorieDrift(phaseSchedule(activeWeightGoal())[1]) };
+                       reoffered: phaseCalorieDrift(phaseTimeline()[1]) };
     STATE.phases[1].calorieSetOn = shiftDate(t, -12);
     updatePhaseCalorieTarget('p2', suggested);
     const accepted = { target: STATE.phases[1].calorieTarget, setOn: STATE.phases[1].calorieSetOn,
-                       reoffered: phaseCalorieDrift(phaseSchedule(activeWeightGoal())[1]) };
+                       reoffered: phaseCalorieDrift(phaseTimeline()[1]) };
     return { suggested, declined, accepted, today: t };
   });
   console.log('accept / decline:', answers);
@@ -238,7 +237,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     // Put the current phase's target deliberately far from what the estimate now says, and stale,
     // so the offer is guaranteed to be showing. Carrying state forward from the steps above would
     // make this assertion depend on arithmetic they were free to change.
-    const seeded = phaseCalorieSeed(phaseSchedule(activeWeightGoal())[1]).target;
+    const seeded = phaseCalorieSeed(phaseTimeline()[1]).target;
     STATE.phases[1].calorieTarget = seeded - 200;
     STATE.phases[1].calorieSetOn = shiftDate(todayStr(), -12);
     saveState();
@@ -272,8 +271,8 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     STATE.phases.forEach(p => { delete p.calorieTarget; delete p.calorieSetOn; });
     saveState();
     return { resolver: calorieTargetForDate(todayStr()).source,
-             seedStillWorks: phaseCalorieSeed(phaseSchedule(activeWeightGoal())[1]) !== null,
-             drift: phaseCalorieDrift(phaseSchedule(activeWeightGoal())[1]) };
+             seedStillWorks: phaseCalorieSeed(phaseTimeline()[1]) !== null,
+             drift: phaseCalorieDrift(phaseTimeline()[1]) };
   });
   console.log('phases predating calorie targets:', legacy);
   if (legacy.resolver !== 'tdee') throw new Error('A phase with no calorieTarget field falls back, it does not resolve to undefined');
@@ -281,7 +280,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (legacy.drift !== null) throw new Error('A phase with no target has nothing to drift from');
 
   await page.evaluate(() => {
-    STATE.goals = []; STATE.phases = []; STATE.weightLog = []; STATE.diet.foodLog = {}; saveState();
+    STATE.phases = []; STATE.phaseOrigin = null; STATE.weightLog = []; STATE.diet.foodLog = {}; saveState();
   });
 
   await browser.close();

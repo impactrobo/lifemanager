@@ -30,9 +30,9 @@ const ANTIQUE_SAVE = {
 const EXPECT = [
   ['life.scheduleExceptions', 'array'], ['life.habits', 'array'], ['life.habitLog', 'object'],
   ['life.schedules', 'array'], ['life.periodic', 'array'], ['life.periodicLog', 'object'],
-  ['diet.mealPlan', 'object'], ['diet.meals', 'array'], ['diet.customFoods', 'array'], ['diet.foodLog', 'object'],
+['diet.meals', 'array'], ['diet.customFoods', 'array'], ['diet.foodLog', 'object'],
   ['budget.goals', 'array'], ['budget.incidentals', 'object'], ['budget.savingsCompletions', 'object'],
-  ['exercisePlan', 'object'], ['reminders', 'array'], ['notes', 'array'],
+  ['phases', 'array'], ['reminders', 'array'], ['notes', 'array'],
 ];
 
 (async () => {

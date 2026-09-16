@@ -150,12 +150,11 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // ---- 7. The trailing week, and where it sits ----
   const window = await page.evaluate(() => {
     const t = todayStr();
-    STATE.goals = [{ id: 'e1', kind: 'exercise', name: 'Base', startDate: shiftDate(t, -21),
-      targetDate: shiftDate(t, 84), archived: false, createdAt: 1 }];
+    STATE.phaseOrigin = shiftDate(t, -21);
     const plan = () => ({ 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] });
-    STATE.phases = [{ id: 'b1', goalId: 'e1', kind: 'exercise', label: 'Block 1', weeks: 4,
+    STATE.phases = [{ id: 'b1', label: 'Block 1', weeks: 4,
       exercisePlan: plan(), createdAt: 1 }];
-    const s = () => phaseSchedule(activeExerciseGoal())[0];
+    const s = () => phaseTimeline()[0];
     const w = phaseDeloadWindow(s());
     const out = {
       window: w,
@@ -175,7 +174,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     togglePhaseDeload('b1');
     // A one-week block has no trailing week to deload — that's just a rest week.
     STATE.phases[0].weeks = 1;
-    out.oneWeekBlock = phaseDeloadWindow(phaseSchedule(activeExerciseGoal())[0]);
+    out.oneWeekBlock = phaseDeloadWindow(phaseTimeline()[0]);
     STATE.phases[0].weeks = 4;
     return out;
   });
@@ -193,7 +192,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     const rp = STATE.workouts.find(w => w.style !== 'P-Zero (GZCL)');
     // Pretend today is inside the trailing week by shortening the block to end today.
     STATE.phases[0].weeks = 4;
-    STATE.goals[0].startDate = shiftDate(todayStr(), -27);
+    STATE.phaseOrigin = shiftDate(todayStr(), -27);
     const inWeek = dateIsDeloadWeek(todayStr());
     const out = { inWeek, gzAuto: workoutDeloadState(1, gz.id).on, rpAuto: workoutDeloadState(1, rp.id).on };
     setWorkoutDeload(1, gz.id, true);
@@ -253,10 +252,12 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
       STATE.weightLog.push({ id: 'w' + d, date: shiftDate(t, -d),
         weightLb: Math.round((232 - (70 - d) * (1.6 / 7)) * 10) / 10, calories: 2400, cardioCalories: null });
     }
-    STATE.goals.push({ id: 'g1', kind: 'weight', name: 'Cut', startDate: shiftDate(t, -70),
-      targetDate: shiftDate(t, 84), startWeightLb: 232, targetWeightLb: 190, archived: false, createdAt: 2 });
-    STATE.phases.push({ id: 'p1', goalId: 'g1', kind: 'weight', label: 'Cut', weeks: 22,
-      direction: 'deficit', ratePctPerWeek: 0.9, calorieTarget: 2150, calorieSetOn: t, createdAt: 2 });
+    // ONE phase carries both now. The deload config and the calorie target used to sit on separate
+    // phases belonging to separate goals, overlapping in time; with a single timeline two phases
+    // can't overlap, so a block that deloads is the same block that says what to eat.
+    const b = STATE.phases.find(p => p.id === 'b1');
+    b.direction = 'deficit'; b.ratePctPerWeek = 0.9;
+    b.calorieTarget = 2150; b.calorieSetOn = t;
     const inDeload = calorieTargetForDate(t);
     // A day outside the deload week keeps the phase's deficit.
     const normalDay = calorieTargetForDate(shiftDate(todayStr(), -21));
@@ -301,7 +302,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (!midSession.showsFlag || !midSession.showsWas) throw new Error('The screen should flag the deload and show what it was');
 
   await page.evaluate(() => {
-    STATE.goals = []; STATE.phases = []; STATE.logs = {}; STATE.workouts = []; STATE.weightLog = [];
+    STATE.phases = []; STATE.phaseOrigin = null; STATE.logs = {}; STATE.workouts = []; STATE.weightLog = [];
     saveState();
   });
 

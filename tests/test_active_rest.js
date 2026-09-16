@@ -35,27 +35,28 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
       repMax: 8, targetRIR: 2, resType: 'weight', setType: 'straight', muscle: 'Chest', adjustments: [] }];
     const mk = (n) => { const o = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
       for (let i = 0; i < n; i++) o[i + 1] = [planEntry('workout', w.id)]; return o; };
-    STATE.exercisePlan = mk(1);
     STATE.weightLog = [];
     for (let d = 140; d >= 0; d -= 2) {
       STATE.weightLog.push({ id: 'w' + d, date: shiftDate(t, -d),
         weightLb: 232 - (140 - d) * 0.17, calories: 2400, cardioCalories: null });
     }
     STATE.diet.tdee = 2600;
-    STATE.goals = [
-      { id: 'g1', kind: 'weight', name: 'Cut', startDate: shiftDate(t, -140), targetDate: shiftDate(t, 60),
-        startWeightLb: 232, targetWeightLb: 190, archived: false, createdAt: 1 },
-      { id: 'e1', kind: 'exercise', name: 'Base', startDate: shiftDate(t, -126), targetDate: shiftDate(t, 60),
-        archived: false, createdAt: 2 },
-    ];
+    // ONE sequence. These used to be two overlapping ones -- weight phases and training blocks
+    // belonging to separate goals -- which a single timeline can't express, and doesn't need to: a
+    // phase carries both a calorie target and a plan, so one run of four covers what two runs did.
+    //
+    // The origin is set so 'VO2 Max' starts exactly today: 10 + 18 + 10 = 38 weeks before it.
+    STATE.phaseOrigin = shiftDate(t, -(10 + 18 + 10) * 7);
     STATE.phases = [
-      { id: 'p1', goalId: 'g1', kind: 'weight', label: 'Opening cut', weeks: 10, direction: 'deficit',
-        ratePctPerWeek: 0.8, calorieTarget: 2200, calorieSetOn: t, createdAt: 1 },
-      { id: 'p2', goalId: 'g1', kind: 'weight', label: 'Push', weeks: 18, direction: 'deficit',
-        ratePctPerWeek: 0.9, calorieTarget: 2100, calorieSetOn: t, createdAt: 2 },
-      { id: 'b1', goalId: 'e1', kind: 'exercise', label: 'Hypertrophy', weeks: 10, exercisePlan: mk(3), createdAt: 3 },
-      { id: 'b2', goalId: 'e1', kind: 'exercise', label: 'VO2 Max', weeks: 12, exercisePlan: mk(5),
-        activeRestWeeks: 2, createdAt: 4 },
+      newPhase({ id: 'p1', label: 'Opening cut', weeks: 10, direction: 'deficit',
+        ratePctPerWeek: 0.8, calorieTarget: 2200, calorieSetOn: t, exercisePlan: mk(3) }),
+      newPhase({ id: 'p2', label: 'Push', weeks: 18, direction: 'deficit',
+        ratePctPerWeek: 0.9, calorieTarget: 2100, calorieSetOn: t, exercisePlan: mk(3) }),
+      newPhase({ id: 'b1', label: 'Hypertrophy', weeks: 10, direction: 'deficit',
+        ratePctPerWeek: 0.9, calorieTarget: 2100, calorieSetOn: t, exercisePlan: mk(3) }),
+      newPhase({ id: 'b2', label: 'VO2 Max', weeks: 12, direction: 'deficit',
+        ratePctPerWeek: 0.9, calorieTarget: 2100, calorieSetOn: t, exercisePlan: mk(5),
+        activeRestWeeks: 2 }),
     ];
     STATE.logs = {};
     saveState();
@@ -65,7 +66,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // ---- 1. Where active rest sits, and what each of its weeks is ----
   const rest = await page.evaluate(() => {
-    const b2 = phaseSchedule(activeExerciseGoal())[1];
+    const b2 = phaseTimeline().find(x => x.phase.id === 'b2');
     const w = phaseActiveRestWindow(b2);
     return {
       leadsTheBlock: w.from === b2.startDate,
@@ -75,7 +76,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
       day8: activeRestKindForDate(shiftDate(w.from, 7)),
       lastDay: activeRestKindForDate(w.to),
       dayAfter: activeRestKindForDate(shiftDate(w.to, 1)),
-      inTheOtherBlock: activeRestKindForDate(phaseSchedule(activeExerciseGoal())[0].startDate),
+      inTheOtherBlock: activeRestKindForDate(phaseTimeline().find(x => x.phase.id === 'b1').startDate),
     };
   });
   console.log('active rest window:', rest);
@@ -88,7 +89,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // The heart of it: active rest is the absence of a workout, not a reduced one. And you
   // re-sensitise from what you were actually doing, not from the block that hasn't started yet.
   const plans = await page.evaluate(() => {
-    const b2 = phaseSchedule(activeExerciseGoal())[1];
+    const b2 = phaseTimeline().find(x => x.phase.id === 'b2');
     const w = phaseActiveRestWindow(b2);
     const at = (d) => { const e = exercisePlanInEffect(d); return { src: e.source, label: e.label, n: weekPlanCount(e.plan).workouts }; };
     return {
@@ -114,7 +115,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // ---- 3. Calories go to maintenance for the WHOLE span, not just its deload week ----
   const cals = await page.evaluate(() => {
-    const b2 = phaseSchedule(activeExerciseGoal())[1];
+    const b2 = phaseTimeline().find(x => x.phase.id === 'b2');
     const w = phaseActiveRestWindow(b2);
     const at = (d) => { const c = calorieTargetForDate(d); return { cal: c.calories, src: c.source, label: c.label }; };
     return {
@@ -141,10 +142,10 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     out.blockWeeks = STATE.phases[3].weeks;
     for (let i = 0; i < 30; i++) setPhaseActiveRest('b2', -1);
     out.floor = STATE.phases[3].activeRestWeeks;
-    out.noWindow = phaseActiveRestWindow(phaseSchedule(activeExerciseGoal())[1]);
+    out.noWindow = phaseActiveRestWindow(phaseTimeline().find(x => x.phase.id === 'b2'));
     // A one-week block has no room for any.
     STATE.phases[3].weeks = 1; STATE.phases[3].activeRestWeeks = 1;
-    out.oneWeekBlock = phaseActiveRestWindow(phaseSchedule(activeExerciseGoal())[1]);
+    out.oneWeekBlock = phaseActiveRestWindow(phaseTimeline().find(x => x.phase.id === 'b2'));
     STATE.phases[3].weeks = 12; STATE.phases[3].activeRestWeeks = 2;
     saveState();   // these were direct writes; without this the reload below reads the older value
     return out;
@@ -157,21 +158,21 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // ---- 5. Phase boundaries, for the charts ----
   const marks = await page.evaluate(() => {
     const t = todayStr();
-    const all = phaseBoundaryMarks(shiftDate(t, -140), t);
+    // Wide enough to reach the whole fixture: 38 weeks of phases precede today.
+    const all = phaseBoundaryMarks(shiftDate(t, -300), t);
     return {
       labels: all.map(m => m.label),
-      kinds: all.map(m => m.kind),
       sorted: all.every((m, i) => i === 0 || all[i - 1].date <= m.date),
-      // Both goal kinds, because they run on independent timelines and dividing by only one would
-      // explain half the chart.
-      hasBoth: all.some(m => m.kind === 'weight') && all.some(m => m.kind === 'exercise'),
+      // One timeline, so this is a filter rather than a merge of two independent sequences -- there
+      // is no longer a `kind` to divide the chart by, only phases in order.
+      noKind: all.every(m => m.kind === undefined),
       outsideWindow: phaseBoundaryMarks(shiftDate(t, 400), shiftDate(t, 500)).length,
     };
   });
   console.log('boundary marks:', marks);
   if (marks.labels.length !== 4) throw new Error(`Four phases start inside the window, got ${marks.labels.length}`);
   if (!marks.sorted) throw new Error('Marks should come back in date order');
-  if (!marks.hasBoth) throw new Error('Both goal kinds divide the chart');
+  if (!marks.noKind) throw new Error('One timeline means a mark names a phase, not a goal kind');
   if (marks.outsideWindow !== 0) throw new Error('A window with no phase starts has no marks');
 
   // ---- 6. COMPARE reads the lift library ----
@@ -234,8 +235,8 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (persisted !== 2) throw new Error('activeRestWeeks should persist');
 
   await page.evaluate(() => {
-    STATE.goals = []; STATE.phases = []; STATE.logs = {}; STATE.workouts = []; STATE.weightLog = [];
-    STATE.exercisePlan = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
+    STATE.phases = []; ensurePerpetualPhase();
+    STATE.logs = {}; STATE.workouts = []; STATE.weightLog = [];
     saveState();
   });
 

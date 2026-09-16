@@ -66,80 +66,140 @@ function phaseSignedPct(phase) {
   return phaseDirection(phase.direction).sign * Math.abs(Number(phase.ratePctPerWeek) || 0);
 }
 
-function phasesForGoal(goalId) { return (STATE.phases || []).filter(p => p.goalId === goalId); }
+// ---- ONE timeline ----
+//
+// Phases used to belong to a goal, and there were two independent sequences -- weight phases and
+// training blocks -- that could overlap and neither of which could exist without first creating a
+// goal. That is now inverted: the PHASE is the record, and a goal is something it optionally carries.
+// "Working out" with no goal at all is a first-class state rather than a thing you had to invent a
+// fake goal to express.
+//
+// Dates stay DERIVED, for the reason they always were: phases run back to back, so extending one
+// pushes every later one out as a property of the model rather than an operation that has to
+// remember to rewrite N records. The anchor is now a single STATE.phaseOrigin instead of one
+// start date per goal.
+//
+// A PERPETUAL phase (weeks == null) runs until something replaces it. It has no end date, so it must
+// be last -- nothing can be scheduled after a phase that never finishes. loadState() enforces that.
+function phaseIsPerpetual(phase) { return !phase || phase.weeks == null; }
 
-// Everything positional about a goal's phases, in one walk: when each runs, what weight the plan
+// The weight a projection compounds from: the 7-day trailing average as of a date. Deliberately the
+// same line the Body Weight chart draws, so a projection and the chart can never disagree about what
+// you currently weigh -- one number, one definition.
+//
+// It averages whatever entries fall in the window, so "a full week of weigh-ins" and "one weigh-in
+// that week" are the same operation rather than two cases.
+//
+// Falls back to a weigh-in up to 14 days old, then gives up rather than guessing. 14 because that is
+// already this app's bound for "too stale to report an honest rate" (GOAL_RATE_MIN_DAYS), and
+// because a month is long enough to be several pounds wrong in either direction.
+const PHASE_START_WEIGHT_MAX_STALE_DAYS = 14;
+function trendWeightOn(dateStr) {
+  const list = (STATE.weightLog || [])
+    .filter(e => e.weightLb != null && e.date <= dateStr)
+    .map(e => ({ date: e.date, value: Number(e.weightLb) }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+  if (!list.length) return null;
+  const asOf = list[list.length - 1].date;
+  if (daysBetween(asOf, dateStr) > PHASE_START_WEIGHT_MAX_STALE_DAYS) return null;
+  const avg = trailingAverage(list, WEIGHT_TREND_WINDOW_DAYS);
+  return { weightLb: avg[avg.length - 1], asOf };
+}
+// Null, not a guess, when there's nothing recent enough -- the screen asks for a weight instead.
+function phaseOriginWeightLb() {
+  const t = trendWeightOn(STATE.phaseOrigin || todayStr());
+  return t ? t.weightLb : null;
+}
+
+// Everything positional about the phase sequence, in one walk: when each runs, what weight the plan
 // expects it to start and end at, and whether it's behind, on, or ahead of today. Every read goes
 // through here rather than recomputing a start date at the call site.
-function phaseSchedule(goal) {
-  if (!goal) return [];
+function phaseTimeline() {
   const today = todayStr();
-  const weighted = goal.kind === 'weight';
-  let cursor = goal.startDate;
-  // An exercise goal has no weight to walk. The dates, the ordering and the state are identical for
-  // both kinds -- only the weight projection is weight-goal-specific, so it's the only part that
-  // branches rather than there being two separate schedulers to keep in step.
-  let weightLb = weighted ? Number(goal.startWeightLb) : 0;
-  return phasesForGoal(goal.id).map((phase, index) => {
-    const weeks = Math.max(1, Number(phase.weeks) || 1);
+  let cursor = STATE.phaseOrigin || todayStr();
+  let weightLb = phaseOriginWeightLb();
+  return (STATE.phases || []).map((phase, index) => {
+    const perpetual = phaseIsPerpetual(phase);
+    const weeks = perpetual ? null : Math.max(1, Number(phase.weeks) || 1);
     const startDate = cursor;
-    const endDate = shiftDate(startDate, weeks * 7 - 1);   // inclusive: an 8-week phase ends on day 56
-    cursor = shiftDate(endDate, 1);
+    // Inclusive: an 8-week phase ends on day 56. A perpetual one has no end at all -- not a very
+    // distant one, because a sentinel date would sort and compare as though it meant something.
+    const endDate = perpetual ? null : shiftDate(startDate, weeks * 7 - 1);
+    cursor = endDate ? shiftDate(endDate, 1) : null;
     const startWeightLb = weightLb;
     // Compounded, not multiplied out. The rate is a percent OF BODYWEIGHT and bodyweight is moving,
     // so 1%/wk off 232 lb is 2.32 lb this week and 2.30 lb the next. Ten weeks linear says 208.8 lb;
     // compounding says 209.8 lb, and the second one is what actually happens.
-    const endWeightLb = weighted ? startWeightLb * Math.pow(1 + phaseSignedPct(phase) / 100, weeks) : 0;
+    //
+    // A perpetual phase projects nothing: with no end there is no end weight, and inventing one from
+    // "however long it has run so far" would show a figure that moves every day on its own.
+    const endWeightLb = (perpetual || startWeightLb == null)
+      ? null
+      : startWeightLb * Math.pow(1 + phaseSignedPct(phase) / 100, weeks);
     weightLb = endWeightLb;
     return {
-      phase, index, weeks, startDate, endDate, goal,
+      phase, index, weeks, startDate, endDate, perpetual,
       startWeightLb, endWeightLb,
-      plannedLbPerWeek: (endWeightLb - startWeightLb) / weeks,   // the average; each week is slightly smaller
-      state: today < startDate ? 'future' : today > endDate ? 'past' : 'current',
-      band: weighted ? goalRateBand(phaseSignedPct(phase), weeks) : null,
+      plannedLbPerWeek: endWeightLb == null ? null : (endWeightLb - startWeightLb) / weeks,
+      state: today < startDate ? 'future' : (endDate && today > endDate) ? 'past' : 'current',
+      band: goalRateBand(phaseSignedPct(phase), weeks),
     };
   });
 }
 
-// Which phase covers a date. The choke point every later step reads through -- step 4's calorie
-// target and step 5's exercise plan both answer "what was in effect on this day?" and neither should
-// re-derive the walk.
+// Which phase covers a date. The choke point every later step reads through -- the calorie target,
+// the exercise plan and the meal plan all answer "what was in effect on this day?" and none of them
+// should re-derive the walk.
 //
-// Scans archived goals too, so a date inside a finished goal still resolves; the active goal is
-// checked first, since a forward-dated new goal can legitimately overlap the tail of an old one.
-function phaseForDate(dateStr, kind) {
-  const want = kind || 'weight';
-  const goals = (STATE.goals || [])
-    .filter(g => g.kind === want)
-    .sort((a, b) => (a.archived === b.archived) ? 0 : (a.archived ? 1 : -1));
-  for (const g of goals) {
-    const hit = phaseSchedule(g).find(s => dateStr >= s.startDate && dateStr <= s.endDate);
-    if (hit) return hit;
-  }
+// No `kind` any more: there is one sequence, so at most one phase can cover a date and there is
+// nothing to disambiguate. A perpetual phase covers everything from its start onward.
+function phaseForDate(dateStr) {
+  return phaseTimeline().find(s =>
+    dateStr >= s.startDate && (s.endDate == null || dateStr <= s.endDate)) || null;
+}
+// The phase you're in right now, which is what most callers actually mean.
+function currentPhase() { return phaseForDate(todayStr()); }
+
+// The phase whose plans govern a date, including the case where the date is past the end of
+// everything planned. Both plan resolvers read through this so they can never disagree about which
+// phase a day belongs to.
+//
+// 'carried' is the deliberate answer to "the block ended, now what?". A plan that was working
+// doesn't stop working because a date passed, so it simply continues and the editor says that it's
+// doing so rather than silently reverting you to nothing. It can only happen when the last phase is
+// finite -- a perpetual one never ends, so nothing is ever past it.
+//
+// Returns null only for a date BEFORE the first phase began, which is honest: there was no plan then.
+function phaseOrCarriedForDate(dateStr) {
+  const tl = phaseTimeline();
+  if (!tl.length) return null;
+  const hit = tl.find(s => dateStr >= s.startDate && (s.endDate == null || dateStr <= s.endDate));
+  if (hit) return { entry: hit, carried: false };
+  const last = tl[tl.length - 1];
+  if (last.endDate && dateStr > last.endDate) return { entry: last, carried: true };
   return null;
 }
 
-// Does the plan as written actually land on the goal? This is the whole point of writing phases
-// down rather than keeping them in your head -- four phases that each look reasonable can still add
-// up to three pounds short and six weeks long, and nothing but the arithmetic will tell you.
-function phasePlanSummary(goal) {
-  const sched = phaseSchedule(goal);
+// Where the plan as written actually LANDS. It used to answer "does this reach the goal?" -- whether
+// the phases added up to a target weight by a target date, and by how much they fell short.
+//
+// There is no target weight any more, so there is nothing to fall short OF. You choose a rate and a
+// length; the ending weight is the OUTPUT of those, not a thing to be chased. That inverts what this
+// reports: not a verdict, just the number the plan arrives at, which is the honest version of what
+// the old summary was approximating.
+//
+// Null while the projection can't be made -- no phases, no recent weigh-in to compound from, or a
+// perpetual phase at the end with no end weight to report.
+function phasePlanSummary() {
+  const sched = phaseTimeline();
   if (!sched.length) return null;
   const last = sched[sched.length - 1];
-  const target = Number(goal.targetWeightLb);
-  const losing = target < Number(goal.startWeightLb);
-  const goalWeeks = daysBetween(goal.startDate, goal.targetDate) / 7;
-  const plannedWeeks = sched.reduce((s, x) => s + x.weeks, 0);
   return {
     endDate: last.endDate,
     endWeightLb: last.endWeightLb,
-    reachesTarget: losing
-      ? last.endWeightLb <= target + PHASE_TARGET_TOLERANCE_LB
-      : last.endWeightLb >= target - PHASE_TARGET_TOLERANCE_LB,
-    shortByLb: Math.abs(last.endWeightLb - target),
-    plannedWeeks, goalWeeks,
-    // Positive: the plan runs past the target date. Negative: weeks at the end with no phase on them.
-    weeksOver: plannedWeeks - goalWeeks,
+    startWeightLb: sched[0].startWeightLb,
+    plannedWeeks: sched.reduce((s, x) => s + (x.weeks || 0), 0),
+    perpetualTail: last.perpetual,
     covered: sched.length,
   };
 }
@@ -206,29 +266,25 @@ function exercisePlanInEffect(dateStr) {
   if (rest === 'light') {
     // No plan at all, not a heavily reduced one. Light activity is the absence of a workout, and
     // anything you do log is an ordinary cardio session -- already how a walk gets recorded.
-    return { plan: EMPTY_WEEK_PLAN(), source: 'activeRest', label: 'light activity', entry: phaseForDate(dateStr, 'exercise') };
+    return { plan: EMPTY_WEEK_PLAN(), source: 'activeRest', label: 'light activity', entry: phaseForDate(dateStr) };
   }
   if (rest === 'deload') {
     // Week 1 deloads the OUTGOING plan -- you re-sensitise from what you were actually doing, not
     // from the block that hasn't started in earnest yet. Resolved as "the day before this block".
-    const entry = phaseForDate(dateStr, 'exercise');
+    const entry = phaseForDate(dateStr);
     const outgoing = exercisePlanInEffect(shiftDate(entry.startDate, -1));
     return { plan: outgoing.plan, source: 'activeRestDeload', label: outgoing.label || 'your previous plan', entry };
   }
-  let best = null;
-  for (const g of (STATE.goals || [])) {
-    if (g.kind !== 'exercise') continue;
-    for (const s of phaseSchedule(g)) {
-      if (s.startDate > dateStr || !s.phase.exercisePlan) continue;
-      // The latest phase to have STARTED by this date. Within a goal, phases are contiguous, so if
-      // one covers the date it is necessarily that one; across goals this prefers the most recent.
-      if (!best || s.startDate > best.startDate) best = s;
-    }
+  const res = phaseOrCarriedForDate(dateStr);
+  // Before the first phase began there was no plan, and inventing one would put workouts on days
+  // that predate the app knowing about you.
+  if (!res || !res.entry.phase.exercisePlan) {
+    return { plan: EMPTY_WEEK_PLAN(), source: 'none', label: null, entry: null };
   }
-  if (!best) return { plan: STATE.exercisePlan, source: 'global', label: null, entry: null };
+  const best = res.entry;
   return {
     plan: best.phase.exercisePlan,
-    source: dateStr <= best.endDate ? 'phase' : 'carried',
+    source: res.carried ? 'carried' : 'phase',
     label: best.phase.label,
     entry: best,
   };
@@ -270,7 +326,7 @@ function weekPlanCount(plan) {
 // are targeted at the goal the way the calories already were.
 //
 // It hangs off the WEIGHT goal, not the exercise one, because that is where calorieTarget lives --
-// calorieTargetForDate() resolves through phaseForDate(dateStr, 'weight') and this must agree with
+// calorieTargetForDate() resolves through phaseForDate(dateStr) and this must agree with
 // it. A meal plan answering to a training block while its calorie target answered to a weight phase
 // would be two screens disagreeing about the same day.
 //
@@ -282,26 +338,21 @@ const EMPTY_MEAL_PLAN = () => ({ 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: []
 function mealPlanEntry(mealId) { return { id: uid(), mealId: mealId || null }; }
 
 // Which meal plan governs a given date, and why. Returns { plan, source, label, entry } with the
-// same three sources exercisePlanInEffect() uses -- 'phase', 'carried', 'global'.
+// same sources exercisePlanInEffect() uses -- 'phase', 'carried', 'none'.
 //
 // Deliberately NO active-rest branch, which is the one place this departs from the exercise rule.
 // A deload changes how MUCH you eat, not WHAT you eat, and calorieTargetForDate() already overrides
 // the number to maintenance for those weeks. Swapping the week's meals out as well would be the same
 // override applied twice, in two different units.
 function mealPlanInEffect(dateStr) {
-  let best = null;
-  for (const g of (STATE.goals || [])) {
-    if (g.kind !== 'weight') continue;
-    for (const s of phaseSchedule(g)) {
-      if (s.startDate > dateStr || !s.phase.mealPlan) continue;
-      // The latest phase to have STARTED by this date -- see exercisePlanInEffect() for why.
-      if (!best || s.startDate > best.startDate) best = s;
-    }
+  const res = phaseOrCarriedForDate(dateStr);
+  if (!res || !res.entry.phase.mealPlan) {
+    return { plan: EMPTY_MEAL_PLAN(), source: 'none', label: null, entry: null };
   }
-  if (!best) return { plan: STATE.diet.mealPlan, source: 'global', label: null, entry: null };
+  const best = res.entry;
   return {
     plan: best.phase.mealPlan,
-    source: dateStr <= best.endDate ? 'phase' : 'carried',
+    source: res.carried ? 'carried' : 'phase',
     label: best.phase.label,
     entry: best,
   };
@@ -323,7 +374,11 @@ function copyMealPlan(plan) {
 // behind in the one global plan; now that a plan exists per phase, one dangling reference would
 // become one per phase, so the sweep has to be exhaustive rather than incidental.
 function allMealPlans() {
-  return [STATE.diet.mealPlan].concat((STATE.phases || []).filter(p => p.mealPlan).map(p => p.mealPlan));
+  return (STATE.phases || []).filter(p => p.mealPlan).map(p => p.mealPlan);
+}
+// The same, for workouts -- deleteWorkout() has to reach every phase for exactly the same reason.
+function allExercisePlans() {
+  return (STATE.phases || []).filter(p => p.exercisePlan).map(p => p.exercisePlan);
 }
 
 // ---- Deloads ----
@@ -386,7 +441,7 @@ function phaseActiveRestWindow(entry) {
 
 // Which half of an active-rest span a date falls in, or null. 'deload' is week 1, 'light' the rest.
 function activeRestKindForDate(dateStr) {
-  const entry = phaseForDate(dateStr, 'exercise');
+  const entry = phaseForDate(dateStr);
   const w = phaseActiveRestWindow(entry);
   if (!w || dateStr < w.from || dateStr > w.to) return null;
   return dateStr <= shiftDate(w.from, 6) ? 'deload' : 'light';
@@ -396,7 +451,7 @@ function dateIsDeloadWeek(dateStr) {
   // Week 1 of an active rest is a standard deload, so it answers yes here too -- the scaling, the
   // progression exclusion and the maintenance calories are all the same thing.
   if (activeRestKindForDate(dateStr) === 'deload') return true;
-  const w = phaseDeloadWindow(phaseForDate(dateStr, 'exercise'));
+  const w = phaseDeloadWindow(phaseForDate(dateStr));
   return !!(w && dateStr >= w.from && dateStr <= w.to);
 }
 
@@ -408,21 +463,15 @@ function dateIsMaintenanceWeek(dateStr) {
 
 // ---- Phase boundaries, for the charts ----
 //
-// Every phase start inside a window, both goal kinds, so a chart can divide a year of weight data
-// into the blocks it was actually produced by. Much more meaningful once several phases exist, which
-// is why this is the last thing built rather than the first.
+// Every phase start inside a window, so a chart can divide a year of weight data into the blocks it
+// was actually produced by. One timeline now, so this is a filter rather than a merge of two.
 function phaseBoundaryMarks(fromDate, toDate) {
-  const marks = [];
-  (STATE.goals || []).forEach(g => {
-    phaseSchedule(g).forEach(s => {
-      if (s.startDate < fromDate || s.startDate > toDate) return;
-      marks.push({ date: s.startDate, label: s.phase.label, kind: g.kind });
-    });
-  });
-  return marks.sort((a, b) => a.date.localeCompare(b.date));
+  return phaseTimeline()
+    .filter(s => s.startDate >= fromDate && s.startDate <= toDate)
+    .map(s => ({ date: s.startDate, label: s.phase.label }));
 }
 function deloadStyleForDate(dateStr) {
-  const entry = phaseForDate(dateStr, 'exercise');
+  const entry = phaseForDate(dateStr);
   return deloadStyleOf(entry && entry.phase);
 }
 
@@ -634,7 +683,7 @@ function calorieTargetForDate(dateStr) {
       };
     }
   }
-  const entry = phaseForDate(dateStr, 'weight');
+  const entry = phaseForDate(dateStr);
   if (entry && entry.phase.calorieTarget != null) {
     return { calories: Math.round(entry.phase.calorieTarget), source: 'phase', label: entry.phase.label, entry };
   }
@@ -662,68 +711,62 @@ function phaseCalorieDrift(entry) {
 
 // ---- Mutations ----
 
-// A new phase is seeded to CLOSE THE GAP rather than arrive blank: it takes the weeks the plan
-// hasn't covered yet and exactly the rate that walks the remaining weight over them. So adding one
-// phase to an empty goal produces a plan that lands on the target on the target date, and adding a
-// fourth to three that fall short produces the phase that makes up the difference.
+// One phase constructor now, because there's one kind of phase. It used to branch on the goal's kind
+// -- a weight phase seeded a rate solved to land on a target weight, an exercise block seeded a plan
+// -- and with target weights gone there is nothing left to solve for. A new phase simply continues
+// what you were already doing at a default length, and you change what you want to change.
 //
-// The rate is solved, not copied from the goal's required lb/wk: the goal's figure is linear and a
-// phase's is compounded, so copying it would land close-but-not-on and leave the summary line
-// nagging about a pound the app itself introduced.
-function addPhase(goalId) {
-  const goal = (STATE.goals || []).find(g => g.id === goalId);
-  if (!goal) return;
-  if (goal.kind === 'exercise') return addExercisePhase(goal);
-  const existing = phaseSchedule(goal);
-  const startDate = existing.length ? shiftDate(existing[existing.length - 1].endDate, 1) : goal.startDate;
-  const summary = phasePlanSummary(goal);
-  const fromLb = summary ? summary.endWeightLb : Number(goal.startWeightLb);
-  const goalWeeks = daysBetween(goal.startDate, goal.targetDate) / 7;
-  const uncovered = Math.round(goalWeeks - (summary ? summary.plannedWeeks : 0));
-  // Past the goal's own length there are no weeks left to fill, so fall back to a default block.
-  const weeks = Math.max(1, Math.min(PHASE_MAX_WEEKS, uncovered > 0 ? uncovered : PHASE_DEFAULT_WEEKS));
-  // fromLb * (1 + r)^weeks = target, solved for r.
-  const r = fromLb > 0 ? Math.pow(Number(goal.targetWeightLb) / fromLb, 1 / weeks) - 1 : 0;
-  const pct = Math.round(Math.abs(r) * 100 * 100) / 100;
-  STATE.phases.push({
-    id: uid(), goalId, kind: 'weight',
-    label: 'Phase ' + (phasesForGoal(goalId).length + 1),
-    weeks,
-    direction: pct === 0 ? 'maintain' : r < 0 ? 'deficit' : 'surplus',
-    ratePctPerWeek: pct,
-    // Left unset rather than seeded here: a calorie target is a number you'll eat against every day
-    // for weeks, so it gets an explicit "use this" the same way the TDEE estimate does. Adding a
-    // phase shouldn't quietly change what you're eating.
-    calorieTarget: null,
-    calorieSetOn: null,
-    // Seeded as a COPY of whatever plan is in effect where this phase starts, for the same reasons
-    // addExercisePhase() copies its week: blank means rebuilding six days to change two, and a
-    // shared reference would make editing this phase rewrite the one before it. Unlike the calorie
-    // target above, copying the plan changes nothing about what you eat -- the same meals on the
-    // same days -- so it can be seeded without quietly making a decision on your behalf.
+// Both plans are seeded as COPIES of whatever is in effect where this phase starts. Blank would mean
+// rebuilding six days of assignments to change two of them, and a shared reference would make
+// editing the new phase silently rewrite the old one -- the exact failure the copy exists to prevent.
+// Copying changes nothing about what you actually do: same workouts, same meals, same days.
+function addPhase() {
+  const existing = phaseTimeline();
+  const last = existing[existing.length - 1];
+  // A perpetual phase has no end, so adding after it would have nowhere to start. Adding a phase is
+  // therefore what ENDS a perpetual one -- it stops where the new one begins, having run exactly as
+  // long as it actually ran.
+  if (last && last.perpetual) endPerpetualPhaseAt(last, todayStr());
+  const tl = phaseTimeline();
+  const prev = tl[tl.length - 1];
+  const startDate = prev ? shiftDate(prev.endDate, 1) : (STATE.phaseOrigin || todayStr());
+  STATE.phases.push(newPhase({
+    label: 'Phase ' + (STATE.phases.length + 1),
+    weeks: PHASE_DEFAULT_WEEKS,
+    exercisePlan: copyWeekPlan(exercisePlanInEffect(startDate).plan),
     mealPlan: copyMealPlan(mealPlanInEffect(startDate).plan),
-    createdAt: Date.now(),
-  });
+  }));
   saveState();
   render();
 }
 
-// An exercise phase carries a plan instead of a rate. It's seeded as a COPY of whatever plan is in
-// effect where it starts, not as an empty week: starting from blank means rebuilding six days of
-// assignments to change two of them, and starting from a shared reference would mean editing the new
-// block silently rewrote the old one. A copy gives you a running start and leaves the past intact.
-function addExercisePhase(goal) {
-  const existing = phaseSchedule(goal);
-  const startDate = existing.length ? shiftDate(existing[existing.length - 1].endDate, 1) : goal.startDate;
-  STATE.phases.push({
-    id: uid(), goalId: goal.id, kind: 'exercise',
-    label: 'Block ' + (existing.length + 1),
-    weeks: PHASE_DEFAULT_WEEKS,
-    exercisePlan: copyWeekPlan(exercisePlanInEffect(startDate).plan),
+// The shape of a phase, in one place, so a field added here can't be forgotten by one of the callers
+// that makes one. Everything optional is left unset rather than defaulted to a number that would
+// read as a decision someone made.
+function newPhase(over) {
+  return Object.assign({
+    id: uid(),
+    label: 'Phase',
+    weeks: PHASE_DEFAULT_WEEKS,     // null == perpetual: runs until something replaces it
+    direction: 'maintain',
+    ratePctPerWeek: 0,
+    // A calorie target is a number you'll eat against every day for weeks, so it gets an explicit
+    // "use this" the same way the TDEE estimate does. Creating a phase shouldn't quietly change
+    // what you're eating.
+    calorieTarget: null,
+    calorieSetOn: null,
+    exercisePlan: EMPTY_WEEK_PLAN(),
+    mealPlan: EMPTY_MEAL_PLAN(),
     createdAt: Date.now(),
-  });
-  saveState();
-  render();
+  }, over || {});
+}
+
+// Fixes a perpetual phase's length at however long it actually ran, so something can follow it.
+// Rounded UP to whole weeks, because a phase is measured in weeks everywhere else and a 3.4-week
+// phase would be the only one in the app that isn't.
+function endPerpetualPhaseAt(entry, dateStr) {
+  const days = Math.max(1, daysBetween(entry.startDate, dateStr) + 1);
+  entry.phase.weeks = Math.max(1, Math.ceil(days / 7));
 }
 
 function setPhaseActiveRest(id, delta) {
@@ -763,7 +806,7 @@ function togglePhaseDeloadAccessories(id) {
 function seedPhaseCalorieTarget(id) {
   const p = (STATE.phases || []).find(x => x.id === id);
   if (!p) return;
-  const entry = phaseSchedule((STATE.goals || []).find(g => g.id === p.goalId)).find(s => s.phase.id === id);
+  const entry = phaseTimeline().find(s => s.phase.id === id);
   const seed = entry && phaseCalorieSeed(entry);
   if (!seed) { showToast('Not enough logged yet to estimate a TDEE'); return; }
   p.calorieTarget = seed.target;
@@ -800,7 +843,18 @@ function updatePhaseField(id, field, value) {
   const p = (STATE.phases || []).find(x => x.id === id);
   if (!p) return;
   if (field === 'label') { const t = (value || '').trim(); if (t) p.label = t; }
-  else if (field === 'weeks') { const n = Math.round(Number(value)); if (n >= 1 && n <= PHASE_MAX_WEEKS) p.weeks = n; }
+  else if (field === 'weeks') {
+    // Clearing the field makes a phase PERPETUAL again -- "how long?" genuinely has the answer
+    // "until I change it", and an empty box is how you say that. Only the last phase may be, since
+    // nothing can be scheduled after one that never ends.
+    if (String(value).trim() === '') {
+      if (STATE.phases[STATE.phases.length - 1] === p) p.weeks = null;
+      else showToast('Only the last phase can run until you change it');
+    } else {
+      const n = Math.round(Number(value));
+      if (n >= 1 && n <= PHASE_MAX_WEEKS) p.weeks = n;
+    }
+  }
   else if (field === 'direction') { if (PHASE_DIRECTIONS.some(d => d.key === value)) p.direction = value; }
   else if (field === 'ratePctPerWeek') { const n = Math.abs(Number(value)); if (n >= 0) p.ratePctPerWeek = n; }
   saveState();
@@ -815,6 +869,13 @@ function updatePhaseField(id, field, value) {
 function extendPhase(id, deltaWeeks) {
   const p = (STATE.phases || []).find(x => x.id === id);
   if (!p) return;
+  // Extending a PERPETUAL phase is how you give it a length. It starts from however long it has
+  // actually run rather than from 1 -- "+1 week" on a block you've been in for six should mean
+  // seven, not two.
+  if (phaseIsPerpetual(p)) {
+    const entry = phaseTimeline().find(s => s.phase.id === id);
+    if (entry) endPerpetualPhaseAt(entry, todayStr());
+  }
   const next = Math.max(1, Math.min(PHASE_MAX_WEEKS, (Number(p.weeks) || 1) + deltaWeeks));
   if (next === p.weeks) return;
   p.weeks = next;
@@ -826,15 +887,18 @@ function movePhase(id, delta) {
   const all = STATE.phases || [];
   const i = all.findIndex(x => x.id === id);
   if (i < 0) return;
-  const sibs = phasesForGoal(all[i].goalId);
-  const at = sibs.indexOf(all[i]);
-  const swapWith = sibs[at + delta];
-  if (!swapWith) return;
+  const j = i + delta;
+  // One sequence now, so neighbours are simply adjacent -- no sibling list to index through first.
+  if (j < 0 || j >= all.length) return;
+  // A perpetual phase can only ever be last: nothing can be scheduled after a phase with no end.
+  if (phaseIsPerpetual(all[i]) || phaseIsPerpetual(all[j])) {
+    showToast('A perpetual phase stays last — give it a length first');
+    return;
+  }
   // Swaps the two in STATE.phases itself. Order within that array IS the phase order -- there's no
   // separate index field to keep in step, which is the same reason start dates aren't stored.
-  const j = all.indexOf(swapWith);
   const moving = all[i];
-  all[i] = swapWith; all[j] = moving;
+  all[i] = all[j]; all[j] = moving;
   saveState();
   render();
 }
@@ -850,29 +914,32 @@ function deletePhase(id) {
 
 // ---- Screen ----
 
-function renderPhases(goal) {
-  const sched = phaseSchedule(goal);
-  const summary = phasePlanSummary(goal);
+function renderPhases() {
+  const sched = phaseTimeline();
+  const summary = phasePlanSummary();
   return `
     <div class="row" style="margin:22px 0 8px;">
-      <div class="subtle-label" style="margin-bottom:0;">${goal.kind === 'exercise' ? 'BLOCKS' : 'PHASES'}</div>
-      <button class="btn btn-sm" onclick="addPhase('${goal.id}')">+ ADD ${goal.kind === 'exercise' ? 'BLOCK' : 'PHASE'}</button>
+      <div class="subtle-label" style="margin-bottom:0;">PHASES</div>
+      <button class="btn btn-sm" onclick="addPhase()">+ ADD PHASE</button>
     </div>
     ${sched.length
       ? `<div class="phase-list">${sched.map(renderPhaseCard).join('')}</div>
-         ${goal.kind === 'weight' ? renderPhaseSummary(goal, summary) : ''}`
-      : emptyState(goal.kind === 'exercise'
-          ? 'No blocks yet. Add one when a stretch of training should have its own plan — whatever you’re running now simply carries on until you do.'
-          : 'No phases yet. One long push is a plan too — add phases when you want to change pace partway, or take a planned break.')}`;
+         ${renderPhaseSummary(summary)}`
+      : emptyState('No phases yet. One long push is a plan too — add phases when you want to change pace partway, or take a planned break.')}`;
 }
 
-// The shell -- label, dates, length, and the extend/move/delete row -- is identical for both kinds,
-// because all of that is about WHEN a block runs and that question has one answer. Only the middle
-// differs: a weight phase carries a rate and a calorie target, an exercise block carries a plan.
+// One card for one kind of phase. It used to branch on the goal's kind, showing a rate and a calorie
+// target for a weight phase and a plan for an exercise block -- but a phase now carries both, because
+// a stretch of time has both a way you're training and a way you're eating.
 function renderPhaseCard(entry) {
   const p = entry.phase;
-  const exercise = entry.goal.kind === 'exercise';
   const stateLabel = { past: 'DONE', current: 'NOW', future: 'UPCOMING' }[entry.state];
+  // A perpetual phase names itself rather than showing an end date it doesn't have.
+  const when = entry.perpetual
+    ? `${fmtGoalDate(entry.startDate)} &ndash; <b style="color:var(--text)">until you change it</b>`
+    : `${fmtGoalDate(entry.startDate)} &ndash; ${fmtGoalDate(entry.endDate)} · ${entry.weeks} weeks`;
+  const projection = (entry.startWeightLb == null || entry.endWeightLb == null) ? ''
+    : ` · ${fmt(lbToDisplay(entry.startWeightLb), 1)} &rarr; ${fmt(lbToDisplay(entry.endWeightLb), 1)} ${weightUnitLabel()} projected`;
   return `
     <div class="phase-card phase-state-${entry.state}">
       <div class="ehead">
@@ -880,12 +947,10 @@ function renderPhaseCard(entry) {
                onchange="updatePhaseField('${p.id}','label',this.value)">
         <span class="phase-chip phase-chip-${entry.state}">${stateLabel}</span>
       </div>
-      <div class="phase-when">
-        ${fmtGoalDate(entry.startDate)} &ndash; ${fmtGoalDate(entry.endDate)} · ${entry.weeks} weeks${exercise ? ''
-          : ` · ${fmt(lbToDisplay(entry.startWeightLb), 1)} &rarr; ${fmt(lbToDisplay(entry.endWeightLb), 1)} ${weightUnitLabel()} planned`}
-      </div>
+      <div class="phase-when">${when}${projection}</div>
 
-      ${exercise ? renderExercisePhaseBody(entry) : renderWeightPhaseBody(entry)}
+      ${renderWeightPhaseBody(entry)}
+      ${renderExercisePhaseBody(entry)}
 
       <div class="phase-actions">
         <button class="btn btn-sm" onclick="extendPhase('${p.id}',1)" title="Everything after this moves out a week; your pace is left alone">+1 WK</button>
@@ -900,15 +965,13 @@ function renderPhaseCard(entry) {
 // A block's plan is NOT edited here. The Planner already is that editor, and building a second one
 // would give the app two places to change the same seven days. This says what the block holds and
 // points at the one editor, which follows whichever plan is in effect.
+// The training half of a phase card. No Weeks control here: a phase has ONE length, and it's set in
+// the weight half above -- rendering both bodies on one card meant this second copy was editing the
+// same field from two places on the same screen.
 function renderExercisePhaseBody(entry) {
   const p = entry.phase;
   const n = weekPlanCount(p.exercisePlan);
   return `
-      <div class="phase-controls phase-controls-1">
-        <label class="field"><span class="lbl">Weeks</span>
-          <input type="number" min="1" max="${PHASE_MAX_WEEKS}" step="1" value="${entry.weeks}"
-                 onchange="updatePhaseField('${p.id}','weeks',this.value)"></label>
-      </div>
       <div class="goal-rows">
         <div class="goal-row">
           <span class="goal-row-k">Plan</span>
@@ -976,7 +1039,9 @@ function renderWeightPhaseBody(entry) {
   return `
       <div class="phase-controls">
         <label class="field"><span class="lbl">Weeks</span>
-          <input type="number" min="1" max="${PHASE_MAX_WEEKS}" step="1" value="${entry.weeks}"
+          <input type="number" min="1" max="${PHASE_MAX_WEEKS}" step="1"
+                 value="${entry.perpetual ? '' : entry.weeks}"
+                 ${entry.perpetual ? 'placeholder="open"' : ''}
                  onchange="updatePhaseField('${p.id}','weeks',this.value)"></label>
         <label class="field"><span class="lbl">Direction</span>
           <select onchange="updatePhaseField('${p.id}','direction',this.value)">
@@ -1047,13 +1112,21 @@ function renderPhaseCalories(entry) {
 // The line that makes the phases worth writing down: what they add up to, against what you asked
 // for. Both halves can disagree with the goal independently -- landing on the weight but two weeks
 // late is a different problem from finishing on time three pounds short.
-function renderPhaseSummary(goal, s) {
+// Reports where the plan LANDS, with no verdict attached -- there's no target to reach or miss any
+// more, so the ending weight is simply the number your rates and lengths add up to.
+function renderPhaseSummary(s) {
   if (!s) return '';
   const u = weightUnitLabel();
-  const over = Math.round(s.weeksOver * 10) / 10;
-  const weeksNote = Math.abs(over) < 0.15 ? null
-    : over > 0 ? `<span class="goal-pace goal-pace-behind">${fmt(over, 1)} wk past the target date</span>`
-               : `<span class="goal-pace goal-pace-ok">${fmt(Math.abs(over), 1)} wk still unplanned</span>`;
+  // A perpetual tail has no end and nothing to project to. Saying so beats showing a figure that
+  // would creep every day on its own.
+  if (s.perpetualTail) {
+    return `<div class="phase-sum"><div class="phase-sum-note">Runs until you change it — no end to project to.</div></div>`;
+  }
+  if (s.endWeightLb == null) {
+    return `<div class="phase-sum"><div class="phase-sum-note">Log a weight to project where this plan lands.</div></div>`;
+  }
+  const deltaLb = s.endWeightLb - s.startWeightLb;
+  const dir = Math.abs(deltaLb) < 0.5 ? 'holding' : deltaLb < 0 ? 'down' : 'up';
   return `
     <div class="phase-sum">
       <div class="row">
@@ -1061,10 +1134,9 @@ function renderPhaseSummary(goal, s) {
         <span class="mono" style="font-size:13px;">${fmt(lbToDisplay(s.endWeightLb), 1)} ${u} · ${fmtGoalDate(s.endDate)}</span>
       </div>
       <div class="phase-sum-note">
-        ${s.reachesTarget
-          ? `<span class="goal-pace goal-pace-ok">reaches the target</span>`
-          : `<span class="goal-pace goal-pace-behind">${fmt(Number(lbToDisplay(s.shortByLb)), 1)} ${u} short of target</span>`}
-        ${weeksNote ? ' · ' + weeksNote : ''}
+        ${dir === 'holding'
+          ? 'holding steady'
+          : `${dir} ${fmt(Math.abs(Number(lbToDisplay(deltaLb))), 1)} ${u} across ${fmt(s.plannedWeeks, 0)} weeks`}
       </div>
     </div>`;
 }
@@ -1097,4 +1169,84 @@ function renderPhasesScreen() {
       `<button class="${sub === key ? 'active' : ''}" onclick="setPhasesSubtab('${key}')">${label}</button>`).join(''))}
     ${body}
   </div>`;
+}
+
+// ---------------- Migration to the one-timeline model ----------------
+//
+// Phases used to hang off a goal (STATE.goals, one 'weight' and one 'exercise' sequence). They are
+// now a single top-level sequence anchored at STATE.phaseOrigin, and a goal is something a phase
+// optionally carries rather than the thing that owns it.
+//
+// Nobody is running the old shape in anger, so this converts rather than preserving: the two
+// sequences interleave by start date, and target weights -- unrepresentable in a model where the
+// ending weight is an OUTPUT of your rates rather than an input -- are dropped. What survives is
+// every phase's own rate, length, plan and calorie target, which is what was actually driving the
+// plan the whole time.
+function migratePhasesToOneTimeline() {
+  if (!STATE.phases.some(p => p.goalId) && !Array.isArray(STATE.goals)) return;
+  const goals = Array.isArray(STATE.goals) ? STATE.goals : [];
+  if (goals.length) {
+    // Rebuild each old sequence's dates so the merge can order by when things actually ran.
+    const dated = [];
+    goals.forEach(g => {
+      let cursor = g.startDate || todayStr();
+      STATE.phases.filter(p => p.goalId === g.id).forEach(p => {
+        const weeks = Math.max(1, Number(p.weeks) || 1);
+        dated.push({ phase: p, startDate: cursor });
+        cursor = shiftDate(cursor, weeks * 7);
+      });
+    });
+    dated.sort((a, b) => a.startDate.localeCompare(b.startDate));
+    if (dated.length) {
+      STATE.phaseOrigin = STATE.phaseOrigin || dated[0].startDate;
+      STATE.phases = dated.map(d => d.phase);
+    }
+  }
+  // A phase is a phase. The kind/goalId pair described a split that no longer exists, and leaving
+  // them behind would let a later read resurrect it.
+  STATE.phases.forEach(p => { delete p.kind; delete p.goalId; });
+  delete STATE.goals;
+  // exTargets were keyed to a goal. Fitness targets become phase-owned in the next step; until then
+  // there is nothing for them to hang off, and a target pointing at a deleted goal can never render.
+  STATE.exTargets = [];
+}
+
+// Everything belongs to a phase, so there is always at least one. Auto-creating it is what lets the
+// plan resolvers drop their "no phase covers this date" branch entirely -- and it costs nothing,
+// because a phase with no goal and no end is exactly the state someone who never sets anything up is
+// already in. They just get to see it named.
+//
+// It absorbs the two former global plans. STATE.exercisePlan and STATE.diet.mealPlan existed only as
+// the pre-phase fallback; with a phase always present they have nothing left to be.
+function ensurePerpetualPhase() {
+  if (STATE.phases.length) {
+    // A perpetual phase can only be last -- phaseTimeline() has nowhere to start whatever follows a
+    // phase that never ends. Anything after one is unreachable, so it can't have been meant.
+    const at = STATE.phases.findIndex(p => phaseIsPerpetual(p));
+    if (at >= 0 && at < STATE.phases.length - 1) STATE.phases.length = at + 1;
+    if (!STATE.phaseOrigin) STATE.phaseOrigin = earliestLoggedDate() || todayStr();
+    return;
+  }
+  STATE.phaseOrigin = earliestLoggedDate() || todayStr();
+  // Convert legacy entry shape BEFORE copying. copyWeekPlan() reads `refId`, which an old-shape
+  // {id, workoutId} entry doesn't have -- copying first would silently blank every assignment.
+  migrateWeekPlanEntries(STATE.exercisePlan);
+  STATE.phases.push(newPhase({
+    label: 'Current block',
+    weeks: null,                       // perpetual: runs until something replaces it
+    exercisePlan: copyWeekPlan(STATE.exercisePlan),
+    mealPlan: copyMealPlan(STATE.diet && STATE.diet.mealPlan),
+  }));
+  delete STATE.exercisePlan;
+  if (STATE.diet) delete STATE.diet.mealPlan;
+}
+
+// The first day this app has any record of. Used as the origin so the auto-created phase covers the
+// history that already exists, rather than starting today and leaving every past date planless.
+function earliestLoggedDate() {
+  let best = null;
+  const consider = d => { if (d && (!best || d < best)) best = d; };
+  (STATE.weightLog || []).forEach(e => consider(e.date));
+  Object.keys(STATE.logs || {}).forEach(k => consider((STATE.logs[k] || {}).date));
+  return best;
 }

@@ -49,7 +49,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     const wd = new Date(today + 'T00:00:00').getDay();
     STATE.workouts = STATE.workouts.filter(w => w.id !== 'wX');
     STATE.workouts.push({ id: 'wX', name: 'Lower Body', type: 'weights', style: 'P-Zero (GZCL)', exercises: [] });
-    STATE.exercisePlan[wd] = [planEntry('workout', 'wX')];
+    currentPhase().phase.exercisePlan[wd] = [planEntry('workout', 'wX')];
     STATE.life.habits = [{ id: 'hX', name: 'Stretches', startDate: '2020-01-01', endDate: null, createdAt: 1 }];
     STATE.life.scheduleExceptions = [];
     saveState();
@@ -72,14 +72,14 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // Home's box system treats '' as "conditional box with nothing to say" (same as Reminders); an
   // empty panel with a heading would be worse than no box.
   const empty = await page.evaluate(() => {
-    const kept = { a: STATE.life.anchors, h: STATE.life.habits, p: STATE.exercisePlan, m: STATE.diet.mealPlan };
+    const kept = { a: STATE.life.anchors, h: STATE.life.habits, p: currentPhase().phase.exercisePlan, m: currentPhase().phase.mealPlan };
     const wd = new Date(todayStr() + 'T00:00:00').getDay();
     STATE.life.anchors = []; STATE.life.habits = [];
-    STATE.exercisePlan[wd] = []; STATE.diet.mealPlan[wd] = [];
+    currentPhase().phase.exercisePlan[wd] = []; currentPhase().phase.mealPlan[wd] = [];
     STATE.life.schedules = [];
     const html = renderHomeDayBox();
     STATE.life.anchors = kept.a; STATE.life.habits = kept.h;
-    STATE.exercisePlan = kept.p; STATE.diet.mealPlan = kept.m;
+    currentPhase().phase.exercisePlan = kept.p; currentPhase().phase.mealPlan = kept.m;
     return html;
   });
   if (empty !== '') throw new Error(`An empty day should render no box at all, got ${empty.length} chars`);

@@ -365,8 +365,9 @@ function migrateState() {
   if (STATE.diet.fatG === undefined) STATE.diet.fatG = null;
   if (STATE.diet.carbG === undefined) STATE.diet.carbG = null;
   if (!Array.isArray(STATE.diet.meals)) STATE.diet.meals = [];
-  if (!STATE.diet.mealPlan || typeof STATE.diet.mealPlan !== 'object') STATE.diet.mealPlan = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
-  for (let d = 0; d <= 6; d++) { if (!Array.isArray(STATE.diet.mealPlan[d])) STATE.diet.mealPlan[d] = []; }
+  // No STATE.diet.mealPlan guard: the global meal plan is retired. ensurePerpetualPhase() folds a
+  // legacy one into the first phase and deletes it, and re-creating it here would resurrect it on
+  // every load. Phase plans are normalised below instead.
   if (!Array.isArray(STATE.diet.customFoods)) STATE.diet.customFoods = [];
   if (!STATE.diet.foodLog || typeof STATE.diet.foodLog !== 'object') STATE.diet.foodLog = {};
   if (!STATE.diet.tdeeWindowWeeks) STATE.diet.tdeeWindowWeeks = 12;
@@ -381,7 +382,6 @@ function migrateState() {
   // carried over. Dropping the old key stops a save dump showing both and leaving the next reader
   // wondering which one is live.
   delete STATE.meso;
-  if (!Array.isArray(STATE.goals)) STATE.goals = [];
   if (!Array.isArray(STATE.phases)) STATE.phases = [];
   if (!Array.isArray(STATE.lifts)) STATE.lifts = [];
   // Setup notes keyed by liftId -- sparse, and deliberately not on the lift itself, since
@@ -425,29 +425,20 @@ function migrateState() {
       });
     });
   });
-  // A target whose goal is gone can never render; same reasoning as orphan phases.
-  STATE.exTargets = STATE.exTargets.filter(t => STATE.goals.some(g => g.id === t.goalId));
-  // A phase whose goal is gone can never render or be reached, but it would keep being saved
-  // and would silently reappear if an id were ever reused. Dropping them here is cheaper than
-  // a guard at every read.
-  STATE.phases = STATE.phases.filter(p => STATE.goals.some(g => g.id === p.goalId));
-  // An exercise block with a malformed plan would break every weekday read through it. Cheaper to
-  // normalise once on load than to guard seven array lookups at every call site.
+  migratePhasesToOneTimeline();
+  ensurePerpetualPhase();
+  // Every phase now carries BOTH plans, so both get the same normalisation -- a malformed one would
+  // break every weekday read through it, and guarding seven array lookups at each call site is more
+  // expensive than fixing it once here.
   STATE.phases.forEach(p => {
-    if (p.kind !== 'exercise') return;
     if (!p.exercisePlan || typeof p.exercisePlan !== 'object') p.exercisePlan = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
-    for (let d = 0; d <= 6; d++) if (!Array.isArray(p.exercisePlan[d])) p.exercisePlan[d] = [];
-    // Every block carries its OWN copy of a plan, so the entry conversion has to reach all of them.
+    if (!p.mealPlan || typeof p.mealPlan !== 'object') p.mealPlan = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
+    for (let d = 0; d <= 6; d++) {
+      if (!Array.isArray(p.exercisePlan[d])) p.exercisePlan[d] = [];
+      if (!Array.isArray(p.mealPlan[d])) p.mealPlan[d] = [];
+    }
+    // Every phase carries its OWN copy of a plan, so the entry conversion has to reach all of them.
     migrateWeekPlanEntries(p.exercisePlan);
-  });
-  // The same normalisation for weight phases' meal plans, with one deliberate difference: a MISSING
-  // plan is left missing rather than created empty. mealPlanInEffect() treats "no mealPlan" as "this
-  // phase predates the feature, fall through to the global plan" -- so seeding an empty week here
-  // would silently replace the meal plan of everyone who already had a weight goal with a blank one.
-  // Only a plan that already exists gets its seven arrays guaranteed.
-  STATE.phases.forEach(p => {
-    if (p.kind !== 'weight' || !p.mealPlan || typeof p.mealPlan !== 'object') return;
-    for (let d = 0; d <= 6; d++) if (!Array.isArray(p.mealPlan[d])) p.mealPlan[d] = [];
   });
   if (STATE.settings.waterTargetMl == null) {
     STATE.settings.waterTargetMl = STATE.settings.waterTarget != null
@@ -560,9 +551,10 @@ function migrateState() {
     STATE.cardioLogs = {};
     STATE.settings.workoutModelMigrated = true;
   }
-  if (!STATE.exercisePlan || typeof STATE.exercisePlan !== 'object') STATE.exercisePlan = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
-  for (let d = 0; d <= 6; d++) { if (!Array.isArray(STATE.exercisePlan[d])) STATE.exercisePlan[d] = []; }
-  migrateWeekPlanEntries(STATE.exercisePlan);
+  // No STATE.exercisePlan guard either, and for a sharper reason than the meal one: this block ran
+  // AFTER ensurePerpetualPhase() folded the global plan away, so it re-created the very thing that
+  // had just been retired -- on every single load. The legacy entry conversion it did moved into
+  // the fold itself, where it happens before the copy rather than after.
   STATE.workouts.forEach(w => {
     if (w.type === undefined) w.type = w.t1 ? 'weights' : 'weights'; // defensive fallback — shouldn't happen post-migration
     if (w.style === undefined) w.style = w.t1 ? 'P-Zero (GZCL)' : (w.type === 'cardio' ? 'Time/Dist/Cal' : 'Hypertrophy (RP Strength)');
@@ -773,10 +765,10 @@ function createWorkout(type, style) {
 function deleteWorkout(id) {
   showConfirm('Delete this workout? Its logged history stays on record but the workout itself is gone.', () => {
     STATE.workouts = STATE.workouts.filter(w => w.id !== id);
-    // Every plan, not just the global one: a workout assigned inside a training block would
-    // otherwise survive its own deletion and render as a blank row in that block forever.
-    const plans = [STATE.exercisePlan].concat((STATE.phases || []).filter(p => p.exercisePlan).map(p => p.exercisePlan));
-    plans.forEach(plan => {
+    // Every phase's plan: a workout assigned inside one would otherwise survive its own deletion
+    // and render as a blank row in that phase forever. (There is no global plan to sweep any more --
+    // every plan belongs to a phase.)
+    allExercisePlans().forEach(plan => {
       for (let d = 0; d <= 6; d++) plan[d] = (plan[d] || []).filter(e => !(e.kind === 'workout' && e.refId === id));
     });
     saveState();

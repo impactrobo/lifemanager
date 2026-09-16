@@ -53,9 +53,9 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
       STATE.logs[logKey(cy, rp.id)] = { date: shiftDate(t, d), deload: false,
         entries: { x1: { sets: [{ weight: lb, reps }] } } };
     });
-    STATE.goals = [{ id: 'e1', kind: 'exercise', name: 'Base', startDate: shiftDate(t, -70),
-      targetDate: shiftDate(t, 84), archived: false, createdAt: 1 }];
-    STATE.phases = [];
+    // The 'since' a target measures from is the PHASE start now, not a goal's.
+    STATE.phaseOrigin = shiftDate(t, -70);
+    STATE.phases = [newPhase({ id: 'e1', label: 'Base', weeks: null })];
     STATE.exTargets = [];
     saveState();
     return { rpId: rp.id, gzId: gz.id, cardioId: cardio.id };
@@ -112,8 +112,8 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // ---- 3. Rep max: a set must meet or exceed BOTH numbers ----
   const repMax = await page.evaluate(() => {
-    const g = activeExerciseGoal();
-    const mk = (o) => Object.assign({ id: 'tt', goalId: 'e1', kind: 'repMax', liftId: 'bb-bench',
+    const g = { startDate: phaseTimeline()[0].startDate };
+    const mk = (o) => Object.assign({ id: 'tt', kind: 'repMax', liftId: 'bb-bench',
       weightLb: 225, reps: 5, distance: null, minutes: null, unit: 'mi', createdAt: 1 }, o);
     return {
       // 215x5 logged, 225x2 logged: neither is 225x5.
@@ -141,12 +141,12 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // ---- 4. Measured since the goal started; lifetime sits alongside as context ----
   const windowed = await page.evaluate(() => {
     const t = todayStr();
-    const g = activeExerciseGoal();
+    const g = { startDate: phaseTimeline()[0].startDate };
     // A heavier set from long before the goal began.
     const rp = STATE.workouts[0];
     STATE.logs[logKey(9, rp.id)] = { date: shiftDate(t, -800), deload: false,
       entries: { x1: { sets: [{ weight: 250, reps: 5 }] } } };
-    const target = { id: 'tt', goalId: 'e1', kind: 'repMax', liftId: 'bb-bench', weightLb: 245, reps: 5,
+    const target = { id: 'tt', kind: 'repMax', liftId: 'bb-bench', weightLb: 245, reps: 5,
       distance: null, minutes: null, unit: 'mi', createdAt: 1 };
     const p = exTargetProgress(target, g);
     const lifetimeBest = bestForLift('bb-bench', null).bestAtReps(5).weightLb;
@@ -164,11 +164,11 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // ---- 5. Cardio: a run is a run, so no identity to resolve ----
   const cardio = await page.evaluate((ids) => {
     const t = todayStr();
-    const g = activeExerciseGoal();
+    const g = { startDate: phaseTimeline()[0].startDate };
     [[-50, 3.1, 27.5], [-40, 3.1, 26.2], [-30, 5.0, 46.0], [-20, 3.1, 25.4], [-10, 6.2, 55.0]].forEach(([d, dist, mins], i) => {
       STATE.logs[logKey(i + 1, ids.cardioId)] = { date: shiftDate(t, d), actualDistance: dist, actualMinutes: mins };
     });
-    const mk = (o) => Object.assign({ id: 'tt', goalId: 'e1', kind: 'cardioTime', liftId: null,
+    const mk = (o) => Object.assign({ id: 'tt', kind: 'cardioTime', liftId: null,
       weightLb: null, reps: 1, distance: 3.1, minutes: 25, unit: 'mi', createdAt: 1 }, o);
     const time = exTargetProgress(mk({}), g);
     const easy = exTargetProgress(mk({ minutes: 26 }), g);
@@ -201,8 +201,8 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // Deliberate: current, target, gap. A straight line through strength or cardio would be
   // confidently wrong most of the time, and that is worse than silent.
   const noProj = await page.evaluate(() => {
-    const g = activeExerciseGoal();
-    const p = exTargetProgress({ id: 'tt', goalId: 'e1', kind: 'repMax', liftId: 'bb-bench',
+    const g = { startDate: phaseTimeline()[0].startDate };
+    const p = exTargetProgress({ id: 'tt', kind: 'repMax', liftId: 'bb-bench',
       weightLb: 245, reps: 5, distance: null, minutes: null, unit: 'mi', createdAt: 1 }, g);
     return Object.keys(p).filter(k => /project/i.test(k));
   });
@@ -210,7 +210,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // ---- 7. The PR log reads the same resolver ----
   await page.evaluate(() => {
-    STATE.exTargets = [{ id: 't1', goalId: 'e1', kind: 'repMax', liftId: 'bb-bench', weightLb: 225,
+    STATE.exTargets = [{ id: 't1', kind: 'repMax', liftId: 'bb-bench', weightLb: 225,
       reps: 5, distance: null, minutes: null, unit: 'mi', createdAt: 1 }];
     saveState();
     switchTab('train'); NAV.fitnessSubtab = 'body'; NAV.bodySubtab = 'pr'; render();
@@ -221,7 +221,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
       reps: c.querySelector('.pr-reps').textContent.trim(),
       weight: c.querySelector('.pr-weight').textContent.trim(),
     }));
-    const target = exTargetProgress(STATE.exTargets[0], activeExerciseGoal());
+    const target = exTargetProgress(STATE.exTargets[0], phaseTimeline()[0].phase);
     return {
       lifts: Array.from(document.querySelectorAll('.pr-grid')).length,
       cells,
@@ -237,44 +237,15 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (pr.prAt5 !== '215') throw new Error(`The 5-rep PR should be 215, got ${pr.prAt5}`);
   if (!pr.targetBest.startsWith('215')) throw new Error('The target and the PR log must not disagree about your best');
 
-  // ---- 8. Targets render on the goal, persist, and die with it ----
-  await page.evaluate(() => { switchTab('train'); setFitnessSubtab('goal'); });
-  await settle(page);
-  const ui = await page.evaluate(() => ({
-    cards: document.querySelectorAll('.ex-target').length,
-    // The delete control must sit beside the type select, not drop onto its own line.
-    headIsRow: getComputedStyle(document.querySelector('.ex-target .ehead')).display,
-  }));
-  console.log('goal screen:', ui);
-  if (ui.cards !== 1) throw new Error('The target should render under the training goal');
-  if (ui.headIsRow !== 'flex') throw new Error('.ehead is scoped to .entry-card — .ex-target needs its own');
-
-  await page.reload();
-  await settle(page);
-  const persisted = await page.evaluate(() => ({ n: STATE.exTargets.length, kind: STATE.exTargets[0].kind }));
-  if (persisted.n !== 1 || persisted.kind !== 'repMax') throw new Error('Targets should persist');
-
-  const cascade = await page.evaluate(() => {
-    showConfirm = (msg, fn) => fn();
-    deleteGoal('e1');
-    return { goals: STATE.goals.length, targets: STATE.exTargets.length };
-  });
-  console.log('after deleting the goal:', cascade);
-  if (cascade.targets !== 0) throw new Error('Deleting a goal takes its targets with it');
-
-  // An orphan that slipped through is dropped on load, same as orphan phases.
-  await page.evaluate(() => {
-    STATE.exTargets = [{ id: 'zz', goalId: 'gone', kind: '1rm', liftId: 'bb-bench', weightLb: 225,
-      reps: 1, distance: null, minutes: null, unit: 'mi', createdAt: 1 }];
-    saveState();
-  });
-  await page.reload();
-  await settle(page);
-  const orphan = await page.evaluate(() => STATE.exTargets.length);
-  if (orphan !== 0) throw new Error('A target whose goal is gone must not survive loadState');
+  // Sections 8-10 tested the exTargets UI: targets rendered on the goal screen, persisted, and
+  // cascaded away when the goal was deleted. The goal record is gone, and fitness targets become
+  // PHASE-owned in the next step ({liftId, reps, weightLb, hitOn}) -- measured by exactly the
+  // bestForLift() machinery sections 1-7 above pin. They come back with that shape; deleting them
+  // here rather than leaving them red keeps the suite honest about what currently exists.
 
   await page.evaluate(() => {
-    STATE.goals = []; STATE.phases = []; STATE.exTargets = []; STATE.logs = {}; STATE.workouts = [];
+    STATE.phases = []; ensurePerpetualPhase();
+    STATE.exTargets = []; STATE.logs = {}; STATE.workouts = [];
     STATE.categories.forEach(c => { delete c.liftId; });
     saveState();
   });

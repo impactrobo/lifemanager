@@ -32,8 +32,8 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // that runs after it.
   const snapshot = await page.evaluate(() => JSON.stringify({
     reminders: STATE.reminders, recurring: STATE.budget.recurring,
-    habits: STATE.life.habits, meals: STATE.diet.meals, mealPlan: STATE.diet.mealPlan,
-    workouts: STATE.workouts, exercisePlan: STATE.exercisePlan,
+    habits: STATE.life.habits, meals: STATE.diet.meals, mealPlan: currentPhase().phase.mealPlan,
+    workouts: STATE.workouts, exercisePlan: currentPhase().phase.exercisePlan,
     exceptions: STATE.life.scheduleExceptions,
   }));
 
@@ -208,18 +208,18 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   await page.evaluate(() => {
     STATE.life.habits = [{ id: 'h1', name: 'Stretches', startDate: '2020-01-01', endDate: null, createdAt: 1 }];
     STATE.diet.meals = [{ id: 'mA', name: 'Oats', items: [] }, { id: 'mB', name: 'Chicken Rice', items: [] }];
-    STATE.diet.mealPlan = {};
-    STATE.diet.mealPlan[1] = [{ id: 'p1', mealId: 'mA' }];   // Mon 15
-    STATE.diet.mealPlan[2] = [{ id: 'p2', mealId: 'mA' }];   // Tue 16 — same as Monday
-    STATE.diet.mealPlan[3] = [{ id: 'p3', mealId: 'mB' }];   // Wed 17 — different
+    currentPhase().phase.mealPlan = {};
+    currentPhase().phase.mealPlan[1] = [{ id: 'p1', mealId: 'mA' }];   // Mon 15
+    currentPhase().phase.mealPlan[2] = [{ id: 'p2', mealId: 'mA' }];   // Tue 16 — same as Monday
+    currentPhase().phase.mealPlan[3] = [{ id: 'p3', mealId: 'mB' }];   // Wed 17 — different
     if (!STATE.workouts.find(w => w.id === 'wLower')) {
       STATE.workouts.push({ id: 'wLower', name: 'Lower Body', type: 'weights', t1: {}, t2a: {}, t2b: {}, t2c: {} });
     }
     // Mon and Wed but NOT Tue: the A/B/A case.
-    STATE.exercisePlan = STATE.exercisePlan || {};
-    STATE.exercisePlan[1] = [planEntry('workout', 'wLower', null)];
-    STATE.exercisePlan[2] = [];
-    STATE.exercisePlan[3] = [planEntry('workout', 'wLower', null)];
+    currentPhase().phase.exercisePlan = currentPhase().phase.exercisePlan || {};
+    currentPhase().phase.exercisePlan[1] = [planEntry('workout', 'wLower', null)];
+    currentPhase().phase.exercisePlan[2] = [];
+    currentPhase().phase.exercisePlan[3] = [planEntry('workout', 'wLower', null)];
     STATE.life.scheduleExceptions = [];
     saveState();
     VIEW.calCompare = ['2026-06-15', '2026-06-16', '2026-06-17'];
@@ -286,7 +286,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // and a ditto cannot rescue it.
   // render() is rAF-deferred, so the DOM read sits behind its own settle().
   await page.evaluate(() => {
-    STATE.life.habits = []; STATE.diet.mealPlan = {}; STATE.exercisePlan = {};
+    STATE.life.habits = []; currentPhase().phase.mealPlan = {}; currentPhase().phase.exercisePlan = {};
     saveState(); render();
   });
   await settle(page);
@@ -331,8 +331,8 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   await page.evaluate((snap) => {
     const s = JSON.parse(snap);
     STATE.reminders = s.reminders; STATE.budget.recurring = s.recurring;
-    STATE.life.habits = s.habits; STATE.diet.meals = s.meals; STATE.diet.mealPlan = s.mealPlan;
-    STATE.workouts = s.workouts; STATE.exercisePlan = s.exercisePlan;
+    STATE.life.habits = s.habits; STATE.diet.meals = s.meals; currentPhase().phase.mealPlan = s.mealPlan;
+    STATE.workouts = s.workouts; currentPhase().phase.exercisePlan = s.exercisePlan;
     STATE.life.scheduleExceptions = s.exceptions;
     VIEW.calCompare = null;
     saveState();

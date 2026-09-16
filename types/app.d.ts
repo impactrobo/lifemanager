@@ -167,7 +167,6 @@ interface DietState {
   calc: DietCalcInputs;
   macro: DietMacroInputs;
   meals: Meal[];
-  mealPlan: DayOfWeekMap<{ id: string; mealId: string | null }>;
   customFoods: CustomFood[];
   foodLog: Record<string, Array<{ id: string; foodId: string; qty: number | string; unit: string }>>;
   /** How many weeks of weight-log data rollingTdeeEstimate() averages over (default 12) —
@@ -679,8 +678,11 @@ interface AppState {
   muscleLandmarks: Record<string, any>;
   life: LifeState;
   currentCycle: number;
-  goals: WeightGoal[];
+  /** One timeline. A phase owns a stretch of time; a goal is something it optionally carries rather
+   *  than the thing that owns it. Start dates stay derived -- phases run back to back from
+   *  phaseOrigin, so extending one pushes every later one out without rewriting any record. */
   phases: GoalPhase[];
+  phaseOrigin: string | null;
   /** Lifts ADDED by hand. The shipped library is concatenated at read time, never copied here. */
   lifts: Lift[];
   exTargets: ExerciseTarget[];
@@ -694,7 +696,6 @@ interface AppState {
   weightLog: WeightLogEntry[];
   cardioWorkouts: Array<Record<string, any>>;
   cardioLogs: Record<string, any>;
-  exercisePlan: DayOfWeekMap<{ id: string; workoutId: string }>;
   notes: Note[];
   reminders: Reminder[];
   diet: DietState;

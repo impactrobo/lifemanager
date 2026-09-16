@@ -41,11 +41,12 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (!shape.uniqueIds) throw new Error('Every entry gets its own id');
   if (!shape.a.id) throw new Error('...and it is always set');
 
-  // ---- 2. The migration reaches the global plan AND every block's own copy ----
+  // ---- 2. The migration reaches every phase's own copy ----
+  // Written as a save from BEFORE phases became a single timeline: old-shape plan entries
+  // ({id, workoutId}) inside blocks that still hang off a goal. Both migrations have to run, and
+  // the entry conversion has to reach every phase rather than just the one in effect.
   const migrated = await page.evaluate(() => {
-    // A save exactly as it looked before the change: old-shape entries everywhere.
     const old = e => ({ id: e.id, workoutId: e.workoutId });
-    STATE.exercisePlan = { 0: [], 1: [old({ id: 'g1', workoutId: 'wA' })], 2: [], 3: [], 4: [], 5: [], 6: [] };
     STATE.goals = [{ id: 'goal1', kind: 'exercise', name: 'Block goal', startDate: '2026-01-01',
                      targetDate: '2026-06-01', archived: false, createdAt: 1 }];
     STATE.phases = [
@@ -67,32 +68,35 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
       return out;
     };
     return {
-      global: read(STATE.exercisePlan),
-      phaseA: read(STATE.phases[0].exercisePlan),
-      phaseB: read(STATE.phases[1].exercisePlan),
+      // Every phase there is, so the assertion can't miss one by naming them individually.
+      perPhase: (STATE.phases || []).map(p => read(p.exercisePlan)),
+      goalsGone: STATE.goals === undefined,
+      kindGone: (STATE.phases || []).every(p => p.kind === undefined && p.goalId === undefined),
     };
   });
   console.log('migrated:', JSON.stringify(after));
   if (!migrated) throw new Error('fixture failed');
-  const all = after.global.concat(after.phaseA, after.phaseB);
-  if (all.length !== 4) throw new Error('Every entry should survive, got ' + all.length);
+  if (!after.goalsGone) throw new Error('STATE.goals should be gone once phases are one timeline');
+  if (!after.kindGone) throw new Error('kind/goalId describe a split that no longer exists and must not survive');
+  const all = after.perPhase.reduce((a, b) => a.concat(b), []);
+  if (all.length !== 3) throw new Error('Every entry should survive, got ' + all.length);
   if (all.some(e => e.kind !== 'workout')) throw new Error('Everything that existed before was a workout');
   // The old field is gone, not merely shadowed — leaving it would be the two-nullable-fields shape
   // arriving by the back door.
   if (all.some(e => e.legacy)) throw new Error('workoutId must be REPLACED, not kept alongside');
-  if (after.global[0].refId !== 'wA') throw new Error('The global plan converted: ' + JSON.stringify(after.global));
-  // A block's plan is its own copy, and missing it would leave that block rendering blank rows.
-  if (after.phaseA[0].refId !== 'wB') throw new Error('A block plan converted: ' + JSON.stringify(after.phaseA));
-  if (after.phaseA[1].refId !== null) throw new Error('An empty old slot stays empty, got ' + after.phaseA[1].refId);
-  if (after.phaseB[0].refId !== 'wC') throw new Error('EVERY block converted, not just the first');
-  if (after.global[0].id !== 'g1' || after.phaseA[0].id !== 'p1') throw new Error('Entry ids are preserved — they key the Planner UI');
+  const [phaseA, phaseB] = after.perPhase;
+  // Each phase's plan is its OWN copy, and missing one would leave that phase rendering blank rows.
+  if (phaseA[0].refId !== 'wB') throw new Error('A phase plan converted: ' + JSON.stringify(phaseA));
+  if (phaseA[1].refId !== null) throw new Error('An empty old slot stays empty, got ' + phaseA[1].refId);
+  if (phaseB[0].refId !== 'wC') throw new Error('EVERY phase converted, not just the first');
+  if (phaseA[0].id !== 'p1') throw new Error('Entry ids are preserved — they key the Planner UI');
 
   // ---- 3. It runs on every load, so it must be a no-op the second time ----
   const idempotent = await page.evaluate(() => {
-    const before = JSON.stringify(STATE.exercisePlan);
-    migrateWeekPlanEntries(STATE.exercisePlan);
-    migrateWeekPlanEntries(STATE.exercisePlan);
-    return { same: JSON.stringify(STATE.exercisePlan) === before };
+    const before = JSON.stringify(currentPhase().phase.exercisePlan);
+    migrateWeekPlanEntries(currentPhase().phase.exercisePlan);
+    migrateWeekPlanEntries(currentPhase().phase.exercisePlan);
+    return { same: JSON.stringify(currentPhase().phase.exercisePlan) === before };
   });
   console.log('idempotent:', idempotent);
   if (!idempotent.same) throw new Error('Running the migration again must change nothing');
@@ -118,27 +122,29 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // ---- 4. Every consumer reads the new shape ----
   const consumers = await page.evaluate(() => {
-    STATE.goals = []; STATE.phases = [];
+    // Back to one perpetual phase -- an empty STATE.phases is no longer a state the app can be in,
+    // since every plan belongs to a phase and ensurePerpetualPhase() guarantees one exists.
+    STATE.phases = []; ensurePerpetualPhase();
     // Its own workout rather than whatever happens to be in STATE: the tests share a file:// origin,
     // so borrowing one makes this depend on what ran before it.
     if (!Array.isArray(STATE.workouts)) STATE.workouts = [];
     STATE.workouts.push({ id: 'wPlanTest', name: 'Plan Test', type: 'weights', t3: [] });
     const w = STATE.workouts[STATE.workouts.length - 1];
     const wd = new Date().getDay();
-    STATE.exercisePlan = EMPTY_WEEK_PLAN();
-    STATE.exercisePlan[wd] = [planEntry('workout', w.id)];
+    currentPhase().phase.exercisePlan = EMPTY_WEEK_PLAN();
+    currentPhase().phase.exercisePlan[wd] = [planEntry('workout', w.id)];
     STATE.life.scheduleExceptions = [];
     saveState();
     const model = dayModel(todayStr());
-    const copied = copyWeekPlan(STATE.exercisePlan);
+    const copied = copyWeekPlan(currentPhase().phase.exercisePlan);
     return {
       dayModelWorkouts: model.workouts.map(x => x.id),
       hasPlan: hasWeekdayPlan(wd, todayStr()),
-      count: weekPlanCount(STATE.exercisePlan),
+      count: weekPlanCount(currentPhase().phase.exercisePlan),
       // A copy must be a COPY: sharing the object would make editing a new block rewrite the old one.
       copiedRef: copied[wd][0].refId,
       copiedKind: copied[wd][0].kind,
-      freshId: copied[wd][0].id !== STATE.exercisePlan[wd][0].id,
+      freshId: copied[wd][0].id !== currentPhase().phase.exercisePlan[wd][0].id,
       wid: w.id,
     };
   });
@@ -149,19 +155,24 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (consumers.copiedRef !== consumers.wid || consumers.copiedKind !== 'workout') throw new Error('copyWeekPlan() carries both fields');
   if (!consumers.freshId) throw new Error('A copied entry gets a NEW id — a shared one would alias two blocks');
 
-  // Deleting a workout still clears it from every plan, including blocks' own copies.
+  // Deleting a workout still clears it from EVERY phase's plan, not just the one in effect.
   const deleted = await page.evaluate(() => {
     const w = STATE.workouts.find(x => x.id === 'wPlanTest');
     const wd = new Date().getDay();
-    STATE.phases = [{ id: 'ph', goalId: 'g', kind: 'exercise', label: 'B', weeks: 4, createdAt: 1,
-                      exercisePlan: (() => { const p = EMPTY_WEEK_PLAN(); p[wd] = [planEntry('workout', w.id)]; return p; })() }];
+    const planWith = () => { const p = EMPTY_WEEK_PLAN(); p[wd] = [planEntry('workout', w.id)]; return p; };
+    // Two phases, both holding the workout: a sweep that only reached the current one would pass
+    // against a single phase and leave a dangling reference in every other.
+    STATE.phases = [
+      newPhase({ id: 'phA', label: 'A', weeks: 4, exercisePlan: planWith() }),
+      newPhase({ id: 'phB', label: 'B', weeks: null, exercisePlan: planWith() }),
+    ];
     deleteWorkout(w.id);
     confirmYes();
-    return { global: STATE.exercisePlan[wd].length, phase: STATE.phases[0].exercisePlan[wd].length };
+    return STATE.phases.map(p => (p.exercisePlan[wd] || []).length);
   });
-  console.log('workout deleted:', deleted);
-  if (deleted.global !== 0 || deleted.phase !== 0) {
-    throw new Error('A deleted workout must leave every plan, blocks included: ' + JSON.stringify(deleted));
+  console.log('entries left per phase after delete:', deleted);
+  if (deleted.some(n => n !== 0)) {
+    throw new Error('A deleted workout must leave every phase plan: ' + JSON.stringify(deleted));
   }
 
   // ---- 5. Nothing still READS a plan entry's old field ----
@@ -184,7 +195,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // skill without a budget, which is why the starter asks for one.
   const onPlan = await page.evaluate(() => {
     STATE.skills = []; STATE.skillTargets = []; STATE.skillSession = null;
-    STATE.goals = []; STATE.phases = []; STATE.life.scheduleExceptions = [];
+    STATE.phases = []; ensurePerpetualPhase(); STATE.life.scheduleExceptions = [];
     const skill = registerSkill(defaultSkill('Guitar'));
     const l = defaultSkillList('Chords', false);
     const it = defaultSkillItem('Em');
@@ -194,15 +205,15 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     const wd = new Date().getDay();
     STATE.workouts = STATE.workouts.filter(w => w.id !== 'wPlanTest');
     STATE.workouts.push({ id: 'wPlanTest', name: 'Plan Test', type: 'weights', t3: [] });
-    STATE.exercisePlan = EMPTY_WEEK_PLAN();
-    STATE.exercisePlan[wd] = [planEntry('workout', 'wPlanTest'), planEntry('skill', skill.id, 25)];
+    currentPhase().phase.exercisePlan = EMPTY_WEEK_PLAN();
+    currentPhase().phase.exercisePlan[wd] = [planEntry('workout', 'wPlanTest'), planEntry('skill', skill.id, 25)];
     saveState();
     const model = dayModel(todayStr());
     return {
       skillId: skill.id, wd,
       workouts: model.workouts.map(w => w.id),
       practice: model.practice.map(p => ({ name: p.skill.name, minutes: p.minutes })),
-      count: weekPlanCount(STATE.exercisePlan),
+      count: weekPlanCount(currentPhase().phase.exercisePlan),
       // The starter reads the plan rather than being handed a number.
       plannedMins: plannedPracticeMinutes(skill.id),
       noPlanMins: plannedPracticeMinutes('nope'),
@@ -238,7 +249,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // The Planner offers skills, round-trips the "kind:id" value, and keeps minutes with the kind.
   const planner = await page.evaluate(a => {
     VIEW.plannerDate = null;
-    const entry = STATE.exercisePlan[a.wd][1];
+    const entry = currentPhase().phase.exercisePlan[a.wd][1];
     const picker = renderPlanWorkoutEntry(a.wd, planEntry('workout', null));
     const filled = renderPlanWorkoutEntry(a.wd, entry);
     // Switching a skill entry to a workout must drop minutes -- they mean nothing on a workout.
@@ -272,9 +283,9 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   const clip = await page.evaluate(a => {
     copyDayWorkoutPlan(a.wd);
     const target = (a.wd + 3) % 7;
-    STATE.exercisePlan[target] = [];
+    currentPhase().phase.exercisePlan[target] = [];
     pasteDayWorkoutPlan(target);
-    return STATE.exercisePlan[target].map(e => ({ kind: e.kind, refId: e.refId, minutes: e.minutes }));
+    return currentPhase().phase.exercisePlan[target].map(e => ({ kind: e.kind, refId: e.refId, minutes: e.minutes }));
   }, onPlan);
   console.log('pasted:', JSON.stringify(clip));
   if (clip.length !== 2) throw new Error('Both entries paste');
@@ -285,7 +296,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // silently dropping a day you committed to would be the app deciding rather than reporting.
   const archived = await page.evaluate(a => {
     archiveSkill(a.skillId);
-    const row = renderPlanWorkoutEntry(a.wd, STATE.exercisePlan[a.wd].find(e => e.kind === 'skill'));
+    const row = renderPlanWorkoutEntry(a.wd, currentPhase().phase.exercisePlan[a.wd].find(e => e.kind === 'skill'));
     const model = dayModel(todayStr());
     unarchiveSkill(a.skillId);
     return { renders: /Guitar/.test(row), flagged: /ARCHIVED/.test(row), stillOnDay: model.practice.length };

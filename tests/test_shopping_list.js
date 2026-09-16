@@ -22,8 +22,8 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   await settle(page);
 
   // Snapshot + clear the meal plan so this test's math is exact regardless of other state.
-  const snapshot = await page.evaluate(() => JSON.parse(JSON.stringify(STATE.diet.mealPlan)));
-  await page.evaluate(() => { STATE.diet.mealPlan = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] }; saveState(); });
+  const snapshot = await page.evaluate(() => JSON.parse(JSON.stringify(currentPhase().phase.mealPlan)));
+  await page.evaluate(() => { currentPhase().phase.mealPlan = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] }; saveState(); });
 
   // 1. No meals assigned -> no items, GENERATE disabled
   // MEAL PLAN lives under PHASES now, not SETUP -- assigning a meal to a weekday is planning, and
@@ -43,8 +43,8 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     STATE.diet.meals.push({ id: mealAId, name: 'Test Meal A', unitSystem: 'metric', items: [{ id: uid(), foodId, qty: 200, unit: 'g' }], createdAt: Date.now(), updatedAt: Date.now() });
     STATE.diet.meals.push({ id: mealBId, name: 'Test Meal B', unitSystem: 'metric', items: [{ id: uid(), foodId, qty: 150, unit: 'g' }], createdAt: Date.now(), updatedAt: Date.now() });
     // Monday (1) gets Meal A, Wednesday (3) gets Meal B — same food+unit, different days
-    STATE.diet.mealPlan[1] = [{ id: uid(), mealId: mealAId }];
-    STATE.diet.mealPlan[3] = [{ id: uid(), mealId: mealBId }];
+    currentPhase().phase.mealPlan[1] = [{ id: uid(), mealId: mealAId }];
+    currentPhase().phase.mealPlan[3] = [{ id: uid(), mealId: mealBId }];
     saveState();
     return { foodId, mealAId, mealBId };
   });
@@ -88,7 +88,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // cleanup
   await page.evaluate((args) => {
-    STATE.diet.mealPlan = args.snapshot;
+    currentPhase().phase.mealPlan = args.snapshot;
     STATE.diet.meals = STATE.diet.meals.filter(m => m.id !== args.mealAId && m.id !== args.mealBId);
     STATE.diet.customFoods = STATE.diet.customFoods.filter(f => f.id !== args.foodId);
     STATE.reminders = STATE.reminders.filter(r => r.id !== args.reminderId);

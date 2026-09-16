@@ -70,7 +70,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     // one of these, because it lives inside STATE.logs keyed by cycle and workout.
     STATE.logs = {};
     STATE.currentCycle = (STATE.currentCycle || 1) + 12;   // a year of cycles later
-    STATE.exercisePlan = {};
+    currentPhase().phase.exercisePlan = {};
     STATE.phases = [];
     saveState();
     return { before, after: liftNote(liftId), cycle: STATE.currentCycle };
