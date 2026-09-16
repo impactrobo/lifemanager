@@ -899,25 +899,74 @@ function addPhase() {
   const tl = phaseTimeline();
   const prev = tl[tl.length - 1];
   const startDate = prev ? shiftDate(prev.endDate, 1) : (STATE.phaseOrigin || todayStr());
-  // The new phase inherits the previous one's rotation, and its plans are copied ROTATED to the
-  // slot the calendar has reached at the boundary -- so a rotation in progress continues rather
-  // than restarting from slot 0 the day the phase changes. See copyRotationPlan().
+  appendSeededPhase(prev, startDate, { label: 'Phase ' + (STATE.phases.length + 1), weeks: PHASE_DEFAULT_WEEKS });
+  saveState();
+  render();
+}
+
+// Appends a phase seeded from whatever is in effect where it starts. Shared by addPhase() and
+// endPhaseNow() so the seeding rule lives in one place.
+//
+// The new phase inherits the previous one's rotation, and its plans are copied ROTATED to the slot
+// the calendar has reached at the boundary -- so a rotation in progress continues rather than
+// restarting from slot 0 the day the phase changes. See copyRotationPlan().
+function appendSeededPhase(prev, startDate, over) {
   const ex = exercisePlanInEffect(startDate);
   const ml = mealPlanInEffect(startDate);
   const n = rotationDaysOf(prev && prev.phase);
   const mealMode = mealRotationOf(prev && prev.phase);
   const exOffset = ex.slotEntry ? workoutSlotFor(ex.slotEntry, startDate) : 0;
   const mlOffset = (mealMode === 'workout' && ml.slotEntry) ? workoutSlotFor(ml.slotEntry, startDate) : 0;
-  STATE.phases.push(newPhase({
-    label: 'Phase ' + (STATE.phases.length + 1),
-    weeks: PHASE_DEFAULT_WEEKS,
+  const phase = newPhase(Object.assign({
     workoutRotationDays: n,
     mealRotation: mealMode,
     exercisePlan: copyRotationPlan(ex.plan, n, exOffset),
     mealPlan: copyMealPlan(ml.plan, mealMode === 'workout' ? n : 7, mlOffset),
-  }));
-  saveState();
-  render();
+  }, over || {}));
+  STATE.phases.push(phase);
+  return phase;
+}
+
+// ---- Ending a phase early ----
+//
+// Fixes the phase's length at what it ACTUALLY ran, and everything after it pulls forward on its
+// own -- dates are derived from lengths, so there is nothing to rewrite.
+//
+// Rounded UP to whole weeks, which means END PHASE really says "this is its last week" rather than
+// "it stops this instant". Weeks are the unit everywhere else in the model, and a 3.4-week phase
+// would be the only one in the app that isn't -- so the confirm names the actual end date instead
+// of pretending the phase stops mid-week.
+//
+// Only the phase you're IN can be ended: a future one hasn't run (delete it), and a past one is
+// history -- shortening it after the fact would rewrite the record of what you did.
+function endPhaseNow(id) {
+  const tl = phaseTimeline();
+  const at = tl.findIndex(s => s.phase.id === id);
+  if (at < 0) return;
+  const entry = tl[at];
+  if (entry.state !== 'current') { showToast('Only the phase you’re in can be ended'); return; }
+  const weeks = Math.max(1, Math.ceil((daysBetween(entry.startDate, todayStr()) + 1) / 7));
+  const endsOn = shiftDate(entry.startDate, weeks * 7 - 1);
+  if (!entry.perpetual && weeks >= entry.weeks) {
+    showToast('That’s already its last week');
+    return;
+  }
+  const next = tl[at + 1];
+  const tail = next
+    ? `“${next.phase.label}” then starts on ${fmtGoalDate(shiftDate(endsOn, 1))}.`
+    : 'A new open-ended phase picks up after it.';
+  showConfirm(
+    `End “${entry.phase.label}” after ${weeks} week${weeks === 1 ? '' : 's'}, on ${fmtGoalDate(endsOn)}? ${tail}`,
+    () => {
+      entry.phase.weeks = weeks;
+      // Nothing follows it, so something has to: every date from the origin on belongs to a phase,
+      // and that invariant is what lets the plan resolvers have no "no phase covers this" branch.
+      // Open-ended rather than a default eight weeks -- you ended this block; what comes next is
+      // exactly the thing you haven't decided yet.
+      if (!next) appendSeededPhase(entry, shiftDate(endsOn, 1), { label: 'Next block', weeks: null });
+      saveState();
+      render();
+    });
 }
 
 // The shape of a phase, in one place, so a field added here can't be forgotten by one of the callers
@@ -1184,6 +1233,11 @@ function renderPhaseCard(entry) {
         <button class="btn btn-sm" onclick="extendPhase('${p.id}',-1)">&minus;1 WK</button>
         <button class="btn btn-sm" onclick="movePhase('${p.id}',-1)">&uarr;</button>
         <button class="btn btn-sm" onclick="movePhase('${p.id}',1)">&darr;</button>
+        ${entry.state === 'current'
+          // Only on the phase you're in. A future one hasn't run -- delete it; a past one is
+          // history. END keeps what you logged and stops the plan here; DELETE removes the phase.
+          ? `<button class="btn btn-sm" onclick="endPhaseNow('${p.id}')" title="Fix this phase's length at what it actually ran">END</button>`
+          : ''}
         <button class="btn btn-sm btn-danger" onclick="deletePhase('${p.id}')">DELETE</button>
       </div>
     </div>`;
@@ -1606,12 +1660,11 @@ function applyRotationDays(p, n) {
 // today and seeds the successor to CONTINUE the current rotation, so the new phase arrives on the
 // old length with its field editable -- you then set the number you actually wanted.
 function startPhaseWithNewRotation(id) {
-  const entry = phaseTimeline().find(s => s.phase.id === id);
-  if (!entry) return;
-  showConfirm('Changing the rotation starts a new phase. Continue?', () => {
-    addPhase();
-    showToast('New phase started — set its rotation below');
-  });
+  // Ends the phase you're in, which pulls its successor forward or creates one -- that successor is
+  // where the new rotation goes. Routed through endPhaseNow() rather than appending at the end of
+  // the timeline, which is where addPhase() would have put it: if other phases are already
+  // scheduled after this one, a rotation change is meant to take effect NEXT, not in a year.
+  endPhaseNow(id);
 }
 // Meals can switch between the calendar week and the workout rotation at any time; eating adjusts
 // freely. The plan is reshaped to the new slot count, and switching to fewer slots confirms first

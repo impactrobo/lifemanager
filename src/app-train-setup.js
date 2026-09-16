@@ -629,22 +629,36 @@ function toggleAutoFillDay(day) {
   else VIEW.autofillDays.push(day);
   render();
 }
+// Fills ROTATION SLOTS, not weekdays. A pre-loaded program was written for a seven-day week -- C25K
+// is three sessions a week, and that "a week" is the program's own assumption, not yours. So the
+// picker says which rotation it's filling, and says what the program expected, and leaves the
+// arithmetic of whether those agree to you rather than silently reinterpreting one as the other.
 function renderAutoFillPicker() {
   const programs = [];
   if (programWorkouts('C25K').length) programs.push('C25K');
   if (programWorkouts('C2Triathlon').length) programs.push('C2Triathlon');
   const sessions = programWorkouts(VIEW.autofillProgram);
+  const entry = plannerEntry();
+  if (!entry) return '';
+  const n = rotationDaysOf(entry.phase);
+  const slots = rotationSlotOrder(entry, 'workout');
+  // Fewer slots than the program needs sessions is the case worth flagging: you physically cannot
+  // place them all in one pass, so some would be dropped or doubled up.
+  const tooFew = n < sessions.length;
   return `<div class="panel" style="margin-bottom:14px;">
     <div class="subtle-label" style="margin-bottom:8px;">AUTO-FILL</div>
     ${programs.length > 1 ? `
       <div class="field-row" style="margin-bottom:10px;">
         ${programs.map(p => `<button class="btn btn-sm ${VIEW.autofillProgram===p?'btn-primary':''}" style="flex:1;" onclick="setAutoFillProgram('${p}')">${p}</button>`).join('')}
       </div>` : ''}
-    <div style="font-size:11px; color:var(--text-dim); margin-bottom:8px;">Tap days in the order you want ${escapeHtml(VIEW.autofillProgram || '')}'s ${sessions.length} weekly session${sessions.length===1?'':'s'} to land, in sequence.</div>
+    <div style="font-size:11px; color:var(--text-dim); margin-bottom:8px;">Tap days in the order you want ${escapeHtml(VIEW.autofillProgram || '')}'s ${sessions.length} session${sessions.length===1?'':'s'} to land, in sequence.</div>
+    ${n !== 7 ? `<div style="font-size:11px; color:var(--text-dim); margin-bottom:8px;">${escapeHtml(VIEW.autofillProgram || '')} is written for a 7-day week; you're filling a <b style="color:var(--text)">${n}-day rotation</b>.</div>` : ''}
+    ${tooFew ? `<div style="font-size:11px; color:var(--bad); font-weight:600; margin-bottom:8px;">A ${n}-day rotation has fewer days than ${escapeHtml(VIEW.autofillProgram || '')}'s ${sessions.length} sessions — some would have to share a day or be left out.</div>` : ''}
     <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px;">
-      ${MEAL_PLAN_DAY_ORDER.map(day => {
-        const pos = VIEW.autofillDays.indexOf(day);
-        return `<button class="btn btn-sm ${pos>=0?'btn-primary':''}" onclick="toggleAutoFillDay(${day})">${MEAL_PLAN_DAY_LABELS[day].slice(0,3).toUpperCase()}${pos>=0?' '+(pos+1):''}</button>`;
+      ${slots.map(slot => {
+        const pos = VIEW.autofillDays.indexOf(slot);
+        const label = n === 7 ? rotationSlotLabel(entry, slot, 'workout').slice(0, 3).toUpperCase() : 'D' + (slot + 1);
+        return `<button class="btn btn-sm ${pos>=0?'btn-primary':''}" onclick="toggleAutoFillDay(${slot})">${label}${pos>=0?' '+(pos+1):''}</button>`;
       }).join('')}
     </div>
     <div class="field-row">
@@ -656,14 +670,23 @@ function renderAutoFillPicker() {
 function applyAutoFill() {
   const sessions = programWorkouts(VIEW.autofillProgram);
   if (!sessions.length || !VIEW.autofillDays.length) return;
-  VIEW.autofillDays.forEach((day, i) => {
+  const plan = plannerPlan();
+  // A workout appears at most once per rotation -- the same rule the slot editor enforces, applied
+  // here rather than left to produce a plan the editor itself would have refused. Skipped, not
+  // refused outright: filling four slots from three sessions should place three and say so.
+  let placed = 0, skipped = 0;
+  VIEW.autofillDays.forEach((slot, i) => {
     const w = sessions[i % sessions.length];
-    const plan = plannerPlan();
-    if (!Array.isArray(plan[day])) plan[day] = [];
-    plan[day].push(planEntry('workout', w.id));
+    const already = Object.keys(plan).some(d => (plan[d] || []).some(e => e.kind === 'workout' && e.refId === w.id));
+    if (already) { skipped++; return; }
+    if (!Array.isArray(plan[slot])) plan[slot] = [];
+    plan[slot].push(planEntry('workout', w.id));
+    placed++;
   });
   saveState();
-  showToast(VIEW.autofillProgram + ' scheduled');
+  showToast(skipped
+    ? `${placed} session${placed === 1 ? '' : 's'} scheduled — ${skipped} already in the rotation`
+    : VIEW.autofillProgram + ' scheduled');
   UI.autofillPickerOpen = false;
   render();
 }

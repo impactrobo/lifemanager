@@ -487,6 +487,35 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **END PHASE, and auto-fill onto rotation slots (2026-09-16).** Commits 4 and 5 — the phases/
+  rotations arc is complete.
+  - **END fixes a phase's length at what it actually ran**, and everything after pulls forward on
+    its own: dates are derived from lengths, so there is nothing to rewrite. That's the payoff of
+    the model choice made back in the original phases work.
+  - **Rounded UP to whole weeks**, so END really says *"this is its last week"* rather than *"it
+    stops this instant"*. Weeks are the unit everywhere else and a 3.4-week phase would be the only
+    one in the app that isn't — so the confirm names the **actual end date** and what follows:
+    *"End 'Opening cut' after 2 weeks, on Sep 19? 'Diet break' then starts on Sep 20."*
+  - **Only the phase you're IN can be ended.** A future one hasn't run (delete it); a past one is
+    history, and shortening it after the fact would rewrite the record of what you did. The END
+    button only renders on the current phase.
+  - **Ending the LAST phase creates an open-ended successor**, preserving the invariant commit 1
+    established — every date from the origin on belongs to a phase, which is what lets the plan
+    resolvers have no "nothing covers this date" branch. Open-ended rather than a default eight
+    weeks: you ended this block, so what comes next is precisely the thing you haven't decided.
+  - The successor **continues the rotation** across the boundary via the same `appendSeededPhase()`
+    helper `addPhase()` uses, so a five-day split ending mid-pass resumes where the calendar was.
+  - `startPhaseWithNewRotation()` now routes through END rather than `addPhase()`, which appended at
+    the end of the timeline — a rotation change is meant to take effect *next*, not after every
+    phase already scheduled.
+  - **Auto-fill fills rotation slots.** A pre-loaded program was written for a seven-day week, and
+    that's the *program's* assumption rather than yours — so the picker says which rotation it's
+    filling (*"C25K is written for a 7-day week; you're filling a 5-day rotation"*), flags when the
+    rotation has fewer days than the program has sessions, and skips a session already in the
+    rotation rather than producing a plan the slot editor would itself have refused.
+  - `tests/test_end_phase.js` covers both, including the rotation-continuity check by walking dates
+    past the boundary and asserting every hit is still a multiple of the rotation length.
+
 - **Rotations, and the log key that had to change with them (2026-09-16).** Commit 3 of the
   phases/rotations arc.
   - **A plan is keyed by position in its phase's rotation, not by weekday.** `workoutRotationDays`
