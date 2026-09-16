@@ -244,9 +244,12 @@ function renderDayUntimedItems(dateStr) {
   // whole point of being able to look back at a day you forgot to log.
   const habitsHtml = !habits.length ? '' : group('HABITS', entityColor('habit'), habits.map(h => {
     const status = habitStatusOn(h.id, dateStr);
-    return `<div class="day-extra-row">
+    // A habit you've MARKED -- either way -- is settled for the day and stops competing with the
+    // ones still open. `.done-keep` on the button pair so the marks you'd tap to change your mind
+    // stay at full strength; see the .is-done block in styles.css for why that matters.
+    return `<div class="day-extra-row${status === 'unmarked' ? '' : ' is-done'}">
       <span class="day-extra-name">${escapeHtml(h.name)}</span>
-      <span style="display:flex; gap:6px; flex-shrink:0;">
+      <span class="done-keep" style="display:flex; gap:6px; flex-shrink:0;">
         <button class="btn btn-sm ${status==='kept'?'btn-good':''}" onclick="toggleHabitOn('${h.id}','kept','${dateStr}')" title="Kept">${icon('check')}</button>
         <button class="btn btn-sm ${status==='broken'?'btn-danger':''}" onclick="toggleHabitOn('${h.id}','broken','${dateStr}')" title="Broke">${icon('close')}</button>
       </span>

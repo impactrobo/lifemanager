@@ -515,8 +515,22 @@ on an architecture split + a large wave of Maximalist aesthetics.
     the group box is structural, saying these are performed together, so folding happens to the
     members inside it. Per-view state on `VIEW.logCollapsed`, never saved: what's expanded on your
     screen is no more a fact about the workout than a scroll position is.
-  - `tests/test_modded_workout.js` pins seven contracts, the first of which is a **negative**: if a
-    future change quietly makes `modded` mean something to progression, that assertion fails.
+  - A block carries its **progress in its header, folded or not** — `2 / 4`, as a fraction rather
+    than prose, because the useful question mid-session is "how much is left" and a fraction answers
+    it at a glance. Scrolling past a block you left half-finished, that count is the thing that
+    sends you back to it. Finishing one adds a green tick and dims the whole block.
+  - **One completion treatment, shared** (`.is-done` + `.done-keep` in styles.css). There were three
+    unrelated ones before: `.set-greyed` dimmed, `.superset-complete` recoloured, `.workout-cell.done`
+    went green. The reminder version had already learned the hard part and its comment says why —
+    **dim the CHILDREN, never the container**, because `opacity` on a parent compounds onto
+    everything inside it and cannot be raised back by a child, which would render the one control
+    you need to UNDO the completion at half strength. `.done-keep` marks what must stay legible:
+    the undo control and any wrapper holding one. Reminders moved onto it; habits gained it (a
+    habit you've marked either way is settled for the day); exercise blocks use it.
+  - `tests/test_modded_workout.js` pins eight contracts, the first of which is a **negative**: if a
+    future change quietly makes `modded` mean something to progression, that assertion fails. The
+    last asserts the fold control computes to opacity 1 while the body is at 0.55 — the undo path
+    surviving the dim is the thing most likely to regress.
 
 - **The weekly review (2026-09-16).** The Best Shape list's #1, and the top unbuilt item for two
   weeks. `src/app-review.js`, surfaced as a YOUR WEEK box on Home.

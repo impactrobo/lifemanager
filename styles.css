@@ -348,7 +348,13 @@ select { -webkit-appearance: none; appearance: none; background-image: linear-gr
   margin-left: 10px; padding: 4px 2px 4px 6px; flex: none;
   -webkit-tap-highlight-color: transparent;
 }
-.ex-fold-sum { font-size: 11px; color: var(--text-faint); white-space: nowrap; }
+.ex-fold-sum {
+  font-size: 11px; color: var(--text-faint); white-space: nowrap;
+  font-family: var(--font-mono); font-variant-numeric: tabular-nums;
+}
+.ex-fold-sum-done { color: var(--good); }
+.ex-fold-check { display: flex; color: var(--good); }
+.ex-fold-check svg { width: 14px; height: 14px; }
 .ex-fold-chev { font-size: 11px; color: var(--text-dim); line-height: 1; }
 .ex-fold:hover .ex-fold-chev { color: var(--text); }
 .ex-fold:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
@@ -1378,19 +1384,26 @@ input[type="number"].lab-range-in {
 
 
 
-/* ---------- A checked-off reminder ---------- */
-/* It stays exactly where it was rather than disappearing -- the point is being able to look back
-   at a day and see that you did the thing, instead of wondering because the row vanished. So this
-   only lowers its claim on your attention; it never hides anything.
+/* ---------- Done: ONE completion treatment, used everywhere ---------- */
+/* Anything checked off in a list gets `.is-done` and dims. It stays exactly where it was rather
+   than disappearing -- the point is being able to look back and see that you did the thing,
+   instead of wondering because the row vanished. This only lowers its claim on your attention; it
+   never hides anything and never removes a control.
 
-   Dimming each CHILD rather than the container is deliberate. opacity on a parent compounds onto
-   everything inside it and cannot be raised back by a child, so `.reminder-done { opacity: .5 }`
-   plus `.hit-mark { opacity: 1 }` renders the tick at 0.5 anyway -- making the one control you
-   need in order to UNDO this the hardest thing on the card to see. Excluding the tick from the
-   dimmed set is the only way it stays at full strength. .ehead is excluded from the first
-   selector so its children aren't dimmed twice (0.55 * 0.55). */
-.reminder-done > *:not(.hit-mark):not(.ehead),
-.reminder-done > .ehead > *:not(.hit-mark) { opacity: 0.55; }
+   DIMMING EACH CHILD RATHER THAN THE CONTAINER IS THE WHOLE TRICK, and it was learned the hard way
+   on reminders. `opacity` on a parent compounds onto everything inside it and cannot be raised back
+   by a child, so `.is-done { opacity: .5 }` plus `.hit-mark { opacity: 1 }` renders the tick at 0.5
+   anyway -- making the one control you need in order to UNDO this the hardest thing on the card to
+   see. Excluding that control from the dimmed set is the only way it stays at full strength.
+
+   `.done-keep` marks anything that must NOT dim: the control that undoes the completion, and any
+   wrapper holding one. A wrapper marked `.done-keep` has its own children dimmed individually by
+   the second rule, so they aren't dimmed twice (0.55 x 0.55) and the control inside still escapes. */
+.is-done > *:not(.done-keep),
+.is-done > .done-keep > *:not(.done-keep) { opacity: 0.55; }
+
+/* A checked-off reminder: the shared treatment plus a strike, which suits a to-do title and would
+   be wrong on an exercise (you didn't cancel the squats, you finished them). */
 .reminder-done .reminder-title,
 .reminder-done > .ehead input[type="text"] { text-decoration: line-through; }
 

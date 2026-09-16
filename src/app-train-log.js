@@ -456,8 +456,8 @@ function renderRpExerciseBlock(workout, cycle, log, ex) {
   const displayedDelta = entry.applied ? entry.appliedDeltaLb : null;
 
   return `
-    <div class="tier-block${exBlockCollapsed(workout.id, entryKey) ? ' tier-block-collapsed' : ''}" ${mColor ? `style="border-left: 4px solid ${mColor};"` : ''}>
-      <div class="tier-head" ${mColor ? `style="background:${hexToRgba(mColor, 0.14)};"` : ''}>
+    <div class="tier-block${exBlockClass(workout.id, entryKey, entry, tSets)}" ${mColor ? `style="border-left: 4px solid ${mColor};"` : ''}>
+      <div class="tier-head done-keep" ${mColor ? `style="background:${hexToRgba(mColor, 0.14)};"` : ''}>
         ${exBlockHead(workout.id, entryKey, `
         <div>
           <div class="tname">${escapeHtml(ex.name || 'Untitled exercise')}</div>
@@ -723,27 +723,46 @@ function renderCollapseAllControl(workoutId) {
   return `<button class="btn btn-ghost btn-sm" onclick="setAllExBlocks('${workoutId}',${collapse})">
     ${collapse ? 'COLLAPSE ALL' : 'EXPAND ALL'}</button>`;
 }
-// What a folded block says about itself. Sets with reps filled in are the ones that happened, the
+// How far through an exercise you are. Sets with reps filled in are the ones that happened, the
 // same definition countLoggedSets() uses everywhere else -- so a collapsed block can never disagree
 // with the one underneath it.
-function exBlockSummary(entry, targetSets) {
+//
+// `x / total` rather than prose, because the useful question while folded is "how much is left",
+// and a fraction answers it at a glance where "3 of 4 sets" has to be read.
+function exBlockProgress(entry, targetSets) {
   const done = countLoggedSets(entry);
   const total = targetSets || ((entry && entry.sets) ? entry.sets.length : 0);
-  if (!done) return 'not started';
-  if (total && done >= total) return 'done &middot; ' + done + ' set' + (done === 1 ? '' : 's');
-  return done + (total ? ' of ' + total : '') + ' set' + (done === 1 ? '' : 's');
+  return { done, total, complete: total > 0 && done >= total, started: done > 0 };
+}
+function exBlockSummary(entry, targetSets) {
+  const p = exBlockProgress(entry, targetSets);
+  if (!p.total) return p.started ? String(p.done) : '';
+  return p.done + ' / ' + p.total;
 }
 // Wraps a block's own head content with the fold control. Each renderer keeps its own header markup
-// -- the name, the muscle chip, the plate row -- and this only adds the chevron and the summary.
+// -- the name, the muscle chip, the plate row -- and this only adds the count, the tick and the
+// chevron.
+//
+// The count shows whether the block is folded or not: mid-session you scroll past a block you left
+// half-finished, and "2 / 4" in its header is exactly the thing that sends you back to it. The tick
+// appears only when it's complete, and the whole block dims with it (see .is-done) -- finished work
+// should stop competing for attention with work still to do.
 function exBlockHead(workoutId, entryKey, inner, entry, targetSets) {
   const collapsed = exBlockCollapsed(workoutId, entryKey);
+  const p = exBlockProgress(entry, targetSets);
   return `${inner}
-    <div class="ex-fold" onclick="event.stopPropagation(); toggleExBlock('${workoutId}','${entryKey}')"
+    <div class="ex-fold done-keep" onclick="event.stopPropagation(); toggleExBlock('${workoutId}','${entryKey}')"
          role="button" tabindex="0" aria-expanded="${!collapsed}" aria-label="${collapsed ? 'Expand' : 'Collapse'} this exercise"
          onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleExBlock('${workoutId}','${entryKey}');}">
-      ${collapsed ? `<span class="ex-fold-sum">${exBlockSummary(entry, targetSets)}</span>` : ''}
+      ${p.complete ? `<span class="ex-fold-check">${icon('check')}</span>` : ''}
+      <span class="ex-fold-sum${p.complete ? ' ex-fold-sum-done' : ''}">${exBlockSummary(entry, targetSets)}</span>
       <span class="ex-fold-chev">${collapsed ? '&#9662;' : '&#9652;'}</span>
     </div>`;
+}
+// The class list for a block, carrying both its fold state and its completion.
+function exBlockClass(workoutId, entryKey, entry, targetSets) {
+  const p = exBlockProgress(entry, targetSets);
+  return (exBlockCollapsed(workoutId, entryKey) ? ' tier-block-collapsed' : '') + (p.complete ? ' is-done' : '');
 }
 
 function renderSupersetGroup(workout, cycle, log, keys, supersetNumber) {
@@ -902,8 +921,8 @@ function renderTierBlock(workout, cycle, log, tierKey, liftId) {
   const repeatIdx = nextRepeatableSetIndex(entry);
 
   return `
-    <div class="tier-block${exBlockCollapsed(workout.id, entryKey) ? ' tier-block-collapsed' : ''}" ${blockStyle}>
-      <div class="tier-head" ${headStyle}>
+    <div class="tier-block${exBlockClass(workout.id, entryKey, entry, tSets)}" ${blockStyle}>
+      <div class="tier-head done-keep" ${headStyle}>
         ${exBlockHead(workout.id, entryKey, `
         <div>
           <div class="tname">${escapeHtml(liftName(liftId, tierField))}</div>
@@ -1116,8 +1135,8 @@ function renderT3Block(workout, cycle, log, idx, name) {
   }
 
   return `
-    <div class="tier-block${exBlockCollapsed(workout.id, entryKey) ? ' tier-block-collapsed' : ''}" ${t3Mcolor ? `style="border-left: 4px solid ${t3Mcolor};"` : ''}>
-      <div class="tier-head" ${t3Mcolor ? `style="background:${hexToRgba(t3Mcolor, 0.14)};"` : ''}>
+    <div class="tier-block${exBlockClass(workout.id, entryKey, entry, entry.sets.length)}" ${t3Mcolor ? `style="border-left: 4px solid ${t3Mcolor};"` : ''}>
+      <div class="tier-head done-keep" ${t3Mcolor ? `style="background:${hexToRgba(t3Mcolor, 0.14)};"` : ''}>
         ${exBlockHead(workout.id, entryKey, `
         <div>
           <div class="tname">${escapeHtml(name)}</div>

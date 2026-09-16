@@ -209,6 +209,54 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (all !== 0) throw new Error(`COLLAPSE ALL should fold every block, ${all} bodies left`);
   if (none !== 2) throw new Error(`EXPAND ALL should restore every block, got ${none}`);
 
+  // ---- 8. Progress, the tick, and the shared dim ----
+  // The count shows whether folded or not — scrolling past a block you left half-finished, "2 / 4"
+  // in its header is the thing that sends you back to it.
+  const progress = await page.evaluate(() => {
+    const read = () => {
+      const blocks = [...document.querySelectorAll('.tier-block')];
+      return blocks.map(b => ({
+        sum: (b.querySelector('.ex-fold-sum') || {}).textContent,
+        check: !!b.querySelector('.ex-fold-check'),
+        done: b.classList.contains('is-done'),
+      }));
+    };
+    const log = getLog(trainCycle(), 'wMod');
+    log.entries.t1 = { sets: [{ weight: 200, reps: 5 }, { weight: 200, reps: '' },
+                              { weight: 200, reps: '' }, { weight: 200, reps: '' }] };
+    render();
+    return new Promise(r => requestAnimationFrame(() => requestAnimationFrame(() => r({ partial: read() }))));
+  });
+  console.log('8. partial:', JSON.stringify(progress.partial[0]));
+  if (!/^\s*1 \/ 4\s*$/.test(progress.partial[0].sum)) throw new Error(`Expected "1 / 4", got "${progress.partial[0].sum}"`);
+  if (progress.partial[0].check) throw new Error('No tick until it is actually finished');
+  if (progress.partial[0].done) throw new Error('A half-finished block must not dim — that is work still to do');
+
+  const finished = await page.evaluate(() => {
+    const log = getLog(trainCycle(), 'wMod');
+    log.entries.t1.sets.forEach(s => { s.reps = 5; });
+    render();
+    return new Promise(r => requestAnimationFrame(() => requestAnimationFrame(() => {
+      const b = document.querySelector('.tier-block');
+      const fold = b.querySelector('.ex-fold');
+      const body = b.querySelector('.tier-body');
+      r({
+        sum: (b.querySelector('.ex-fold-sum') || {}).textContent.trim(),
+        check: !!b.querySelector('.ex-fold-check'),
+        done: b.classList.contains('is-done'),
+        // The fold control must stay at FULL strength: it is how you get back in to change it.
+        foldOpacity: fold ? getComputedStyle(fold).opacity : null,
+        bodyOpacity: body ? getComputedStyle(body).opacity : null,
+      });
+    })));
+  });
+  console.log('8. finished:', JSON.stringify(finished));
+  if (finished.sum !== '4 / 4') throw new Error(`Expected "4 / 4", got "${finished.sum}"`);
+  if (!finished.check) throw new Error('A finished exercise gets its tick');
+  if (!finished.done) throw new Error('...and the container dims');
+  if (finished.foldOpacity !== '1') throw new Error(`The fold control must not dim (it is the way back in), got ${finished.foldOpacity}`);
+  if (Number(finished.bodyOpacity) > 0.8) throw new Error(`The body should be dimmed, got ${finished.bodyOpacity}`);
+
   // And it is per-view, not persisted: a reload starts expanded.
   await page.evaluate(() => { setAllExBlocks('wMod', true); saveState(); });
   await page.reload();

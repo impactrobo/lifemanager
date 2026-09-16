@@ -678,9 +678,9 @@ function saveReminder() {
 function renderReminderCard(r) {
   const isTodo = r.type === 'todo';
   const done = reminderIsDone(r);
-  return `<div class="entry-card ${done ? 'reminder-done' : ''}" ${entityAttr('reminder', r.id)}>
-    <div class="ehead">
-      <button class="hit-mark ${r.done ? 'hit' : ''}" style="flex-shrink:0;" onclick="toggleReminderDone('${r.id}')" title="${r.done ? 'Mark not done' : 'Mark done'}" aria-pressed="${!!r.done}">${r.done ? icon('check') : ''}</button>
+  return `<div class="entry-card ${done ? 'is-done reminder-done' : ''}" ${entityAttr('reminder', r.id)}>
+    <div class="ehead done-keep">
+      <button class="hit-mark done-keep ${r.done ? 'hit' : ''}" style="flex-shrink:0;" onclick="toggleReminderDone('${r.id}')" title="${r.done ? 'Mark not done' : 'Mark done'}" aria-pressed="${!!r.done}">${r.done ? icon('check') : ''}</button>
       ${pastDueMark(r)}
       <input type="text" value="${escapeHtml(r.title)}" placeholder="Title" style="font-weight:700; font-size:14px; border:none; background:transparent; padding:0; color:var(--text); font-family:var(--font-body); flex:1; min-width:0;" onchange="updateReminderField('${r.id}','title',this.value)">
       <button class="icon-btn" onclick="deleteReminder('${r.id}')">${icon('close')}</button>
@@ -815,8 +815,8 @@ function renderTodaysReminders() {
     <div class="subtle-label" style="margin:18px 0 8px;">TODAY'S REMINDERS</div>
     <div class="panel" style="padding:2px 14px;">
       ${list.map((r, i) => `
-      <div class="${reminderIsDone(r) ? 'reminder-done' : ''}" onclick="jumpToReminderDay('${r.date}')" style="display:flex; gap:10px; align-items:flex-start; padding:10px 0; ${i < list.length-1 ? 'border-bottom:1px solid var(--border-soft);' : ''} cursor:pointer;">
-        <button class="hit-mark ${r.done ? 'hit' : ''}" style="flex-shrink:0; margin-top:1px;" onclick="event.stopPropagation(); toggleReminderDone('${r.id}')" title="${r.done ? 'Mark not done' : 'Mark done'}" aria-pressed="${!!r.done}">${r.done ? icon('check') : ''}</button>
+      <div class="${reminderIsDone(r) ? 'is-done reminder-done' : ''}" onclick="jumpToReminderDay('${r.date}')" style="display:flex; gap:10px; align-items:flex-start; padding:10px 0; ${i < list.length-1 ? 'border-bottom:1px solid var(--border-soft);' : ''} cursor:pointer;">
+        <button class="hit-mark done-keep ${r.done ? 'hit' : ''}" style="flex-shrink:0; margin-top:1px;" onclick="event.stopPropagation(); toggleReminderDone('${r.id}')" title="${r.done ? 'Mark not done' : 'Mark done'}" aria-pressed="${!!r.done}">${r.done ? icon('check') : ''}</button>
         <div style="flex:1;">
           <div class="reminder-title" style="font-size:13px; font-weight:600;">${pastDueMark(r)}${escapeHtml(r.title)}${r.time ? ` <span style="color:var(--text-faint); font-weight:500; font-size:11px;">${fmtReminderTime(r.time)}</span>` : ''}</div>
           ${r.notes ? `<div style="font-size:11px; color:var(--text-dim); margin-top:2px;">${escapeHtml(r.notes)}</div>` : ''}
