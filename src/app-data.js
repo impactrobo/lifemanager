@@ -479,6 +479,9 @@ function defaultLifeState() {
     // them too. A separate `waterColor` field used to hold a sticky copy of the latest value; it was
     // a second source for the same fact and is gone. See app-home.js "hydration colour marker".
     waterColorLog: [],
+    // Bristol stool scale readings, same shape and same mechanism as waterColorLog -- see SCALES
+    // in app-home.js. Several a day, each timestamped; the chip shows the latest taken today.
+    stoolLog: [],
     supplementLog: {}, // date -> { suppName: true }
     // Habits (added 2026-09-12) are distinct from anchors on purpose: an anchor is a permanent,
     // time-of-day-scoped routine item that's always there; a habit is a discipline push with a

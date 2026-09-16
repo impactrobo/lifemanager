@@ -1463,6 +1463,24 @@ input[type="number"].lab-range-in {
 .log-color-prior { display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--text-dim); margin: 8px 0 2px; }
 .log-color-prior-sw { width: 13px; height: 13px; border-radius: 50%; border: 1px solid var(--border); flex: none; }
 .log-color-prior b { color: var(--text); }
+/* Bristol: a labelled list rather than a row of swatches. Seven types need their descriptions to be
+   pickable at all -- nobody recognises "type 5" by a colour chip. */
+.bristol-scale { display: flex; flex-direction: column; gap: 4px; margin: 6px 0 8px; }
+.bristol-row {
+  display: flex; align-items: center; gap: 9px; width: 100%; text-align: left;
+  padding: 7px 9px; border-radius: 8px; cursor: pointer;
+  background: var(--surface2); border: 1px solid var(--border-soft); color: var(--text);
+  font-family: var(--font-body); font-size: 12px;
+  -webkit-tap-highlight-color: transparent;
+}
+.bristol-row:hover { border-color: var(--border); }
+.bristol-row-on { border-color: var(--accent); background: var(--accent-soft); }
+.bristol-sw { width: 14px; height: 14px; border-radius: 4px; flex: none; border: 1px solid rgba(0,0,0,0.25); }
+.bristol-n { font-weight: 700; width: 1ch; flex: none; color: var(--text-dim); }
+.bristol-row-on .bristol-n { color: var(--accent); }
+.bristol-label { flex: 1; min-width: 0; }
+.bristol-note { font-size: 10px; color: var(--text-faint); white-space: nowrap; }
+.scale-undo { margin: 2px 0 8px; }
 .log-color-note { font-size: 10px; color: var(--text-faint); margin: -2px 0 8px; line-height: 1.45; }
 /* A marker older than half a day is describing a body you no longer have. It stays visible -- it's
    the only reading you've got -- but stops presenting itself as current. */

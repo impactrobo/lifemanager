@@ -519,6 +519,31 @@ on an architecture split + a large wave of Maximalist aesthetics.
     evening reading in a negative-offset zone would file under tomorrow, showing as "today" a day
     early and dropping out of yesterday's average.
 
+- **One reading per visit, an undo button, and the Bristol stool scale (2026-09-16).**
+  - **Tap-to-toggle was deleting real data.** Tapping the shade you were already on removed that
+    reading, on the reasoning that it was a toggle-off like the habit buttons. But two consecutive
+    readings being the same colour is completely ordinary — it's what a stable day looks like — so
+    the app would silently delete the first instead of recording the second. A tap now always means
+    "this is my reading": the first in a visit logs, further taps **correct** it, and **undo is its
+    own button**. Destroying data should never be something you do by tapping the same thing twice.
+  - **Not "save on close"**, which was the other option raised and is exactly the pattern that lost
+    the AM/PM logs. Dismissing a sheet must never be the difference between recorded and gone. Every
+    tap commits immediately; the per-visit id only decides whether the next tap writes a new row or
+    edits the one just made. Undo can reach **only** this visit's reading — an undo that could reach
+    back into yesterday is a delete button wearing a friendlier word.
+  - **The Bristol stool scale**, seven types with their clinical notes, as its own PM chip. It reads
+    the same system from the other end (fibre and water show up here first), and a chip you tap once
+    a day is the only way a record like this gets kept at all.
+  - **Deliberately never averaged**, which is the one place the two scales diverge. Hydration colour
+    is a continuum, so several samples average honestly. Bristol is not: types 1 and 7 are opposite
+    failure modes and **their mean is a perfectly healthy 4**. Its readings are listed instead —
+    `scalePriorDay(scale, average)` takes the flag, and a test asserts the same two numbers average
+    for hydration and refuse to for Bristol.
+  - Both run on one `SCALES` mechanism, so they can't drift apart in how they store, reset or undo.
+    The colours are a muted brown ramp rather than a red/green health gradient: colouring 6 the same
+    as 1 because both are "bad" would be the app grading you. It states where the healthy middle is
+    and stops — a run worth acting on is a conversation with a doctor, not a flag in an app.
+
 - **Drag the water number to adjust it (2026-09-16).** Replaces the type-an-amount box added hours
   earlier, which cost a row and a keyboard to say "and 150 more". The count between the +/- buttons
   is now a drag handle: pull up or down for 50 mL a step, or **one fluid ounce** in cups — the small

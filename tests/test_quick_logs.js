@@ -33,8 +33,8 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     STATE.settings.waterTargetMl = 2000;
     STATE.settings.waterServingMl = 250;
     STATE.settings.waterUnit = 'ml';
-    STATE.life.waterColor = { value: null, at: null };
     STATE.life.waterColorLog = [];
+    STATE.life.stoolLog = [];
     UI.logPopup = null;
     saveState();
     switchTab('home');
@@ -68,15 +68,15 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     weight: logFieldDisplay('weight'), sleepLen: logFieldDisplay('sleepLen'),
     sleepQual: logFieldDisplay('sleepQual'), restingHR: logFieldDisplay('restingHR'),
     calories: logFieldDisplay('calories'),
-    water: logFieldDisplay('water'), steps: logFieldDisplay('steps'),
+    water: logFieldDisplay('water'), steps: logFieldDisplay('steps'), stool: logFieldDisplay('stool'),
     setChips: document.querySelectorAll('.log-chip-set').length,
     chips: document.querySelectorAll('.log-chip').length,
   }));
   console.log('nothing logged yet:', empty);
-  // 4 AM (weight, sleep length, sleep quality, resting HR) + 3 PM (calories, water, steps).
+  // 4 AM (weight, sleep length, sleep quality, resting HR) + 4 PM (calories, water, steps, stool).
   // BP was a fifth AM chip until it moved to Labs.
-  if (empty.chips !== 7) throw new Error(`Expected 7 chips across the two strips, got ${empty.chips}`);
-  ['weight', 'sleepLen', 'sleepQual', 'restingHR', 'calories', 'steps'].forEach(f => {
+  if (empty.chips !== 8) throw new Error(`Expected 8 chips across the two strips, got ${empty.chips}`);
+  ['weight', 'sleepLen', 'sleepQual', 'restingHR', 'calories', 'steps', 'stool'].forEach(f => {
     if (empty[f] !== '&mdash;') throw new Error(`${f} should read as a dash when unlogged, got "${empty[f]}"`);
   });
   if (empty.water !== '0/2000') throw new Error(`Water should show progress even at zero, got "${empty.water}"`);
@@ -353,31 +353,90 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // It used to be a single sticky value that survived until you changed it, with a staleness
   // warning past twelve hours. Hydration turns over across a night, so the day is the honest unit:
   // today starts blank, and yesterday appears as a reference mark rather than as a current reading.
+  // ONE READING PER OPENING, which fixes a genuinely nasty trap: tapping the shade you were already
+  // on used to REMOVE that reading, as a toggle-off. But two consecutive readings being the same
+  // colour is completely ordinary — it's what a stable day looks like — and the app would silently
+  // delete the first instead of recording the second. A tap now always means "this is my reading".
   const color = await page.evaluate(() => {
     STATE.life.waterColorLog = [];
+    openLogPopup('water');                     // a visit begins
     setWaterColor(3);
     const set = { value: waterColorValue(), age: waterColorAge(), logged: STATE.life.waterColorLog.length };
     const onChip = /log-chip-dot/.test(logChip('water'));
-    setWaterColor(6);
+    setWaterColor(6);                          // same visit: corrects, does not stack
     const changed = { value: waterColorValue(), logged: STATE.life.waterColorLog.length };
-    setWaterColor(6);                          // tapping the active one UNDOES that reading
+    setWaterColor(6);                          // THE TRAP: tapping the same shade again
+    const same = { value: waterColorValue(), logged: STATE.life.waterColorLog.length };
+    closeLogPopup();
+    openLogPopup('water');                     // a NEW visit
+    setWaterColor(6);                          // the same colour again — a second real reading
+    const second = { value: waterColorValue(), logged: STATE.life.waterColorLog.length };
+    undoScaleReading('waterColor');            // undo reaches only this visit's reading
     const undone = { value: waterColorValue(), logged: STATE.life.waterColorLog.length };
+    undoScaleReading('waterColor');            // and cannot reach back into the earlier one
+    const twice = STATE.life.waterColorLog.length;
+    closeLogPopup();
     STATE.life.waterColorLog = [];
     const blank = { value: waterColorValue(), dot: /log-chip-dot/.test(logChip('water')) };
-    return { set, onChip, changed, undone, blank, scale: WATER_COLORS.length };
+    return { set, onChip, changed, same, second, undone, twice, blank, scale: WATER_COLORS.length };
   });
   console.log('colour marker:', color);
   if (color.scale !== 8) throw new Error('The hydration scale is eight steps');
   if (color.set.value !== 3) throw new Error('Setting a colour should stick');
   if (!color.onChip) throw new Error('The marker must show on the chip — one that lives only inside the sheet is not a marker');
   if (color.set.age !== 'just now') throw new Error(`A freshly set marker should read as just now, got ${color.set.age}`);
-  if (color.changed.value !== 6) throw new Error('Changing the colour should replace what shows');
-  if (color.changed.logged !== 2) throw new Error('Each reading is recorded — a day can hold several');
-  // An UNDO, not a wipe: several readings a day is the point, so removing the last one reveals the
-  // one before it rather than blanking a day you did record.
-  if (color.undone.value !== 3) throw new Error(`Undoing the last reading should reveal the previous one, got ${color.undone.value}`);
-  if (color.undone.logged !== 1) throw new Error('...and drop exactly one reading');
+  if (color.changed.value !== 6 || color.changed.logged !== 1) {
+    throw new Error(`Within one visit, another shade CORRECTS the reading rather than stacking: ${JSON.stringify(color.changed)}`);
+  }
+  if (color.same.value !== 6 || color.same.logged !== 1) {
+    throw new Error(`Tapping the shade you're already on must NOT delete it: ${JSON.stringify(color.same)}`);
+  }
+  if (color.second.logged !== 2) throw new Error('A new visit logs a new reading, even at the same colour — that is what a stable day looks like');
+  if (color.undone.logged !== 1) throw new Error('Undo removes this visit\'s reading');
+  if (color.undone.value !== 6) throw new Error('...revealing the earlier one, which still stands');
+  if (color.twice !== 1) throw new Error('Undo twice must not reach back into history — it is not a delete button');
   if (color.blank.value !== null || color.blank.dot) throw new Error('With no readings today, the scale is blank and the chip has no dot');
+
+  // ---- 8c-bis. Bristol: same mechanism, deliberately never averaged ----
+  await page.evaluate(() => { STATE.life.stoolLog = []; openLogPopup('stool'); });
+  await settle(page);
+  const hasScale = await page.evaluate(() => document.querySelectorAll('.bristol-row').length);
+  const bristol = await page.evaluate(() => {
+    setBristol(4);
+    const one = { value: bristolValue(), today: bristolReadingsToday(), chip: logFieldDisplay('stool') };
+    setBristol(3);                              // same visit: corrects
+    const corrected = { value: bristolValue(), logged: STATE.life.stoolLog.length };
+    closeLogPopup(); openLogPopup('stool');
+    setBristol(6);                              // a second reading later in the day
+    const two = { today: bristolReadingsToday(), chip: logFieldDisplay('stool') };
+    // Out-of-range values are refused rather than stored and rendered as a blank row.
+    setBristol(0); setBristol(8); setBristol('x');
+    const guarded = STATE.life.stoolLog.length;
+    closeLogPopup();
+    // A prior day of opposite extremes: averaging 1 and 7 gives a perfectly healthy 4, which is why
+    // Bristol is listed rather than averaged.
+    const y = (h) => { const d = new Date(); d.setDate(d.getDate() - 1); d.setHours(h, 0, 0, 0); return d.toISOString(); };
+    STATE.life.stoolLog = [{ id: 'a', value: 1, at: y(9) }, { id: 'b', value: 7, at: y(18) }];
+    const prior = bristolPriorDay();
+    const waterAvg = (function () {
+      STATE.life.waterColorLog = [{ id: 'c', value: 1, at: y(9) }, { id: 'd', value: 7, at: y(18) }];
+      return waterColorPriorDay();
+    })();
+    return { one, corrected, two, guarded, prior, waterAvg, types: BRISTOL_TYPES.length };
+  });
+  console.log('bristol:', JSON.stringify(bristol));
+  if (bristol.types !== 7 || hasScale !== 7) throw new Error(`The Bristol scale has seven types, rendered ${hasScale}`);
+  if (bristol.one.value !== 4 || bristol.one.chip !== '4') throw new Error('A reading shows on the chip');
+  if (bristol.corrected.value !== 3 || bristol.corrected.logged !== 1) throw new Error('Same visit corrects rather than stacks, same as the colour scale');
+  if (JSON.stringify(bristol.two.today) !== JSON.stringify([3, 6])) throw new Error(`A day holds several readings in order, got ${JSON.stringify(bristol.two.today)}`);
+  if (!/6/.test(bristol.two.chip) || !/2/.test(bristol.two.chip)) throw new Error(`The chip shows the latest plus how many, got "${bristol.two.chip}"`);
+  if (bristol.guarded !== 2) throw new Error('Values outside 1-7 are refused');
+  // THE POINT: 1 and 7 are opposite failure modes. Their mean is 4, which reads as a perfect day.
+  if (bristol.prior.value === 4) throw new Error('Bristol must NOT be averaged — 1 and 7 averaging to a healthy 4 is the exact failure this avoids');
+  if (JSON.stringify(bristol.prior.values) !== JSON.stringify([1, 7])) throw new Error('...it lists the readings instead');
+  // Hydration IS a continuum, so the same two numbers average honestly there. Same mechanism, one flag.
+  if (bristol.waterAvg.value !== 4) throw new Error(`Hydration colour still averages, got ${bristol.waterAvg.value}`);
+  await page.evaluate(() => { STATE.life.stoolLog = []; STATE.life.waterColorLog = []; saveState(); });
 
   // ---- 8d. Today starts blank; yesterday is a reference mark ----
   const daily = await page.evaluate(() => {

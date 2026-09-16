@@ -589,7 +589,10 @@ interface LifeState {
    *  is DERIVED -- the latest reading taken today -- so it clears at midnight, and the prior day's
    *  average is derived from the same list. A sticky `waterColor` field held a duplicate of the
    *  latest value and was removed: two sources for one fact can disagree. */
-  waterColorLog: { value: number; at: string }[];
+  waterColorLog: { id?: string; value: number; at: string }[];
+  /** Bristol stool scale readings (1-7), same shape and mechanism as waterColorLog. Deliberately
+   *  never averaged: types 1 and 7 are opposite failure modes and their mean is a perfect 4. */
+  stoolLog: { id?: string; value: number; at: string }[];
   periodicLog: Record<string, string>;
   anchors: ScheduleAnchor[];
   periodic: PeriodicAnchor[];

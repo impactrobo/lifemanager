@@ -593,6 +593,8 @@ const LOG_FIELDS = {
   calories:  { group: 'pm', label: 'Calories', unit: () => 'kcal', step: '1' },
   water:     { group: 'pm', label: 'Water',    unit: () => waterUnitLabel() },
   steps:     { group: 'pm', label: 'Steps',    unit: () => 'steps', step: '1' },
+  // Bristol: a 7-point scale, not a number you type. Its sheet renders the scale itself.
+  stool:     { group: 'pm', label: 'Stool',    unit: () => '1-7' },
 };
 // Today's value for a field, or null when it hasn't been logged. One reader for the chips, the
 // sheet and the tests, so a chip can never disagree with the sheet it opens.
@@ -609,6 +611,9 @@ function logFieldValue(field) {
     // pressure -- so it's null until both halves are there, and callers get an object or nothing.
     case 'water':     return log.waterMl != null ? log.waterMl : null;
     case 'steps':     return log.steps != null ? log.steps : null;
+    // Not in dailyLog: Bristol is a dated reading log like the hydration colour, several a day,
+    // resetting at midnight. logFieldValue() shows the latest one taken today.
+    case 'stool':     return bristolValue();
     default:          return null;
   }
 }
@@ -624,6 +629,9 @@ function logFieldDisplay(field) {
   if (field === 'sleepLen') return fmt(v, 1) + 'h';
   if (field === 'sleepQual') return v + '/5';
   if (field === 'steps') return Number(v).toLocaleString();
+  // "4" on its own, or "4 ·2" when today held more than one reading -- the second number is how
+  // many, not a range, and a day with three is worth seeing from the strip.
+  if (field === 'stool') { const n = bristolReadingsToday().length; return v + (n > 1 ? ` <i class="log-chip-unit">·${n}</i>` : ''); }
   return Number(v).toLocaleString();
 }
 // Water is stored in millilitres, always, and displayed in whichever unit is set -- the same
@@ -670,38 +678,93 @@ function setWaterServing(val) {
 // arithmetic is identical either way, so renumbering would mean migrating every stored reading to
 // move a scale that nobody reads as a number.
 const WATER_COLORS = ['#F8F7D4', '#F5EFA6', '#F2E778', '#EDDA4C', '#E3C93A', '#D6AF2A', '#C08F1E', '#A16B17'];
-function waterColorLog() {
-  if (!Array.isArray(STATE.life.waterColorLog)) STATE.life.waterColorLog = [];
-  return STATE.life.waterColorLog;
+// ---- Dated observation scales ----
+//
+// Hydration colour and the Bristol stool scale are the same thing structurally: pick a point on a
+// fixed scale, several times a day, and what matters is the pattern over days. One mechanism, two
+// scales -- so they can't drift apart in how they store, reset or undo.
+//
+// ONE READING PER OPENING, which is the fix for a genuinely nasty trap. Tapping the shade you were
+// already on used to REMOVE that reading, on the reasoning that it was a toggle-off like the habit
+// buttons. But two consecutive readings being the same colour is completely ordinary -- that is
+// what a stable day looks like -- and the app would silently delete the first one instead of
+// recording the second. So a tap always means "this is my reading": the first one in a visit logs,
+// and further taps REPLACE it rather than stacking. Undo is its own button, because destroying data
+// should never be something you do by tapping the same thing twice.
+//
+// Not "save on close": that is exactly the pattern that lost the AM/PM logs, and dismissing a sheet
+// must never be the difference between recorded and gone. Every tap here commits immediately; the
+// per-visit id only decides whether the next tap writes a new row or edits the one just made.
+const SCALES = {
+  waterColor: { field: 'waterColorLog', steps: 8 },
+  stool:      { field: 'stoolLog',      steps: 7 },
+};
+function scaleLog(scale) {
+  const f = SCALES[scale].field;
+  if (!Array.isArray(STATE.life[f])) STATE.life[f] = [];
+  return STATE.life[f];
 }
 // The LOCAL day a reading belongs to. Slicing the ISO string would take the UTC date, which is the
 // exact trap dateKeyOf()'s own comment warns about: an evening reading in a negative-offset zone
 // would be filed under tomorrow, so the scale would show it as "today" a day early and yesterday's
 // average would be missing its last reading.
-function waterColorDateOf(r) {
+function scaleDateOf(r) {
   if (!r || !r.at) return null;
   const d = new Date(r.at);
   return isNaN(d.getTime()) ? null : dateKeyOf(d);
 }
-// Today's readings, oldest first.
-function waterColorReadingsOn(dateStr) {
-  return waterColorLog().filter(r => waterColorDateOf(r) === dateStr);
+function scaleReadingsOn(scale, dateStr) {
+  return scaleLog(scale).filter(r => scaleDateOf(r) === dateStr);
 }
-// The marker showing on the scale right now: the latest reading taken TODAY, or nothing.
-function waterColorValue() {
-  const today = waterColorReadingsOn(todayStr());
+// What shows on the scale right now: the latest reading taken TODAY, or nothing.
+function scaleValue(scale) {
+  const today = scaleReadingsOn(scale, todayStr());
   return today.length ? Number(today[today.length - 1].value) || null : null;
 }
-// Yesterday as one figure. Averaged rather than last-of-day because several readings across a day
-// are several samples of the same thing, and rounded because the scale has no half-steps.
-// Walks back for the most recent day that actually HAS readings, so a day you forgot doesn't erase
-// the reference -- and reports which day it came from, since "yesterday" and "last Tuesday" are
-// different claims.
-function waterColorPriorDay() {
+function setScaleReading(scale, v) {
+  const n = Number(v);
+  if (!n || n < 1 || n > SCALES[scale].steps) return;
+  const log = scaleLog(scale);
+  const sessionId = UI.scaleSessionId[scale];
+  const existing = sessionId ? log.find(r => r.id === sessionId) : null;
+  if (existing) {
+    existing.value = n;          // still the same reading, corrected
+  } else {
+    const rec = { id: uid(), value: n, at: new Date().toISOString() };
+    log.push(rec);
+    UI.scaleSessionId[scale] = rec.id;
+    // A scale you touch a few times a day will never approach this; the cap just stops an unbounded
+    // array riding along in every cloud sync forever.
+    if (log.length > 400) STATE.life[SCALES[scale].field] = log.slice(-400);
+  }
+  saveState();
+  render();
+}
+// Removes the reading made during THIS visit, and only that one. Deliberately cannot reach back
+// into earlier readings: undo means "I mis-tapped just now", not "delete history".
+function undoScaleReading(scale) {
+  const id = UI.scaleSessionId[scale];
+  if (!id) return;
+  const f = SCALES[scale].field;
+  STATE.life[f] = scaleLog(scale).filter(r => r.id !== id);
+  UI.scaleSessionId[scale] = null;
+  saveState();
+  render();
+}
+function scaleHasSessionReading(scale) { return !!UI.scaleSessionId[scale]; }
+
+// The most recent PRIOR day that has readings -- walked back rather than fixed to yesterday, so a
+// day you forgot doesn't erase the reference, and reported with its date since "yesterday" and
+// "last Tuesday" are different claims.
+//
+// `average` is true only where averaging MEANS something. Hydration colour is a continuum, so
+// several samples average honestly. Bristol is not: types 1 and 7 are opposite failure modes and
+// averaging them to 4 would report a perfect day. Its readings are listed instead.
+function scalePriorDay(scale, average) {
   const today = todayStr();
   const byDate = {};
-  waterColorLog().forEach(r => {
-    const d = waterColorDateOf(r);
+  scaleLog(scale).forEach(r => {
+    const d = scaleDateOf(r);
     if (!d || d >= today) return;
     (byDate[d] = byDate[d] || []).push(Number(r.value) || 0);
   });
@@ -711,30 +774,50 @@ function waterColorPriorDay() {
   const vals = byDate[d];
   return {
     date: d,
-    value: Math.round(vals.reduce((a, b) => a + b, 0) / vals.length),
+    value: average ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : vals[vals.length - 1],
+    values: vals,
     readings: vals.length,
     isYesterday: d === shiftDate(today, -1),
   };
 }
+
+// ---- The Bristol stool scale ----
+//
+// Seven types, the standard clinical scale. It belongs beside hydration because it reads the same
+// system from the other end -- fibre and water intake show up here first -- and because a chip you
+// tap once a day is the only way a record like this ever gets kept.
+//
+// 3 and 4 are the healthy middle; 1-2 is constipation and 6-7 is diarrhoea. The app STATES that and
+// stops. It does not score the day, flag a run, or suggest anything: this is a symptom scale, where
+// the line between "instrumenting" and "diagnosing" is one the app has no business crossing.
+const BRISTOL_TYPES = [
+  { n: 1, label: 'Separate hard lumps',        note: 'constipated' },
+  { n: 2, label: 'Lumpy and sausage-like',     note: 'mildly constipated' },
+  { n: 3, label: 'Sausage with cracks',        note: 'normal' },
+  { n: 4, label: 'Smooth, soft sausage',       note: 'normal' },
+  { n: 5, label: 'Soft blobs, clear edges',    note: 'lacking fibre' },
+  { n: 6, label: 'Mushy, ragged edges',        note: 'mild diarrhoea' },
+  { n: 7, label: 'Liquid, no solid pieces',    note: 'diarrhoea' },
+];
+// A muted brown ramp, darkest at the constipated end. Deliberately NOT a red/green health gradient:
+// colouring 6 the same as 1 because both are "bad" would be the app grading you.
+const BRISTOL_COLORS = ['#6B4A2F', '#7C5836', '#8C6740', '#94714A', '#A08159', '#AD9370', '#BCA98D'];
+function bristolType(n) { return BRISTOL_TYPES.find(t => t.n === Number(n)) || null; }
+function bristolHex(v) { return BRISTOL_COLORS[(v || 1) - 1] || BRISTOL_COLORS[0]; }
+function bristolValue() { return scaleValue('stool'); }
+function bristolReadingsToday() { return scaleReadingsOn('stool', todayStr()).map(r => Number(r.value)); }
+function setBristol(v) { setScaleReading('stool', v); }
+// Not averaged -- see scalePriorDay(). Types 1 and 7 are opposite problems and their mean is 4.
+function bristolPriorDay() { return scalePriorDay('stool', false); }
+
+// ---- Hydration colour, on top of the above ----
+function waterColorLog() { return scaleLog('waterColor'); }
+function waterColorDateOf(r) { return scaleDateOf(r); }
+function waterColorReadingsOn(dateStr) { return scaleReadingsOn('waterColor', dateStr); }
+function waterColorValue() { return scaleValue('waterColor'); }
+function waterColorPriorDay() { return scalePriorDay('waterColor', true); }
 function waterColorHex(v) { return WATER_COLORS[(v || 1) - 1] || WATER_COLORS[0]; }
-function setWaterColor(v) {
-  const n = Number(v);
-  const log = waterColorLog();
-  // Tapping the swatch you're already on clears it, the same toggle-off the habit buttons use --
-  // which now means dropping today's last reading rather than blanking a sticky value.
-  if (waterColorValue() === n) {
-    for (let i = log.length - 1; i >= 0; i--) {
-      if (waterColorDateOf(log[i]) === todayStr()) { log.splice(i, 1); break; }
-    }
-  } else {
-    log.push({ value: n, at: new Date().toISOString() });
-    // A marker you change a couple of times a day will never approach this; the cap just stops an
-    // unbounded array from riding along in every cloud sync forever.
-    if (log.length > 400) STATE.life.waterColorLog = log.slice(-400);
-  }
-  saveState();
-  render();
-}
+function setWaterColor(v) { setScaleReading('waterColor', v); }
 // How long ago today's latest reading was taken. Still worth saying -- a reading from first thing
 // this morning and one from ten minutes ago are different claims -- but it can no longer run past
 // a day, because the marker clears at midnight.
@@ -754,14 +837,25 @@ function waterColorAge() {
 // waterColorIsStale() and WATER_COLOR_STALE_MIN are gone. They warned that a marker older than
 // twelve hours was describing a body you no longer had -- a warning that only existed because the
 // marker outlived its day. It doesn't any more, so there is nothing to warn about.
+// Shared across both scales. Only appears once you've logged something in THIS visit, because that
+// is the only reading it can remove -- an undo that could reach back into yesterday would be a
+// delete button wearing a friendlier word.
+function renderScaleUndo(scale) {
+  if (!scaleHasSessionReading(scale)) return '';
+  return `<button class="btn btn-ghost btn-sm scale-undo" onclick="undoScaleReading('${scale}')">&#8630; UNDO THIS READING</button>`;
+}
+// A short "Mon 14" for a prior day that isn't yesterday.
+function shortDayLabel(dateStr) {
+  const d = new Date(dateStr + 'T12:00:00');
+  return MONTH_NAMES[d.getMonth()].slice(0, 3) + ' ' + d.getDate();
+}
 // Yesterday's average, shown UNDER the scale rather than on it: it's a reference point, not a
 // reading, and putting it on the scale itself would read as today's answer already filled in.
 function renderWaterColorPrior() {
   const prior = waterColorPriorDay();
   if (!prior) return '';
   // Named, not "3 days ago": the gap is the point when you skipped a day, and a date says which.
-  const d = new Date(prior.date + 'T12:00:00');
-  const when = prior.isYesterday ? 'Yesterday' : MONTH_NAMES[d.getMonth()].slice(0, 3) + ' ' + d.getDate();
+  const when = prior.isYesterday ? 'Yesterday' : shortDayLabel(prior.date);
   return `
     <div class="log-color-prior">
       <i class="log-color-prior-sw" style="background:${waterColorHex(prior.value)};"></i>
@@ -845,7 +939,7 @@ function renderLogStrip(group, fields) {
     <div class="log-strip">${fields.map(logChip).join('')}</div>`;
 }
 function renderHomeAmLogBox() { return renderLogStrip('am', ['weight', 'sleepLen', 'sleepQual', 'restingHR']); }
-function renderHomePmLogBox() { return renderLogStrip('pm', ['calories', 'water', 'steps']); }
+function renderHomePmLogBox() { return renderLogStrip('pm', ['calories', 'water', 'steps', 'stool']); }
 
 // ---- The log sheet: ONE field at a time, saved as you type ----
 //
@@ -863,8 +957,16 @@ function renderHomePmLogBox() { return renderLogStrip('pm', ['calories', 'water'
 //     splitting them would mean opening two sheets every morning.
 const LOG_FIELD_PAIRS = { sleepLen: ['sleepLen', 'sleepQual'], sleepQual: ['sleepLen', 'sleepQual'] };
 function logFieldsOfSheet(field) { return LOG_FIELD_PAIRS[field] || [field]; }
-function openLogPopup(field, focus) { UI.logPopup = { field, focus: focus || field }; render(); }
-function closeLogPopup() { UI.logPopup = null; render(); }
+function openLogPopup(field, focus) {
+  UI.logPopup = { field, focus: focus || field };
+  UI.scaleSessionId = { waterColor: null, stool: null };   // a fresh visit logs a fresh reading
+  render();
+}
+function closeLogPopup() {
+  UI.logPopup = null;
+  UI.scaleSessionId = { waterColor: null, stool: null };
+  render();
+}
 
 // Commits one field. Every write goes through here, so the chip, the sheet and the stored value
 // cannot drift apart.
@@ -1042,11 +1144,34 @@ function renderLogPopup() {
           </div>
         </div>
         ${renderWaterColorTrend()}
+        ${renderScaleUndo('waterColor')}
         ${renderWaterColorPrior()}
         <div class="log-color-note">${cur
-          ? `Today: <b>${cur}</b> of 8, ${waterColorAge()}. Tap again to undo, or pick another to log a fresh reading.`
+          ? `Today: <b>${cur}</b> of 8, ${waterColorAge()}. Tap another shade to correct it.`
           : 'Lighter is more hydrated. Tap a shade to log today’s first reading &mdash; it clears again tomorrow.'}</div>
         ${renderWaterColorInsight()}`;
+    }
+    if (f === 'stool') {
+      const cur = bristolValue();
+      const today = bristolReadingsToday();
+      const prior = bristolPriorDay();
+      return `
+        <div class="bristol-scale">
+          ${BRISTOL_TYPES.map(t => `
+            <button class="bristol-row ${cur === t.n ? 'bristol-row-on' : ''}" onclick="setBristol(${t.n})">
+              <i class="bristol-sw" style="background:${bristolHex(t.n)};"></i>
+              <span class="bristol-n mono">${t.n}</span>
+              <span class="bristol-label">${t.label}</span>
+              <span class="bristol-note">${t.note}</span>
+            </button>`).join('')}
+        </div>
+        ${renderScaleUndo('stool')}
+        ${today.length ? `<div class="log-color-note">Today: <b>${today.join(', ')}</b>${today.length > 1 ? ` <span class="log-insight-n">(${today.length} readings)</span>` : ''}</div>` : ''}
+        ${prior ? `<div class="log-color-prior">
+            <i class="log-color-prior-sw" style="background:${bristolHex(prior.value)};"></i>
+            <span>${prior.isYesterday ? 'Yesterday' : shortDayLabel(prior.date)}: <b>${prior.values.join(', ')}</b></span>
+          </div>` : ''}
+        <div class="log-color-note">3 and 4 are the healthy middle; 1&ndash;2 is constipation, 6&ndash;7 diarrhoea. Recorded, not scored &mdash; a run worth acting on is a conversation with a doctor, not a flag in an app.</div>`;
     }
     if (f === 'sleepQual') {
       const opts = [1, 2, 3, 4, 5].map(n => {

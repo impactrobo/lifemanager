@@ -74,6 +74,11 @@ function defaultTransientUi() {
     // choosing ANNUALLY after typing a title silently wiped the title.
     reminderFormDraft: {},
     exceptionFormOpen: false,
+    // The reading logged during THIS opening of a scale sheet (hydration colour, Bristol). One
+    // opening logs one reading: tapping another shade replaces it rather than stacking a second,
+    // and UNDO removes it. Cleared when the sheet closes, so tomorrow's -- or this afternoon's --
+    // visit starts a genuinely new reading. See setScaleReading() in app-home.js.
+    scaleSessionId: { waterColor: null, stool: null },
     homeEditMode: false,
     homeAddPopup: null,                // 'sections' | 'boxes' | null
     goalFormOpen: false,
