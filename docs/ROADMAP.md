@@ -487,6 +487,45 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Exercise identity: categories dissolve into lifts (2026-09-16).** Arc 2. The model inverted.
+  - **A lift owns its own training maxes.** It used to work the other way: `STATE.categories` held
+    six fixed buckets (Squat, Bench, Deadlift, OHP, Back, Bonus), each owning four independent tier
+    records with their own test weight, conversion and TM — plus one shared muscle, a hand-set
+    upper/lower flag, and a free-text `exerciseName` on each T2 so a "Squat-tracked T2" could
+    actually be a Leg Press. A workout's T1/T2 slot pointed at the *category*, an exercise pointed
+    at a *lift*, and a category pointed at a lift too. **Three identities for one movement.**
+  - The slot points at a **lift** now, and the lift carries its maxes, which deletes the mapping
+    layer outright — and with it the rename/swap ambiguity, since there's no shared category record
+    left for a rename to silently rewrite. Changing what a slot points at is always a swap.
+  - **One test per SCHEME, not per tier.** A lift stores `t1` and `t2`; T2a/T2b/T2c all read `t2`
+    and differ by their own `TIER_SCHEMES` intensity (0.80 / 0.75 / 0.75) and rep ladder. Nothing
+    is lost — the old per-tier maxes existed because all four belonged to one category, and three
+    T2 slots now hold three different *lifts*, each with its own number.
+  - `STATE.liftMaxes` is **sparse and keyed by liftId**, the same pattern as `liftNotes` — a lift
+    you've never tested has no entry. `muscle` comes off the lift (it always did), and
+    **upper/lower/core is derived** from it via `MUSCLE_LU` rather than stored beside it where the
+    two could disagree. **Abs → `core`**, since it's genuinely neither.
+  - **The base TM is derived, not cached.** `recomputeTMs()` wrote a `tmLb` onto every tier and had
+    to be called on every render of the screen that showed it — a cached derivation refreshed by a
+    function that had to remember to run. It's computed where it's read now.
+  - **The migration resolves each (category, tier) pair to a lift**, in three cases: a tier's
+    `exerciseName` override becomes its own lift (the case the old model handled worst); otherwise
+    the category's linked lift; otherwise a custom lift named after the category. Name matching is
+    normalised on case and whitespace — merging two lifts later is easy, splitting one isn't. Dated
+    TM adjustments come across intact.
+  - **MAXES became EXERCISES**, listing lifts you've actually tested rather than six fixed buckets,
+    each card carrying its maxes, its muscle, its derived upper/lower pill and its persistent setup
+    notes. The workout builder's T1/T2 picker groups the whole library into *With a max* / *No max
+    yet*. `defaultCategories()` no longer ships, so a fresh install starts with no maxes at all.
+  - **GENERAL is gone, and `STATE.program.cycles` with it.** Rotations had already taken both of
+    that setting's consumers — the WORKOUTS counter is derived from the phase, Set Volume is a real
+    calendar week — leaving a number you could still type into that governed nothing, which is the
+    most dangerous kind of setting because it looks like it works. Its one honest use (warning that
+    C25K needs more weeks than you have) moved to the auto-fill picker, where it compares against
+    the **phase's** length. BUILDER → WORKOUTS is four tabs now.
+  - `tests/test_lift_maxes.js` pins seven contracts, the migration most of all — it runs once,
+    silently, against real training data, and a mistake in it loses numbers nobody can reconstruct.
+
 - **END PHASE, and auto-fill onto rotation slots (2026-09-16).** Commits 4 and 5 — the phases/
   rotations arc is complete.
   - **END fixes a phase's length at what it actually ran**, and everything after pulls forward on

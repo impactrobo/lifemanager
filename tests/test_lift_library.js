@@ -101,7 +101,10 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     };
   });
   console.log('unlinked refs:', refs.kinds);
-  if (!refs.kinds.category || !refs.kinds.exercise) throw new Error('Categories and flat exercises both need linking');
+  // No 'category' kind any more: categories dissolved into lifts, so a T1/T2 slot names a lift
+  // outright and has nothing left to link. Flat exercises and T3 slots are still free text.
+  if (refs.kinds.category) throw new Error('Categories no longer exist and must not be listed for linking');
+  if (!refs.kinds.exercise) throw new Error('Flat exercises still need linking');
   if (!refs.hasT3) throw new Error('T3 slots are the free-text gap inside GZCL — they must be listed');
   if (!refs.blankT3NotListed) throw new Error('An empty slot is not an unlinked lift');
 
@@ -112,14 +115,9 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     const ex = w.exercises.find(e => e.id === 'x1');
     onPickLift(`review:t3:0:${ids.gzclId}`, 'lying-leg-curl');
     const g = STATE.workouts.find(x => x.id === ids.gzclId);
-    onPickLift('cat:bench', 'bb-bench');
-    const cat = STATE.categories.find(c => c.id === 'bench');
     return {
       ex: { liftId: ex.liftId, name: ex.name, muscle: ex.muscle },
       t3: { liftId: g.t3[0].liftId, name: g.t3[0].name },
-      // A category KEEPS everything it had and gains a liftId — "Bench" the lift and "Bench as a
-      // GZCL category with a T1 training max" stay different things.
-      cat: { liftId: cat.liftId, name: cat.name, keptTiers: !!cat.tiers, keptLu: cat.lu },
       remaining: unlinkedLiftRefs().length,
     };
   }, { workoutId: refs.workoutId, gzclId: refs.gzclId });
@@ -127,10 +125,6 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (assigned.ex.liftId !== 'bb-bench') throw new Error('The exercise should carry the liftId');
   if (assigned.ex.name !== 'Barbell Bench Press') throw new Error('The name follows the lift — a stale free-text name is how you get two answers again');
   if (assigned.t3.liftId !== 'lying-leg-curl' || assigned.t3.name !== 'Lying Leg Curl') throw new Error('T3 slots link the same way');
-  if (assigned.cat.liftId !== 'bb-bench') throw new Error('A category gains a liftId');
-  if (assigned.cat.name !== 'Bench' || !assigned.cat.keptTiers || assigned.cat.keptLu !== 'upper') {
-    throw new Error('A category KEEPS its own name, tiers and lu — the lift is a reference, not a replacement');
-  }
 
   // ---- 5. Adding a lift by hand, and never duplicating the library ----
   const added = await page.evaluate(() => {
@@ -188,14 +182,20 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (dupe.linkedTo !== 'cable-flye') throw new Error('And it should link to the one that already exists');
 
   // ---- 6. The picker: muscle first, and it never assigns by itself ----
-  await page.evaluate(() => {
+  // Its own unlinked exercise to open the picker against. This used to use a category token, which
+  // needed nothing to exist because categories were global; an exercise belongs to a workout, so
+  // one has to survive the reset below.
+  const pickerWorkoutId = await page.evaluate(() => {
     STATE.workouts = []; STATE.lifts = [];
-    switchTab('train'); NAV.fitnessSubtab = 'setup'; NAV.setupSubtab = 'lifts'; render();
+    const w = createWorkout('weights', 'Hypertrophy (RP Strength)');
+    w.exercises = [{ id: 'xp', name: 'Some Press', liftId: null, sets: 3, repMin: 8, repMax: 12,
+                     targetRIR: 2, resType: 'weight', setType: 'straight', muscle: null, adjustments: [] }];
+    switchTab('train'); NAV.fitnessSubtab = 'builder'; NAV.setupSubtab = 'lifts'; render();
+    return w.id;
   });
   await settle(page);
   // Each step needs its own settle() for the same rAF reason.
-  // 'squat', not 'bench' — section 4 linked bench, so it no longer has a row on this screen.
-  const TOKEN = 'review:category:squat:';
+  const TOKEN = 'review:exercise:xp:' + pickerWorkoutId;
   await page.evaluate((t) => openLiftPicker(t, ''), TOKEN);
   await settle(page);
   const beforeMuscle = await page.evaluate(() => ({
@@ -233,11 +233,9 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   const persisted = await page.evaluate(() => ({
     custom: STATE.lifts.length,
     resolves: !!allLifts().find(l => l.name === 'Landmine Press'),
-    catLift: (STATE.categories.find(c => c.id === 'bench') || {}).liftId,
   }));
   console.log('after reload:', persisted);
   if (persisted.custom !== 1 || !persisted.resolves) throw new Error('Added lifts should persist');
-  if (persisted.catLift !== 'bb-bench') throw new Error('A category liftId should persist');
 
   // A save predating the feature has no lifts key at all.
   await page.evaluate(() => { delete STATE.lifts; saveState(); });
@@ -255,7 +253,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   }
 
   await page.evaluate(() => {
-    STATE.workouts = []; STATE.lifts = []; STATE.categories.forEach(c => { delete c.liftId; });
+    STATE.workouts = []; STATE.lifts = [];
     saveState();
   });
 

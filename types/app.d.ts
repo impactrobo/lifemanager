@@ -90,7 +90,11 @@ interface AppSettings {
 }
 
 interface ProgramConfig {
-  cycles: number;
+  /** RETIRED. Was "the program is N weeks long" -- the last survivor of the pre-phases model.
+   *  Rotations took both its consumers: the WORKOUTS week counter is derived from the phase
+   *  covering the date, and Set Volume is a real calendar week. Optional so an old save still
+   *  parses; nothing reads it. */
+  cycles?: number;
   weightsProgramStyle?: WeightsProgramStyle | null;
   cardioProgramStyle?: CardioProgramStyle | null;
   weightsWorkoutsPerCycle?: number;
@@ -105,10 +109,25 @@ interface CategoryTier {
   muscle?: string;
   exerciseName?: string;
 }
+/** One tested result on a lift. `conv` turns the tested weight into a training max and is auto-set
+ *  from `testType` (TEST_CONV_MAP) but editable. The base TM is DERIVED as testWeightLb * conv --
+ *  there is no stored `tmLb`, because a cached derivation is a number that can go stale.
+ *  `adjustments` are increases earned from a logged session, each dated and applied strictly after
+ *  that date, so one never affects the session that earned it. */
+interface LiftMax {
+  testType: string;
+  testWeightLb: number;
+  conv: number;
+  adjustments: Array<{ id: string; fromDate: string; deltaLb: number }>;
+}
+
+/** Category is retained only so the one-time migration can read an old save. Nothing writes one,
+ *  and STATE.categories is deleted once migrateCategoriesToLiftMaxes() has run. */
 interface Category {
   id: string;
   name: string;
-  /** 'upper' | 'lower' */
+  liftId?: string | null;
+  /** 'upper' | 'lower' -- derived from the lift's muscle now (muscleLU), not stored. */
   lu?: string;
   tmT2Revealed?: boolean | number;
   tiers: { T1: CategoryTier; T2a: CategoryTier; T2b: CategoryTier; T2c: CategoryTier };
@@ -690,7 +709,12 @@ interface AppState {
   updatedAt: number | null;
   settings: AppSettings;
   program: ProgramConfig;
-  categories: Category[];
+  /** Training maxes, keyed by liftId and SPARSE -- a lift you've never tested has no entry. A lift
+   *  owns its own maxes; STATE.categories (six fixed buckets each holding four tier records) is
+   *  gone, along with the mapping layer that joined a slot to a category to a lift. One record per
+   *  SCHEME, not per tier: T2a/T2b/T2c all read `t2` and differ by their own TIER_SCHEMES intensity
+   *  and rep ladder. See app-lifts.js "LIFT MAXES". */
+  liftMaxes: Record<string, { t1?: LiftMax; t2?: LiftMax }>;
   workouts: Array<Record<string, any> & { id: string; name: string; type?: WorkoutType }>;
   mesoWorkouts: Array<Record<string, any>>;
   mesoLogs: Record<string, any>;

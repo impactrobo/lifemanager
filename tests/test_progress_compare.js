@@ -30,8 +30,9 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     const workoutId = uid();
     STATE.workouts.push({
       id: workoutId, name: 'Compare Test Day', type: 'weights',
-      t1: { enabled: true, categoryId: 'squat', variant: 'regular' },
-      t2a: { enabled: false, categoryId: null }, t2b: { enabled: false, categoryId: null }, t2c: { enabled: false, categoryId: null },
+      // A tier slot names a LIFT now -- there is no category to point at.
+      t1: { enabled: true, liftId: 'bb-back-squat', variant: 'regular' },
+      t2a: { enabled: false, liftId: null }, t2b: { enabled: false, liftId: null }, t2c: { enabled: false, liftId: null },
     });
     // Three real sessions, ascending weight, with one incomplete trailing set on the last to
     // confirm it's excluded from the "top set" pick.
@@ -51,13 +52,15 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // 2. trackedLiftSlots() finds the new Squat T1 slot
   const slots = await page.evaluate(() => trackedLiftSlots());
   console.log('tracked lift slots:', slots);
-  const squatSlot = slots.find(s => s.categoryId === 'squat' && s.tierKey === 't1');
+  const squatSlot = slots.find(s => s.categoryId === 'bb-back-squat' && s.tierKey === 't1');
   if (!squatSlot) throw new Error('Expected trackedLiftSlots() to include the new Squat T1 slot');
-  if (squatSlot.label !== 'Squat (T1)') throw new Error(`Expected label "Squat (T1)", got "${squatSlot.label}"`);
+  // The lift's real name, not a category bucket's. "Squat" was a container that a Barbell Back
+  // Squat, a Front Squat and a Leg Press all had to file themselves under.
+  if (squatSlot.label !== 'Barbell Back Squat (T1)') throw new Error(`Expected the lift's own name, got "${squatSlot.label}"`);
 
   // 3. liftHistorySeries() returns the 3 sessions, sorted, with the 225 (no reps) excluded
-  const series = await page.evaluate(() => liftHistorySeries('squat', 't1'));
-  console.log('liftHistorySeries(squat, t1):', series);
+  const series = await page.evaluate(() => liftHistorySeries('bb-back-squat', 't1'));
+  console.log('liftHistorySeries(bb-back-squat, t1):', series);
   if (series.length !== 3) throw new Error(`Expected 3 points, got ${series.length}: ${JSON.stringify(series)}`);
   if (series.map(p => p.weightLb).join(',') !== '185,195,205') {
     throw new Error(`Expected top-set weights [185,195,205] in date order, got ${JSON.stringify(series.map(p => p.weightLb))}`);
@@ -71,7 +74,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   console.log('default VIEW.compareSelected:', defaultSelected);
   if (!defaultSelected.includes('bodyweight')) throw new Error('Expected Body Weight to be selected by default');
 
-  const squatId = await page.evaluate(() => compareMetricId('squat', 't1'));
+  const squatId = await page.evaluate(() => compareMetricId('bb-back-squat', 't1'));
   await page.evaluate((id) => toggleCompareMetric(id), squatId);
   await settle(page);
   const afterToggle = await page.evaluate(() => [...VIEW.compareSelected]);

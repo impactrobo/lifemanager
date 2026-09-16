@@ -30,22 +30,17 @@ function renderRoundingPanel() {
       <div style="font-size:11px;color:var(--text-faint); margin-top:8px;">Every target weight below rounds to the nearest increment — e.g. 2.5 lb or 1 kg plates. Change units in Settings.</div>
     </div>`;
 }
-function renderPlan() {
-  const c25kTooShort = programWorkouts('C25K').length > 0 && STATE.program.cycles < C25K_TOTAL_WEEKS;
-  const c2triTooShort = programWorkouts('C2Triathlon').length > 0 && STATE.program.cycles < C2TRI_TOTAL_WEEKS;
-  return `
-    <div class="subtle-label" style="margin-bottom:10px;">PROGRAM STRUCTURE</div>
-    <div class="panel">
-      <label class="field">
-        <span class="lbl">Cycles (weeks)</span>
-        <input type="number" min="1" step="1" value="${STATE.program.cycles}" onchange="updateRp('cycles', this.value)">
-      </label>
-      <div style="font-size:11px; color:var(--text-faint); margin-top:2px;">Length of the program cycle — the Train tab's week selector and Set Volume both follow this. Whole numbers only, minimum 1.</div>
-      ${c25kTooShort ? `<div style="font-size:11px; color:var(--accent); font-weight:600; margin-top:6px;">Your program is only ${STATE.program.cycles} week${STATE.program.cycles===1?'':'s'} — your C25K workouts need ${C25K_TOTAL_WEEKS} weeks to complete. Increase Cycles above to run the full program, or it'll hold at Week ${STATE.program.cycles}'s pace once your program ends.</div>` : ''}
-      ${c2triTooShort ? `<div style="font-size:11px; color:var(--accent); font-weight:600; margin-top:6px;">Your program is only ${STATE.program.cycles} week${STATE.program.cycles===1?'':'s'} — your C2Triathlon workouts need ${C2TRI_TOTAL_WEEKS} weeks to complete. Increase Cycles above to run the full program, or it'll hold at Week ${STATE.program.cycles}'s pace once your program ends.</div>` : ''}
-    </div>
-    <div class="empty-state" style="padding:14px 10px;"><div style="font-size:12px;">Weights/Cardio/Mobility/Warmup workouts, and each one's own style, are built under <b style="color:var(--text)">Builder &rarr; Workouts &rarr; Workout</b> — there's no per-cycle slot count anymore, just add what you use.</div></div>`;
-}
+// renderPlan() and STATE.program.cycles are gone.
+//
+// `cycles` was a single global "the program is N weeks long", and it was the last survivor of the
+// pre-phases model. Rotations took its two remaining consumers: the WORKOUTS week counter is
+// derived from the phase covering the date, and Set Volume is a real calendar week. That left a
+// number you could still type into which governed nothing at all -- the most dangerous kind of
+// setting, since it looks like it works.
+//
+// Its one honest use, warning that a program needs more weeks than you have, moved to the auto-fill
+// picker, where it compares against the PHASE's length. That's where the question is actually
+// asked, and the phase is what actually decides the answer.
 
 
 function workoutCompletion(cycle, workout) {
@@ -62,10 +57,10 @@ function workoutCompletion(cycle, workout) {
 }
 function enabledTierKeys(workout) {
   const keys = [];
-  if (workout.t1.enabled && workout.t1.categoryId) keys.push('t1');
-  if (workout.t2a.enabled && workout.t2a.categoryId) keys.push('t2a');
-  if (workout.t2b.enabled && workout.t2b.categoryId) keys.push('t2b');
-  if (workout.t2c.enabled && workout.t2c.categoryId) keys.push('t2c');
+  if (workout.t1.enabled && workout.t1.liftId) keys.push('t1');
+  if (workout.t2a.enabled && workout.t2a.liftId) keys.push('t2a');
+  if (workout.t2b.enabled && workout.t2b.liftId) keys.push('t2b');
+  if (workout.t2c.enabled && workout.t2c.liftId) keys.push('t2c');
   workout.t3.forEach((t, i) => { if (t.enabled && t.name) keys.push('t3_' + i); });
   return keys;
 }
@@ -657,10 +652,10 @@ function clearRpWorkoutLog(workoutId) {
 function renderSingleExerciseBlock(workout, cycle, log, key) {
   if (key === 't1') {
     const tierKey = workout.t1.variant === 'ultra' ? 'ultra' : 't1';
-    return renderTierBlock(workout, cycle, log, tierKey, workout.t1.categoryId);
+    return renderTierBlock(workout, cycle, log, tierKey, workout.t1.liftId);
   }
   if (key === 't2a' || key === 't2b' || key === 't2c') {
-    return renderTierBlock(workout, cycle, log, key, workout[key].categoryId);
+    return renderTierBlock(workout, cycle, log, key, workout[key].liftId);
   }
   if (key.indexOf('t3_') === 0) {
     // T3 IS the accessory tier -- it's absent from the training-max config precisely because it
@@ -728,8 +723,7 @@ function renderWorkoutLog(workoutId) {
 }
 function todayOrDate(log) { return log.date || 'not dated'; }
 
-function renderTierBlock(workout, cycle, log, tierKey, categoryId) {
-  const cat = getCategory(categoryId);
+function renderTierBlock(workout, cycle, log, tierKey, liftId) {
   const scheme = TIER_SCHEMES[tierKey];
   const entryKey = tierKey;
   const { stage: stageIdx, needsReset } = computeStageState(workout.id, entryKey, cycle);
@@ -741,10 +735,10 @@ function renderTierBlock(workout, cycle, log, tierKey, categoryId) {
   entry.stage = stageIdx; // stashed for reference/display only — computeStageState is authoritative
   if (entry.applied === undefined) entry.applied = false;
   const stageDef = scheme.stages[stageIdx];
-  // As of this SESSION's date. A training max is dated now -- the category is shared across
-  // workouts that each count their own sessions, so the session ordinal says nothing about which
-  // queued increases had come due by the time you trained.
-  const baseTargetLb = targetWeightLb(tierKey, categoryId, log.date || todayStr());
+  // As of this SESSION's date. A training max is dated -- the LIFT is shared across workouts that
+  // each count their own sessions, so the session ordinal says nothing about which queued
+  // increases had come due by the time you trained.
+  const baseTargetLb = targetWeightLb(tierKey, liftId, log.date || todayStr());
   // Display-time only: the stage scheme and the training max are never edited, so turning the
   // deload off restores these exactly. Both counts floor at 1 -- see deloadScaleCount().
   const dl = workoutDeloadState(cycle, workout.id);
@@ -811,11 +805,14 @@ function renderTierBlock(workout, cycle, log, tierKey, categoryId) {
     </div>`;
   }).join('');
 
-  const sugg = computeSuggestion(workout, tierKey, categoryId, entry, stageDef);
+  const sugg = computeSuggestion(workout, tierKey, liftId, entry, stageDef);
   const appliedClass = entry.applied ? 'applied' : '';
   const displayedDelta = entry.applied ? entry.appliedDeltaLb : sugg.lb;
   const tierField = tierKeyToField(tierKey);
-  const muscle = cat && cat.tiers[tierField] ? cat.tiers[tierField].muscle : null;
+  // Straight off the lift. The muscle used to be stored on each of a category's four tier records
+  // and synced by hand, so the colour on this block was a copy of a copy.
+  const slotLift = liftById(liftId);
+  const muscle = slotLift ? slotLift.muscle : null;
   const mColor = muscleColor(muscle);
   const blockStyle = mColor ? `style="border-left: 4px solid ${mColor};"` : '';
   const headStyle = mColor ? `style="background:${hexToRgba(mColor, 0.14)};"` : '';
@@ -825,13 +822,13 @@ function renderTierBlock(workout, cycle, log, tierKey, categoryId) {
     <div class="tier-block" ${blockStyle}>
       <div class="tier-head" ${headStyle}>
         <div>
-          <div class="tname">${escapeHtml(tierExerciseLabel(cat, tierField))}</div>
+          <div class="tname">${escapeHtml(liftName(liftId, tierField))}</div>
           <div class="tmove">${scheme.label}${muscle ? ` <span style="background:${mColor}; color:#1a1a1a; padding:1px 7px; border-radius:10px; font-size:10px; font-weight:700; margin-left:4px;">${muscle}</span>` : ''}</div>
         </div>
         <div class="plate-row">${plates}</div>
       </div>
       <div class="tier-body">
-        ${renderLiftNoteRow(cat && cat.liftId)}
+        ${renderLiftNoteRow(liftId)}
         ${needsReset
           ? `<div class="target-line" style="color:var(--reset-text); font-weight:600;">Reset triggered — missed Stage 3 last time. Enter a fresh working weight for Set 1; the rest will match it. Back to Stage 1: ${stageDef.sets}&times;${stageDef.reps}${stageDef.amrapLast ? ' (last set AMRAP)' : ''}</div>`
           : `<div class="target-line">Target: <span class="tv">${fmtWeight(targetLb)} ${weightUnitLabel()}</span> &middot; ${tSets}&times;${tReps}${(stageDef.amrapLast && !dl.on) ? ' (last set AMRAP)' : ''}${stageDef.testNote ? ' &mdash; ' + stageDef.testNote : ''}${
@@ -848,7 +845,7 @@ function renderTierBlock(workout, cycle, log, tierKey, categoryId) {
             <div class="sugtext">TM change queued for next workout</div>
             <div class="sugval">${displayedDelta >= 0 ? '+' : ''}${fmt(lbToDisplay(displayedDelta),1)} ${weightUnitLabel()}</div>
           </div>
-          <button class="btn btn-sm" style="background:var(--good); color:#0c1b12; border-color:var(--good);" onclick="undoSuggestion('${workout.id}','${entryKey}','${categoryId}')" title="Tap to undo">SET! (tap to undo)</button>
+          <button class="btn btn-sm" style="background:var(--good); color:#0c1b12; border-color:var(--good);" onclick="undoSuggestion('${workout.id}','${entryKey}','${liftId}')" title="Tap to undo">SET! (tap to undo)</button>
         </div>
         <div style="font-size:11px; color:var(--text-faint); margin-top:6px;">Locked in for next time — tap SET! to undo if you made a mistake.</div>`
         : sugg.eligible ? `
@@ -859,7 +856,7 @@ function renderTierBlock(workout, cycle, log, tierKey, categoryId) {
           </div>
           <div style="display:flex; align-items:center; gap:8px;">
             <input type="number" step="0.5" value="${fmt(lbToDisplay(sugg.lb),1)}" id="sugg_${workout.id}_${entryKey}">
-            <button class="btn btn-good btn-sm" onclick="applySuggestion('${workout.id}','${entryKey}','${categoryId}')">APPLY</button>
+            <button class="btn btn-good btn-sm" onclick="applySuggestion('${workout.id}','${entryKey}','${liftId}')">APPLY</button>
           </div>
         </div>
         <div style="font-size:11px; color:var(--text-faint); margin-top:6px;">${sugg.note}</div>`
@@ -869,8 +866,7 @@ function renderTierBlock(workout, cycle, log, tierKey, categoryId) {
     </div>`;
 }
 
-function computeSuggestion(workout, tierKey, categoryId, entry, stageDef) {
-  const cat = getCategory(categoryId);
+function computeSuggestion(workout, tierKey, liftId, entry, stageDef) {
   const lastSet = entry.sets[entry.sets.length - 1];
   const isAmrap = stageDef.amrapLast;
   const tierGroup = tierGroupOf(tierKey);
@@ -882,8 +878,10 @@ function computeSuggestion(workout, tierKey, categoryId, entry, stageDef) {
   if (extra < 0) {
     return { lb: 0, eligible: false, missed: true, note: `Missed the AMRAP target by ${-extra} rep(s) — next workout moves to the next stage.` };
   }
-  const bonus = amrapSuggestionLb(extra, cat.lu, tierGroup);
-  return { lb: bonus, eligible: true, missed: false, note: `${extra} rep(s) over target on the AMRAP set (${cat.lu} body, ${tierGroup}) → +${fmtLbShort(lbToDisplay(bonus))}${weightUnitLabel()} suggested.` };
+  // Upper/lower is derived from the lift's muscle rather than read off a hand-set category flag.
+  const bonus = amrapSuggestionLb(extra, liftLU(liftId), tierGroup);
+  const lu = liftLU(liftId);
+  return { lb: bonus, eligible: true, missed: false, note: `${extra} rep(s) over target on the AMRAP set (${lu ? lu + ' body' : 'unclassified'}, ${tierGroup}) → +${fmtLbShort(lbToDisplay(bonus))}${weightUnitLabel()} suggested.` };
 }
 
 
@@ -1192,38 +1190,33 @@ function removeT3Set(workoutId, entryKey, idx) {
   log.entries[entryKey].sets.splice(idx, 1);
   saveState(); render();
 }
-function applySuggestion(workoutId, entryKey, categoryId) {
+function applySuggestion(workoutId, entryKey, liftId) {
   const log = getLog(trainCycle(), workoutId);
   const entry = log.entries[entryKey];
   if (entry.applied) return; // guard against double-apply
   const input = document.getElementById(`sugg_${workoutId}_${entryKey}`);
   const deltaLb = displayToLb(input.value);
-  const cat = getCategory(categoryId);
-  const tierField = tierKeyToField(entryKey);
-  const tier = cat.tiers[tierField];
-  if (!Array.isArray(tier.adjustments)) tier.adjustments = [];
+  const m = ensureLiftMax(liftId, entryKey);
   const adjId = uid();
   // Dated to THIS session and applied strictly after it -- never affects the workout it was
-  // earned in, and a second workout sharing the category picks it up at its own next session.
-  // Dated rather than "cycle + 1" because the category is shared: this workout's next ordinal
-  // means nothing to another workout's count. Can't be queued twice for the same logged entry.
-  tier.adjustments.push({ id: adjId, fromDate: log.date || todayStr(), deltaLb });
+  // earned in, and a second workout using the same LIFT picks it up at its own next session.
+  // Dated rather than "cycle + 1" because the lift is shared: this workout's next ordinal means
+  // nothing to another workout's count. Can't be queued twice for the same logged entry.
+  m.adjustments.push({ id: adjId, fromDate: log.date || todayStr(), deltaLb });
   entry.applied = true;
   entry.appliedDeltaLb = deltaLb;
   entry.appliedAdjustmentId = adjId;
   saveState();
-  showToast(`Queued: ${cat.name} ${tierField} +${fmt(lbToDisplay(deltaLb),1)} ${weightUnitLabel()} starting next workout`);
+  showToast(`Queued: ${liftName(liftId, 'lift')} ${liftSchemeOf(entryKey).toUpperCase()} +${fmt(lbToDisplay(deltaLb),1)} ${weightUnitLabel()} starting next workout`);
   render();
 }
-function undoSuggestion(workoutId, entryKey, categoryId) {
+function undoSuggestion(workoutId, entryKey, liftId) {
   const log = getLog(trainCycle(), workoutId);
   const entry = log.entries[entryKey];
   if (!entry.applied) return;
-  const cat = getCategory(categoryId);
-  const tierField = tierKeyToField(entryKey);
-  const tier = cat.tiers[tierField];
-  if (Array.isArray(tier.adjustments) && entry.appliedAdjustmentId) {
-    tier.adjustments = tier.adjustments.filter(a => a.id !== entry.appliedAdjustmentId);
+  const m = liftMax(liftId, entryKey);
+  if (m && Array.isArray(m.adjustments) && entry.appliedAdjustmentId) {
+    m.adjustments = m.adjustments.filter(a => a.id !== entry.appliedAdjustmentId);
   }
   entry.applied = false;
   entry.appliedDeltaLb = null;
@@ -1319,31 +1312,28 @@ function renderExerciseSetup() {
   // Rounding LEADS this pane. It exists only to turn a training max into a weight you can actually
   // load on a bar, so every number below it is computed through it -- reading it first tells you
   // what the targets underneath are rounded to, instead of leaving you to find that in a drawer.
-  if (NAV.setupSubtab === 'tm') body = `${renderRoundingPanel()}<div class="subtle-label" style="margin-bottom:10px;">TRAINING MAXES BY CATEGORY</div>${renderTMSetup()}<div class="divider"></div>${renderVolumeLandmarksSetup()}`;
+  // renderTMSetup() brings its own ROUNDING panel and heading -- it is the exercise library now,
+  // not six fixed category buckets, so "TRAINING MAXES BY CATEGORY" described a shape that no
+  // longer exists.
+  if (NAV.setupSubtab === 'tm') body = `${renderTMSetup()}<div class="divider"></div>${renderVolumeLandmarksSetup()}`;
   else if (NAV.setupSubtab === 'builder') body = renderWorkoutBuilder();
   else if (NAV.setupSubtab === 'viewWorkouts') body = renderViewWorkouts();
   else if (NAV.setupSubtab === 'lifts') body = renderLiftReview();
-  // GENERAL, and the two stale values that now land on it. 'plan' merged into it; 'planner' moved
-  // out to PHASES entirely -- a saved nav snapshot can still carry either, so neither may render
-  // nothing. 'planner' would be better served by PHASES, but a subtab value can't switch tabs
-  // without fighting whatever navigation put you here, so it settles on the pane it's nearest.
-  else body = renderPlan();
+  // Anything else -- 'general', 'plan', 'planner' -- is a retired subtab riding in on a saved nav
+  // snapshot, and lands on EXERCISES. GENERAL held the program cycle length, which rotations made
+  // meaningless; its other tenants (units, rounding, rest behaviour) had already moved to where
+  // each is used. A settings pane whose last setting governs nothing is not a settings pane.
+  else body = `${renderTMSetup()}<div class="divider"></div>${renderVolumeLandmarksSetup()}`;
 
-  // MAXES/BUILDER/VIEW WORKOUTS/LIFTS/GENERAL switch here, as a subnav across the top of the screen,
-  // rather than in the bottom NavBar. `.subnav` scrolls horizontally once it has more buttons than
-  // fit a narrow viewport (see ARCHITECTURE.md).
-  //
-  // PLANNER left for PHASES, where mapping workouts onto weekdays belongs -- it was always a plan,
-  // not a build. PLAN (units, rounding, cycle length) folded into GENERAL: two settings panes with
-  // one named after the thing it wasn't was a tab spent on nothing.
+  // Four buttons. EXERCISES is the former MAXES: it's the library of movements now -- what each
+  // trains, what you've tested it at, and its setup notes -- rather than six fixed buckets.
   return `<div class="screen">
     <div class="section-title">Builder</div>
     ${subNav(`
       <button class="${NAV.setupSubtab==='builder'?'active':''}" onclick="setSetupSubtab('builder')">WORKOUT</button>
       <button class="${NAV.setupSubtab==='viewWorkouts'?'active':''}" onclick="setSetupSubtab('viewWorkouts')">ALL WORKOUTS</button>
-      <button class="${NAV.setupSubtab==='tm'?'active':''}" onclick="setSetupSubtab('tm')">MAXES</button>
-      <button class="${NAV.setupSubtab==='lifts'?'active':''}" onclick="setSetupSubtab('lifts')">LIFTS</button>
-      <button class="${NAV.setupSubtab==='general'?'active':''}" onclick="setSetupSubtab('general')">GENERAL</button>
+      <button class="${NAV.setupSubtab==='tm'?'active':''}" onclick="setSetupSubtab('tm')">EXERCISES</button>
+      <button class="${NAV.setupSubtab==='lifts'?'active':''}" onclick="setSetupSubtab('lifts')">LINK NAMES</button>
     `)}
     ${body}
   </div>`;

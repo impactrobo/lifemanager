@@ -535,12 +535,12 @@ function trackedLiftSlots() {
   workoutsByType('weights').forEach(w => {
     ['t1', 't2a', 't2b', 't2c'].forEach(tierKey => {
       const slot = w[tierKey];
-      if (!slot || !slot.enabled || !slot.categoryId) return;
-      const cat = getCategory(slot.categoryId);
-      if (!cat) return;
-      const key = slot.categoryId + ':' + tierKey;
-      if (seen.has(key)) return; // same category+tier reused across workouts — history merges across all of them below anyway
-      seen.set(key, { categoryId: slot.categoryId, tierKey, label: `${cat.name} (${tierKeyToField(tierKey)})` });
+      if (!slot || !slot.enabled || !slot.liftId) return;
+      const lift = liftById(slot.liftId);
+      if (!lift) return;
+      const key = slot.liftId + ':' + tierKey;
+      if (seen.has(key)) return; // same lift+tier reused across workouts — history merges across all of them below anyway
+      seen.set(key, { categoryId: slot.liftId, tierKey, label: `${lift.name} (${tierKeyToField(tierKey)})` });
     });
   });
   return [...seen.values()];
@@ -552,7 +552,7 @@ function trackedLiftSlots() {
 // actually filled in, i.e. a completed set, not just a placeholder row.
 function liftHistorySeries(categoryId, tierKey) {
   const workoutIds = workoutsByType('weights')
-    .filter(w => w[tierKey] && w[tierKey].enabled && w[tierKey].categoryId === categoryId)
+    .filter(w => w[tierKey] && w[tierKey].enabled && w[tierKey].liftId === categoryId)
     .map(w => w.id);
   if (!workoutIds.length) return [];
   const points = [];
@@ -583,9 +583,11 @@ function compareMetricLabel(id) {
     const lift = liftById(id.slice(7));
     return lift ? lift.name : 'Removed lift';
   }
-  const [, categoryId, tierKey] = id.split(':');
-  const cat = getCategory(categoryId);
-  return cat ? `${cat.name} (${tierKeyToField(tierKey)})` : 'Removed lift';
+  // The middle segment is a LIFT id now -- a tier slot names a lift directly. The metric id keeps
+  // its `lift:` prefix so a saved COMPARE selection still resolves.
+  const [, slotLiftId, tierKey] = id.split(':');
+  const l = liftById(slotLiftId);
+  return l ? `${l.name} (${tierKeyToField(tierKey)})` : 'Removed lift';
 }
 function compareMetricSeries(id) {
   if (id === 'bodyweight') {
@@ -934,7 +936,11 @@ function renderVolume() {
   const data = computeVolumeForWeek(weekStart);
   const maxSets = Math.max(1, ...data.map(d => d.sets));
   const anyTagged = workoutsByType('weights').some(w => Array.isArray(w.exercises) ? w.exercises.some(ex => ex.muscle) : w.t3.some(t => t.muscle))
-    || STATE.categories.some(c => Object.values(c.tiers).some(t => t.muscle));
+    // A T1/T2 slot's muscle is the LIFT's now -- there is no category tier carrying a copy of it.
+    || workoutsByType('weights').some(w => ['t1','t2a','t2b','t2c'].some(tk => {
+         const l = w[tk] && w[tk].liftId ? liftById(w[tk].liftId) : null;
+         return !!(l && l.muscle);
+       }));
 
   const bars = data.map(d => {
     const barColor = muscleColor(d.muscle) || 'var(--accent)';

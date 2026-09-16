@@ -559,16 +559,10 @@ function budgetCategoryChip(cat) {
   const c = cat && BUDGET_CATEGORIES[cat] ? cat : 'Other';
   return `<span style="background:${budgetCategoryColor(c)}; color:#1a1a1a; padding:1px 7px; border-radius:10px; font-size:10px; font-weight:700; margin-right:6px; white-space:nowrap;">${c}</span>`;
 }
-// T2 tiers can name a specific exercise distinct from the category (e.g. Leg Press
-// under a Squat-tracked T2), falling back to the category name when unset. T1 always
-// uses the category name directly.
-function tierExerciseLabel(cat, tierField) {
-  if (!cat) return '';
-  if (tierField !== 'T1' && cat.tiers[tierField] && cat.tiers[tierField].exerciseName) {
-    return cat.tiers[tierField].exerciseName;
-  }
-  return cat.name;
-}
+// tierExerciseLabel() is gone. It resolved a tier's display name through a category's optional
+// free-text `exerciseName` override -- "Leg Press under a Squat-tracked T2" -- which existed only
+// because a slot could not name the movement it actually held. It can now: a slot carries a liftId,
+// so the label is just liftName(). The Leg Press finally gets to be a Leg Press.
 // Standard Unicode/emoji has no true per-muscle icon set, so these group into
 // upper body / lower body / core representative icons as a reasonable approximation.
 // Custom body-silhouette icon per muscle group: one shared humanoid outline, with the
@@ -636,16 +630,16 @@ const CARDIO_TYPE_ICONS = {
 };
 function workoutIcon(workout) {
   const tierCats = [
-    workout.t1.enabled ? workout.t1.categoryId : null,
-    workout.t2a.enabled ? workout.t2a.categoryId : null,
-    workout.t2b.enabled ? workout.t2b.categoryId : null,
-    workout.t2c.enabled ? workout.t2c.categoryId : null,
+    workout.t1.enabled ? workout.t1.liftId : null,
+    workout.t2a.enabled ? workout.t2a.liftId : null,
+    workout.t2b.enabled ? workout.t2b.liftId : null,
+    workout.t2c.enabled ? workout.t2c.liftId : null,
   ];
-  for (const catId of tierCats) {
-    if (catId) {
-      const cat = getCategory(catId);
-      const m = cat && cat.tiers.T1 ? cat.tiers.T1.muscle : null;
-      if (m) return muscleIcon(m);
+  for (const liftId of tierCats) {
+    if (liftId) {
+      // The muscle is the LIFT's, not a copy stored on a category tier.
+      const l = liftById(liftId);
+      if (l && l.muscle) return muscleIcon(l.muscle);
     }
   }
   const t3WithMuscle = (workout.t3 || []).find(t => t.enabled && t.muscle);
@@ -663,16 +657,15 @@ function hexToRgba(hex, alpha) {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
-function defaultCategories() {
-  return [
-    { id: 'squat',    name: 'Squat',    lu: 'lower', tmT2Revealed: 1, tiers: defaultTiers('Quads') },
-    { id: 'bench',    name: 'Bench',    lu: 'upper', tmT2Revealed: 1, tiers: defaultTiers('Chest') },
-    { id: 'deadlift', name: 'Deadlift', lu: 'lower', tmT2Revealed: 1, tiers: defaultTiers('Hams') },
-    { id: 'ohp',      name: 'OHP',      lu: 'upper', tmT2Revealed: 1, tiers: defaultTiers('S Delts') },
-    { id: 'back',     name: 'Back',     lu: 'upper', tmT2Revealed: 1, tiers: defaultTiers('Back') },
-    { id: 'bonus',    name: 'Bonus',    lu: 'lower', tmT2Revealed: 1, tiers: defaultTiers(null) },
-  ];
-}
+// defaultCategories() and defaultTiers() are gone, and nothing replaces them.
+//
+// They shipped six fixed buckets -- Squat, Bench, Deadlift, OHP, Back, Bonus -- to every new
+// install, and every movement then had to be one of those or masquerade as one. A T1/T2 slot names
+// a LIFT now, chosen from the several-hundred-entry library, so a new save starts with no training
+// maxes at all and gains one the first time you record a test. That is also why they can't be kept
+// as a convenience: a fresh install would migrate them straight into six custom lifts called
+// "Squat" and "Bench", sitting alongside the library's own Barbell Back Squat and Barbell Bench
+// Press as permanent duplicates.
 // Test type -> conversion % mapping, tier-group dependent
 const TEST_CONV_MAP = {
   T1: { '1RM': 0.90, '5RM': 1.035 },
@@ -686,15 +679,9 @@ function convForTest(tierKey, testType) {
   return group[testType] !== undefined ? group[testType] : (tierKey === 'T1' ? 0.90 : 0.90);
 }
 
-function defaultTiers(defaultMuscle) {
-  const m = defaultMuscle || null;
-  return {
-    T1:  { testType: '1RM',  testWeightLb: 0, conv: convForTest('T1', '1RM'), tmLb: 0, muscle: m },
-    T2a: { testType: '10RM', testWeightLb: 0, conv: convForTest('T2', '10RM'), tmLb: 0, muscle: m, exerciseName: '' },
-    T2b: { testType: '10RM', testWeightLb: 0, conv: convForTest('T2', '10RM'), tmLb: 0, muscle: m, exerciseName: '' },
-    T2c: { testType: '10RM', testWeightLb: 0, conv: convForTest('T2', '10RM'), tmLb: 0, muscle: m, exerciseName: '' },
-  };
-}
+// (defaultTiers() lived here. A lift's max is created by ensureLiftMax() in app-lifts.js now, which
+// makes ONE record per scheme rather than four per category -- T2a/T2b/T2c share the T2 number and
+// differ by their own TIER_SCHEMES intensity and rep ladder.)
 function defaultWorkouts() {
   return [0,1,2,3,4,5,6,7,8,9,10,11].map((i) => ({
     id: 'w' + (i + 1),
@@ -779,8 +766,14 @@ function defaultState() {
       // pushed to the backend.
       reminderPush: { enabled: false },
     },
-    program: { cycles: 8 },
-    categories: defaultCategories(),
+    // `cycles` retired: rotations took both its consumers (the WORKOUTS counter is derived from the
+    // phase, Set Volume is a calendar week), leaving a setting that governed nothing. Kept as an
+    // object because updateRp() and a few saves still reference the container.
+    program: {},
+    // Training maxes, sparse and keyed by liftId: { [liftId]: { t1: {...}, t2: {...} } }. A lift
+    // you have never tested has no entry. Same pattern as liftNotes -- LIFT_LIBRARY is a source
+    // constant with nowhere to put per-user data. See app-lifts.js "LIFT MAXES".
+    liftMaxes: {},
     // Free-form pool: every saved workout (any type) lives here now — no more fixed slot count.
     // Each entry carries its own `type` ('weights'|'cardio'|'mobility'|'warmup') and, for
     // weights/cardio, its own `style` — Workout Style is a per-workout choice made in Workout

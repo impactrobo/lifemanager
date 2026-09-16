@@ -41,10 +41,8 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     // A GZCL workout reaching the SAME lift through a category, to prove the resolver unifies them.
     const gz = createWorkout('weights', 'P-Zero (GZCL)');
     gz.name = 'Push A';
-    gz.t1 = { enabled: true, categoryId: 'bench', variant: 'regular' };
+    gz.t1 = { enabled: true, liftId: 'bb-bench', variant: 'regular' };
     gz.t3[0] = { enabled: true, name: 'Cable Flye', liftId: 'cable-flye', targetReps: null, muscle: 'Chest', adjustments: [] };
-    const cat = STATE.categories.find(c => c.id === 'bench');
-    cat.liftId = 'bb-bench';
     const cardio = createWorkout('cardio', 'Time/Dist/Cal');
     cardio.name = 'Easy Run'; cardio.targetDistanceUnit = 'mi';
 
@@ -246,7 +244,6 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   await page.evaluate(() => {
     STATE.phases = []; ensurePerpetualPhase();
     STATE.exTargets = []; STATE.logs = {}; STATE.workouts = [];
-    STATE.categories.forEach(c => { delete c.liftId; });
     saveState();
   });
 

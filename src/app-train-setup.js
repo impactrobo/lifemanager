@@ -53,134 +53,158 @@ function updateLandmark(muscle, field, val) {
   STATE.muscleLandmarks[muscle][field] = n;
   saveState(); render();
 }
-
+// ---------------- EXERCISE LIBRARY (Builder -> Workouts -> Exercises) ----------------
+//
+// One record per movement, and the only place a movement is fully described: what it trains, what
+// you've tested it at, and the setup notes that persist across phases.
+//
+// This replaces the MAXES screen, which was six fixed buckets -- Squat, Bench, Deadlift, OHP, Back,
+// Bonus -- each holding four tier records. That shape came from the spreadsheet the app grew out of
+// and it forced every movement to either BE one of six things or masquerade as one: a Front Squat
+// had to be filed under "Squat", and a Leg Press tracked as a Squat T2 lived as free text in a
+// field called `exerciseName`. Now a Front Squat is a Front Squat, with its own max.
+//
+// The list shows what you've actually tested, not the whole library -- a few hundred lifts with a
+// dash where a number should be is a worse screen than a short one. Adding a max is how a lift
+// arrives here.
 function renderTMSetup() {
-  recomputeTMs(); // just the numbers — the save migration belongs at boot, not on every visit
-  return STATE.categories.map(cat => {
-    // Representative value for the shared dropdown: T1's muscle (they're kept in sync by updateCategoryMuscle)
-    const sharedMuscle = cat.tiers.T1.muscle;
-    return `
-    <div class="panel">
-      <div class="row" style="margin-bottom:10px;">
-        <input type="text" value="${escapeHtml(cat.name)}" style="font-family:var(--font-head); font-size:18px; font-weight:700; border:none; background:none; padding:0; width:50%;"
-          onchange="updateCategoryField('${cat.id}','name',this.value)">
-        <div class="field-row" style="width:auto;">
-          <button class="pill pill-${cat.lu === 'lower' ? 'lower' : 'upper'}" style="border:1px solid var(--border); cursor:pointer;"
-            onclick="toggleLU('${cat.id}')">${cat.lu.toUpperCase()} BODY</button>
-        </div>
-      </div>
-      <div style="margin-bottom:6px;">
-        <div style="font-size:9px; color:var(--text-faint); margin-bottom:3px;">MUSCLE (applies to T1/T2a/T2b/T2c)</div>
-        <div style="display:flex; align-items:center; gap:8px;">
-          ${sharedMuscle ? `<div style="width:12px; height:12px; border-radius:50%; background:${muscleColor(sharedMuscle)}; border:1px solid rgba(0,0,0,0.2); flex-shrink:0;"></div>` : ''}
-          <select style="flex:1;" onchange="updateCategoryMuscle('${cat.id}', this.value || null)">
-            <option value="" ${!sharedMuscle ? 'selected' : ''}>&mdash; none &mdash;</option>
-            ${MUSCLE_GROUPS.map(m => `<option value="${m}" ${sharedMuscle===m?'selected':''}>${m}</option>`).join('')}
-          </select>
-        </div>
-      </div>
-      ${renderTierSetupRow(cat, 'T1')}
-      ${['T2a','T2b','T2c'].slice(0, cat.tmT2Revealed).map(tk => renderTierSetupRow(cat, tk)).join('')}
-      <div style="display:flex; gap:8px; margin-top:10px;">
-        ${cat.tmT2Revealed < 3 ? `<button class="btn btn-ghost btn-sm" onclick="addCategoryT2('${cat.id}')">+ ADD EXERCISE</button>` : ''}
-        ${cat.tmT2Revealed > 1 ? `<button class="btn btn-ghost btn-sm" style="color:var(--bad)" onclick="removeCategoryT2('${cat.id}')">&minus; REMOVE EXERCISE</button>` : ''}
-      </div>
-    </div>`;
-  }).join('');
+  const tested = liftsWithMaxes();
+  return `
+    ${renderRoundingPanel()}
+    <div class="row" style="margin:20px 0 8px;">
+      <div class="subtle-label" style="margin-bottom:0;">TRAINING MAXES</div>
+      <button class="btn btn-sm" onclick="openLiftMaxPicker()">+ ADD A LIFT</button>
+    </div>
+    ${UI.liftMaxPickerOpen ? renderLiftMaxPicker() : ''}
+    ${tested.length
+      ? `<div class="stack">${tested.map(renderLiftMaxCard).join('')}</div>`
+      : emptyState('No training maxes yet. Add a lift to record what you tested — T1 and T2 slots in the Workout Builder then read it.')}`;
 }
-function addCategoryT2(id) {
-  const cat = getCategory(id);
-  if (cat.tmT2Revealed < 3) cat.tmT2Revealed++;
+
+// Picking a lift to test. Filtered to lifts that don't already have one, so the list shrinks as you
+// work rather than offering you the same movement twice.
+function openLiftMaxPicker() { UI.liftMaxPickerOpen = true; VIEW.liftMaxQuery = ''; render(); }
+function closeLiftMaxPicker() { UI.liftMaxPickerOpen = false; render(); }
+function setLiftMaxQuery(q) { VIEW.liftMaxQuery = q; render(); }
+function renderLiftMaxPicker() {
+  const q = (VIEW.liftMaxQuery || '').trim().toLowerCase();
+  const matches = allLifts()
+    .filter(l => !liftHasMax(l.id))
+    .filter(l => !q || l.name.toLowerCase().includes(q) || (l.short || '').toLowerCase().includes(q))
+    .slice(0, 40);
+  return `<div class="panel" style="margin-bottom:12px;">
+    <input type="text" placeholder="Search lifts…" value="${escapeHtml(VIEW.liftMaxQuery || '')}"
+           oninput="setLiftMaxQuery(this.value)" style="margin-bottom:8px;">
+    <div class="stack" style="max-height:260px; overflow-y:auto;">
+      ${matches.length ? matches.map(l => `
+        <button class="btn btn-sm btn-block" style="text-align:left;" onclick="startLiftMax('${l.id}')">
+          ${escapeHtml(l.name)}${l.muscle ? ` <span style="color:var(--text-faint); font-size:10px;">${escapeHtml(l.muscle)}</span>` : ''}
+        </button>`).join('')
+      : `<div style="font-size:11px; color:var(--text-faint);">No match. Add it as a custom exercise in the Workout Builder first.</div>`}
+    </div>
+    <button class="btn btn-ghost btn-block" style="margin-top:8px;" onclick="closeLiftMaxPicker()">CANCEL</button>
+  </div>`;
+}
+// Brings a lift onto the screen by creating its T1 record. T2 is added separately -- most lifts
+// only ever need one of the two, and an empty second block on every card is noise.
+function startLiftMax(liftId) {
+  ensureLiftMax(liftId, 't1');
+  UI.liftMaxPickerOpen = false;
   saveState(); render();
 }
-function removeCategoryT2(id) {
-  const cat = getCategory(id);
-  if (cat.tmT2Revealed > 1) {
-    const tierKey = ['T2a','T2b','T2c'][cat.tmT2Revealed - 1];
-    const t = cat.tiers[tierKey];
-    t.testWeightLb = 0;
-    t.tmLb = 0;
-    t.exerciseName = '';
-    if (Array.isArray(t.adjustments)) t.adjustments = [];
-    cat.tmT2Revealed--;
+function addLiftMaxScheme(liftId, tierKey) { ensureLiftMax(liftId, tierKey); saveState(); render(); }
+function removeLiftMaxScheme(liftId, tierKey) {
+  const scheme = liftSchemeOf(tierKey);
+  const entry = liftMaxes()[liftId];
+  if (!entry) return;
+  showConfirm(`Remove this lift's ${scheme.toUpperCase()} max?`, () => {
+    delete entry[scheme];
+    if (!entry.t1 && !entry.t2) delete liftMaxes()[liftId];
     saveState(); render();
-  }
+  });
 }
-function updateCategoryMuscle(catId, val) {
-  const cat = getCategory(catId);
-  ['T1','T2a','T2b','T2c'].forEach(tk => { cat.tiers[tk].muscle = val; });
-  saveState(); render();
+
+function renderLiftMaxCard(lift) {
+  const lu = muscleLU(lift.muscle);
+  const entry = liftMaxes()[lift.id] || {};
+  return `<div class="panel">
+    <div class="row" style="margin-bottom:10px;">
+      <div style="display:flex; align-items:center; gap:8px; min-width:0;">
+        ${lift.muscle ? `<div style="width:12px; height:12px; border-radius:50%; background:${muscleColor(lift.muscle)}; border:1px solid rgba(0,0,0,0.2); flex-shrink:0;"></div>` : ''}
+        <span style="font-family:var(--font-head); font-size:17px; font-weight:700;">${escapeHtml(lift.name)}</span>
+      </div>
+      ${lu
+        // Derived from the muscle rather than a flag you set beside it -- the two could disagree
+        // when both were stored, and only one of them is a fact about the movement.
+        ? `<span class="pill pill-${lu === 'lower' ? 'lower' : 'upper'}">${lu.toUpperCase()}${lu === 'core' ? '' : ' BODY'}</span>`
+        : ''}
+    </div>
+    ${entry.t1 ? renderLiftMaxRow(lift, 't1') : ''}
+    ${entry.t2 ? renderLiftMaxRow(lift, 't2') : ''}
+    <div style="display:flex; gap:8px; margin-top:10px;">
+      ${!entry.t1 ? `<button class="btn btn-ghost btn-sm" onclick="addLiftMaxScheme('${lift.id}','t1')">+ T1 MAX</button>` : ''}
+      ${!entry.t2 ? `<button class="btn btn-ghost btn-sm" onclick="addLiftMaxScheme('${lift.id}','t2')">+ T2 MAX</button>` : ''}
+    </div>
+    ${renderLiftNoteRow(lift.id)}
+  </div>`;
 }
-function renderTierSetupRow(cat, tierKey) {
-  const t = cat.tiers[tierKey];
-  const testedDisplay = t.testWeightLb ? fmt(lbToDisplay(t.testWeightLb), 1) : '';
-  const tierGroup = tierKey === 'T1' ? 'T1' : 'T2';
-  const options = testOptionsForTier(tierGroup);
-  // As of TODAY. A training max is dated now -- the category it belongs to is shared across
-  // workouts that each count their own sessions, so a date is the only axis they agree on.
-  // "Queued" is an increase dated today or later: earned, not yet applied to a session.
-  const currentTM = effectiveTMLb(cat, tierKey, todayStr());
-  const hasQueued = Array.isArray(t.adjustments) && t.adjustments.some(a => a.fromDate && a.fromDate >= todayStr());
+
+// One tested result. T2a/T2b/T2c all read the T2 row -- they differ by their own intensity and rep
+// ladder, not by a separate number, which is why there are two rows here and not four.
+function renderLiftMaxRow(lift, scheme) {
+  const m = liftMax(lift.id, scheme);
+  if (!m) return '';
+  const group = scheme === 't1' ? 'T1' : 'T2';
+  const options = testOptionsForTier(group);
+  const testedDisplay = m.testWeightLb ? fmt(lbToDisplay(m.testWeightLb), 1) : '';
+  const currentTM = liftTmLb(lift.id, scheme, todayStr());
+  const hasQueued = (m.adjustments || []).some(a => a.fromDate && a.fromDate >= todayStr());
+  const usedBy = scheme === 't2' ? 'T2a / T2b / T2c' : 'T1';
   return `
     <div style="border-top:1px solid var(--border-soft); padding-top:10px; margin-top:10px;">
       <div class="row" style="margin-bottom:8px;">
-        <div style="display:flex; align-items:center; gap:6px;">
-          <div class="mono" style="font-size:13px; font-weight:700; color:var(--text-dim);">${tierKey}</div>
+        <div>
+          <div class="mono" style="font-size:13px; font-weight:700; color:var(--text-dim);">${group}</div>
+          <div style="font-size:9px; color:var(--text-faint);">used by ${usedBy}</div>
         </div>
         <div style="text-align:right;">
           <div class="mono" style="font-weight:700; font-size:16px;">${fmtWeight(currentTM)} <span style="font-size:10px;color:var(--text-faint); font-weight:500;">${weightUnitLabel()} TM</span></div>
           ${hasQueued ? `<div style="font-size:9px; color:var(--good); font-weight:600;">increase queued for next workout</div>` : ''}
         </div>
       </div>
-      <div style="display:grid; grid-template-columns: 1fr 1.2fr 0.9fr; gap:6px; margin-bottom:6px;">
+      <div style="display:grid; grid-template-columns: 1fr 1.2fr 0.9fr; gap:6px;">
         <div>
           <div style="font-size:9px; color:var(--text-faint); margin-bottom:3px;">TEST</div>
-          <select onchange="updateTierField('${cat.id}','${tierKey}','testType',this.value)">
-            ${options.map(o => `<option ${t.testType===o?'selected':''}>${o}</option>`).join('')}
+          <select onchange="updateLiftMaxField('${lift.id}','${scheme}','testType',this.value)">
+            ${options.map(o => `<option ${m.testType===o?'selected':''}>${o}</option>`).join('')}
           </select>
         </div>
         <div>
           <div style="font-size:9px; color:var(--text-faint); margin-bottom:3px;">WEIGHT (${weightUnitLabel()})</div>
           <input type="number" step="0.5" placeholder="0" value="${testedDisplay}"
-            onchange="updateTierField('${cat.id}','${tierKey}','testWeightLb', displayToLb(this.value))">
+            onchange="updateLiftMaxField('${lift.id}','${scheme}','testWeightLb', displayToLb(this.value))">
         </div>
         <div>
           <div style="font-size:9px; color:var(--text-faint); margin-bottom:3px;">CONV %</div>
-          <input type="number" step="0.001" value="${t.conv}" title="Auto-set from Test type — edit to fine-tune"
-            onchange="updateTierField('${cat.id}','${tierKey}','conv', this.value)">
+          <input type="number" step="0.001" value="${m.conv}" title="Auto-set from Test type — edit to fine-tune"
+            onchange="updateLiftMaxField('${lift.id}','${scheme}','conv', this.value)">
         </div>
       </div>
-      ${tierGroup === 'T2' ? `
-        <div>
-          <div style="font-size:9px; color:var(--text-faint); margin-bottom:3px;">EXERCISE NAME (optional — can differ from ${escapeHtml(cat.name)}, e.g. Leg Press for a Squat-tracked T2)</div>
-          <input type="text" placeholder="${escapeHtml(cat.name)}" value="${escapeHtml(t.exerciseName || '')}"
-            onchange="updateTierField('${cat.id}','${tierKey}','exerciseName', this.value)">
-        </div>` : ''}
+      <button class="btn btn-ghost btn-sm" style="margin-top:8px; color:var(--bad);" onclick="removeLiftMaxScheme('${lift.id}','${scheme}')">&minus; REMOVE ${group}</button>
     </div>`;
 }
-function updateCategoryField(catId, field, val) {
-  getCategory(catId)[field] = val;
-  saveState(); render();
-}
-function toggleLU(catId) {
-  const cat = getCategory(catId);
-  cat.lu = cat.lu === 'lower' ? 'upper' : 'lower';
-  saveState(); render();
-}
-function updateTierField(catId, tierKey, field, val) {
-  const tier = getCategory(catId).tiers[tierKey];
+
+function updateLiftMaxField(liftId, scheme, field, val) {
+  const m = ensureLiftMax(liftId, scheme);
   if (field === 'testWeightLb') {
-    tier.testWeightLb = val;
+    m.testWeightLb = Number(val) || 0;
   } else if (field === 'conv') {
-    tier.conv = Number(val);
+    m.conv = Number(val) || 0;
   } else if (field === 'testType') {
-    tier.testType = val;
-    const tierGroup = tierKey === 'T1' ? 'T1' : 'T2';
-    tier.conv = convForTest(tierGroup, val); // auto-set conv from the RM/tier table
-  } else {
-    tier[field] = val;
+    m.testType = val;
+    m.conv = convForTest(scheme === 't1' ? 'T1' : 'T2', val); // auto-set from the RM/tier table
   }
-  tier.tmLb = computeTM(tier);
+  // No cached tmLb to refresh: liftBaseTmLb() derives it where it's read.
   saveState(); render();
 }
 
@@ -654,6 +678,7 @@ function renderAutoFillPicker() {
     <div style="font-size:11px; color:var(--text-dim); margin-bottom:8px;">Tap days in the order you want ${escapeHtml(VIEW.autofillProgram || '')}'s ${sessions.length} session${sessions.length===1?'':'s'} to land, in sequence.</div>
     ${n !== 7 ? `<div style="font-size:11px; color:var(--text-dim); margin-bottom:8px;">${escapeHtml(VIEW.autofillProgram || '')} is written for a 7-day week; you're filling a <b style="color:var(--text)">${n}-day rotation</b>.</div>` : ''}
     ${tooFew ? `<div style="font-size:11px; color:var(--bad); font-weight:600; margin-bottom:8px;">A ${n}-day rotation has fewer days than ${escapeHtml(VIEW.autofillProgram || '')}'s ${sessions.length} sessions — some would have to share a day or be left out.</div>` : ''}
+    ${renderProgramLengthNote(entry)}
     <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px;">
       ${slots.map(slot => {
         const pos = VIEW.autofillDays.indexOf(slot);
@@ -667,6 +692,23 @@ function renderAutoFillPicker() {
     </div>
   </div>`;
 }
+// C25K is nine weeks; C2Triathlon is sixteen. Those are the PROGRAM's requirement, and what they
+// have to fit inside is the PHASE -- which is why this warning moved here from the old GENERAL
+// pane, where it compared against a global "cycles" number that governed nothing.
+//
+// Not a blocker. The program simply holds at its final week once the phase runs out, which is what
+// it always did; this says so before you find out.
+function renderProgramLengthNote(entry) {
+  if (!entry || entry.perpetual) return '';   // an open-ended phase is long enough for anything
+  const need = VIEW.autofillProgram === 'C25K' ? C25K_TOTAL_WEEKS
+             : VIEW.autofillProgram === 'C2Triathlon' ? C2TRI_TOTAL_WEEKS : 0;
+  if (!need || entry.weeks >= need) return '';
+  return `<div style="font-size:11px; color:var(--accent); font-weight:600; margin-bottom:8px;">
+    ${escapeHtml(entry.phase.label)} is ${entry.weeks} week${entry.weeks === 1 ? '' : 's'} and
+    ${escapeHtml(VIEW.autofillProgram)} needs ${need} to finish — it'll hold at week ${entry.weeks}'s
+    pace after that. Extend the phase, or carry on into the next one.</div>`;
+}
+
 function applyAutoFill() {
   const sessions = programWorkouts(VIEW.autofillProgram);
   if (!sessions.length || !VIEW.autofillDays.length) return;
@@ -705,9 +747,9 @@ function renderWeightWorkoutEditor(w) {
       ${w.t1Revealed >= 1 ? `
         <div class="subtle-label">T1</div>
         <div class="field-row" style="margin-bottom:10px;">
-          <select onchange="updateTierAssign('${w.id}','t1','categoryId',this.value)">
+          <select onchange="updateTierAssign('${w.id}','t1','liftId',this.value)">
             <option value="">— none —</option>
-            ${STATE.categories.map(c => `<option value="${c.id}" ${w.t1.categoryId===c.id?'selected':''}>${escapeHtml(c.name)}</option>`).join('')}
+            ${tierLiftOptions(w.t1.liftId)}
           </select>
           <select onchange="updateTierAssign('${w.id}','t1','variant',this.value)">
             <option value="regular" ${w.t1.variant!=='ultra'?'selected':''}>Standard</option>
@@ -727,9 +769,9 @@ function renderWeightWorkoutEditor(w) {
         return `
         <div class="subtle-label">${tk.toUpperCase()}</div>
         <div style="margin-bottom:10px;">
-          <select onchange="updateTierAssign('${w.id}','${tk}','categoryId',this.value)">
+          <select onchange="updateTierAssign('${w.id}','${tk}','liftId',this.value)">
             <option value="">— none —</option>
-            ${STATE.categories.map(c => `<option value="${c.id}" ${w[tk].categoryId===c.id?'selected':''}>${escapeHtml(tierExerciseLabel(c, tierField))}</option>`).join('')}
+            ${tierLiftOptions(w[tk].liftId)}
           </select>
         </div>`;
       }).join('')}
@@ -863,17 +905,27 @@ function updateRpExField(workoutId, exId, field, val) {
   saveState(); render();
 }
 
+// The lifts a T1/T2 slot can hold. Those WITH a training max come first and are marked, because a
+// tier slot without one has no target weight to compute -- but the rest are offered too, since
+// "put this in T1 and record the max afterwards" is a perfectly ordinary order to work in.
+function tierLiftOptions(selectedId) {
+  const tested = [], untested = [];
+  allLifts().forEach(l => (liftHasMax(l.id) ? tested : untested).push(l));
+  const opt = (l, mark) => `<option value="${l.id}" ${selectedId === l.id ? 'selected' : ''}>${escapeHtml(l.name)}${mark}</option>`;
+  return [
+    tested.length ? `<optgroup label="With a max">${tested.map(l => opt(l, '')).join('')}</optgroup>` : '',
+    untested.length ? `<optgroup label="No max yet">${untested.map(l => opt(l, ' — no max')).join('')}</optgroup>` : '',
+  ].join('');
+}
+
 function getLiveExercisesForWorkout(w) {
   const list = [];
-  if (w.t1Revealed >= 1 && w.t1.categoryId) {
-    const cat = getCategory(w.t1.categoryId);
-    list.push({ key: 't1', label: 'T1 — ' + tierExerciseLabel(cat, 'T1') });
+  if (w.t1Revealed >= 1 && w.t1.liftId) {
+    list.push({ key: 't1', label: 'T1 — ' + liftName(w.t1.liftId, 'T1') });
   }
   ['t2a','t2b','t2c'].forEach((tk, i) => {
-    if (w.t2Revealed > i && w[tk].categoryId) {
-      const cat = getCategory(w[tk].categoryId);
-      const tierField = tk === 't2a' ? 'T2a' : tk === 't2b' ? 'T2b' : 'T2c';
-      list.push({ key: tk, label: tk.toUpperCase() + ' — ' + tierExerciseLabel(cat, tierField) });
+    if (w.t2Revealed > i && w[tk].liftId) {
+      list.push({ key: tk, label: tk.toUpperCase() + ' — ' + liftName(w[tk].liftId, tk.toUpperCase()) });
     }
   });
   w.t3.slice(0, w.t3Revealed).forEach((t, i) => {
@@ -948,14 +1000,13 @@ function reconcileExerciseOrder(w) {
   liveKeys.forEach(k => { if (!present.has(k)) w.exerciseOrder.push([k]); });
 }
 function resolveExerciseInfo(w, key) {
-  if (key === 't1') {
-    const cat = getCategory(w.t1.categoryId);
-    return { tierLabel: 'T1', name: tierExerciseLabel(cat, 'T1'), color: cat ? muscleColor(cat.tiers.T1.muscle) : null };
-  }
-  if (key === 't2a' || key === 't2b' || key === 't2c') {
-    const tierField = key === 't2a' ? 'T2a' : key === 't2b' ? 'T2b' : 'T2c';
-    const cat = getCategory(w[key].categoryId);
-    return { tierLabel: key.toUpperCase(), name: tierExerciseLabel(cat, tierField), color: cat ? muscleColor(cat.tiers[tierField].muscle) : null };
+  if (key === 't1' || key === 't2a' || key === 't2b' || key === 't2c') {
+    const l = liftById(w[key].liftId);
+    return {
+      tierLabel: key.toUpperCase(),
+      name: l ? l.name : key.toUpperCase(),
+      color: l ? muscleColor(l.muscle) : null,
+    };
   }
   if (key.indexOf('t3_') === 0) {
     const idx = parseInt(key.split('_')[1], 10);

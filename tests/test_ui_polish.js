@@ -136,7 +136,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // 5. Sub-nav scroll affordances. Setup's WORKOUTS panel has 7 sub-tabs — it overflows a 390px
   // phone. The panel has to be set explicitly: Setup remembers which half you were last on, and
   // the meal-draft work just above this leaves it on MEALS, whose subnav is shorter and has no
-  // GENERAL button for 5b to click.
+  // LINK NAMES button for 5b to click.
   await page.evaluate(() => { switchTab('train'); NAV.fitnessSubtab = 'setup'; NAV.setupPanel = 'workouts'; render(); });
   await settle(page);
   const subnavFresh = await page.evaluate(() => {
@@ -177,17 +177,17 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // to the right) is tapped, snapping the whole strip back to the start.
   const scrollBeforeTap = await page.evaluate(() => document.querySelector('#app .subnav-wrap > .subnav').scrollLeft);
   await page.evaluate(() => {
-    const btn = [...document.querySelectorAll('#app .subnav button')].find(b => b.textContent.trim() === 'GENERAL');
-    btn.click(); // a real click through the real onclick="setSetupSubtab('general')", not calling the handler directly
+    const btn = [...document.querySelectorAll('#app .subnav button')].find(b => b.textContent.trim() === 'LINK NAMES');
+    btn.click(); // a real click through the real onclick="setSetupSubtab('lifts')", not calling the handler directly
   });
   await settle(page);
   const afterTap = await page.evaluate(() => ({
     scrollLeft: document.querySelector('#app .subnav-wrap > .subnav').scrollLeft,
-    generalActive: [...document.querySelectorAll('#app .subnav button')].find(b => b.textContent.trim() === 'GENERAL').classList.contains('active'),
+    lastTabActive: [...document.querySelectorAll('#app .subnav button')].find(b => b.textContent.trim() === 'LINK NAMES').classList.contains('active'),
     leftVisible: document.querySelector('#app .subnav-more-l').classList.contains('visible'),
   }));
-  console.log('sub-nav after tapping GENERAL (a real re-render):', { scrollBeforeTap, ...afterTap });
-  if (!afterTap.generalActive) throw new Error('Expected GENERAL to actually become the active sub-tab');
+  console.log('sub-nav after tapping LINK NAMES (a real re-render):', { scrollBeforeTap, ...afterTap });
+  if (!afterTap.lastTabActive) throw new Error('Expected LINK NAMES to actually become the active sub-tab');
   if (afterTap.scrollLeft !== scrollBeforeTap) throw new Error(`Expected scroll position to survive the re-render (was ${scrollBeforeTap}), got ${afterTap.scrollLeft} — the strip snapped back`);
   if (!afterTap.leftVisible) throw new Error('Expected the left chevron to still reflect the restored (scrolled-away-from-start) position, not the new node\'s default');
 

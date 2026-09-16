@@ -22,7 +22,9 @@ function loadState() {
     // shallow-merge with defaults in case of missing new fields
     const base = defaultState();
     return Object.assign(base, parsed, {
-      categories: parsed.categories || base.categories,
+      // `categories` is deliberately absent from defaultState now, but a SAVED one still rides in
+      // through `parsed` so migrateCategoriesToLiftMaxes() can read it once and delete it.
+      liftMaxes: parsed.liftMaxes || base.liftMaxes,
       workouts: parsed.workouts || base.workouts,
       mesoWorkouts: parsed.mesoWorkouts || [],
       mesoLogs: parsed.mesoLogs || {},
@@ -331,23 +333,13 @@ function sanitizeReps(value) {
 }
 
 // ================= COMPUTED VALUES =================
-function computeTM(tier) {
-  const w = Number(tier.testWeightLb) || 0;
-  const c = Number(tier.conv) || 0;
-  return w * c;
-}
-// Derives every tier's base training max from its tested weight. Cheap, pure and idempotent —
-// safe to call on a render, which is the point of it being separate from migrateState(): the
-// Training Maxes screen needs current numbers on every visit, not a 200-line save migration.
-// Must run AFTER migrateState() on a fresh load, because the testType/conv snapping in there is
-// what computeTM() reads.
-function recomputeTMs() {
-  STATE.categories.forEach(cat => {
-    Object.keys(cat.tiers).forEach(k => {
-      cat.tiers[k].tmLb = computeTM(cat.tiers[k]); // base TM — does NOT include queued increases
-    });
-  });
-}
+// computeTM() moved to app-lifts.js as liftBaseTmLb(liftId, tierKey), which reads the lift's own
+// tested result rather than a category tier's. Same arithmetic: tested weight times conversion.
+// recomputeTMs() is gone. It wrote a `tmLb` field onto every tier from its tested weight, which is
+// a CACHED derivation -- a value that can go stale, refreshed by a function that has to remember to
+// run, and which therefore had to be called on every render of the screen that showed it. A lift's
+// base training max is now computed where it's read (liftBaseTmLb), so there is nothing to keep in
+// step and nothing to forget.
 // One-time save migrations: backfills every field added since a save was written, folds legacy
 // shapes (RP-style slots, cardioWorkouts, the old built-in note tags) into their current homes, and
 // finishes by deriving the training maxes.
@@ -575,31 +567,23 @@ function migrateState() {
     if (w.type === 'cardio' && w.nameCustomized === undefined) w.nameCustomized = false;
   });
 
-  STATE.categories.forEach(cat => {
-    // Migrate old category-level muscle (pre-per-tier tracking) into each tier that doesn't have its own yet
-    const legacyMuscle = cat.muscle !== undefined ? cat.muscle : null;
-    Object.keys(cat.tiers).forEach(k => {
+  // Categories are normalised only enough for migrateCategoriesToLiftMaxes() to read them at the
+  // end of this function -- a stored testType that's no longer valid would otherwise carry a bad
+  // conversion onto the lift. Everything else the old block did (per-tier muscle sync, the
+  // exerciseName default, the T2 reveal counter) described category structure that is about to
+  // stop existing.
+  (STATE.categories || []).forEach(cat => {
+    Object.keys(cat.tiers || {}).forEach(k => {
       const tier = cat.tiers[k];
       const tierGroup = k === 'T1' ? 'T1' : 'T2';
-      const validOptions = testOptionsForTier(tierGroup);
-      if (validOptions.indexOf(tier.testType) === -1) {
-        // stored testType no longer valid for this tier (e.g. old 3RM/8RM data) — snap to a sane default
+      if (testOptionsForTier(tierGroup).indexOf(tier.testType) === -1) {
+        // stored testType no longer valid for this tier (e.g. old 3RM/8RM data) — snap to a default
         tier.testType = tierGroup === 'T1' ? '1RM' : '10RM';
         tier.conv = convForTest(tierGroup, tier.testType);
       }
       if (!Array.isArray(tier.adjustments)) tier.adjustments = [];
-      if (tier.muscle === undefined) tier.muscle = legacyMuscle;
-      if (k !== 'T1' && tier.exerciseName === undefined) tier.exerciseName = '';
+      if (tier.muscle === undefined) tier.muscle = cat.muscle !== undefined ? cat.muscle : null;
     });
-    // Muscle is now a single shared choice per category (T1/T2a/T2b/T2c together) —
-    // sync any tiers that diverged from an earlier per-tier session back to T1's value.
-    const shared = cat.tiers.T1.muscle;
-    ['T2a','T2b','T2c'].forEach(tk => { cat.tiers[tk].muscle = shared; });
-    // Migrate older saves that predate T2b/T2c reveal toggling — start revealed at
-    // whatever's already configured, so existing setups don't lose visibility.
-    if (cat.tmT2Revealed === undefined) {
-      cat.tmT2Revealed = cat.tiers.T2c.testWeightLb ? 3 : (cat.tiers.T2b.testWeightLb ? 2 : 1);
-    }
   });
   // Normalize T3 slots from older saved states that predate targetReps/muscle/adjustments —
   // GZCL-shaped (P-Zero) workouts only, identified by having a `t1` field at all.
@@ -614,7 +598,7 @@ function migrateState() {
     // whatever's already configured, so existing T2b/T2c/T3d-f setups don't vanish.
     if (w.t1Revealed === undefined) w.t1Revealed = 1; // T1 was always shown before this feature
     if (w.t2Revealed === undefined) {
-      w.t2Revealed = w.t2c.categoryId ? 3 : (w.t2b.categoryId ? 2 : 1);
+      w.t2Revealed = w.t2c.liftId ? 3 : (w.t2b.liftId ? 2 : 1);
     }
     if (w.t3Revealed === undefined) {
       let maxIdx = 2;
@@ -716,10 +700,11 @@ function migrateState() {
     STATE.settings.noteTagsMigrated = true;
   }
 
-  // Derive the training maxes last: the testType/conv snapping above is what computeTM() reads.
-  recomputeTMs();
+  // Categories dissolve into lifts LAST: the testType/conv snapping above is what it carries over,
+  // and it deletes STATE.categories once every tier's numbers have found a lift to live on.
+  migrateCategoriesToLiftMaxes();
+  normaliseLiftMaxes();
 }
-function getCategory(id) { return STATE.categories.find(c => c.id === id); }
 function getWorkout(id) { return STATE.workouts.find(w => w.id === id); }
 
 // ---- Unified workout pool ----
@@ -742,11 +727,11 @@ const WORKOUT_INSTANCE_NAME = { weights: 'Workout', cardio: 'Cardio', mobility: 
 function workoutsByType(type) { return STATE.workouts.filter(w => w.type === type); }
 function blankGzclShape() {
   return {
-    t1: { enabled: false, categoryId: null, variant: 'regular' },
+    t1: { enabled: false, liftId: null, variant: 'regular' },
     t1Revealed: 1, // 0 or 1 -- whether T1 is shown in Workout Builder
-    t2a: { enabled: false, categoryId: null },
-    t2b: { enabled: false, categoryId: null },
-    t2c: { enabled: false, categoryId: null },
+    t2a: { enabled: false, liftId: null },
+    t2b: { enabled: false, liftId: null },
+    t2c: { enabled: false, liftId: null },
     t2Revealed: 1, // how many of T2a/T2b/T2c are shown in Workout Builder (0-3)
     t3: [0,1,2,3,4,5].map(() => ({ enabled: false, name: '', targetReps: null, muscle: null, adjustments: [] })),
     t3Revealed: 3, // how many of T3a-T3f are shown in Workout Builder (0-6)
@@ -930,21 +915,14 @@ function programWorkouts(program) {
 // now counts its own sessions: workout A's sixth session and workout B's sixth session are
 // unrelated moments in time. A date is the one axis they have in common. (Per-exercise and T3
 // adjustments stay ordinal-keyed -- those live inside one workout, where the ordinal IS the axis.)
-function effectiveTMLb(cat, tierField, asOfDate) {
-  const tier = cat.tiers[tierField];
-  if (!tier) return 0;
-  const adjustments = Array.isArray(tier.adjustments) ? tier.adjustments : [];
-  let total = tier.tmLb;
-  adjustments.forEach(a => { if (a.fromDate && a.fromDate < asOfDate) total += a.deltaLb; });
-  return total;
-}
+// effectiveTMLb() moved to app-lifts.js as liftTmLb(liftId, tierKey, asOfDate): a training max
+// belongs to the LIFT now, not to a category that several workouts borrowed from. The dating rule
+// it carries is unchanged and still load-bearing -- see the note there.
 
-function targetWeightLb(tierKey, categoryId, asOfDate) {
-  const cat = getCategory(categoryId);
-  if (!cat) return 0;
+function targetWeightLb(tierKey, liftId, asOfDate) {
+  if (!liftId) return 0;
   const scheme = TIER_SCHEMES[tierKey];
-  const tierField = tierKeyToField(tierKey);
-  const tm = effectiveTMLb(cat, tierField, asOfDate);
+  const tm = liftTmLb(liftId, tierKey, asOfDate);
   const raw = tm * scheme.intensity;
   // STATE.rounding is stored canonically in lb already
   return roundToIncrement(raw, STATE.rounding || 2.5);
@@ -1025,6 +1003,10 @@ function mondayOf(dateStr) {
   const wd = new Date(dateStr + 'T12:00:00').getDay();
   return shiftDate(dateStr, -((wd + 6) % 7));
 }
+// The DISPLAY label for a tier. It used to double as a key into a category's four tier records --
+// which is why T2a/T2b/T2c had to map to distinct strings. They read one shared `t2` max now and
+// differ only by their own TIER_SCHEMES intensity and rep ladder, so this is purely a label.
+// liftSchemeOf() in app-lifts.js is what resolves a tier to the max it reads.
 function tierKeyToField(tierKey) {
   if (tierKey === 'ultra') return 'T1';
   if (tierKey === 't1') return 'T1';
@@ -1134,19 +1116,18 @@ function computeVolumeForWeek(weekStart) {
         });
         return;
       }
-      // P-Zero (GZCL)
-      if (w.t1.enabled && w.t1.categoryId) {
-        const cat = getCategory(w.t1.categoryId);
+      // P-Zero (GZCL). The muscle comes off the LIFT now -- it used to be stored on the category's
+      // tier record and kept in sync across all four by hand, which is a copy that can disagree
+      // with the movement it describes.
+      if (w.t1.enabled && w.t1.liftId) {
         const entryKey = w.t1.variant === 'ultra' ? 'ultra' : 't1';
-        const m = cat && cat.tiers.T1 ? cat.tiers.T1.muscle : null;
-        if (m) counts[m] += countLoggedSets(log.entries[entryKey]);
+        const l = liftById(w.t1.liftId);
+        if (l && l.muscle) counts[l.muscle] += countLoggedSets(log.entries[entryKey]);
       }
       ['t2a','t2b','t2c'].forEach(tk => {
-        if (w[tk].enabled && w[tk].categoryId) {
-          const cat = getCategory(w[tk].categoryId);
-          const tierField = tk === 't2a' ? 'T2a' : tk === 't2b' ? 'T2b' : 'T2c';
-          const m = cat && cat.tiers[tierField] ? cat.tiers[tierField].muscle : null;
-          if (m) counts[m] += countLoggedSets(log.entries[tk]);
+        if (w[tk].enabled && w[tk].liftId) {
+          const l = liftById(w[tk].liftId);
+          if (l && l.muscle) counts[l.muscle] += countLoggedSets(log.entries[tk]);
         }
       });
       w.t3.forEach((t, i) => {

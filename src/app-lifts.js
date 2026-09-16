@@ -225,9 +225,9 @@ function liftByExactName(name) {
 // judgement call with permanent consequences, so the app gathers them and waits.
 function unlinkedLiftRefs() {
   const out = [];
-  (STATE.categories || []).forEach(c => {
-    if (!c.liftId) out.push({ kind: 'category', id: c.id, name: c.name, muscle: (c.tiers && c.tiers.muscle) || null, label: 'GZCL category' });
-  });
+  // Categories used to appear here: a GZCL category could name a lift in free text and needed
+  // linking to a library entry. They have dissolved into lifts, so there is nothing left to link --
+  // a T1/T2 slot names a lift outright.
   (STATE.workouts || []).forEach(w => {
     (w.exercises || []).forEach(ex => {
       if (ex.name && !ex.liftId) out.push({ kind: 'exercise', id: ex.id, workoutId: w.id, name: ex.name, muscle: ex.muscle || null, label: w.name });
@@ -242,10 +242,7 @@ function unlinkedLiftRefs() {
 function assignLiftRef(ref, liftId) {
   const lift = liftById(liftId);
   if (!lift) return;
-  if (ref.kind === 'category') {
-    const c = (STATE.categories || []).find(x => x.id === ref.id);
-    if (c) c.liftId = liftId;
-  } else {
+  {
     const w = (STATE.workouts || []).find(x => x.id === ref.workoutId);
     if (!w) return;
     if (ref.kind === 'exercise') {
@@ -366,10 +363,8 @@ function createLiftFromPicker(token) {
 function onPickLift(token, liftId) {
   const parts = String(token).split(':');
   const kind = parts[0];
-  if (kind === 'cat') {
-    const c = (STATE.categories || []).find(x => x.id === parts[1]);
-    if (c) c.liftId = liftId;
-  } else if (kind === 'ex') {
+  // No 'cat' kind any more -- categories dissolved into lifts, so a T1/T2 slot has nothing to link.
+  if (kind === 'ex') {
     assignLiftRef({ kind: 'exercise', workoutId: parts[1], id: parts[2] }, liftId);
   } else if (kind === 't3') {
     assignLiftRef({ kind: 't3', workoutId: parts[1], id: parts[2] }, liftId);
@@ -452,9 +447,10 @@ function liftIdForLogEntry(workout, entryKey) {
     return (slot && slot.liftId) || null;
   }
   if (entryKey === 't1' || entryKey === 'ultra' || entryKey === 't2a' || entryKey === 't2b' || entryKey === 't2c') {
+    // Straight off the slot. It used to hop through a category -- slot -> categoryId -> category ->
+    // liftId -- which is the mapping layer this arc removed; a tier slot names a lift directly now.
     const tier = workout[entryKey === 'ultra' ? 't1' : entryKey];
-    const cat = tier && tier.categoryId ? getCategory(tier.categoryId) : null;
-    return (cat && cat.liftId) || null;
+    return (tier && tier.liftId) || null;
   }
   const ex = (workout.exercises || []).find(e => e.id === entryKey);
   return (ex && ex.liftId) || null;
@@ -874,4 +870,207 @@ function renderLiftNoteRow(liftId) {
           <div class="lift-note-hint">Kept with this exercise, not this workout — it follows the lift into any phase.</div>
         </div>` : ''}
     </div>`;
+}
+
+// ================= LIFT MAXES =================
+//
+// A lift owns its own training maxes. This is the inversion Arc 2 is for.
+//
+// It used to work the other way round: STATE.categories held six fixed buckets (Squat, Bench,
+// Deadlift, OHP, Back, Bonus), each owning FOUR independent tier records (T1/T2a/T2b/T2c) with
+// their own test weight, conversion and TM -- plus one shared muscle, an upper/lower flag, and a
+// free-text `exerciseName` on each T2 so a "Squat-tracked T2" could actually be a Leg Press. A
+// workout's T1/T2 slot pointed at the CATEGORY, and an exercise pointed at a lift, and a category
+// pointed at a lift too. Three identities for one movement, joined by links.
+//
+// Now: the slot points at a LIFT, and the lift carries its maxes. That deletes the mapping layer
+// outright, and with it the rename/swap ambiguity -- there is no shared category record left for a
+// rename to silently rewrite, so changing what a slot points at is always and only a swap.
+//
+// ---- One test per SCHEME, not per tier ----
+// A lift stores two tested results: `t1` and `t2`. T2a, T2b and T2c all read the same `t2` and
+// differ by their own TIER_SCHEMES intensity (0.80 / 0.75 / 0.75) and rep ladder. That loses
+// nothing: the old per-tier maxes existed because all four tiers belonged to one category, and now
+// three T2 slots hold three different LIFTS, each with its own number. The only case that shares a
+// figure is the same lift in two T2 slots, which should share one.
+//
+// Sparse, and keyed by liftId, exactly like STATE.liftNotes -- LIFT_LIBRARY is a source constant
+// with nowhere to put per-user data, and a lift you have never tested has no entry at all.
+function liftMaxes() {
+  if (!STATE.liftMaxes || typeof STATE.liftMaxes !== 'object') STATE.liftMaxes = {};
+  return STATE.liftMaxes;
+}
+// 't1' or 't2' -- which tested number a tier slot reads. ULTRA is a T1 variant and shares its max.
+function liftSchemeOf(tierKey) { return (tierKey === 'ultra' || tierKey === 't1' || tierKey === 'T1') ? 't1' : 't2'; }
+function defaultLiftMaxEntry(scheme) {
+  const testType = scheme === 't1' ? '1RM' : '10RM';
+  return {
+    testType,
+    testWeightLb: 0,
+    // Auto-set from the test type, and editable afterwards -- same behaviour the tier rows had.
+    conv: convForTest(scheme === 't1' ? 'T1' : 'T2', testType),
+    // Increases earned from a logged session, each dated and applied strictly after that date.
+    // See effectiveTMLb()'s note on why these are dated rather than keyed by session ordinal.
+    adjustments: [],
+  };
+}
+// The stored record, or null. Null is the honest answer for a lift nobody has tested -- the caller
+// then shows a placeholder rather than a confident 0.
+function liftMax(liftId, tierKey) {
+  const e = liftId ? liftMaxes()[liftId] : null;
+  return (e && e[liftSchemeOf(tierKey)]) || null;
+}
+// The same, created on demand -- for the editor, which is the only thing allowed to bring one into
+// existence. Everything else reads liftMax() and copes with null.
+function ensureLiftMax(liftId, tierKey) {
+  const scheme = liftSchemeOf(tierKey);
+  const all = liftMaxes();
+  if (!all[liftId]) all[liftId] = {};
+  if (!all[liftId][scheme]) all[liftId][scheme] = defaultLiftMaxEntry(scheme);
+  return all[liftId][scheme];
+}
+// The BASE training max: what you tested, converted. Derived rather than stored -- it used to be a
+// `tmLb` field kept in step by recomputeTMs() on every visit to the screen, which is a cached value
+// that can go stale, recomputed by a function that had to remember to run.
+function liftBaseTmLb(liftId, tierKey) {
+  const m = liftMax(liftId, tierKey);
+  if (!m) return 0;
+  return (Number(m.testWeightLb) || 0) * (Number(m.conv) || 0);
+}
+// Base plus every increase dated strictly before `asOfDate`. An increase earned in a session dated
+// D is queued with fromDate = D and applies from the next session on, so it never affects the
+// session that earned it.
+function liftTmLb(liftId, tierKey, asOfDate) {
+  const m = liftMax(liftId, tierKey);
+  if (!m) return 0;
+  let total = liftBaseTmLb(liftId, tierKey);
+  (Array.isArray(m.adjustments) ? m.adjustments : []).forEach(a => {
+    if (a.fromDate && a.fromDate < asOfDate) total += a.deltaLb;
+  });
+  return total;
+}
+// Every lift with a max on record, in library order, for the screen that lists them.
+function liftsWithMaxes() {
+  const all = liftMaxes();
+  return allLifts().filter(l => all[l.id] && (all[l.id].t1 || all[l.id].t2));
+}
+function liftHasMax(liftId) {
+  const e = liftMaxes()[liftId];
+  return !!(e && (e.t1 || e.t2));
+}
+
+// ---- Upper / lower / core ----
+//
+// DERIVED from the lift's muscle rather than stored beside it. It used to be an `lu` flag you
+// toggled by hand on each category, which could therefore disagree with the muscle sitting right
+// next to it. Fourteen of the fifteen groups are unambiguous; Abs is the one that is genuinely
+// neither, so it gets its own value instead of being filed arbitrarily under one of the others.
+const MUSCLE_LU = {
+  Chest: 'upper', Triceps: 'upper', 'F Delts': 'upper', 'S Delts': 'upper', 'R Delts': 'upper',
+  Back: 'upper', Biceps: 'upper', Traps: 'upper', Forearms: 'upper', Neck: 'upper',
+  Quads: 'lower', Hams: 'lower', Glutes: 'lower', Calves: 'lower',
+  Abs: 'core',
+};
+function muscleLU(muscle) { return MUSCLE_LU[muscle] || null; }
+function liftLU(liftId) { const l = liftById(liftId); return l ? muscleLU(l.muscle) : null; }
+
+// ---- Migration: categories dissolve into lifts ----
+//
+// Each (category, tier) pair resolved to something you actually lift, and that is what becomes a
+// liftId. Three cases, in order:
+//
+//   1. The tier carried an `exerciseName` override -- "Leg Press for a Squat-tracked T2". That was
+//      always a DIFFERENT movement wearing the category's number, and it finally gets to be its
+//      own lift with its own max. This is the case the old model handled worst.
+//   2. The category was linked to a library lift (cat.liftId). That lift takes the max.
+//   3. Neither: a custom lift is created named after the category, so "Bonus" survives as a lift
+//      rather than evaporating.
+//
+// Matching by name is normalised on case and whitespace, so a category called "Bench" and a
+// hand-added "bench" don't become two lifts. Merging two later is easy; splitting one is not.
+//
+// T1 goes to the category's own lift. Each T2 goes to whatever that tier resolved to, and the
+// FIRST T2 to claim a given lift wins -- two T2 tiers pointing at one movement meant one number in
+// the new model by definition.
+function migrateCategoriesToLiftMaxes() {
+  if (!Array.isArray(STATE.categories) || !STATE.categories.length) return;
+  const norm = s => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const findOrCreate = (name, muscle) => {
+    const n = norm(name);
+    if (!n) return null;
+    const hit = allLifts().find(l => norm(l.name) === n || norm(l.short) === n);
+    if (hit) return hit.id;
+    const made = addCustomLift(name, muscle || null);
+    return made ? made.id : null;
+  };
+  // (categoryId, tierKey) -> liftId, so the workout slots below can be repointed to match.
+  const resolved = {};
+  STATE.categories.forEach(cat => {
+    const catMuscle = (cat.tiers && cat.tiers.T1 && cat.tiers.T1.muscle) || null;
+    const ownLift = cat.liftId && liftById(cat.liftId) ? cat.liftId : findOrCreate(cat.name, catMuscle);
+    ['T1', 'T2a', 'T2b', 'T2c'].forEach(tf => {
+      const t = cat.tiers && cat.tiers[tf];
+      if (!t) return;
+      const target = (tf !== 'T1' && norm(t.exerciseName))
+        ? findOrCreate(t.exerciseName, t.muscle || catMuscle)
+        : ownLift;
+      if (!target) return;
+      resolved[cat.id + ':' + tf] = target;
+      // Nothing tested means nothing to carry: a max of 0 is the absence of one, and writing it
+      // would put every untouched category on the screen that lists lifts you've tested.
+      if (!(Number(t.testWeightLb) > 0)) return;
+      const scheme = tf === 'T1' ? 't1' : 't2';
+      const all = liftMaxes();
+      if (!all[target]) all[target] = {};
+      if (all[target][scheme]) return;                 // first tier to claim this lift wins
+      all[target][scheme] = {
+        testType: t.testType,
+        testWeightLb: Number(t.testWeightLb) || 0,
+        conv: Number(t.conv) || convForTest(scheme === 't1' ? 'T1' : 'T2', t.testType),
+        adjustments: Array.isArray(t.adjustments) ? t.adjustments.slice() : [],
+      };
+    });
+  });
+  // Repoint every workout's tier slots. `categoryId` described a link that no longer exists, so it
+  // is replaced rather than kept alongside -- leaving both would be the two-fields-one-meaning
+  // shape this whole arc is removing.
+  (STATE.workouts || []).forEach(w => {
+    ['t1', 't2a', 't2b', 't2c'].forEach(tk => {
+      const slot = w[tk];
+      if (!slot) return;
+      if (slot.categoryId) {
+        const tf = tk === 't1' ? 'T1' : tk === 't2a' ? 'T2a' : tk === 't2b' ? 'T2b' : 'T2c';
+        slot.liftId = resolved[slot.categoryId + ':' + tf] || null;
+      }
+      delete slot.categoryId;
+    });
+  });
+  delete STATE.categories;
+}
+
+// Keeps a stored max readable without every call site guarding. A save can predate any of these
+// fields, and an invalid testType would carry a nonsense conversion into every target weight.
+function normaliseLiftMaxes() {
+  const all = liftMaxes();
+  Object.keys(all).forEach(liftId => {
+    const entry = all[liftId];
+    if (!entry || typeof entry !== 'object') { delete all[liftId]; return; }
+    ['t1', 't2'].forEach(scheme => {
+      const m = entry[scheme];
+      if (!m || typeof m !== 'object') { delete entry[scheme]; return; }
+      const group = scheme === 't1' ? 'T1' : 'T2';
+      if (testOptionsForTier(group).indexOf(m.testType) === -1) {
+        m.testType = scheme === 't1' ? '1RM' : '10RM';
+        m.conv = convForTest(group, m.testType);
+      }
+      m.testWeightLb = Number(m.testWeightLb) || 0;
+      m.conv = Number(m.conv) || convForTest(group, m.testType);
+      if (!Array.isArray(m.adjustments)) m.adjustments = [];
+      // A cached base TM used to be stored here. It's derived now -- see liftBaseTmLb().
+      delete m.tmLb;
+    });
+    // An entry with neither scheme left is no entry: liftsWithMaxes() would otherwise list a lift
+    // with nothing on it.
+    if (!entry.t1 && !entry.t2) delete all[liftId];
+  });
 }

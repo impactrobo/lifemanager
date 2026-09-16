@@ -54,7 +54,8 @@ const labels = page => page.evaluate(() => [...document.querySelectorAll('.subtl
   if (maxesLabels[0] !== 'ROUNDING') {
     throw new Error(`ROUNDING must LEAD the MAXES pane, got "${maxesLabels[0]}" first`);
   }
-  if (maxesLabels.indexOf('TRAINING MAXES BY CATEGORY') < 0) throw new Error('MAXES lost its training-max section');
+  // 'BY CATEGORY' no longer: the pane lists LIFTS you've tested, not six fixed buckets.
+  if (maxesLabels.indexOf('TRAINING MAXES') < 0) throw new Error('The EXERCISES pane lost its training-max section');
   // And the control is real, not just a heading.
   const rounding = await page.evaluate(() => {
     const before = STATE.rounding;
@@ -68,7 +69,7 @@ const labels = page => page.evaluate(() => [...document.querySelectorAll('.subtl
 
   // The exercise section must no longer offer its own units switch -- two places to choose one
   // thing is exactly the drift this move existed to remove.
-  for (const sub of ['tm', 'general']) {
+  for (const sub of ['tm', 'builder']) {
     const stray = await page.evaluate(s => {
       setSetupSubtab(s);
       return null;
@@ -82,17 +83,22 @@ const labels = page => page.evaluate(() => [...document.querySelectorAll('.subtl
     }
   }
 
-  // ---- 3. GENERAL is program structure alone ----
-  await page.evaluate(() => setSetupSubtab('general'));
+  // ---- 3. GENERAL is gone entirely ----
+  // It ended up holding one setting, the program cycle length, and rotations took both of that
+  // setting's consumers -- leaving a number you could still type into which governed nothing. A
+  // stale nav snapshot pointing at it must still land on something real.
+  const noGeneral = await page.evaluate(() => {
+    const inNav = [...document.querySelectorAll('#app .subnav button')].map(b => b.textContent.trim());
+    setSetupSubtab('general');
+    return { inNav, cyclesGone: STATE.program.cycles === undefined };
+  });
   await settle(page);
   const generalLabels = await labels(page);
-  console.log('3. GENERAL sections:', generalLabels.join(' / '));
-  if (generalLabels.indexOf('PROGRAM STRUCTURE') < 0) throw new Error('GENERAL lost PROGRAM STRUCTURE');
-  for (const gone of ['UNITS & ROUNDING', 'REST TIMER']) {
-    if (generalLabels.some(l => l.replace(/\s+/g, ' ').toUpperCase() === gone)) {
-      throw new Error(`"${gone}" is still in GENERAL — it was supposed to move out`);
-    }
-  }
+  console.log('3. GENERAL retired:', JSON.stringify(noGeneral), '->', generalLabels.join(' / '));
+  if (noGeneral.inNav.indexOf('GENERAL') >= 0) throw new Error('GENERAL should no longer be a tab');
+  if (!noGeneral.cyclesGone) throw new Error('STATE.program.cycles should be retired with it');
+  if (generalLabels.indexOf('PROGRAM STRUCTURE') >= 0) throw new Error('PROGRAM STRUCTURE governed nothing and should be gone');
+  if (generalLabels.indexOf('TRAINING MAXES') < 0) throw new Error('A retired subtab must land on a real pane, not render nothing');
 
   // ---- 4. Rest behaviour lives in the rest picker ----
   await page.evaluate(() => openRestPicker());
