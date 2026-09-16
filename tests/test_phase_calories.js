@@ -43,10 +43,8 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     STATE.diet.tdee = 2600;
     STATE.phaseOrigin = shiftDate(t, -70);
     STATE.phases = [
-      { id: 'p1', label: 'Opening cut', weeks: 10, direction: 'deficit',
-        ratePctPerWeek: 0.75, calorieTarget: 2400, calorieSetOn: shiftDate(t, -70), createdAt: 1 },
-      { id: 'p2', label: 'Push to race', weeks: 12, direction: 'deficit',
-        ratePctPerWeek: 0.9, calorieTarget: 2150, calorieSetOn: shiftDate(t, -12), createdAt: 2 },
+      { id: 'p1', label: 'Opening cut', weeks: 10, weightGoal: newWeightGoal({ direction: 'deficit', ratePctPerWeek: 0.75 }), calorieTarget: 2400, calorieSetOn: shiftDate(t, -70), createdAt: 1 },
+      { id: 'p2', label: 'Push to race', weeks: 12, weightGoal: newWeightGoal({ direction: 'deficit', ratePctPerWeek: 0.9 }), calorieTarget: 2150, calorieSetOn: shiftDate(t, -12), createdAt: 2 },
     ];
     saveState();
   });
@@ -103,9 +101,9 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // A maintain phase eats at maintenance — the delta is zero, not "no target".
   const maintainSeed = await page.evaluate(() => {
-    STATE.phases[1].direction = 'maintain';
+    STATE.phases[1].weightGoal.direction = 'maintain';
     const s = phaseCalorieSeed(phaseTimeline()[1]);
-    STATE.phases[1].direction = 'deficit';
+    STATE.phases[1].weightGoal.direction = 'deficit';
     return s;
   });
   console.log('maintain seed:', maintainSeed);

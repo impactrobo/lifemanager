@@ -37,13 +37,17 @@
 // owns, and also wants maintenance calories, which the weight goal owns. calorieTargetForDate()
 // makes that the top rung, because eating at a deficit through a deload defeats the point of it.
 
+// Cut / Maintain / Bulk are the LABELS; the stored keys stay deficit/maintain/surplus. The keys are
+// never user-visible and carry the sign, so renaming them would be churn for nothing -- but the
+// words people actually use for these are cut and bulk, so that's what the screen says.
+//
+// "Maintain", not "Maintenance": the select sits in a third of a phone-width card and the longer
+// word truncates to "Maintena" behind the dropdown arrow. It's also the better label -- all three
+// are then what you're DOING rather than what state you're in.
 const PHASE_DIRECTIONS = [
-  { key: 'deficit',  label: 'Deficit',     sign: -1, verb: 'losing' },
-  // "Maintain", not "Maintenance": the select sits in a third of a phone-width card and the longer
-  // word truncates to "Maintena" behind the dropdown arrow. It's also the better label -- the other
-  // two are what you're doing, not what state you're in.
+  { key: 'deficit',  label: 'Cut',      sign: -1, verb: 'losing' },
   { key: 'maintain', label: 'Maintain', sign:  0, verb: 'holding' },
-  { key: 'surplus',  label: 'Surplus',     sign: +1, verb: 'gaining' },
+  { key: 'surplus',  label: 'Bulk',     sign: +1, verb: 'gaining' },
 ];
 const PHASE_DEFAULT_WEEKS = 8;
 const PHASE_MAX_WEEKS = 52;
@@ -60,11 +64,8 @@ const PHASE_TARGET_TOLERANCE_LB = 0.5;
 function phaseDirection(key) {
   return PHASE_DIRECTIONS.find(d => d.key === key) || PHASE_DIRECTIONS[0];
 }
-// Direction carries the sign, the rate carries only a magnitude. Storing a signed rate would let a
-// "Surplus" phase hold a negative number and mean the opposite of its own label.
-function phaseSignedPct(phase) {
-  return phaseDirection(phase.direction).sign * Math.abs(Number(phase.ratePctPerWeek) || 0);
-}
+// phaseSignedPct() moved to app-weight-plan.js, where the rate schedule it now has to average over
+// lives. Direction still carries the sign and a stored rate is still only a magnitude.
 
 // ---- ONE timeline ----
 //
@@ -155,7 +156,11 @@ function phaseTimeline() {
         : endWeightLb == null ? startWeightLb * phaseSignedPct(phase) / 100
         : (endWeightLb - startWeightLb) / weeks,
       state: today < startDate ? 'future' : (endDate && today > endDate) ? 'past' : 'current',
-      band: goalRateBand(phaseSignedPct(phase), weeks),
+      // Null when the phase carries no weight goal, and when it's deliberately maintaining -- a
+      // band names where a RATE sits, and "holding" isn't a rate.
+      band: phaseHasWeightGoal(phase)
+        ? rateBand(phaseWeightGoal(phase).direction, phaseSignedPct(phase))
+        : null,
     };
   });
 }
@@ -764,8 +769,10 @@ function newPhase(over) {
     id: uid(),
     label: 'Phase',
     weeks: PHASE_DEFAULT_WEEKS,     // null == perpetual: runs until something replaces it
-    direction: 'maintain',
-    ratePctPerWeek: 0,
+    // No weight goal until you set one. Defaulting to an explicit 'maintain' would be the app
+    // deciding you're deliberately holding -- which turns on drift detection and would scold
+    // someone who never asked it to watch anything. See app-weight-plan.js.
+    weightGoal: null,
     // A calorie target is a number you'll eat against every day for weeks, so it gets an explicit
     // "use this" the same way the TDEE estimate does. Creating a phase shouldn't quietly change
     // what you're eating.
@@ -871,8 +878,9 @@ function updatePhaseField(id, field, value) {
       if (n >= 1 && n <= PHASE_MAX_WEEKS) p.weeks = n;
     }
   }
-  else if (field === 'direction') { if (PHASE_DIRECTIONS.some(d => d.key === value)) p.direction = value; }
-  else if (field === 'ratePctPerWeek') { const n = Math.abs(Number(value)); if (n >= 0) p.ratePctPerWeek = n; }
+  // direction and ratePctPerWeek moved onto phase.weightGoal, which can be null -- setting them
+  // through here would have had to invent a goal for a phase that deliberately has none. They have
+  // their own setters: setPhaseWeightGoal() and updateWeightGoalRate() in app-weight-plan.js.
   saveState();
   render();
 }
@@ -934,6 +942,7 @@ function renderPhases() {
   const sched = phaseTimeline();
   const summary = phasePlanSummary();
   return `
+    ${renderLongCutNotice()}
     <div class="row" style="margin:22px 0 8px;">
       <div class="subtle-label" style="margin-bottom:0;">PHASES</div>
       <button class="btn btn-sm" onclick="addPhase()">+ ADD PHASE</button>
@@ -942,6 +951,43 @@ function renderPhases() {
       ? `<div class="phase-list">${sched.map(renderPhaseCard).join('')}</div>
          ${renderPhaseSummary(summary)}`
       : emptyState('No phases yet. One long push is a plan too — add phases when you want to change pace partway, or take a planned break.')}`;
+}
+
+// The long-cut flag, at the top of the screen rather than on a card -- it's a property of the
+// SEQUENCE, not of any one phase, and the run it counts crosses phase boundaries by construction.
+//
+// Silent almost always, which is the point. It speaks twice: once while a run is BUILDING (so you
+// can see the seventh hard week coming before you commit to it) and once when it has tripped. It
+// never blocks anything.
+function renderLongCutNotice() {
+  const s = longCutState();
+  if (!s.flagged && !s.building) return '';
+  if (s.flagged) {
+    // A run still ahead of you is a plan to reconsider, not a thing you've done. Saying "you have
+    // been cutting hard" about a block that starts in November would be simply false.
+    const why = s.planned
+      ? `Your plan runs ${LONG_CUT_WEEKS} or more weeks in a row above ${fmt(LONG_CUT_PCT, 1)} %bw/wk from
+         <b style="color:var(--text)">${fmtGoalDate(s.flaggedSince)}</b>.`
+      : `${LONG_CUT_WEEKS} or more weeks in a row above ${fmt(LONG_CUT_PCT, 1)} %bw/wk.`;
+    return `
+      <div class="panel" style="margin-top:18px; border-color:var(--bad); background:var(--accent-soft);">
+        <div class="subtle-label" style="margin-bottom:6px; color:var(--bad);">${s.planned ? 'A LONG CUT AHEAD' : 'CUTTING HARD FOR A WHILE'}</div>
+        <div style="font-size:12px;">
+          ${why} Past about six weeks the usually-cited ceiling drops back toward 1%, and more of the
+          cost lands on lean mass.
+          <b style="color:var(--text)">${s.creditNeeded} more week${s.creditNeeded === 1 ? '' : 's'}</b>
+          at maintenance or in a surplus ${s.planned ? 'would clear it' : 'clears this'}.
+        </div>
+      </div>`;
+  }
+  return `
+    <div class="panel" style="margin-top:18px; border-color:var(--accent-dim);">
+      <div style="font-size:12px; color:var(--text-dim);">
+        <b style="color:var(--text)">${s.run} week${s.run === 1 ? '' : 's'}</b> running above
+        ${fmt(LONG_CUT_PCT, 1)} %bw/wk. ${s.runNeeded} more makes it a long cut —
+        a week at maintenance resets the count.
+      </div>
+    </div>`;
 }
 
 // One card for one kind of phase. It used to branch on the goal's kind, showing a rate and a calorie
@@ -1048,10 +1094,12 @@ function renderExercisePhaseBody(entry) {
 function renderWeightPhaseBody(entry) {
   const p = entry.phase;
   const u = weightUnitLabel();
-  const dir = phaseDirection(p.direction);
-  const maintain = dir.key === 'maintain';
+  const g = phaseWeightGoal(p);
+  const dir = phaseDirection(g && g.direction);
+  const maintain = !g || dir.key === 'maintain';
   const actual = phaseActualRate(entry);
   const signedLb = (n) => (n < 0 ? '&minus;' : '+') + fmt(Math.abs(Number(lbToDisplay(n))), 2);
+  const varying = !!(g && Array.isArray(g.weekRates));
   return `
       <div class="phase-controls">
         <label class="field"><span class="lbl">Weeks</span>
@@ -1059,17 +1107,22 @@ function renderWeightPhaseBody(entry) {
                  value="${entry.perpetual ? '' : entry.weeks}"
                  ${entry.perpetual ? 'placeholder="open"' : ''}
                  onchange="updatePhaseField('${p.id}','weeks',this.value)"></label>
-        <label class="field"><span class="lbl">Direction</span>
-          <select onchange="updatePhaseField('${p.id}','direction',this.value)">
-            ${PHASE_DIRECTIONS.map(d => `<option value="${d.key}"${d.key === dir.key ? ' selected' : ''}>${d.label}</option>`).join('')}
+        <label class="field"><span class="lbl">Weight goal</span>
+          <select onchange="setPhaseWeightGoal('${p.id}',this.value)">
+            <option value="none"${g ? '' : ' selected'}>None</option>
+            ${PHASE_DIRECTIONS.map(d => `<option value="${d.key}"${g && d.key === dir.key ? ' selected' : ''}>${d.label}</option>`).join('')}
           </select></label>
         <label class="field"><span class="lbl">Rate %bw/wk</span>
-          <input type="number" min="0" step="0.05" value="${maintain ? '' : fmt(Math.abs(Number(p.ratePctPerWeek) || 0), 2)}"
-                 ${maintain ? 'disabled placeholder="—"' : ''} inputmode="decimal"
-                 onchange="updatePhaseField('${p.id}','ratePctPerWeek',this.value)"></label>
+          <input type="number" min="0" step="0.05"
+                 value="${maintain || varying ? '' : fmt(Math.abs(Number(g.ratePctPerWeek) || 0), 2)}"
+                 ${maintain ? 'disabled placeholder="—"' : varying ? 'disabled placeholder="varies"' : ''} inputmode="decimal"
+                 onchange="updateWeightGoalRate('${p.id}',this.value)"></label>
       </div>
 
-      <div class="goal-rows">
+      ${!g ? `<div class="phase-cal-note" style="margin-top:2px;">No weight goal — calories fall back to your TDEE and nothing is watched.</div>`
+           : renderRateSchedule(entry, g)}
+
+      ${!g ? '' : `<div class="goal-rows">
         <div class="goal-row">
           <span class="goal-row-k">Planned</span>
           <span class="goal-row-v mono">${maintain ? 'hold'
@@ -1079,8 +1132,8 @@ function renderWeightPhaseBody(entry) {
             : entry.plannedLbPerWeek == null ? '—'
             : signedLb(entry.plannedLbPerWeek) + ' ' + u + '/wk'}</span>
           <span class="goal-row-x">${maintain
-            ? 'a planned break from the deficit'
-            : `${fmt(Math.abs(phaseSignedPct(p)), 2)} %bw/wk · <span class="goal-band goal-band-${entry.band.key}">${entry.band.label}</span>`}</span>
+            ? 'holding on purpose — drift is watched'
+            : `${fmt(Math.abs(phaseSignedPct(p)), 2)} %bw/wk${entry.band ? ` · <span class="goal-band goal-band-${entry.band.key}">${entry.band.label}</span>` : ''}`}</span>
         </div>
         ${entry.state === 'future' ? '' : `
         <div class="goal-row">
@@ -1092,8 +1145,69 @@ function renderWeightPhaseBody(entry) {
                <span class="goal-row-x">needs ${GOAL_RATE_MIN_DAYS} days of weights inside this phase</span>`}
         </div>`}
       </div>
+      ${renderBandNote(entry, g)}
+      ${renderDriftNote(entry)}`}
 
       ${renderPhaseCalories(entry)}`;
+}
+
+// The band's own advisory line, under the rate it describes. Reference points, never limits -- so
+// this states what a rate costs and stops, rather than telling you to pick a different one.
+function renderBandNote(entry, g) {
+  if (!entry.band || !g || g.direction === 'maintain') return '';
+  const cutting = g.direction === 'deficit';
+  return `
+      <div class="phase-cal-note" style="margin-top:8px;">
+        ${escapeHtml(entry.band.note)}
+        ${cutting ? ' ' + escapeHtml(leannessNote(phaseSignedPct(entry.phase))) : ''}
+      </div>`;
+}
+
+// Says so when an explicit Maintain isn't actually holding. This is the entire reason "no weight
+// goal" and "deliberately maintaining" are separate states: the second is a claim worth checking.
+function renderDriftNote(entry) {
+  const d = maintenanceDrift(entry);
+  if (!d) return '';
+  const u = weightUnitLabel();
+  return `
+      <div class="panel" style="margin-top:10px; border-color:var(--accent-dim); background:var(--accent-soft);">
+        <div style="font-size:12px;">
+          You're set to maintain, but the trend is ${d.gaining ? 'up' : 'down'}
+          <b style="color:var(--text)">${fmt(Math.abs(Number(lbToDisplay(d.lbPerWeek))), 2)} ${u}/wk</b>
+          over ${d.spanDays} days. Adjust the rate, or change the goal to match what you're doing.
+        </div>
+      </div>`;
+}
+
+// Flat by default, per-week when you ask for it. A twelve-week phase shouldn't OPEN as twelve
+// number inputs -- the common case is one rate, and per-week exists for the specific thing it's good
+// at: dropping a Fast Cut stretch into the middle of a longer block.
+function renderRateSchedule(entry, g) {
+  if (g.direction === 'maintain') return '';
+  const varying = Array.isArray(g.weekRates);
+  const weeks = entry.perpetual ? null : entry.weeks;
+  return `
+      <div class="row" style="margin-top:10px;">
+        <span style="font-size:12px; color:var(--text-dim);">Vary by week</span>
+        <button class="btn btn-sm ${varying ? 'btn-primary' : ''}" onclick="togglePhaseWeekRates('${entry.phase.id}')"
+                ${entry.perpetual ? 'disabled' : ''}>${varying ? 'ON' : 'OFF'}</button>
+      </div>
+      ${entry.perpetual
+        ? `<div class="phase-cal-note">A phase with no end has no weeks to vary across — give it a length first.</div>`
+        : varying
+          ? `<div class="week-rate-grid">
+              ${Array.from({ length: weeks }, (_, i) => {
+                const pct = Math.abs(phaseRateForWeek(entry.phase, i));
+                const band = rateBand(g.direction, pct);
+                return `<label class="week-rate">
+                  <span class="lbl">Wk ${i + 1}</span>
+                  <input type="number" min="0" step="0.05" inputmode="decimal" value="${fmt(pct, 2)}"
+                         class="week-rate-${band ? band.key : 'none'}"
+                         onchange="updateWeekRate('${entry.phase.id}',${i},this.value)">
+                </label>`;
+              }).join('')}
+            </div>`
+          : ''}`;
 }
 
 // The calorie target: what the phase's rate actually asks you to eat. Editable, because the seed is
@@ -1226,6 +1340,7 @@ function migratePhasesToOneTimeline() {
   // A phase is a phase. The kind/goalId pair described a split that no longer exists, and leaving
   // them behind would let a later read resurrect it.
   STATE.phases.forEach(p => { delete p.kind; delete p.goalId; });
+  migratePhaseWeightGoals();
   delete STATE.goals;
   // exTargets were keyed to a goal. Fitness targets become phase-owned in the next step; until then
   // there is nothing for them to hang off, and a target pointing at a deleted goal can never render.

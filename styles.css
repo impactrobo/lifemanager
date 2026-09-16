@@ -791,11 +791,35 @@ button.hit-mark { padding: 0; background: none; font: inherit; color: inherit; c
 
 /* Advisory only -- the band names where a rate sits, it never prevents one. Same posture as the
    water target being "a target, not a cap". */
+/* Band keys are shared by the cut and bulk lists, which is deliberate: a band means the same thing
+   about how hard you're pushing whichever direction you're pushing in, so the colour says that once
+   rather than twice. `conservative`/`lean` are the slow ends, `extreme` the far ends. */
 .goal-band { font-weight: 700; }
-.goal-band-conservative { color: var(--good); }
+.goal-band-conservative,
+.goal-band-lean         { color: var(--good); }
+.goal-band-standard,
 .goal-band-typical      { color: var(--good); }
+.goal-band-fast,
 .goal-band-aggressive   { color: var(--warn); }
+.goal-band-extreme,
 .goal-band-beyond       { color: var(--bad); }
+
+/* Per-week rates. A twelve-week phase is twelve small inputs, so they wrap into a grid rather than
+   stacking into a column that pushes everything below it off the screen. Each input is tinted by
+   its OWN band, which is the point of editing week by week -- a Fast Cut stretch in the middle of a
+   Conservative block is visible at a glance instead of needing twelve numbers read individually. */
+.week-rate-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 6px; margin-top: 10px;
+}
+.week-rate { display: flex; flex-direction: column; gap: 2px; margin-bottom: 0; }
+.week-rate .lbl { font-size: 9px; letter-spacing: 0.04em; }
+.week-rate input { padding: 5px 6px; font-size: 12px; text-align: center; }
+.week-rate input.week-rate-conservative,
+.week-rate input.week-rate-lean     { border-color: var(--good); }
+.week-rate input.week-rate-standard { border-color: var(--border); }
+.week-rate input.week-rate-fast     { border-color: var(--warn); }
+.week-rate input.week-rate-extreme  { border-color: var(--bad); }
 
 .goal-pace { font-weight: 700; }
 .goal-pace-ok     { color: var(--good); }

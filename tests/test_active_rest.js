@@ -48,14 +48,10 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     // The origin is set so 'VO2 Max' starts exactly today: 10 + 18 + 10 = 38 weeks before it.
     STATE.phaseOrigin = shiftDate(t, -(10 + 18 + 10) * 7);
     STATE.phases = [
-      newPhase({ id: 'p1', label: 'Opening cut', weeks: 10, direction: 'deficit',
-        ratePctPerWeek: 0.8, calorieTarget: 2200, calorieSetOn: t, exercisePlan: mk(3) }),
-      newPhase({ id: 'p2', label: 'Push', weeks: 18, direction: 'deficit',
-        ratePctPerWeek: 0.9, calorieTarget: 2100, calorieSetOn: t, exercisePlan: mk(3) }),
-      newPhase({ id: 'b1', label: 'Hypertrophy', weeks: 10, direction: 'deficit',
-        ratePctPerWeek: 0.9, calorieTarget: 2100, calorieSetOn: t, exercisePlan: mk(3) }),
-      newPhase({ id: 'b2', label: 'VO2 Max', weeks: 12, direction: 'deficit',
-        ratePctPerWeek: 0.9, calorieTarget: 2100, calorieSetOn: t, exercisePlan: mk(5),
+      newPhase({ id: 'p1', label: 'Opening cut', weeks: 10, weightGoal: newWeightGoal({ direction: 'deficit', ratePctPerWeek: 0.8 }), calorieTarget: 2200, calorieSetOn: t, exercisePlan: mk(3) }),
+      newPhase({ id: 'p2', label: 'Push', weeks: 18, weightGoal: newWeightGoal({ direction: 'deficit', ratePctPerWeek: 0.9 }), calorieTarget: 2100, calorieSetOn: t, exercisePlan: mk(3) }),
+      newPhase({ id: 'b1', label: 'Hypertrophy', weeks: 10, weightGoal: newWeightGoal({ direction: 'deficit', ratePctPerWeek: 0.9 }), calorieTarget: 2100, calorieSetOn: t, exercisePlan: mk(3) }),
+      newPhase({ id: 'b2', label: 'VO2 Max', weeks: 12, weightGoal: newWeightGoal({ direction: 'deficit', ratePctPerWeek: 0.9 }), calorieTarget: 2100, calorieSetOn: t, exercisePlan: mk(5),
         activeRestWeeks: 2 }),
     ];
     STATE.logs = {};

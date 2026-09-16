@@ -427,6 +427,7 @@ function migrateState() {
   });
   migratePhasesToOneTimeline();
   ensurePerpetualPhase();
+  normalisePhaseWeightGoals();
   // Every phase now carries BOTH plans, so both get the same normalisation -- a malformed one would
   // break every weekday read through it, and guarding seven array lookups at each call site is more
   // expensive than fixing it once here.

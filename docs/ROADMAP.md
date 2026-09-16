@@ -487,6 +487,52 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **The weight plan: rate schedules, asymmetric bands, and the long-cut flag (2026-09-16).**
+  Commit 2 of the phases/rotations arc. New `src/app-weight-plan.js`.
+  - **Three states, not two.** `phase.weightGoal` is nullable: `null` means no weight goal (calories
+    fall back to TDEE, nothing is watched); `{direction:'maintain'}` means *deliberately holding*,
+    which turns on drift detection. The difference is the point — "I haven't decided" and "I am
+    holding on purpose" are different claims, and only the second is checkable. The old flat
+    `direction`/`ratePctPerWeek` on the phase couldn't express "no goal", so every phase made a
+    claim about eating whether you'd asked it to or not.
+  - **Cut / Maintain / Bulk** are the labels; stored keys stay `deficit`/`maintain`/`surplus`.
+    Choosing Maintain **locks the rate to zero** rather than merely labelling it.
+  - **Asymmetric bands.** Cut: Conservative / Standard / Fast (*run for 6 weeks maximum*) / Extreme
+    (*expect muscle loss*) at 0.5 / 1.0 / 1.5. Bulk: Lean Gain / Standard / Fast / Extreme at
+    0.25 / 0.5 / 1.0. The old single list ran through `Math.abs()`, so ±1.2%/wk got the same label —
+    and they don't mean remotely the same thing. **1.2%/wk is a Fast Cut but an Extreme Bulk.** Fat
+    loss is rate-limited by energy deficit against a large store; muscle gain is rate-limited by
+    protein synthesis, which doesn't speed up when you eat more.
+  - **Rate schedule**: flat by default, "vary by week" expanding to a per-week grid seeded from the
+    flat rate, each input tinted by its own band so a Fast Cut stretch inside a Conservative block
+    is visible at a glance. The phase's single figure becomes the mean. Past the end of a shortened
+    list the flat rate carries on, so extending a phase can't silently plan zero-rate weeks.
+  - **The long-cut flag** is a hysteresis rule, not a threshold. Three kinds of week: `hard`
+    (cut >1%/wk) increments the run, `soft` (cut ≤1%/wk) **pauses** it, `credit` (maintenance or
+    surplus, including *no goal at all*) resets it and counts toward clearing. Six hard weeks in a
+    row raises it; only six credit weeks clear it. Soft weeks pausing rather than resetting follows
+    from the clearing rule — it takes eating at maintenance to get credit, not merely cutting less
+    hard — otherwise 5 hard / 1 token soft / 5 hard would never flag. Cycling through a *real*
+    maintenance week does reset it, which is the safer pattern and shouldn't be warned about.
+    It crosses phase boundaries by construction, since the walk is over weeks rather than phases.
+  - **Actual for elapsed weeks, planned for upcoming ones**, read through a 14-day trailing window
+    (`GOAL_RATE_MIN_DAYS` — a single week of scale weight is mostly water). Consecutive weeks
+    therefore share seven days, which is right: the flag is about sustained behaviour.
+  - **No lingering flag on the bulk side.** A prolonged deficit has real costs and a recovery
+    requirement, which the clearing rule encodes. Gaining too fast just makes you fatter — visible,
+    self-correcting, demanding nothing afterwards. It still gets an Extreme Bulk band: labelled,
+    just not watched.
+  - **Maintenance drift** alerts when an explicit Maintain is actually moving: ±0.25%/wk sustained
+    over ≥14 days, just under the Conservative Cut / Lean Gain floor so it means "drifted into a
+    direction" rather than "fluctuated".
+  - The cut side's leanness note **personalises off a recent `bodyFatPct` reading** when there is
+    one within 90 days, and stays generic otherwise.
+  - **One bug caught by screenshot rather than by tests:** the flag walks planned weeks, so a block
+    sketched for November raised a notice reading *"you have been cutting hard for six weeks"* in
+    the present tense. `flaggedSince` also used the week's **end** date, which called a run
+    "planned" whenever its sixth week merely finished in a few days. Now anchored to the start date,
+    with a separate *A LONG CUT AHEAD* wording for runs still in front of you.
+
 - **Phases became the primary record — one timeline, goals optional (2026-09-16).** Commit 1 of the
   phases/rotations arc. The model inverted: a **goal** used to be the record, with a `kind`
   (`weight` / `exercise`) and phases hanging off it, so there were two independent sequences that

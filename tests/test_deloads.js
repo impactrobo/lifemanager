@@ -256,7 +256,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     // phases belonging to separate goals, overlapping in time; with a single timeline two phases
     // can't overlap, so a block that deloads is the same block that says what to eat.
     const b = STATE.phases.find(p => p.id === 'b1');
-    b.direction = 'deficit'; b.ratePctPerWeek = 0.9;
+    b.weightGoal = newWeightGoal({ direction: 'deficit', ratePctPerWeek: 0.9 });
     b.calorieTarget = 2150; b.calorieSetOn = t;
     const inDeload = calorieTargetForDate(t);
     // A day outside the deload week keeps the phase's deficit.

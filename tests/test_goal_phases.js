@@ -37,16 +37,16 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     }
     STATE.phaseOrigin = shiftDate(t, -70);
     STATE.phases = [
-      { id: 'p1', label: 'Opening cut', weeks: 10, direction: 'deficit', ratePctPerWeek: 0.75, createdAt: 1 },
-      { id: 'p2', label: 'Diet break', weeks: 2, direction: 'maintain', ratePctPerWeek: 0, createdAt: 2 },
-      { id: 'p3', label: 'Push', weeks: 10, direction: 'deficit', ratePctPerWeek: 0.9, createdAt: 3 },
+      { id: 'p1', label: 'Opening cut', weeks: 10, weightGoal: newWeightGoal({ direction: 'deficit', ratePctPerWeek: 0.75 }), createdAt: 1 },
+      { id: 'p2', label: 'Diet break', weeks: 2, weightGoal: newWeightGoal({ direction: 'maintain', ratePctPerWeek: 0 }), createdAt: 2 },
+      { id: 'p3', label: 'Push', weeks: 10, weightGoal: newWeightGoal({ direction: 'deficit', ratePctPerWeek: 0.9 }), createdAt: 3 },
     ];
     saveState();
   });
   const sched = () => page.evaluate(() => phaseTimeline().map(s => ({
     id: s.phase.id, label: s.phase.label, weeks: s.weeks, state: s.state,
     startDate: s.startDate, endDate: s.endDate,
-    startWeightLb: s.startWeightLb, endWeightLb: s.endWeightLb, band: s.band.key,
+    startWeightLb: s.startWeightLb, endWeightLb: s.endWeightLb, band: s.band && s.band.key,
   })));
 
   await seed();
@@ -82,15 +82,15 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     const p = STATE.phases[0];
     const read = () => phaseTimeline()[0].endWeightLb;
     const out = {};
-    p.direction = 'deficit';  out.deficit = read();
-    p.direction = 'surplus';  out.surplus = read();
-    p.direction = 'maintain'; out.maintain = read();
+    p.weightGoal.direction = 'deficit';  out.deficit = read();
+    p.weightGoal.direction = 'surplus';  out.surplus = read();
+    p.weightGoal.direction = 'maintain'; out.maintain = read();
     // A maintain phase holds even with a rate still stored on it -- switching back must restore it.
-    p.ratePctPerWeek = 0.75;  out.maintainWithRate = read();
-    p.direction = 'deficit';
+    p.weightGoal.ratePctPerWeek = 0.75;  out.maintainWithRate = read();
+    p.weightGoal.direction = 'deficit';
     // A negative magnitude can't flip a surplus into a loss.
-    p.ratePctPerWeek = -0.75; out.negativeStored = read();
-    p.ratePctPerWeek = 0.75;
+    p.weightGoal.ratePctPerWeek = -0.75; out.negativeStored = read();
+    p.weightGoal.ratePctPerWeek = 0.75;
     return out;
   });
   console.log('direction:', dirs);
