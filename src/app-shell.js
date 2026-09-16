@@ -201,8 +201,14 @@ function initialTab() {
 }
 let NAV = {
   currentTab: initialTab(), // Settings -> Default Page, not always Home
-  /** @type {{ mode: string, workoutId?: any, cardioId?: any }} */
-  trainView: { mode: 'grid', workoutId: null }, // {mode:'grid'} | {mode:'log', workoutId} | {mode:'cardioLog', cardioId}
+  /** @type {{ mode: string, workoutId?: any, cardioId?: any, date?: string|null, cycle?: number|null }} */
+  // {mode:'grid'} | {mode:'log'|'rpLog', workoutId} | {mode:'cardioLog', cardioId}. `date` and `cycle`
+  // identify the SESSION a log screen has open: the cycle is this workout's session ordinal on that
+  // date, derived once when the session is opened (see openSession() in app-train-log.js). All
+  // five keys live on the default so the type is inferred wide enough for every shape.
+  trainView: { mode: 'grid', workoutId: null, cardioId: null, date: null, cycle: null },
+  // The Monday of the week the WORKOUTS screen is showing. null = this week.
+  trainWeekStart: null,
   // The one subtab key for the whole Health & Wellness tab: 'workouts' | 'phases' | 'builder' |
   // 'body' | 'diet'. Replaced trainTopSubtab + healthSubtab when Exercise and Health & Diet merged
   // -- they described a split that no longer exists. 'goal', 'setup' and 'longevity' are retired
@@ -239,7 +245,7 @@ let NAV = {
   budgetMonth: null,
   dietLogDate: null,
   habitCalMonth: null,
-  volumeCycle: null,
+  volumeWeekStart: null,
 };
 // Which section's own Setup page is showing — Setup is no longer one shared screen: each
 // section that has configurable parameters gets its own distinct page, reachable only from
@@ -277,7 +283,7 @@ function applyNavSnapshot(prev) {
   resetTransientUi(); // Back/Forward is navigation too
   NAV_SNAPSHOT_KEYS.forEach(k => { if (prev[k] !== undefined) NAV[k] = prev[k]; });
   // Never restore into a stale open workout log -- those have their own in-context back button.
-  if (NAV.currentTab === 'train') NAV.trainView = { mode: 'grid', workoutId: null };
+  if (NAV.currentTab === 'train') NAV.trainView = GRID_VIEW();
 }
 function pushNavHistory() {
   NAV_HISTORY.push(navSnapshot());
@@ -299,7 +305,7 @@ function switchTab(tab) {
   pushNavHistory();
   resetTransientUi();
   NAV.currentTab = tab;
-  if (tab === 'train') { NAV.trainView = { mode: 'grid', workoutId: null }; NAV.fitnessSubtab = 'workouts'; }
+  if (tab === 'train') { NAV.trainView = GRID_VIEW(); NAV.fitnessSubtab = 'workouts'; }
   if (tab === 'notes') {
     // Same stale-edit guard as setNotesSubtab() — a fresh visit to Notes (e.g. via the bottom tab
     // bar) shouldn't resume an edit left in progress from before you navigated away.

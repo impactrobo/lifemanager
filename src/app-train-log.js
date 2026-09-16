@@ -87,51 +87,32 @@ function rpWorkoutIcon(workout) {
 // Renders one workout-type section (grid of cells + a small summary line) for renderTrainGrid.
 // `list` is workoutsByType(type); `openFn` is the click handler name. Weights workouts branch
 // per-item on shape (GZCL tiers vs exercises[]) since style is chosen per-workout now.
-function renderTrainSection(type, list, cycle, openFn) {
+// The full library of one type, every tile opening a session on `dateStr`. This used to take a
+// cycle and read each workout's log at that one number; it takes a DATE now, because each workout
+// counts its own sessions and the only thing two workouts share is the calendar. The "logged this
+// week N / M" footer went with the change -- the week view above says that per day.
+function renderTrainSection(type, list, dateStr, openFn) {
   if (list.length === 0) {
     return `<div class="empty-state" style="padding:16px 10px;">
       <div style="font-size:12px;">No ${WORKOUT_TYPE_LABELS[type].toLowerCase()} workouts yet — add one under <b style="color:var(--text)">Builder &rarr; Workouts &rarr; Workout</b>.</div>
     </div>`;
   }
-  if (type === 'cardio') {
-    const cells = list.map((c, i) => {
-      const clog = STATE.logs[logKey(cycle, c.id)];
-      const status = clog && clog.date ? 'done' : 'empty';
-      const flair = status === 'empty' ? 'unfinished-cardio' : '';
-      const ic = cardioIcon(c);
-      return `<div class="workout-cell ${status} ${flair}" onclick="${openFn}('${c.id}')">
-        <div class="wnum">${i + 1}</div>
-        <div class="wname">${escapeHtml(c.name)}</div>
-        ${ic ? `<div class="cell-icon">${ic}</div>` : ''}
-      </div>`;
-    }).join('');
-    return `<div class="workout-grid">${cells}</div>`;
-  }
-  // weights / mobility / warmup — all exercises[]-shaped except GZCL-style weights (has t1)
   const cells = list.map((w, i) => {
+    const isCardio = type === 'cardio';
     const isGzcl = !!w.t1;
-    const status = isGzcl ? workoutCompletion(cycle, w) : rpWorkoutCompletion(cycle, w);
-    const hasContent = isGzcl ? enabledTierKeys(w).length > 0 : w.exercises.length > 0;
-    const flair = (status === 'empty' && hasContent) ? 'unfinished-weight' : '';
-    const ic = isGzcl ? workoutIcon(w) : rpWorkoutIcon(w);
-    return `<div class="workout-cell ${status} ${flair} ${!hasContent ? 'empty-slot' : ''}" onclick="${openFn}('${w.id}')">
+    const status = sessionStatus(w, dateStr);
+    const hasContent = isCardio ? true : (isGzcl ? enabledTierKeys(w).length > 0 : w.exercises.length > 0);
+    const flair = (status === 'empty' && hasContent) ? (isCardio ? 'unfinished-cardio' : 'unfinished-weight') : '';
+    const ic = isCardio ? cardioIcon(w) : (isGzcl ? workoutIcon(w) : rpWorkoutIcon(w));
+    return `<div class="workout-cell ${status} ${flair} ${!hasContent ? 'empty-slot' : ''}" onclick="${openFn}('${w.id}','${dateStr}')">
       <div class="wnum">${i + 1}</div>
       <div class="wname">${escapeHtml(w.name)}</div>
       ${ic ? `<div class="cell-icon">${ic}</div>` : ''}
     </div>`;
   }).join('');
-  const doneCount = list.filter(w => (w.t1 ? workoutCompletion(cycle, w) : rpWorkoutCompletion(cycle, w)) === 'done').length;
-  const withContentCount = list.filter(w => w.t1 ? enabledTierKeys(w).length > 0 : w.exercises.length > 0).length;
-  return `<div class="workout-grid">${cells}</div>
-    <div class="panel" style="margin-top:10px;">
-      <div class="row">
-        <span style="font-size:13px;color:var(--text-dim)">Logged this week</span>
-        <span class="mono" style="font-weight:700">${doneCount} / ${withContentCount}</span>
-      </div>
-    </div>`;
+  return `<div class="workout-grid">${cells}</div>`;
 }
 function renderTrainGrid() {
-  const cycle = STATE.currentCycle;
   const weights = workoutsByType('weights');
   const cardio = workoutsByType('cardio');
   const mobility = workoutsByType('mobility');
@@ -149,10 +130,26 @@ function renderTrainGrid() {
       </div>`;
   }
 
+  // A CALENDAR WEEK, Monday-first, with real dates. The rotation is how a plan is AUTHORED; the
+  // week is how it's read -- you want to know what's on Thursday, not what's in slot 3. Each day
+  // shows whatever the rotation puts there, and a workout that lands twice in one week on a short
+  // rotation shows twice, as two separate sessions.
+  if (!NAV.trainWeekStart) NAV.trainWeekStart = mondayOf(todayStr());
+  const weekStart = NAV.trainWeekStart;
+  const today = todayStr();
+  const days = Array.from({ length: 7 }, (_, i) => shiftDate(weekStart, i));
+
+  // WEEK X / Y is DERIVED from the date -- the motivating part of the old counter without the part
+  // you had to remember to press, and it can't drift from the calendar because it is the calendar.
+  // Read off the phase covering the week's Monday; a perpetual phase has a week number but no total.
+  const entry = exercisePlanInEffect(weekStart).entry;
+  const weekNo = entry ? weekOfPhase(entry, weekStart) : null;
+  const weekTotal = entry && !entry.perpetual ? entry.weeks : null;
+
   const typeIcon = { weights: 'exercise', cardio: 'progress', mobility: 'mobility', warmup: 'warmup' };
   const section = (type, list, openFn) => list.length === 0 ? '' : `
     <div class="section-title" style="font-size:17px; margin-top:0; display:flex; align-items:center; gap:6px;"><span class="ic">${icon(typeIcon[type])}</span>${WORKOUT_TYPE_LABELS[type]}</div>
-    ${renderTrainSection(type, list, cycle, openFn)}
+    ${renderTrainSection(type, list, today, openFn)}
     <div class="divider"></div>`;
 
   return `
@@ -160,60 +157,121 @@ function renderTrainGrid() {
       <div class="section-title">Health &amp; Wellness</div>
       <div class="week-selector">
         <div>
-          <div class="subtle-label">PROGRAM CYCLE</div>
-          <div class="cycle-label">WEEK ${cycle} <span style="color:var(--text-faint); font-size:16px;">/ ${STATE.program.cycles}</span></div>
+          <div class="subtle-label">${entry ? escapeHtml(entry.phase.label) : 'THIS WEEK'}</div>
+          <div class="cycle-label">${weekNo != null
+            ? `WEEK ${weekNo}${weekTotal ? ` <span style="color:var(--text-faint); font-size:16px;">/ ${weekTotal}</span>` : ''}`
+            : `${fmtGoalDate(weekStart)} <span style="color:var(--text-faint); font-size:16px;">&ndash; ${fmtGoalDate(days[6])}</span>`}</div>
+          ${weekNo != null ? `<div style="font-size:11px; color:var(--text-faint);">${fmtGoalDate(weekStart)} &ndash; ${fmtGoalDate(days[6])}</div>` : ''}
         </div>
         <div class="cycle-btns">
-          <button onclick="changeCycle(-1)" ${cycle <= 1 ? 'disabled style="opacity:.3"' : ''}>&#8249;</button>
-          <button onclick="changeCycle(1)" ${cycle >= STATE.program.cycles ? 'disabled style="opacity:.3"' : ''}>&#8250;</button>
+          <button onclick="changeTrainWeek(-1)">&#8249;</button>
+          <button onclick="changeTrainWeek(1)">&#8250;</button>
         </div>
       </div>
+      <div class="stack" style="margin-bottom:16px;">${days.map(d => renderTrainDay(d, today)).join('')}</div>
+      <div class="divider"></div>
+      <div class="subtle-label" style="margin-bottom:4px;">ALL WORKOUTS</div>
+      <div style="font-size:11px; color:var(--text-dim); margin-bottom:10px;">Log a session that wasn't on the plan — it files under today.</div>
       ${section('weights', weights, 'openWorkoutLog')}
       ${section('cardio', cardio, 'openCardioLog')}
       ${section('mobility', mobility, 'openWorkoutLog')}
       ${section('warmup', warmup, 'openWorkoutLog')}
     </div>`;
 }
+// One day of the week: what the rotation puts there, each tile opening THAT day's session.
+function renderTrainDay(dateStr, today) {
+  const eff = exercisePlanInEffect(dateStr);
+  const planned = plannedWorkoutsOn(dateStr).filter(e => e.kind === 'workout' && e.refId);
+  const d = new Date(dateStr + 'T12:00:00');
+  const label = `${MEAL_PLAN_DAY_LABELS[d.getDay()].slice(0, 3)} ${d.getDate()}`;
+  const isToday = dateStr === today;
+  const tiles = planned.map(e => {
+    const w = getWorkout(e.refId);
+    if (!w) return '';
+    const status = sessionStatus(w, dateStr);
+    const openFn = w.type === 'cardio' ? 'openCardioLog' : 'openWorkoutLog';
+    const ic = w.type === 'cardio' ? cardioIcon(w) : (w.t1 ? workoutIcon(w) : rpWorkoutIcon(w));
+    return `<div class="workout-cell ${status}" onclick="${openFn}('${w.id}','${dateStr}')">
+      <div class="wname">${escapeHtml(w.name)}</div>
+      ${ic ? `<div class="cell-icon">${ic}</div>` : ''}
+    </div>`;
+  }).join('');
+  const rest = eff.source === 'activeRest' ? 'light activity'
+             : eff.source === 'activeRestDeload' ? 'deload week' : 'rest';
+  return `<div class="panel" style="padding:10px 12px;${isToday ? ' border-color:var(--accent);' : ''}">
+    <div class="row" style="margin-bottom:${tiles ? '8px' : '0'};">
+      <span style="font-size:13px; font-weight:700;">${label}</span>
+      ${isToday ? '<span class="phase-chip phase-chip-current">TODAY</span>' : ''}
+    </div>
+    ${tiles ? `<div class="workout-grid">${tiles}</div>` : `<div style="font-size:11px; color:var(--text-faint);">${rest}</div>`}
+  </div>`;
+}
+// Done / partial / empty for a workout on a date, read off that date's session if there is one.
+// A cardio session counts as done once something was actually performed in it -- the date alone
+// no longer signals that, since every session is dated the moment it's opened.
+function sessionStatus(w, dateStr) {
+  const s = findLogOn(w.id, dateStr);
+  if (!s) return 'empty';
+  if (w.type === 'cardio') {
+    const l = s.log;
+    return (Number(l.actualMinutes) > 0 || Number(l.actualDistance) > 0) ? 'done' : 'empty';
+  }
+  return w.t1 ? workoutCompletion(s.cycle, w) : rpWorkoutCompletion(s.cycle, w);
+}
 // Leaving WORKOUTS drops whatever log was open, so coming back lands on the grid rather than
 // resuming a half-finished session you navigated away from. setFitnessSubtab() calls through here.
+const GRID_VIEW = () => ({ mode: 'grid', workoutId: null, cardioId: null, date: null, cycle: null });
 function resetTrainViewForSubtab(t) {
-  if (t === 'workouts') NAV.trainView = { mode: 'grid', workoutId: null };
+  if (t === 'workouts') NAV.trainView = GRID_VIEW();
 }
 
-function changeCycle(delta) {
-  const next = STATE.currentCycle + delta;
-  if (next < 1 || next > STATE.program.cycles) return;
-  STATE.currentCycle = next;
-  saveState();
+// The cycle of the session currently open. It used to be STATE.currentCycle -- one global counter
+// you advanced by hand with a pair of arrows -- and it is now derived ONCE, when a session is
+// opened, from which workout and which date: the workout's existing session on that date, or one
+// past its last. Derived at open rather than on every read because getLog() creates on read, and
+// re-deriving after the create would return N+1 forever.
+function trainCycle() { return NAV.trainView.cycle; }
+
+// The one way in. Every opener resolves the session ordinal for (workout, date), creates the log
+// if it's new, and stamps the date -- the date IS what identifies the session from now on, so a
+// log without one couldn't be found again.
+function openSession(mode, id, dateStr) {
+  const date = dateStr || todayStr();
+  const cycle = sessionCycleFor(id, date);
+  const log = mode === 'cardioLog' ? getCardioLog(cycle, id) : getLog(cycle, id);
+  if (!log.date) { log.date = date; saveState(); }
+  NAV.trainView = {
+    mode,
+    workoutId: mode === 'cardioLog' ? null : id,
+    cardioId: mode === 'cardioLog' ? id : null,
+    date, cycle,
+  };
   render();
+  window.scrollTo(0, 0);
 }
 // Auto-detects shape (GZCL tiers vs exercises[]) so the same handler works for weights,
 // mobility, and warmup workouts alike.
-function openWorkoutLog(workoutId) {
+function openWorkoutLog(workoutId, dateStr) {
   const w = getWorkout(workoutId);
-  NAV.trainView = { mode: (w && w.t1) ? 'log' : 'rpLog', workoutId };
-  render();
-  window.scrollTo(0, 0);
+  openSession((w && w.t1) ? 'log' : 'rpLog', workoutId, dateStr);
 }
-function openCardioLog(cardioId) {
-  NAV.trainView = { mode: 'cardioLog', cardioId };
-  render();
-  window.scrollTo(0, 0);
-}
-function openRpWorkoutLog(workoutId) {
-  NAV.trainView = { mode: 'rpLog', workoutId };
-  render();
-  window.scrollTo(0, 0);
-}
+function openCardioLog(cardioId, dateStr) { openSession('cardioLog', cardioId, dateStr); }
+function openRpWorkoutLog(workoutId, dateStr) { openSession('rpLog', workoutId, dateStr); }
 function backToGrid() {
-  NAV.trainView = { mode: 'grid', workoutId: null };
+  NAV.trainView = GRID_VIEW();
+  render();
+}
+// The week the WORKOUTS screen is showing. Unbounded in both directions: back to look, forward to
+// see what the rotation puts where.
+function changeTrainWeek(delta) {
+  NAV.trainWeekStart = shiftDate(NAV.trainWeekStart || mondayOf(todayStr()), delta * 7);
   render();
 }
 
 // ================= TRAIN: CARDIO LOG =================
 function renderCardioLog(cardioId) {
   const cardio = getCardioWorkout(cardioId);
-  const cycle = STATE.currentCycle;
+  const cycle = trainCycle();
   const clog = getCardioLog(cycle, cardioId);
   const isC25K = cardio.programTag === 'C25K';
   const isC2Tri = cardio.programTag === 'C2Triathlon';
@@ -258,7 +316,7 @@ function renderCardioLog(cardioId) {
         <button class="btn btn-ghost btn-sm" onclick="backToGrid()">&#8249; BACK</button>
       </div>
       <div class="section-title" style="margin-top:6px;">${escapeHtml(cardio.name)}</div>
-      <div class="subtle-label">WEEK ${cycle} &middot; ${escapeHtml(cardio.style || 'Cardio')}${cardio.programTag ? ' &middot; ' + cardio.programTag : ''}</div>
+      <div class="subtle-label">SESSION ${cycle} &middot; ${escapeHtml(cardio.style || 'Cardio')}${cardio.programTag ? ' &middot; ' + cardio.programTag : ''}</div>
       ${prescriptionHtml}
       ${targetHtml}
       <label class="field">
@@ -273,19 +331,19 @@ function renderCardioLog(cardioId) {
     </div>`;
 }
 function updateCardioLogDate(cardioId, val) {
-  const clog = getCardioLog(STATE.currentCycle, cardioId);
+  const clog = getCardioLog(trainCycle(), cardioId);
   clog.date = val;
   saveState();
 }
 // Numeric actuals (minutes/distance/calories/rounds) — blank clears back to null rather than 0,
 // so an unlogged field reads as "not logged" rather than a real zero.
 function updateCardioLogField(cardioId, field, val) {
-  const clog = getCardioLog(STATE.currentCycle, cardioId);
+  const clog = getCardioLog(trainCycle(), cardioId);
   clog[field] = val === '' ? null : Number(val);
   saveState();
 }
 function updateCardioLogNotes(cardioId, val) {
-  const clog = getCardioLog(STATE.currentCycle, cardioId);
+  const clog = getCardioLog(trainCycle(), cardioId);
   clog.notes = val;
   saveState();
 }
@@ -448,10 +506,12 @@ function renderRpExerciseBlock(workout, cycle, log, ex) {
 }
 function renderRpWorkoutLog(workoutId) {
   const workout = getRpWorkout(workoutId);
-  const cycle = STATE.currentCycle;
+  const cycle = trainCycle();
   const log = getRpLog(cycle, workoutId);
 
-  const setVol = computeVolumeForCycle(cycle);
+  // The calendar week this session sits in -- "this week so far" meant a cycle when the cycle was
+  // a global weekly counter, and means a week now that it isn't.
+  const setVol = computeVolumeForWeek(mondayOf(log.date || todayStr()));
   const bumpedMuscles = new Set(workout.exercises.map(e => e.muscle).filter(Boolean));
   const volLine = bumpedMuscles.size > 0 ? `
     <div class="panel" style="margin-bottom:10px;">
@@ -478,7 +538,7 @@ function renderRpWorkoutLog(workoutId) {
         <button class="btn btn-ghost btn-sm" onclick="clearRpWorkoutLog('${workoutId}')" style="color:var(--bad)">CLEAR</button>
       </div>
       <div class="section-title" style="margin-top:6px;">${escapeHtml(workout.name)}</div>
-      <div class="subtle-label">WEEK ${cycle} &middot; ${log.date || 'not dated'}</div>
+      <div class="subtle-label">SESSION ${cycle} &middot; ${log.date || 'not dated'}</div>
       ${renderWorkoutDeloadControl(cycle, workoutId)}
       <label class="field" style="margin-top:10px;">
         <span class="lbl">Date</span>
@@ -495,7 +555,7 @@ function renderRpWorkoutLog(workoutId) {
     </div>`;
 }
 function updateRpSet(workoutId, exId, idx, field, value) {
-  const log = getRpLog(STATE.currentCycle, workoutId);
+  const log = getRpLog(trainCycle(), workoutId);
   // Stamped the first time anything is written, which freezes what actually happened. Deriving it
   // from dates later would mean extending a phase silently rewrote which past sessions counted.
   stampDeloadOnLog(log, workoutId);
@@ -519,7 +579,7 @@ function updateRpSet(workoutId, exId, idx, field, value) {
   render();
 }
 function repeatLastRpSet(workoutId, exId) {
-  const log = getRpLog(STATE.currentCycle, workoutId);
+  const log = getRpLog(trainCycle(), workoutId);
   const entry = log.entries[exId];
   const nextIdx = nextRepeatableSetIndex(entry);
   if (nextIdx === -1) return;
@@ -532,17 +592,17 @@ function repeatLastRpSet(workoutId, exId) {
   render();
 }
 function addRpSet(workoutId, exId) {
-  const log = getRpLog(STATE.currentCycle, workoutId);
+  const log = getRpLog(trainCycle(), workoutId);
   log.entries[exId].sets.push({ weight: '', reps: '', rir: '' });
   saveState(); render();
 }
 function removeRpSet(workoutId, exId, idx) {
-  const log = getRpLog(STATE.currentCycle, workoutId);
+  const log = getRpLog(trainCycle(), workoutId);
   log.entries[exId].sets.splice(idx, 1);
   saveState(); render();
 }
 function applyRpSuggestion(workoutId, exId) {
-  const log = getRpLog(STATE.currentCycle, workoutId);
+  const log = getRpLog(trainCycle(), workoutId);
   const entry = log.entries[exId];
   if (entry.applied) return;
   const input = document.getElementById(`rpsugg_${workoutId}_${exId}`);
@@ -551,7 +611,7 @@ function applyRpSuggestion(workoutId, exId) {
   const ex = getRpExercise(workout, exId);
   if (!Array.isArray(ex.adjustments)) ex.adjustments = [];
   const adjId = uid();
-  ex.adjustments.push({ id: adjId, fromCycle: STATE.currentCycle + 1, deltaLb });
+  ex.adjustments.push({ id: adjId, fromCycle: trainCycle() + 1, deltaLb });
   entry.applied = true;
   entry.appliedDeltaLb = deltaLb;
   entry.appliedAdjustmentId = adjId;
@@ -560,7 +620,7 @@ function applyRpSuggestion(workoutId, exId) {
   render();
 }
 function undoRpSuggestion(workoutId, exId) {
-  const log = getRpLog(STATE.currentCycle, workoutId);
+  const log = getRpLog(trainCycle(), workoutId);
   const entry = log.entries[exId];
   if (!entry.applied) return;
   const workout = getRpWorkout(workoutId);
@@ -576,18 +636,18 @@ function undoRpSuggestion(workoutId, exId) {
   render();
 }
 function updateRpLogDate(workoutId, val) {
-  const log = getRpLog(STATE.currentCycle, workoutId);
+  const log = getRpLog(trainCycle(), workoutId);
   log.date = val;
   saveState();
 }
 function updateRpLogNotes(workoutId, val) {
-  const log = getRpLog(STATE.currentCycle, workoutId);
+  const log = getRpLog(trainCycle(), workoutId);
   log.notes = val;
   saveState();
 }
 function clearRpWorkoutLog(workoutId) {
   showConfirm('Clear all logged data for this workout this week?', () => {
-    delete STATE.logs[logKey(STATE.currentCycle, workoutId)];
+    delete STATE.logs[logKey(trainCycle(), workoutId)];
     saveState();
     render();
   });
@@ -625,7 +685,7 @@ function renderSupersetGroup(workout, cycle, log, keys, supersetNumber) {
 }
 function renderWorkoutLog(workoutId) {
   const workout = getWorkout(workoutId);
-  const cycle = STATE.currentCycle;
+  const cycle = trainCycle();
   const log = getLog(cycle, workoutId);
   reconcileExerciseOrder(workout);
 
@@ -651,7 +711,7 @@ function renderWorkoutLog(workoutId) {
         <button class="btn btn-ghost btn-sm" onclick="clearWorkoutLog('${workoutId}')" style="color:var(--bad)">CLEAR</button>
       </div>
       <div class="section-title" style="margin-top:6px;">${escapeHtml(workout.name)}</div>
-      <div class="subtle-label">WEEK ${cycle} &middot; ${todayOrDate(log)}</div>
+      <div class="subtle-label">SESSION ${cycle} &middot; ${todayOrDate(log)}</div>
       ${renderWorkoutDeloadControl(cycle, workoutId)}
       <label class="field" style="margin-top:10px;">
         <span class="lbl">Date</span>
@@ -681,7 +741,10 @@ function renderTierBlock(workout, cycle, log, tierKey, categoryId) {
   entry.stage = stageIdx; // stashed for reference/display only — computeStageState is authoritative
   if (entry.applied === undefined) entry.applied = false;
   const stageDef = scheme.stages[stageIdx];
-  const baseTargetLb = targetWeightLb(tierKey, categoryId, cycle);
+  // As of this SESSION's date. A training max is dated now -- the category is shared across
+  // workouts that each count their own sessions, so the session ordinal says nothing about which
+  // queued increases had come due by the time you trained.
+  const baseTargetLb = targetWeightLb(tierKey, categoryId, log.date || todayStr());
   // Display-time only: the stage scheme and the training max are never edited, so turning the
   // deload off restores these exactly. Both counts floor at 1 -- see deloadScaleCount().
   const dl = workoutDeloadState(cycle, workout.id);
@@ -1090,7 +1153,7 @@ function nextRepeatableSetIndex(entry) {
   return nextIdx;
 }
 function repeatLastSet(workoutId, entryKey) {
-  const log = getLog(STATE.currentCycle, workoutId);
+  const log = getLog(trainCycle(), workoutId);
   const entry = log.entries[entryKey];
   const nextIdx = nextRepeatableSetIndex(entry);
   if (nextIdx === -1) return;
@@ -1104,7 +1167,7 @@ function repeatLastSet(workoutId, entryKey) {
 
 // ---- event handlers for train tab ----
 function updateSet(workoutId, entryKey, idx, field, value) {
-  const log = getLog(STATE.currentCycle, workoutId);
+  const log = getLog(trainCycle(), workoutId);
   stampDeloadOnLog(log, workoutId);
   const entry = log.entries[entryKey];
   if (!entry.sets[idx]) entry.sets[idx] = { weight: '', reps: '' };
@@ -1120,17 +1183,17 @@ function updateSet(workoutId, entryKey, idx, field, value) {
   render();
 }
 function addT3Set(workoutId, entryKey) {
-  const log = getLog(STATE.currentCycle, workoutId);
+  const log = getLog(trainCycle(), workoutId);
   log.entries[entryKey].sets.push({ weight: '', reps: '' });
   saveState(); render();
 }
 function removeT3Set(workoutId, entryKey, idx) {
-  const log = getLog(STATE.currentCycle, workoutId);
+  const log = getLog(trainCycle(), workoutId);
   log.entries[entryKey].sets.splice(idx, 1);
   saveState(); render();
 }
 function applySuggestion(workoutId, entryKey, categoryId) {
-  const log = getLog(STATE.currentCycle, workoutId);
+  const log = getLog(trainCycle(), workoutId);
   const entry = log.entries[entryKey];
   if (entry.applied) return; // guard against double-apply
   const input = document.getElementById(`sugg_${workoutId}_${entryKey}`);
@@ -1140,9 +1203,11 @@ function applySuggestion(workoutId, entryKey, categoryId) {
   const tier = cat.tiers[tierField];
   if (!Array.isArray(tier.adjustments)) tier.adjustments = [];
   const adjId = uid();
-  // Queued for the cycle AFTER this one — never affects the workout it was earned in,
-  // and can't be queued twice for the same logged entry.
-  tier.adjustments.push({ id: adjId, fromCycle: STATE.currentCycle + 1, deltaLb });
+  // Dated to THIS session and applied strictly after it -- never affects the workout it was
+  // earned in, and a second workout sharing the category picks it up at its own next session.
+  // Dated rather than "cycle + 1" because the category is shared: this workout's next ordinal
+  // means nothing to another workout's count. Can't be queued twice for the same logged entry.
+  tier.adjustments.push({ id: adjId, fromDate: log.date || todayStr(), deltaLb });
   entry.applied = true;
   entry.appliedDeltaLb = deltaLb;
   entry.appliedAdjustmentId = adjId;
@@ -1151,7 +1216,7 @@ function applySuggestion(workoutId, entryKey, categoryId) {
   render();
 }
 function undoSuggestion(workoutId, entryKey, categoryId) {
-  const log = getLog(STATE.currentCycle, workoutId);
+  const log = getLog(trainCycle(), workoutId);
   const entry = log.entries[entryKey];
   if (!entry.applied) return;
   const cat = getCategory(categoryId);
@@ -1168,7 +1233,7 @@ function undoSuggestion(workoutId, entryKey, categoryId) {
   render();
 }
 function applyT3Suggestion(workoutId, entryKey, t3idx) {
-  const log = getLog(STATE.currentCycle, workoutId);
+  const log = getLog(trainCycle(), workoutId);
   const entry = log.entries[entryKey];
   if (entry.applied) return;
   const input = document.getElementById(`t3sugg_${workoutId}_${entryKey}`);
@@ -1177,7 +1242,7 @@ function applyT3Suggestion(workoutId, entryKey, t3idx) {
   const t3def = workout.t3[t3idx];
   if (!Array.isArray(t3def.adjustments)) t3def.adjustments = [];
   const adjId = uid();
-  t3def.adjustments.push({ id: adjId, fromCycle: STATE.currentCycle + 1, deltaLb });
+  t3def.adjustments.push({ id: adjId, fromCycle: trainCycle() + 1, deltaLb });
   entry.applied = true;
   entry.appliedDeltaLb = deltaLb;
   entry.appliedAdjustmentId = adjId;
@@ -1186,7 +1251,7 @@ function applyT3Suggestion(workoutId, entryKey, t3idx) {
   render();
 }
 function undoT3Suggestion(workoutId, entryKey, t3idx) {
-  const log = getLog(STATE.currentCycle, workoutId);
+  const log = getLog(trainCycle(), workoutId);
   const entry = log.entries[entryKey];
   if (!entry.applied) return;
   const workout = getWorkout(workoutId);
@@ -1202,18 +1267,18 @@ function undoT3Suggestion(workoutId, entryKey, t3idx) {
   render();
 }
 function updateLogDate(workoutId, val) {
-  const log = getLog(STATE.currentCycle, workoutId);
+  const log = getLog(trainCycle(), workoutId);
   log.date = val;
   saveState();
 }
 function updateLogNotes(workoutId, val) {
-  const log = getLog(STATE.currentCycle, workoutId);
+  const log = getLog(trainCycle(), workoutId);
   log.notes = val;
   saveState();
 }
 function clearWorkoutLog(workoutId) {
   showConfirm('Clear all logged data for this workout this week?', () => {
-    delete STATE.logs[logKey(STATE.currentCycle, workoutId)];
+    delete STATE.logs[logKey(trainCycle(), workoutId)];
     saveState();
     render();
   });

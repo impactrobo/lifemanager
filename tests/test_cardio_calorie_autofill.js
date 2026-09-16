@@ -42,7 +42,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // from that target, with no manual entry.
   await page.evaluate((id) => { switchTab('train'); openCardioLog(id); }, workoutId);
   await settle(page);
-  const seeded = await page.evaluate((id) => getCardioLog(STATE.currentCycle, id).actualCalories, workoutId);
+  const seeded = await page.evaluate((id) => getCardioLog(trainCycle(), id).actualCalories, workoutId);
   console.log('actualCalories on brand-new log:', seeded);
   if (seeded !== 400) throw new Error(`Expected auto-filled actualCalories 400, got ${seeded}`);
 
@@ -59,21 +59,24 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // 4. Overriding it for this session (e.g. a wearable read something different) sticks — it's
   // a real edit, not just a placeholder.
   await page.evaluate((id) => { updateCardioLogField(id, 'actualCalories', '350'); }, workoutId);
-  const overridden = await page.evaluate((id) => getCardioLog(STATE.currentCycle, id).actualCalories, workoutId);
+  const overridden = await page.evaluate((id) => getCardioLog(trainCycle(), id).actualCalories, workoutId);
   if (overridden !== 350) throw new Error(`Expected override 350 to stick, got ${overridden}`);
 
   // 5. Persists across a real reload.
   await page.reload();
   await settle(page);
-  const afterReload = await page.evaluate((id) => STATE.logs[logKey(STATE.currentCycle, id)].actualCalories, workoutId);
+  // By DATE, not by trainCycle(): a reload resets the open view, and the session is identified by
+  // the date it was opened on -- today, since openCardioLog() above defaulted to it.
+  const afterReload = await page.evaluate((id) => findLogOn(id, todayStr()).log.actualCalories, workoutId);
   if (afterReload !== 350) throw new Error(`Expected override 350 to survive reload, got ${afterReload}`);
 
   // 6. A different week's log for the same workout is a fresh log — it seeds independently from
   // the workout's target, unaffected by week 1's override.
   const nextCycleCal = await page.evaluate((id) => {
-    STATE.currentCycle = 2;
+    // A second SESSION is a second DATE. Cycles are per-workout session ordinals now, derived
+    // when a log opens -- there is no counter to set to 2. Opening on tomorrow yields session 2.
     saveState();
-    openCardioLog(id);
+    openCardioLog(id, shiftDate(todayStr(), 1));
     return getCardioLog(2, id).actualCalories;
   }, workoutId);
   if (nextCycleCal !== 400) throw new Error(`Expected week 2's fresh log to seed 400, got ${nextCycleCal}`);
@@ -87,14 +90,14 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // 8. A cardio workout with no Calories target set at all leaves a brand-new log's
   // actualCalories blank, exactly like before this feature existed.
   const noTargetWorkoutId = await page.evaluate(() => createWorkout('cardio', 'Time/Dist/Cal').id);
-  const blankSeed = await page.evaluate((id) => { openCardioLog(id); return getCardioLog(STATE.currentCycle, id).actualCalories; }, noTargetWorkoutId);
+  const blankSeed = await page.evaluate((id) => { openCardioLog(id); return getCardioLog(trainCycle(), id).actualCalories; }, noTargetWorkoutId);
   if (blankSeed !== undefined) throw new Error(`Expected no-target workout's fresh log to stay unseeded, got ${blankSeed}`);
 
   // cleanup
   await page.evaluate((snap) => {
     STATE.workouts = snap.workouts;
     STATE.logs = snap.logs;
-    STATE.currentCycle = 1;
+    // (No counter to reset: the cycle is derived per session from its date, not stored.)
     saveState();
   }, snapshot);
 

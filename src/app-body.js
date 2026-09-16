@@ -927,11 +927,11 @@ function drawCompareCharts() {
 
 // ---------------- SET VOLUME ----------------
 function renderVolume() {
-  if (NAV.volumeCycle === null) NAV.volumeCycle = STATE.currentCycle;
-  if (NAV.volumeCycle < 1) NAV.volumeCycle = 1;
-  if (NAV.volumeCycle > STATE.program.cycles) NAV.volumeCycle = STATE.program.cycles;
-
-  const data = computeVolumeForCycle(NAV.volumeCycle);
+  // A CALENDAR WEEK, not a cycle. Cycles are per-workout session ordinals now, so "cycle 5" for two
+  // different workouts are unrelated moments -- but a week is a week, and every log carries a date.
+  if (!NAV.volumeWeekStart) NAV.volumeWeekStart = mondayOf(todayStr());
+  const weekStart = NAV.volumeWeekStart;
+  const data = computeVolumeForWeek(weekStart);
   const maxSets = Math.max(1, ...data.map(d => d.sets));
   const anyTagged = workoutsByType('weights').some(w => Array.isArray(w.exercises) ? w.exercises.some(ex => ex.muscle) : w.t3.some(t => t.muscle))
     || STATE.categories.some(c => Object.values(c.tiers).some(t => t.muscle));
@@ -972,11 +972,11 @@ function renderVolume() {
     <div class="week-selector">
       <div>
         <div class="subtle-label">SETS PER MUSCLE GROUP</div>
-        <div class="cycle-label">WEEK ${NAV.volumeCycle} <span style="color:var(--text-faint); font-size:16px;">/ ${STATE.program.cycles}</span></div>
+        <div class="cycle-label">${fmtGoalDate(weekStart)} <span style="color:var(--text-faint); font-size:16px;">&ndash; ${fmtGoalDate(shiftDate(weekStart, 6))}</span></div>
       </div>
       <div class="cycle-btns">
-        <button onclick="changeVolumeCycle(-1)" ${NAV.volumeCycle <= 1 ? 'disabled style="opacity:.3"' : ''}>&#8249;</button>
-        <button onclick="changeVolumeCycle(1)" ${NAV.volumeCycle >= STATE.program.cycles ? 'disabled style="opacity:.3"' : ''}>&#8250;</button>
+        <button onclick="changeVolumeWeek(-1)">&#8249;</button>
+        <button onclick="changeVolumeWeek(1)" ${weekStart >= mondayOf(todayStr()) ? 'disabled style="opacity:.3"' : ''}>&#8250;</button>
       </div>
     </div>
     ${!anyTagged ? `<div class="panel" style="border-color:var(--accent-dim); background:var(--accent-soft);"><div style="font-size:12px;">No exercises are tagged with a muscle group yet. Add one under <b>Builder &rarr; Workouts &rarr; Maxes</b> (per category) or <b>Builder &rarr; Workouts &rarr; Workout</b> (per exercise/accessory) to start seeing volume here.</div></div>` : ''}
@@ -986,10 +986,11 @@ function renderVolume() {
     <div style="font-size:11px; color:var(--text-faint); margin-top:4px;">Counts every set with reps logged that week, tagged to whichever muscle group is assigned to that exercise. Where a muscle group has MEV/MAV/MRV landmarks set (Builder &rarr; Workouts &rarr; Maxes), the marker line shows where this week's sets fall against them.</div>
   `;
 }
-function changeVolumeCycle(delta) {
-  const next = NAV.volumeCycle + delta;
-  if (next < 1 || next > STATE.program.cycles) return;
-  NAV.volumeCycle = next;
+function changeVolumeWeek(delta) {
+  const next = shiftDate(NAV.volumeWeekStart || mondayOf(todayStr()), delta * 7);
+  // No paging into weeks that haven't happened -- there is nothing logged in them to count.
+  if (next > mondayOf(todayStr())) return;
+  NAV.volumeWeekStart = next;
   render();
 }
 

@@ -37,7 +37,10 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     const wId = uid();
     const eKey = 'testEntry';
     STATE.workouts.push({ id: wId, name: 'Reps Validation Test Workout', type: 'weights' });
-    const key = logKey(STATE.currentCycle, wId);
+    // A session has to be OPEN for trainCycle() to mean anything: the cycle is derived once, from
+    // (workout, date), when a log screen opens. There is no global counter to read any more.
+    openWorkoutLog(wId, todayStr());
+    const key = logKey(trainCycle(), wId);
     STATE.logs[key] = { date: '', entries: { [eKey]: { sets: [] } }, notes: '', complete: false };
     saveState();
     return { workoutId: wId, entryKey: eKey };
@@ -46,7 +49,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // Logging a decimal reps value should truncate, same as the pure function
   await page.evaluate(({ workoutId, entryKey }) => updateSet(workoutId, entryKey, 0, 'reps', '8.7'), { workoutId, entryKey });
   let logged = await page.evaluate(({ workoutId, entryKey }) => {
-    const log = getLog(STATE.currentCycle, workoutId);
+    const log = getLog(trainCycle(), workoutId);
     return log.entries[entryKey].sets[0].reps;
   }, { workoutId, entryKey });
   console.log('reps logged for input "8.7":', logged);
@@ -55,7 +58,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // A negative reps value should clamp to 0, not go negative or get silently dropped
   await page.evaluate(({ workoutId, entryKey }) => updateSet(workoutId, entryKey, 1, 'reps', '-2'), { workoutId, entryKey });
   logged = await page.evaluate(({ workoutId, entryKey }) => {
-    const log = getLog(STATE.currentCycle, workoutId);
+    const log = getLog(trainCycle(), workoutId);
     return log.entries[entryKey].sets[1].reps;
   }, { workoutId, entryKey });
   console.log('reps logged for input "-2":', logged);
@@ -64,7 +67,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // An untouched set slot should still read as '' (blank), not 0 — the distinction between
   // "no reps logged yet" and "logged as zero reps" matters for the app's completion checks.
   const untouchedReps = await page.evaluate(({ workoutId, entryKey }) => {
-    const log = getLog(STATE.currentCycle, workoutId);
+    const log = getLog(trainCycle(), workoutId);
     return log.entries[entryKey].sets[2]; // never touched
   }, { workoutId, entryKey });
   console.log('untouched 3rd set slot:', untouchedReps);
@@ -73,7 +76,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // Explicitly clearing a set back to blank should store '' , not 0 or undefined
   await page.evaluate(({ workoutId, entryKey }) => updateSet(workoutId, entryKey, 0, 'reps', ''), { workoutId, entryKey });
   const clearedReps = await page.evaluate(({ workoutId, entryKey }) => {
-    const log = getLog(STATE.currentCycle, workoutId);
+    const log = getLog(trainCycle(), workoutId);
     return log.entries[entryKey].sets[0].reps;
   }, { workoutId, entryKey });
   console.log('reps after clearing back to blank:', JSON.stringify(clearedReps));

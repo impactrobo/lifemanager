@@ -434,6 +434,11 @@ function migrateState() {
   // the rate on the floor. Idempotent, so running it twice on an older save costs nothing.
   migratePhaseWeightGoals();
   normalisePhaseWeightGoals();
+  // After the perpetual phase exists and the timeline is computable: it re-indexes each phase's
+  // plan from absolute weekday to position-in-rotation, which needs the phase's start date.
+  migratePlansToRotationSlots();
+  // Category-tier TM adjustments re-anchor from the retired global cycle counter to a date.
+  migrateTierAdjustmentsToDates();
   // Every phase now carries BOTH plans, so both get the same normalisation -- a malformed one would
   // break every weekday read through it, and guarding seven array lookups at each call site is more
   // expensive than fixing it once here.
@@ -916,27 +921,109 @@ function programWorkouts(program) {
   return workoutsByType('cardio').filter(w => w.programTag === program).sort((a, b) => (a.programSlotIdx||0) - (b.programSlotIdx||0));
 }
 
-// Effective TM for a given cycle = base TM + every applied increase that was queued
-// for a cycle at or before this one. An increase applied while viewing cycle N is
-// queued with fromCycle = N+1, so it never affects the cycle it was earned in.
-function effectiveTMLb(cat, tierField, cycle) {
+// Effective TM as of a DATE = base TM + every increase queued before that date. An increase earned
+// during a session dated D is queued with fromDate = D and applies to sessions strictly after it --
+// so it never affects the session it was earned in, and a second workout sharing the category picks
+// it up at its own next session rather than at some unrelated ordinal.
+//
+// Dated rather than keyed by cycle because a CATEGORY is shared across workouts, and each workout
+// now counts its own sessions: workout A's sixth session and workout B's sixth session are
+// unrelated moments in time. A date is the one axis they have in common. (Per-exercise and T3
+// adjustments stay ordinal-keyed -- those live inside one workout, where the ordinal IS the axis.)
+function effectiveTMLb(cat, tierField, asOfDate) {
   const tier = cat.tiers[tierField];
   if (!tier) return 0;
   const adjustments = Array.isArray(tier.adjustments) ? tier.adjustments : [];
   let total = tier.tmLb;
-  adjustments.forEach(a => { if (a.fromCycle <= cycle) total += a.deltaLb; });
+  adjustments.forEach(a => { if (a.fromDate && a.fromDate < asOfDate) total += a.deltaLb; });
   return total;
 }
 
-function targetWeightLb(tierKey, categoryId, cycle) {
+function targetWeightLb(tierKey, categoryId, asOfDate) {
   const cat = getCategory(categoryId);
   if (!cat) return 0;
   const scheme = TIER_SCHEMES[tierKey];
   const tierField = tierKeyToField(tierKey);
-  const tm = effectiveTMLb(cat, tierField, cycle);
+  const tm = effectiveTMLb(cat, tierField, asOfDate);
   const raw = tm * scheme.intensity;
   // STATE.rounding is stored canonically in lb already
   return roundToIncrement(raw, STATE.rounding || 2.5);
+}
+
+// ---- Which "cycle" a session is ----
+//
+// The log key is (cycle, workoutId), and `cycle` is now this workout's SESSION ORDINAL -- the Nth
+// time you did it -- rather than a global counter advanced by hand. Dense and monotonic per
+// workout, so every progression walk that does `cycle - 1` keeps working (better than before: a
+// skipped cycle used to leave a gap the walk had to step over). It never renumbers when a phase is
+// extended, because it isn't derived from dates or phases at all. And existing logs keyed
+// N_workoutId are already exactly this for anyone who logged every workout every cycle -- so no
+// log migrates.
+//
+// Two sessions of one workout can never share a key, which is what "workouts never overwrite each
+// other in one week" means in practice: the same workout on Monday and Saturday of a five-day
+// rotation is sessions 7 and 8, logged separately, with progression running between them.
+function logsForWorkout(workoutId) {
+  const out = [];
+  Object.keys(STATE.logs).forEach(k => {
+    const sep = k.indexOf('_');
+    if (sep < 0 || k.slice(sep + 1) !== workoutId) return;
+    const n = Number(k.slice(0, sep));
+    const log = STATE.logs[k];
+    if (isFinite(n) && log) out.push({ cycle: n, log });
+  });
+  return out;
+}
+// The session of a workout on a given date, or null. Never creates -- getLog() creates.
+function findLogOn(workoutId, dateStr) {
+  return logsForWorkout(workoutId).find(s => s.log.date === dateStr) || null;
+}
+// The ordinal to use for a workout on a date: the existing session's, or one past the highest.
+function sessionCycleFor(workoutId, dateStr) {
+  const existing = findLogOn(workoutId, dateStr);
+  if (existing) return existing.cycle;
+  return logsForWorkout(workoutId).reduce((m, s) => Math.max(m, s.cycle), 0) + 1;
+}
+// Every dated session of a workout inside a window -- what a calendar-week view sums over. A
+// workout on a short rotation can legitimately appear twice in one week, so this is a list.
+function logsForWorkoutBetween(workoutId, from, to) {
+  return logsForWorkout(workoutId).map(s => s.log).filter(l => l.date && l.date >= from && l.date <= to);
+}
+// ---- Migration: category-tier adjustments from fromCycle to fromDate ----
+//
+// A tier adjustment used to be queued "from cycle N+1", N being the global counter when it was
+// earned. The counter is gone -- each workout counts its own sessions now -- so those adjustments
+// are re-anchored to a DATE: the latest dated log at cycle N, which is the session that earned it.
+// Where no such log carries a date, today: the increase was earned, and applying it from now on is
+// the honest reading of an adjustment whose exact moment was never recorded. Idempotent -- an
+// adjustment that already has fromDate is left alone.
+function migrateTierAdjustmentsToDates() {
+  (STATE.categories || []).forEach(cat => {
+    Object.keys(cat.tiers || {}).forEach(tf => {
+      const tier = cat.tiers[tf];
+      if (!tier || !Array.isArray(tier.adjustments)) return;
+      tier.adjustments.forEach(a => {
+        if (a.fromDate || a.fromCycle == null) return;
+        const earnedCycle = Number(a.fromCycle) - 1;
+        let date = null;
+        Object.keys(STATE.logs || {}).forEach(k => {
+          const sep = k.indexOf('_');
+          if (sep < 0 || Number(k.slice(0, sep)) !== earnedCycle) return;
+          const d = (STATE.logs[k] || {}).date;
+          if (d && (!date || d > date)) date = d;
+        });
+        a.fromDate = date || todayStr();
+        delete a.fromCycle;
+      });
+    });
+  });
+}
+
+// The Monday on or before a date. Calendar weeks run Monday-first here, matching
+// MEAL_PLAN_DAY_ORDER and the way the meal plan has always been laid out.
+function mondayOf(dateStr) {
+  const wd = new Date(dateStr + 'T12:00:00').getDay();
+  return shiftDate(dateStr, -((wd + 6) % 7));
 }
 function tierKeyToField(tierKey) {
   if (tierKey === 'ultra') return 'T1';
@@ -1030,37 +1117,43 @@ function countLoggedSets(entry) {
   if (!entry || !entry.sets) return 0;
   return entry.sets.filter(s => s.reps !== '' && s.reps !== undefined).length;
 }
-function computeVolumeForCycle(cycle) {
+// Sets per muscle group across a CALENDAR WEEK. This used to be "for a cycle", reading every
+// workout's log at the same cycle number -- which meant something when the cycle was one global
+// counter and means nothing now that each workout counts its own sessions. A week is a week, every
+// log carries its date, and a workout on a short rotation that lands twice in one week is counted
+// twice, because you did it twice.
+function computeVolumeForWeek(weekStart) {
+  const weekEnd = shiftDate(weekStart, 6);
   const counts = {};
   MUSCLE_GROUPS.forEach(m => { counts[m] = 0; });
   workoutsByType('weights').forEach(w => {
-    const log = STATE.logs[logKey(cycle, w.id)];
-    if (!log) return;
-    if (Array.isArray(w.exercises)) { // Hypertrophy / Free Entry
-      w.exercises.forEach(ex => {
-        if (ex.muscle) counts[ex.muscle] += countLoggedSets(log.entries[ex.id]);
+    logsForWorkoutBetween(w.id, weekStart, weekEnd).forEach(log => {
+      if (Array.isArray(w.exercises)) { // Hypertrophy / Free Entry
+        w.exercises.forEach(ex => {
+          if (ex.muscle) counts[ex.muscle] += countLoggedSets(log.entries[ex.id]);
+        });
+        return;
+      }
+      // P-Zero (GZCL)
+      if (w.t1.enabled && w.t1.categoryId) {
+        const cat = getCategory(w.t1.categoryId);
+        const entryKey = w.t1.variant === 'ultra' ? 'ultra' : 't1';
+        const m = cat && cat.tiers.T1 ? cat.tiers.T1.muscle : null;
+        if (m) counts[m] += countLoggedSets(log.entries[entryKey]);
+      }
+      ['t2a','t2b','t2c'].forEach(tk => {
+        if (w[tk].enabled && w[tk].categoryId) {
+          const cat = getCategory(w[tk].categoryId);
+          const tierField = tk === 't2a' ? 'T2a' : tk === 't2b' ? 'T2b' : 'T2c';
+          const m = cat && cat.tiers[tierField] ? cat.tiers[tierField].muscle : null;
+          if (m) counts[m] += countLoggedSets(log.entries[tk]);
+        }
       });
-      return;
-    }
-    // P-Zero (GZCL)
-    if (w.t1.enabled && w.t1.categoryId) {
-      const cat = getCategory(w.t1.categoryId);
-      const entryKey = w.t1.variant === 'ultra' ? 'ultra' : 't1';
-      const m = cat && cat.tiers.T1 ? cat.tiers.T1.muscle : null;
-      if (m) counts[m] += countLoggedSets(log.entries[entryKey]);
-    }
-    ['t2a','t2b','t2c'].forEach(tk => {
-      if (w[tk].enabled && w[tk].categoryId) {
-        const cat = getCategory(w[tk].categoryId);
-        const tierField = tk === 't2a' ? 'T2a' : tk === 't2b' ? 'T2b' : 'T2c';
-        const m = cat && cat.tiers[tierField] ? cat.tiers[tierField].muscle : null;
-        if (m) counts[m] += countLoggedSets(log.entries[tk]);
-      }
-    });
-    w.t3.forEach((t, i) => {
-      if (t.enabled && t.name && t.muscle) {
-        counts[t.muscle] += countLoggedSets(log.entries['t3_' + i]);
-      }
+      w.t3.forEach((t, i) => {
+        if (t.enabled && t.name && t.muscle) {
+          counts[t.muscle] += countLoggedSets(log.entries['t3_' + i]);
+        }
+      });
     });
   });
   return Object.keys(counts).map(m => ({ muscle: m, sets: counts[m] })).sort((a, b) => b.sets - a.sets);

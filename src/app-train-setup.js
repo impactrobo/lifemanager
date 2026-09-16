@@ -116,8 +116,11 @@ function renderTierSetupRow(cat, tierKey) {
   const testedDisplay = t.testWeightLb ? fmt(lbToDisplay(t.testWeightLb), 1) : '';
   const tierGroup = tierKey === 'T1' ? 'T1' : 'T2';
   const options = testOptionsForTier(tierGroup);
-  const currentTM = effectiveTMLb(cat, tierKey, STATE.currentCycle);
-  const hasQueued = Array.isArray(t.adjustments) && t.adjustments.some(a => a.fromCycle > STATE.currentCycle);
+  // As of TODAY. A training max is dated now -- the category it belongs to is shared across
+  // workouts that each count their own sessions, so a date is the only axis they agree on.
+  // "Queued" is an increase dated today or later: earned, not yet applied to a session.
+  const currentTM = effectiveTMLb(cat, tierKey, todayStr());
+  const hasQueued = Array.isArray(t.adjustments) && t.adjustments.some(a => a.fromDate && a.fromDate >= todayStr());
   return `
     <div style="border-top:1px solid var(--border-soft); padding-top:10px; margin-top:10px;">
       <div class="row" style="margin-bottom:8px;">
@@ -420,6 +423,16 @@ function setPlanEntryRef(day, entryId, value) {
   const sep = (value || '').indexOf(':');
   const kind = sep > 0 ? value.slice(0, sep) : '';
   const refId = sep > 0 ? value.slice(sep + 1) : '';
+  // The same workout twice in one rotation is refused. A training-design rule, not a data one:
+  // the log key is a per-workout session ordinal, so two slots holding one workout would log as
+  // two sessions perfectly well -- but a rotation is one pass through the plan, and doing A twice
+  // per pass is a plan that should be written as a shorter rotation. Practice may repeat; it isn't
+  // logged that way.
+  if (kind === 'workout' && refId) {
+    const plan = plannerPlan();
+    const dup = Object.keys(plan).some(d => (plan[d] || []).some(e => e.id !== entryId && e.kind === 'workout' && e.refId === refId));
+    if (dup) { showToast('That workout is already in this rotation'); render(); return; }
+  }
   entry.kind = PLAN_ENTRY_KINDS.indexOf(kind) >= 0 ? kind : 'workout';
   entry.refId = refId || null;
   // Minutes belong to a skill and mean nothing on a workout, so switching kinds drops them
@@ -460,15 +473,40 @@ function renderExercisePlanTab() {
     : null;
   const hasProgram = programWorkouts('C25K').length > 0 || programWorkouts('C2Triathlon').length > 0;
   return `
-    <div style="font-size:11px; color:var(--text-dim); margin:18px 0 14px;">Assign saved workouts to each day of the week. Copy a day's plan to reuse it elsewhere.</div>
+    <div style="font-size:11px; color:var(--text-dim); margin:18px 0 14px;">Assign saved workouts to each day of the rotation. Copy a day's plan to reuse it elsewhere.</div>
     ${renderPlannerScope()}
     ${hasProgram ? `<button class="btn btn-sm btn-block" style="margin-bottom:14px;" onclick="openAutoFillPicker()">AUTO-FILL C25K / C2TRIATHLON</button>` : ''}
     ${UI.autofillPickerOpen ? renderAutoFillPicker() : ''}
     ${clipboardLabel ? `<div class="panel" style="margin-bottom:14px; font-size:11px; color:var(--text-dim);">Clipboard: ${escapeHtml(clipboardLabel)}</div>` : ''}
-    <div class="stack" style="margin-bottom:20px;">
-      ${MEAL_PLAN_DAY_ORDER.map(renderExercisePlanDay).join('')}
-    </div>
+    ${renderRotationHeader(plannerEntry(), 'workout')}
+    ${plannerEntry()
+      ? `<div class="stack" style="margin-bottom:20px;">
+          ${rotationSlotOrder(plannerEntry(), 'workout').map(renderExercisePlanDay).join('')}
+        </div>`
+      : emptyState(`No phase covers ${fmtGoalDate(plannerDate())} — there is nothing to plan onto.`)}
   `;
+}
+// The phase whose rotation the Planner is laying out. Null only before the first phase began.
+function plannerEntry() { return exercisePlanInEffect(plannerDate()).slotEntry; }
+
+// Names the rotation an editor is laying out and when its next pass begins. With a seven-day
+// rotation and meals on the calendar week -- the default -- the slots ARE weekdays and there's
+// nothing to explain, so it stays quiet. It speaks when they aren't, and it always speaks when
+// the rotation doesn't divide into the phase.
+function renderRotationHeader(entry, kind) {
+  if (!entry) return '';
+  const n = kind === 'meal' ? mealSlotsOf(entry.phase) : rotationDaysOf(entry.phase);
+  const weekly = kind === 'meal' ? mealRotationOf(entry.phase) === 'week' : n === 7;
+  const mis = kind === 'meal' ? null : rotationMisalignment(entry);
+  if (weekly && !mis) return '';
+  const nextStart = rotationSlotNextDate(entry, 0, kind);
+  return `
+    <div class="planner-scope" style="margin-bottom:12px;">
+      <div>${weekly
+        ? 'A weekly plan.'
+        : `A <b style="color:var(--text)">${n}-day rotation</b>${kind === 'meal' ? ', following the workouts' : ''}. Next pass starts <b style="color:var(--text)">${fmtGoalDate(nextStart)}</b>.`}</div>
+      ${mis ? `<div style="margin-top:4px; color:var(--text-dim);">${mis.rotationDays} days doesn't divide into ${mis.weeks} weeks — the final pass stops ${mis.lastRotationDays} day${mis.lastRotationDays === 1 ? '' : 's'} in.</div>` : ''}
+    </div>`;
 }
 // Names which phase you're editing, and offers the others you could be editing instead.
 //
@@ -502,7 +540,8 @@ function renderExercisePlanDay(day) {
   const entries = plannerPlan()[day] || [];
   return `<div class="panel">
     <div class="row" style="margin-bottom:${entries.length ? '10px' : '0'};">
-      <div style="font-size:15px; font-weight:700;">${MEAL_PLAN_DAY_LABELS[day]}</div>
+      <div style="font-size:15px; font-weight:700;">${rotationSlotLabel(plannerEntry(), day, 'workout')}
+        <span style="font-size:10px; color:var(--text-faint); font-weight:500; margin-left:6px;">next ${fmtGoalDate(rotationSlotNextDate(plannerEntry(), day, 'workout'))}</span></div>
       <div style="display:flex; gap:6px;">
         <button class="btn btn-sm btn-ghost" onclick="copyDayWorkoutPlan(${day})" title="Copy this day's plan">COPY</button>
         <button class="btn btn-sm btn-ghost" ${VIEW.exPlanClipboard ? '' : 'disabled'} onclick="pasteDayWorkoutPlan(${day})" title="Paste the copied plan here">PASTE</button>

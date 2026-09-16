@@ -689,15 +689,20 @@ function renderMealPlanTab() {
     ? `${MEAL_PLAN_DAY_LABELS[VIEW.mealPlanClipboard.day]} (${VIEW.mealPlanClipboard.entries.length} meal${VIEW.mealPlanClipboard.entries.length === 1 ? '' : 's'})`
     : null;
   return `
-    <div style="font-size:11px; color:var(--text-dim); margin:18px 0 14px;">Assign saved meals to each day of the week. Copy a day's plan to reuse it elsewhere.</div>
+    <div style="font-size:11px; color:var(--text-dim); margin:18px 0 14px;">Assign saved meals to each day. Copy a day's plan to reuse it elsewhere.</div>
     ${renderMealPlannerScope()}
     ${renderShoppingListGenerator()}
     ${clipboardLabel ? `<div class="panel" style="margin-bottom:14px; font-size:11px; color:var(--text-dim);">Clipboard: ${escapeHtml(clipboardLabel)}</div>` : ''}
-    <div class="stack" style="margin-bottom:20px;">
-      ${MEAL_PLAN_DAY_ORDER.map(renderMealPlanDay).join('')}
-    </div>
+    ${renderRotationHeader(mealPlannerEntry(), 'meal')}
+    ${mealPlannerEntry()
+      ? `<div class="stack" style="margin-bottom:20px;">
+          ${rotationSlotOrder(mealPlannerEntry(), 'meal').map(renderMealPlanDay).join('')}
+        </div>`
+      : emptyState(`No phase covers ${fmtGoalDate(mealPlannerDate())} — there is nothing to plan onto.`)}
   `;
 }
+// The phase whose meal rotation the editor is laying out. Null only before the first phase began.
+function mealPlannerEntry() { return mealPlanInEffect(mealPlannerDate()).slotEntry; }
 // Names which week you're editing, and offers the phases you could be editing instead. The exact
 // counterpart of renderPlannerScope() in app-train-setup.js, down to reusing its .planner-scope
 // styling -- the two editors do the same job for different goals and shouldn't look like they don't.
@@ -743,11 +748,15 @@ function toggleShoppingListForm() { UI.shoppingListFormOpen = !UI.shoppingListFo
 // Grouped by (foodId, unit) rather than foodId alone — two meals measuring the same food in
 // different units (e.g. one in g, another in oz) stay as separate lines rather than risking a
 // wrong unit conversion just to merge them into one.
-function generateShoppingListItems() {
+function generateShoppingListItems(fromDate) {
   const totals = new Map();
-  const plan = mealPlannerPlan();   // the week you're looking at, not a global one
-  for (let day = 0; day <= 6; day++) {
-    (plan[day] || []).forEach(entry => {
+  // Seven REAL dates resolved through the rotation, not seven weekday buckets. On a five-day meal
+  // rotation A B C D E starting Monday, the week is A B C D E A B -- two of A, two of B, one each
+  // of the rest. That's what you'd actually need to buy; a bucket sum would have said one of each.
+  // And because a rotation needn't divide into seven, WHICH seven days matters -- hence the date.
+  const from = fromDate || todayStr();
+  for (let i = 0; i < 7; i++) {
+    plannedMealsOn(shiftDate(from, i)).forEach(entry => {
       if (!entry.mealId) return;
       const meal = STATE.diet.meals.find(m => m.id === entry.mealId);
       if (!meal) return;
@@ -775,7 +784,7 @@ function renderShoppingListGenerator() {
       <div class="row" style="margin-bottom:${UI.shoppingListFormOpen ? '10px' : '0'};">
         <div>
           <div class="subtle-label" style="margin-bottom:2px;">SHOPPING LIST</div>
-          <div style="font-size:11px; color:var(--text-dim);">${items.length ? `${items.length} ingredient${items.length===1?'':'s'} across this week's Meal Plan` : 'Assign some meals below to generate one'}</div>
+          <div style="font-size:11px; color:var(--text-dim);">${items.length ? `${items.length} ingredient${items.length===1?'':'s'} for the next 7 days` : 'Assign some meals below to generate one'}</div>
         </div>
         <button class="btn btn-sm btn-primary" ${items.length ? '' : 'disabled'} onclick="toggleShoppingListForm()">${UI.shoppingListFormOpen ? 'CANCEL' : 'GENERATE'}</button>
       </div>
@@ -786,10 +795,12 @@ function renderShoppingListGenerator() {
     </div>`;
 }
 function generateShoppingListReminder() {
-  const items = generateShoppingListItems();
-  if (!items.length) { showToast('No meals assigned yet'); return; }
+  // Shop on the chosen date, FOR the seven days from it -- one date, both meanings, since that is
+  // what a shopping trip is. The preview above counts from today; this counts from the trip.
   const dateEl = document.getElementById('shoppingListDate');
   const date = (dateEl && dateEl.value) || todayStr();
+  const items = generateShoppingListItems(date);
+  if (!items.length) { showToast('No meals planned in the 7 days from that date'); return; }
   STATE.reminders.push({
     id: uid(), date, time: null, title: 'Shopping List', notes: '', createdAt: Date.now(),
     type: 'todo', items: items.map(text => ({ id: uid(), text, done: false })),
@@ -809,7 +820,9 @@ function renderMealPlanDay(day) {
   const totals = computeMealTotals(assignedItems);
   return `<div class="panel">
     <div class="row" style="margin-bottom:${entries.length ? '10px' : '0'};">
-      <div style="font-size:15px; font-weight:700;">${MEAL_PLAN_DAY_LABELS[day]}</div>
+      <div style="font-size:15px; font-weight:700;">${rotationSlotLabel(mealPlannerEntry(), day, 'meal')}${mealRotationOf(mealPlannerEntry().phase) === 'workout'
+        ? `<span style="font-size:10px; color:var(--text-faint); font-weight:500; margin-left:6px;">next ${fmtGoalDate(rotationSlotNextDate(mealPlannerEntry(), day, 'meal'))}</span>`
+        : ''}</div>
       <div style="display:flex; gap:6px;">
         <button class="btn btn-sm btn-ghost" onclick="copyDayPlan(${day})" title="Copy this day's plan">COPY</button>
         <button class="btn btn-sm btn-ghost" ${VIEW.mealPlanClipboard ? '' : 'disabled'} onclick="pasteDayPlan(${day})" title="Paste the copied plan here">PASTE</button>

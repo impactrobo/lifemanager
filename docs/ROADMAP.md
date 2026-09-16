@@ -487,6 +487,50 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **Rotations, and the log key that had to change with them (2026-09-16).** Commit 3 of the
+  phases/rotations arc.
+  - **A plan is keyed by position in its phase's rotation, not by weekday.** `workoutRotationDays`
+    (default 7) per phase; slot 0 is the phase's first day; a date resolves to `daysSinceStart % N`.
+    The weekday grid everyone had is exactly the N=7 case. The every-other-day
+    A/rest/B/rest/C/rest/D/rest split is eight days and could never be written on a weekday grid.
+    Existing plans re-index once on load (`plansKeyedBy: 'slot'`), so a phase that started on a
+    Wednesday has its Monday entries at slot 5.
+  - **Meals follow either the calendar week or the workout rotation** (`mealRotation`) — one choice
+    rather than a second free-running length, because two rotations drifting against each other
+    would make "eat more on training days" meaningless. Week mode stays keyed by absolute weekday.
+  - **A new phase CONTINUES the rotation across the boundary.** `copyRotationPlan()` takes an offset
+    — the slot the calendar had reached — so A/rest/B on the last three days of one phase is
+    followed by rest/C/rest, not by A/rest/B all over again.
+  - **The log key is a per-workout session ordinal.** `STATE.currentCycle` — one global counter you
+    advanced by hand — is gone. A session's cycle is derived once, from (workout, date), when the
+    log opens: the existing session on that date, or one past the workout's last. Dense and
+    monotonic per workout, so every progression walk that does `cycle − 1` keeps working (better
+    than before — a skipped cycle used to leave a gap the walk stepped over), and existing logs
+    keyed `N_workoutId` are already exactly this: **nothing migrates.** Two sessions of one workout
+    can never share a key, which is what "workouts never overwrite each other in one week" means.
+  - **Two consequences of that key, both forced.** Category-tier TM adjustments are queued by
+    `fromDate` rather than `fromCycle`: a category is shared across workouts that each count their
+    own sessions, so a date is the only axis they agree on (per-exercise and T3 adjustments stay
+    ordinal-keyed — they live inside one workout). And Set Volume is per calendar week by
+    `log.date`, counting a workout done twice in a week twice.
+  - **The WORKOUTS screen is a calendar week** — real dates, Monday-first, each day showing what
+    the rotation puts there. `WEEK X / Y` is derived from the date, so it can't drift from the
+    calendar and can't be forgotten. A workout that lands twice in one week on a short rotation
+    shows twice. An ALL WORKOUTS grid below files an unplanned session under today.
+  - The **shopping list walks seven real dates** through the meal rotation instead of summing seven
+    buckets: on a five-day rotation A B C D E, a week from Monday is A B C D E A B — two of A. A
+    bucket sum would have said one of each.
+  - **The same workout twice in one rotation is refused** in the editor — a training-design rule,
+    not a data one, since ordinals made the key collision moot. **Rotation is immutable once a
+    phase is current**; changing it starts a new phase. **Misalignment is flagged with the numbers**:
+    "5 days doesn't divide into 6 weeks — the final pass stops 2 days in."
+  - Along the way: the cardio tile's "done" signal was the log carrying a date, which every session
+    now has the moment it opens — it reads `actualMinutes`/`actualDistance` instead; and a
+    `complete` flag nothing ever set was dropped.
+  - `tests/test_rotations.js` pins all seven contracts. Eleven existing tests had fixtures that
+    wrote plans by weekday; each now anchors its phase origin on a Sunday so slot ≡ weekday, and
+    one that switched a skill to a workout already in the rotation now uses a second workout.
+
 - **The weight plan: rate schedules, asymmetric bands, and the long-cut flag (2026-09-16).**
   Commit 2 of the phases/rotations arc. New `src/app-weight-plan.js`.
   - **Three states, not two.** `phase.weightGoal` is nullable: `null` means no weight goal (calories

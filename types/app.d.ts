@@ -217,6 +217,17 @@ interface GoalPhase {
     ratePctPerWeek: number;
     weekRates: number[] | null;
   } | null;
+  /** How many days one pass through the workout plan takes. 7 is the classic week; 8 is the
+   *  every-other-day A/rest/B/rest/C/rest/D/rest split a weekday grid could never express. Plans
+   *  are keyed by position in this rotation, slot 0 being the phase's first day. Immutable once
+   *  the phase is current -- changing it starts a new phase. */
+  workoutRotationDays: number;
+  /** Whether meals follow the workout rotation (so meal slot 0 IS workout slot 0, and "eat more on
+   *  training days" lines up by construction) or stay on the calendar week keyed by absolute
+   *  weekday. One choice rather than a second free-running length. */
+  mealRotation: 'week' | 'workout';
+  /** Stamped 'slot' once the one-time weekday -> rotation-slot re-index has run for this phase. */
+  plansKeyedBy?: 'slot';
   /** Exercise blocks only: this block's own weekday -> workout-slot map. Seeded as a COPY of
    *  whatever plan was in effect where the block starts, never a shared reference -- aliasing it
    *  would make editing the new block silently rewrite the old one. */

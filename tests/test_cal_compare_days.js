@@ -209,6 +209,9 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     STATE.life.habits = [{ id: 'h1', name: 'Stretches', startDate: '2020-01-01', endDate: null, createdAt: 1 }];
     STATE.diet.meals = [{ id: 'mA', name: 'Oats', items: [] }, { id: 'mB', name: 'Chicken Rice', items: [] }];
     currentPhase().phase.mealPlan = {};
+    // Anchor the rotation on this week's Sunday so slot == weekday -- the plans below are written
+    // by weekday, and a workout plan is keyed by position in the rotation from the phase's start.
+    STATE.phaseOrigin = shiftDate(todayStr(), -new Date(todayStr() + 'T00:00:00').getDay());
     currentPhase().phase.mealPlan[1] = [{ id: 'p1', mealId: 'mA' }];   // Mon 15
     currentPhase().phase.mealPlan[2] = [{ id: 'p2', mealId: 'mA' }];   // Tue 16 — same as Monday
     currentPhase().phase.mealPlan[3] = [{ id: 'p3', mealId: 'mB' }];   // Wed 17 — different

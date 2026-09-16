@@ -43,7 +43,10 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     const wId = uid();
     const eA = 'entryA', eB = 'entryB';
     STATE.workouts.push({ id: wId, name: 'Superset Test Workout', type: 'weights', exerciseOrder: [[eA, eB]] });
-    const key = logKey(STATE.currentCycle, wId);
+    // A session has to be OPEN for trainCycle() to mean anything: the cycle is derived once, from
+    // (workout, date), when a log screen opens. There is no global counter to read any more.
+    openWorkoutLog(wId, todayStr());
+    const key = logKey(trainCycle(), wId);
     STATE.logs[key] = {
       date: '', notes: '', complete: false,
       entries: {
@@ -75,7 +78,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   await page.evaluate(({ workoutId, entryA }) => updateSet(workoutId, entryA, 0, 'weight', '135'), { workoutId, entryA });
   await page.evaluate(({ workoutId, entryA }) => repeatLastSet(workoutId, entryA), { workoutId, entryA });
   const entryAAfterRepeat = await page.evaluate(({ workoutId, entryA }) => {
-    const log = getLog(STATE.currentCycle, workoutId);
+    const log = getLog(trainCycle(), workoutId);
     return log.entries[entryA].sets;
   }, { workoutId, entryA });
   console.log('entryA sets after repeatLastSet():', entryAAfterRepeat);

@@ -47,6 +47,8 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   const same = await page.evaluate(() => {
     const today = todayStr();
     const wd = new Date(today + 'T00:00:00').getDay();
+    // Anchor the rotation on this week's Sunday so slot == weekday -- this fixture writes by weekday.
+    STATE.phaseOrigin = shiftDate(today, -wd);
     STATE.workouts = STATE.workouts.filter(w => w.id !== 'wX');
     STATE.workouts.push({ id: 'wX', name: 'Lower Body', type: 'weights', style: 'P-Zero (GZCL)', exercises: [] });
     currentPhase().phase.exercisePlan[wd] = [planEntry('workout', 'wX')];
@@ -74,6 +76,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   const empty = await page.evaluate(() => {
     const kept = { a: STATE.life.anchors, h: STATE.life.habits, p: currentPhase().phase.exercisePlan, m: currentPhase().phase.mealPlan };
     const wd = new Date(todayStr() + 'T00:00:00').getDay();
+    STATE.phaseOrigin = shiftDate(todayStr(), -wd);   // slot == weekday; see above
     STATE.life.anchors = []; STATE.life.habits = [];
     currentPhase().phase.exercisePlan[wd] = []; currentPhase().phase.mealPlan[wd] = [];
     STATE.life.schedules = [];

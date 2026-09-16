@@ -63,6 +63,8 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   const surfaces = await page.evaluate(() => {
     const today = todayStr();
     const wd = new Date(today + 'T00:00:00').getDay();
+    // Anchor the rotation on this week's Sunday so slot == weekday -- this fixture writes by weekday.
+    STATE.phaseOrigin = shiftDate(today, -wd);
     STATE.workouts = STATE.workouts.filter(w => w.id !== 'wX');
     STATE.workouts.push({ id: 'wX', name: 'Lower Body', type: 'weights', style: 'P-Zero (GZCL)', exercises: [] });
     currentPhase().phase.exercisePlan[wd] = [planEntry('workout', 'wX')];

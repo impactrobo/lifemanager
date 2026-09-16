@@ -131,6 +131,8 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     STATE.workouts.push({ id: 'wPlanTest', name: 'Plan Test', type: 'weights', t3: [] });
     const w = STATE.workouts[STATE.workouts.length - 1];
     const wd = new Date().getDay();
+    // Anchor the rotation on this week's Sunday so slot == weekday -- this fixture writes by weekday.
+    STATE.phaseOrigin = shiftDate(todayStr(), -wd);
     currentPhase().phase.exercisePlan = EMPTY_WEEK_PLAN();
     currentPhase().phase.exercisePlan[wd] = [planEntry('workout', w.id)];
     STATE.life.scheduleExceptions = [];
@@ -159,6 +161,8 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   const deleted = await page.evaluate(() => {
     const w = STATE.workouts.find(x => x.id === 'wPlanTest');
     const wd = new Date().getDay();
+    // Anchor the rotation on this week's Sunday so slot == weekday -- this fixture writes by weekday.
+    STATE.phaseOrigin = shiftDate(todayStr(), -wd);
     const planWith = () => { const p = EMPTY_WEEK_PLAN(); p[wd] = [planEntry('workout', w.id)]; return p; };
     // Two phases, both holding the workout: a sweep that only reached the current one would pass
     // against a single phase and leave a dangling reference in every other.
@@ -203,8 +207,13 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     l.items = [it];
     skill.lists = [l];
     const wd = new Date().getDay();
-    STATE.workouts = STATE.workouts.filter(w => w.id !== 'wPlanTest');
+    // Anchor the rotation on this week's Sunday so slot == weekday -- this fixture writes by weekday.
+    STATE.phaseOrigin = shiftDate(todayStr(), -wd);
+    STATE.workouts = STATE.workouts.filter(w => w.id !== 'wPlanTest' && w.id !== 'wPlanTest2');
     STATE.workouts.push({ id: 'wPlanTest', name: 'Plan Test', type: 'weights', t3: [] });
+    // A second workout for the kind-switch below: the same workout twice in one rotation is
+    // refused (a rotation is one pass through the plan), and wPlanTest is already on this day.
+    STATE.workouts.push({ id: 'wPlanTest2', name: 'Plan Test 2', type: 'weights', t3: [] });
     currentPhase().phase.exercisePlan = EMPTY_WEEK_PLAN();
     currentPhase().phase.exercisePlan[wd] = [planEntry('workout', 'wPlanTest'), planEntry('skill', skill.id, 25)];
     saveState();
@@ -253,7 +262,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     const picker = renderPlanWorkoutEntry(a.wd, planEntry('workout', null));
     const filled = renderPlanWorkoutEntry(a.wd, entry);
     // Switching a skill entry to a workout must drop minutes -- they mean nothing on a workout.
-    setPlanEntryRef(a.wd, entry.id, 'workout:wPlanTest');
+    setPlanEntryRef(a.wd, entry.id, 'workout:wPlanTest2');   // not wPlanTest: already on this day
     const afterSwitch = { kind: entry.kind, refId: entry.refId, minutes: entry.minutes };
     setPlanEntryRef(a.wd, entry.id, 'skill:' + a.skillId);
     setPlanEntryMinutes(a.wd, entry.id, '40');

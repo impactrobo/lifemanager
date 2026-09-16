@@ -517,20 +517,21 @@ function dayModel(dateStr) {
     schedule, blocks,
     bookedMinutes: dayBookedMinutes(blocks),
     reminders: remindersOn(dateStr),
-    // activeExercisePlan(), not STATE.exercisePlan: which weekly plan governs a date depends on
-    // which training block covers it. With no blocks this is still STATE.exercisePlan.
-    workouts: isDayOff ? [] : (activeExercisePlan(dateStr)[weekday] || [])
+    // plannedWorkoutsOn(), not a weekday index into the plan: a plan is keyed by position in its
+    // phase's ROTATION, which is only a weekday when the rotation happens to be seven days and the
+    // phase happens to start on a Sunday. The resolver knows which phase covers the date, its
+    // rotation length, and where in it the date falls -- so nothing here has to.
+    workouts: isDayOff ? [] : plannedWorkoutsOn(dateStr)
       .filter(e => e.kind === 'workout' && e.refId).map(e => getWorkout(e.refId)).filter(Boolean),
     // Practice is its OWN list rather than being folded in with workouts: the two open different
     // screens, are done in different ways, and a guitar session on a training day isn't a workout.
-    practice: isDayOff ? [] : (activeExercisePlan(dateStr)[weekday] || [])
+    practice: isDayOff ? [] : plannedWorkoutsOn(dateStr)
       .filter(e => e.kind === 'skill' && e.refId)
       .map(e => { const skill = skillById(e.refId); return skill ? { skill, minutes: e.minutes || null } : null; })
       .filter(Boolean),
-    // activeMealPlan(), for the same reason as activeExercisePlan() above: which week of meals
-    // governs a date depends on which weight phase covers it. With no phases this is still
-    // STATE.diet.mealPlan.
-    meals: isDayOff ? [] : (activeMealPlan(dateStr)[weekday] || [])
+    // Same for meals, which follow either the calendar week or the workout rotation -- the
+    // resolver picks, per phase.
+    meals: isDayOff ? [] : plannedMealsOn(dateStr)
       .filter(e => e.mealId).map(e => STATE.diet.meals.find(m => m.id === e.mealId)).filter(Boolean),
     habits: (STATE.life.habits || []).filter(h => habitIsActiveOn(h, dateStr)),
     charges: chargesDueOn(dateStr),

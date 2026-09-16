@@ -35,7 +35,9 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     const w = STATE.workouts.slice(-3).map(x => x.id);
     const mk = (map) => { const o = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
       Object.keys(map).forEach(d => { o[d] = map[d].map(id => planEntry('workout', id)); }); return o; };
-    STATE.phaseOrigin = shiftDate(t, -42);
+    // Six weeks back, then to that week's SUNDAY: both blocks then start on a Sunday, so slot ==
+    // weekday for every date in either -- this fixture writes each block's plan by weekday.
+    STATE.phaseOrigin = shiftDate(t, -42 - new Date(t + 'T12:00:00').getDay());
     STATE.phases = [
       { id: 'b1', label: 'Hypertrophy', weeks: 6,
         exercisePlan: mk({ 1: [w[0]], 2: [w[1]], 4: [w[0]], 5: [w[2]] }), createdAt: 1 },
@@ -204,7 +206,10 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     const s = phaseTimeline();
     // Block 2 assigns nothing to Sunday (weekday 0); the global plan doesn't either. Block 1 does
     // not, but block 1 DOES assign Tuesday (2), which block 2 leaves empty.
-    const inB1 = s[0].startDate, inB2 = s[1].startDate;
+    // The DATE decides which day is asked about now -- hasWeekdayPlan() keeps its weekday
+    // argument for its callers but reads the plan through the date. Both blocks start on a Sunday
+    // (see seed()), so two days in is the Tuesday.
+    const inB1 = shiftDate(s[0].startDate, 2), inB2 = shiftDate(s[1].startDate, 2);
     return { tuesdayInB1: hasWeekdayPlan(2, inB1), tuesdayInB2: hasWeekdayPlan(2, inB2) };
   }, wIds);
   console.log('hasWeekdayPlan by date:', dayOff);

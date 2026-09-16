@@ -175,7 +175,7 @@ function renderDailySchedule(dateStr) {
 
 // Which workouts were actually logged on a specific date. Workout logs are keyed by
 // `${cycle}_${workoutId}` and carry their own `date`, so completion is looked up by the date being
-// viewed rather than by STATE.currentCycle — the Day view can show any date, and the current cycle
+// viewed rather than by a session ordinal — the Day view can show any date, and a workout's cycle count
 // says nothing about whether the workout was done on *that* particular day.
 function workoutIdsLoggedOn(dateStr) {
   const ids = new Set();
@@ -267,9 +267,10 @@ function renderDayUntimedItems(dateStr) {
 // the time a caller sees them, so the notice has to ask the template directly -- otherwise a day
 // off with nothing planned anyway would announce a pause that cancelled nothing.
 function hasWeekdayPlan(weekday, dateStr) {
+  // `weekday` is kept in the signature for its callers but no longer consulted: the plan is keyed
+  // by rotation slot, and only the resolver knows which slot a date is.
   const d = dateStr || todayStr();
-  return !!((activeExercisePlan(d)[weekday] || []).some(e => e.refId)
-         || (activeMealPlan(d)[weekday] || []).some(e => e.mealId));
+  return !!(plannedWorkoutsOn(d).some(e => e.refId) || plannedMealsOn(d).some(e => e.mealId));
 }
 function renderPeriodicRow(a) {
   const last = STATE.life.periodicLog[a.id];

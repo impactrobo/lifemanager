@@ -652,8 +652,7 @@ function extendSkillSession(extraMinutes) {
 // "where did you come from" state to keep in step with the plan it was copied out of.
 function plannedPracticeMinutes(skillId, dateStr) {
   const d = dateStr || todayStr();
-  const weekday = new Date(d + 'T00:00:00').getDay();
-  const entry = (activeExercisePlan(d)[weekday] || [])
+  const entry = plannedWorkoutsOn(d)
     .find(e => e.kind === 'skill' && e.refId === skillId && e.minutes);
   return entry ? entry.minutes : null;
 }

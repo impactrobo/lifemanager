@@ -208,10 +208,14 @@ STATE = {
     calc:  { weight, weightUnit, sex, height, heightUnit, age, activity },  // TDEE calculator inputs
     macro: { energy, energyUnit, weight, weightUnit, proteinPerUnit, fatPerUnit, carbPerUnit },  // macro calculator inputs
     meals: [ { id, name, unitSystem, items: [{id, foodId, qty, unit}], createdAt, updatedAt } ],  // saved meals, Meal Builder
-    mealPlan: { 0: [], 1: [], ..., 6: [] },  // Sun=0..Sat=6 (matches Date.getDay()); each day is [{id, mealId}]
-                                             // NOTE: this is the plan in effect BEFORE any weight phase claims one.
-                                             // A weight phase carries its own `mealPlan` (see GoalPhase); read through
-                                             // activeMealPlan(date) / mealPlanInEffect(date), never this directly.
+    // mealPlan: RETIRED. Every plan belongs to a PHASE (phase.mealPlan, phase.exercisePlan), and a
+    // plan is keyed by position in the phase's ROTATION -- slot 0 is the phase's first day, a date
+    // resolves to daysSinceStart % phase.workoutRotationDays -- or, for meals when
+    // phase.mealRotation is 'week', by absolute weekday. Read through plannedWorkoutsOn(date) /
+    // plannedMealsOn(date), never by indexing a plan yourself: a weekday index silently assumes a
+    // seven-day rotation. Workout logs are keyed (session ordinal, workoutId) -- the Nth time you
+    // did that workout -- derived when a log opens, never a global counter. See app-phases.js
+    // "Rotations" and app-state.js "Which cycle a session is".
   },
 
   // ---------------- SCHEDULE / DAILY LIFE ----------------

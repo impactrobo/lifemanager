@@ -255,7 +255,118 @@ function phaseActualRate(entry) {
 // living in a comment instead of in the data. That shape is what the Skill model spent a fortnight
 // removing elsewhere; it doesn't get reintroduced here to save an afternoon.
 const PLAN_ENTRY_KINDS = ['workout', 'skill'];
-const EMPTY_WEEK_PLAN = () => ({ 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] });
+
+// ---- Rotations ----
+//
+// A plan used to be keyed by WEEKDAY (0=Sun..6=Sat), which hard-codes a seven-day rotation. The
+// classic every-other-day split -- A, rest, B, rest, C, rest, D, rest -- is eight days and cannot
+// be written on a weekday grid at all: Workout A lands Monday this time and Tuesday next, and
+// "Monday" stops meaning anything.
+//
+// So a plan is keyed by POSITION IN THE ROTATION instead: slot 0 is the phase's first day, and a
+// date resolves to slot (daysSinceStart % rotationDays). A seven-day rotation on a phase starting
+// Wednesday has slot 0 = Wednesday, and the editor labels it that way rather than pretending every
+// week starts on Sunday. The weekday grid everyone used to have is exactly the N=7 case.
+//
+// The MEAL plan can either follow the workout rotation (so "eat more on training days" lines up
+// by construction -- meal slot 0 IS workout slot 0) or stay on the calendar week, keyed by absolute
+// weekday, for anyone whose eating runs on groceries and the work week rather than the split.
+// One choice, not a second free-running length: two rotations that drift against each other would
+// make the alignment meaningless.
+const ROTATION_DAYS_DEFAULT = 7;
+const ROTATION_DAYS_MIN = 2;
+const ROTATION_DAYS_MAX = 14;
+const MEAL_ROTATIONS = ['week', 'workout'];
+function rotationDaysOf(phase) {
+  const n = Math.round(Number(phase && phase.workoutRotationDays));
+  return (n >= ROTATION_DAYS_MIN && n <= ROTATION_DAYS_MAX) ? n : ROTATION_DAYS_DEFAULT;
+}
+function mealRotationOf(phase) {
+  return (phase && phase.mealRotation === 'workout') ? 'workout' : 'week';
+}
+// How many slots a phase's meal plan has: seven absolute weekdays, or the workout rotation's length.
+function mealSlotsOf(phase) { return mealRotationOf(phase) === 'workout' ? rotationDaysOf(phase) : 7; }
+
+// An empty plan of N slots. Still an object keyed 0..N-1 rather than an array, so every existing
+// read of `plan[d]` keeps working and a missing slot reads as undefined rather than throwing.
+function emptyRotationPlan(n) {
+  const out = {};
+  for (let i = 0; i < n; i++) out[i] = [];
+  return out;
+}
+// The seven-slot case, kept under its old name because it's what the tests and the two former
+// global plans were written against.
+const EMPTY_WEEK_PLAN = () => emptyRotationPlan(7);
+
+// Which slot a date falls in. `entry` is a phaseTimeline() entry -- the rotation is anchored at the
+// phase's start, and a date past a finite phase's end keeps counting, so a carried-forward plan
+// simply continues its rotation rather than restarting.
+function workoutSlotFor(entry, dateStr) {
+  const n = rotationDaysOf(entry.phase);
+  return ((daysBetween(entry.startDate, dateStr) % n) + n) % n;
+}
+function mealSlotFor(entry, dateStr) {
+  if (mealRotationOf(entry.phase) === 'workout') return workoutSlotFor(entry, dateStr);
+  return new Date(dateStr + 'T12:00:00').getDay();
+}
+// The week of its phase a date sits in, 1-based -- the "WEEK 3 / 12" figure. Motivating precisely
+// because it's derived: it can't drift from the calendar, and it can't be forgotten.
+function weekOfPhase(entry, dateStr) {
+  return Math.floor(daysBetween(entry.startDate, dateStr) / 7) + 1;
+}
+
+// What's planned on a date, resolved all the way through: which phase, which plan, which slot.
+// Every reader goes through these two rather than indexing a plan by weekday, which is the whole
+// change -- a weekday index silently assumes a seven-day rotation.
+function plannedWorkoutsOn(dateStr) {
+  const eff = exercisePlanInEffect(dateStr);
+  if (!eff.slotEntry) return [];
+  return eff.plan[workoutSlotFor(eff.slotEntry, dateStr)] || [];
+}
+function plannedMealsOn(dateStr) {
+  const eff = mealPlanInEffect(dateStr);
+  if (!eff.slotEntry) return [];
+  return eff.plan[mealSlotFor(eff.slotEntry, dateStr)] || [];
+}
+
+// A label for a slot in the editor. A seven-day rotation gets real weekday names counted from the
+// phase's start (so a phase starting Wednesday reads Wed, Thu, Fri...); anything else gets "Day k".
+// Either way the next real date it lands on is shown, because "Day 3" means nothing on its own but
+// "Day 3 -- next Thu 18" does.
+function rotationSlotLabel(entry, slot, kind) {
+  const n = kind === 'meal' ? mealSlotsOf(entry.phase) : rotationDaysOf(entry.phase);
+  if (kind === 'meal' && mealRotationOf(entry.phase) === 'week') return MEAL_PLAN_DAY_LABELS[slot];
+  if (n === 7) return MEAL_PLAN_DAY_LABELS[new Date(shiftDate(entry.startDate, slot) + 'T12:00:00').getDay()];
+  return 'Day ' + (slot + 1);
+}
+function rotationSlotNextDate(entry, slot, kind) {
+  const n = kind === 'meal' ? mealSlotsOf(entry.phase) : rotationDaysOf(entry.phase);
+  const today = todayStr();
+  if (kind === 'meal' && mealRotationOf(entry.phase) === 'week') {
+    const wd = new Date(today + 'T12:00:00').getDay();
+    return shiftDate(today, (slot - wd + 7) % 7);
+  }
+  const cur = ((daysBetween(entry.startDate, today) % n) + n) % n;
+  return shiftDate(today, (slot - cur + n) % n);
+}
+// The order slots are listed in. Weekday-keyed meal plans keep the Monday-first order the editor
+// has always used; rotation-keyed plans list slot 0 first, since that's the phase's first day.
+function rotationSlotOrder(entry, kind) {
+  if (kind === 'meal' && mealRotationOf(entry.phase) === 'week') return MEAL_PLAN_DAY_ORDER.slice();
+  const n = kind === 'meal' ? mealSlotsOf(entry.phase) : rotationDaysOf(entry.phase);
+  return Array.from({ length: n }, (_, i) => i);
+}
+
+// A rotation that doesn't divide into the phase's length. Allowed -- the plan simply truncates at
+// the end -- but said out loud, with the actual numbers, since both are known.
+function rotationMisalignment(entry) {
+  if (entry.perpetual) return null;
+  const n = rotationDaysOf(entry.phase);
+  const days = entry.weeks * 7;
+  const rem = days % n;
+  if (rem === 0) return null;
+  return { rotationDays: n, weeks: entry.weeks, fullRotations: Math.floor(days / n), lastRotationDays: rem };
+}
 // `minutes` is meaningful only for a skill. A workout carries its own content -- the plan says
 // WHICH workout and the workout says what to do -- but the block builder can't pick anything for
 // a skill without a budget, which is why the practice starter asks for one. Optional, so a plan
@@ -268,7 +379,9 @@ function planEntry(kind, refId, minutes) {
 // that already has a `kind` is left exactly as it is, so this can run on every load forever.
 function migrateWeekPlanEntries(plan) {
   if (!plan || typeof plan !== 'object') return;
-  for (let d = 0; d <= 6; d++) {
+  // Every slot the plan has -- a rotation may have more or fewer than seven.
+  for (const k of Object.keys(plan)) {
+    const d = Number(k);
     if (!Array.isArray(plan[d])) continue;
     plan[d] = plan[d].map(e => (e && e.kind)
       ? e
@@ -291,20 +404,22 @@ function exercisePlanInEffect(dateStr) {
   if (rest === 'light') {
     // No plan at all, not a heavily reduced one. Light activity is the absence of a workout, and
     // anything you do log is an ordinary cardio session -- already how a walk gets recorded.
-    return { plan: EMPTY_WEEK_PLAN(), source: 'activeRest', label: 'light activity', entry: phaseForDate(dateStr) };
+    return { plan: EMPTY_WEEK_PLAN(), source: 'activeRest', label: 'light activity', entry: phaseForDate(dateStr), slotEntry: null };
   }
   if (rest === 'deload') {
     // Week 1 deloads the OUTGOING plan -- you re-sensitise from what you were actually doing, not
     // from the block that hasn't started in earnest yet. Resolved as "the day before this block".
     const entry = phaseForDate(dateStr);
     const outgoing = exercisePlanInEffect(shiftDate(entry.startDate, -1));
-    return { plan: outgoing.plan, source: 'activeRestDeload', label: outgoing.label || 'your previous plan', entry };
+    // slotEntry is the OUTGOING phase's: its plan is keyed to its own rotation, and resolving a
+    // slot against the new block's start would read the wrong day of it.
+    return { plan: outgoing.plan, source: 'activeRestDeload', label: outgoing.label || 'your previous plan', entry, slotEntry: outgoing.slotEntry };
   }
   const res = phaseOrCarriedForDate(dateStr);
   // Before the first phase began there was no plan, and inventing one would put workouts on days
   // that predate the app knowing about you.
   if (!res || !res.entry.phase.exercisePlan) {
-    return { plan: EMPTY_WEEK_PLAN(), source: 'none', label: null, entry: null };
+    return { plan: EMPTY_WEEK_PLAN(), source: 'none', label: null, entry: null, slotEntry: null };
   }
   const best = res.entry;
   return {
@@ -312,6 +427,7 @@ function exercisePlanInEffect(dateStr) {
     source: res.carried ? 'carried' : 'phase',
     label: best.phase.label,
     entry: best,
+    slotEntry: best,
   };
 }
 // The plan alone, for the many callers that only want to read a weekday out of it.
@@ -320,26 +436,44 @@ function activeExercisePlan(dateStr) { return exercisePlanInEffect(dateStr).plan
 // A deep copy, because a phase's plan must not alias the one it was seeded from -- sharing the
 // object would make editing the new block silently rewrite the old one, which is the exact failure
 // this whole feature exists to prevent.
-function copyWeekPlan(plan) {
-  const out = EMPTY_WEEK_PLAN();
-  for (let d = 0; d <= 6; d++) {
-    out[d] = ((plan && plan[d]) || []).map(e => ({ id: uid(), kind: e.kind || 'workout',
-                                                   refId: e.refId || null, minutes: e.minutes || null }));
+function copyRotationPlan(plan, n, offset) {
+  const out = emptyRotationPlan(n);
+  const src = planSlotCount(plan);
+  // Copies the slots that FIT and leaves the rest empty. Going 5 -> 8 you're usually adding a rest
+  // day or a fourth session, not starting over; going 8 -> 5 drops three slots, and the caller
+  // confirms before doing that.
+  //
+  // `offset` rotates the copy: new slot 0 reads from old slot `offset`. A phase seeded from the one
+  // before it uses the slot the calendar had reached at the boundary, so the rotation CONTINUES
+  // across it -- A, rest, B on the last three days of one phase is followed by rest, C, rest on
+  // the first three of the next, not by A, rest, B all over again.
+  const off = src ? ((Number(offset) || 0) % src + src) % src : 0;
+  for (let d = 0; d < n; d++) {
+    const from = src ? (d + off) % src : d;
+    out[d] = ((plan && plan[from]) || []).map(e => ({ id: uid(), kind: e.kind || 'workout',
+                                                      refId: e.refId || null, minutes: e.minutes || null }));
   }
   return out;
+}
+function copyWeekPlan(plan) { return copyRotationPlan(plan, 7); }
+// The highest slot index a plan holds, so a copy or a count can walk whatever shape it has.
+function planSlotCount(plan) {
+  return plan ? Object.keys(plan).reduce((m, k) => Math.max(m, Number(k) + 1), 0) : 0;
 }
 // Workouts and practice counted SEPARATELY. Rolling them together would have a training block
 // report a guitar session as training volume, which it isn't -- and this summary line is the one
 // place someone reads a block's shape at a glance.
 function weekPlanCount(plan) {
   let workouts = 0, practice = 0, days = 0;
-  for (let d = 0; d <= 6; d++) {
+  // Over whatever slots the plan has, not a hard-coded seven: a plan is a rotation now.
+  const n = planSlotCount(plan);
+  for (let d = 0; d < n; d++) {
     const filled = ((plan && plan[d]) || []).filter(e => e.refId);
     workouts += filled.filter(e => e.kind !== 'skill').length;
     practice += filled.filter(e => e.kind === 'skill').length;
     if (filled.length) days++;
   }
-  return { workouts, practice, days };
+  return { workouts, practice, days, slots: n };
 }
 
 // ---- The meal plan in effect ----
@@ -359,7 +493,7 @@ function weekPlanCount(plan) {
 // as STATE.exercisePlan does -- so nothing had to be migrated to ship this, and anyone who never
 // creates a weight goal sees the Meal Plan behave precisely as it always has.
 // A meal plan is { 0..6: [entry] }, and an entry is { id, mealId }.
-const EMPTY_MEAL_PLAN = () => ({ 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] });
+const EMPTY_MEAL_PLAN = () => emptyRotationPlan(7);
 function mealPlanEntry(mealId) { return { id: uid(), mealId: mealId || null }; }
 
 // Which meal plan governs a given date, and why. Returns { plan, source, label, entry } with the
@@ -372,7 +506,7 @@ function mealPlanEntry(mealId) { return { id: uid(), mealId: mealId || null }; }
 function mealPlanInEffect(dateStr) {
   const res = phaseOrCarriedForDate(dateStr);
   if (!res || !res.entry.phase.mealPlan) {
-    return { plan: EMPTY_MEAL_PLAN(), source: 'none', label: null, entry: null };
+    return { plan: EMPTY_MEAL_PLAN(), source: 'none', label: null, entry: null, slotEntry: null };
   }
   const best = res.entry;
   return {
@@ -380,6 +514,7 @@ function mealPlanInEffect(dateStr) {
     source: res.carried ? 'carried' : 'phase',
     label: best.phase.label,
     entry: best,
+    slotEntry: best,
   };
 }
 // The plan alone, for the callers that only want to read a weekday out of it.
@@ -387,10 +522,16 @@ function activeMealPlan(dateStr) { return mealPlanInEffect(dateStr).plan; }
 
 // A deep copy, for the same reason copyWeekPlan() is one: a phase's plan must not alias the plan it
 // was seeded from, or editing the new block would silently rewrite the old one.
-function copyMealPlan(plan) {
-  const out = EMPTY_MEAL_PLAN();
-  for (let d = 0; d <= 6; d++) {
-    out[d] = ((plan && plan[d]) || []).map(e => mealPlanEntry(e.mealId));
+function copyMealPlan(plan, n, offset) {
+  const slots = n || 7;
+  const out = emptyRotationPlan(slots);
+  const src = planSlotCount(plan);
+  // Same rotation-continues-across-the-boundary rule as copyRotationPlan(); see its comment. A
+  // weekday-keyed meal plan passes offset 0, since absolute weekdays don't shift at a phase edge.
+  const off = src ? ((Number(offset) || 0) % src + src) % src : 0;
+  for (let d = 0; d < slots; d++) {
+    const from = src ? (d + off) % src : d;
+    out[d] = ((plan && plan[from]) || []).map(e => mealPlanEntry(e.mealId));
   }
   return out;
 }
@@ -758,11 +899,22 @@ function addPhase() {
   const tl = phaseTimeline();
   const prev = tl[tl.length - 1];
   const startDate = prev ? shiftDate(prev.endDate, 1) : (STATE.phaseOrigin || todayStr());
+  // The new phase inherits the previous one's rotation, and its plans are copied ROTATED to the
+  // slot the calendar has reached at the boundary -- so a rotation in progress continues rather
+  // than restarting from slot 0 the day the phase changes. See copyRotationPlan().
+  const ex = exercisePlanInEffect(startDate);
+  const ml = mealPlanInEffect(startDate);
+  const n = rotationDaysOf(prev && prev.phase);
+  const mealMode = mealRotationOf(prev && prev.phase);
+  const exOffset = ex.slotEntry ? workoutSlotFor(ex.slotEntry, startDate) : 0;
+  const mlOffset = (mealMode === 'workout' && ml.slotEntry) ? workoutSlotFor(ml.slotEntry, startDate) : 0;
   STATE.phases.push(newPhase({
     label: 'Phase ' + (STATE.phases.length + 1),
     weeks: PHASE_DEFAULT_WEEKS,
-    exercisePlan: copyWeekPlan(exercisePlanInEffect(startDate).plan),
-    mealPlan: copyMealPlan(mealPlanInEffect(startDate).plan),
+    workoutRotationDays: n,
+    mealRotation: mealMode,
+    exercisePlan: copyRotationPlan(ex.plan, n, exOffset),
+    mealPlan: copyMealPlan(ml.plan, mealMode === 'workout' ? n : 7, mlOffset),
   }));
   saveState();
   render();
@@ -785,6 +937,12 @@ function newPhase(over) {
     // what you're eating.
     calorieTarget: null,
     calorieSetOn: null,
+    // A seven-day rotation with meals on the calendar week is the everyone-by-default state: it
+    // is exactly the weekday grid the app has always had, expressed in the general model.
+    workoutRotationDays: ROTATION_DAYS_DEFAULT,
+    mealRotation: 'week',
+    // Stamped so the one-time weekday -> slot re-index knows this plan was born slot-keyed.
+    plansKeyedBy: 'slot',
     exercisePlan: EMPTY_WEEK_PLAN(),
     mealPlan: EMPTY_MEAL_PLAN(),
     createdAt: Date.now(),
@@ -1040,7 +1198,29 @@ function renderPhaseCard(entry) {
 function renderExercisePhaseBody(entry) {
   const p = entry.phase;
   const n = weekPlanCount(p.exercisePlan);
+  const days = rotationDaysOf(p);
+  const mealMode = mealRotationOf(p);
+  const mis = rotationMisalignment(entry);
+  // The rotation is IMMUTABLE once the phase is current: changing workouts mid-block is exactly
+  // what a phase exists to discourage, and the plan's slots are keyed to this number. A future
+  // phase is still being planned and edits freely. Meals aren't held to that -- eating adjusts.
+  const locked = entry.state !== 'future';
   return `
+      <div class="phase-controls" style="margin-top:10px;">
+        <label class="field"><span class="lbl">Rotation (days)</span>
+          <input type="number" min="${ROTATION_DAYS_MIN}" max="${ROTATION_DAYS_MAX}" step="1" value="${days}"
+                 ${locked ? 'disabled' : ''} onchange="setPhaseRotationDays('${p.id}',this.value)"></label>
+        <label class="field"><span class="lbl">Meals follow</span>
+          <select onchange="setPhaseMealRotation('${p.id}',this.value)">
+            <option value="week"${mealMode === 'week' ? ' selected' : ''}>The week</option>
+            <option value="workout"${mealMode === 'workout' ? ' selected' : ''}>The rotation</option>
+          </select></label>
+        ${locked
+          ? `<button class="btn btn-sm" style="align-self:flex-end;" onclick="startPhaseWithNewRotation('${p.id}')">CHANGE…</button>`
+          : ''}
+      </div>
+      ${locked ? `<div class="phase-cal-note">A rotation is fixed once a phase starts — changing it starts a new phase.</div>` : ''}
+      ${mis ? `<div class="phase-cal-note">${mis.rotationDays} days doesn't divide into ${mis.weeks} weeks — the final pass stops ${mis.lastRotationDays} day${mis.lastRotationDays === 1 ? '' : 's'} in.</div>` : ''}
       <div class="goal-rows">
         <div class="goal-row">
           <span class="goal-row-k">Plan</span>
@@ -1048,7 +1228,7 @@ function renderExercisePhaseBody(entry) {
             ? [n.workouts ? `${n.workouts} workout${n.workouts === 1 ? '' : 's'}` : '',
                n.practice ? `${n.practice} practice` : ''].filter(Boolean).join(' · ')
             : 'empty'}</span>
-          <span class="goal-row-x">${n.workouts || n.practice ? `across ${n.days} day${n.days === 1 ? '' : 's'} a week` : 'nothing assigned to any day yet'}</span>
+          <span class="goal-row-x">${n.workouts || n.practice ? `across ${n.days} of ${days} days` : 'nothing assigned to any day yet'}</span>
         </div>
       </div>
       <div class="deload-bar" style="margin-top:11px;">
@@ -1392,4 +1572,86 @@ function earliestLoggedDate() {
   (STATE.weightLog || []).forEach(e => consider(e.date));
   Object.keys(STATE.logs || {}).forEach(k => consider((STATE.logs[k] || {}).date));
   return best;
+}
+
+// ---------------- Rotation setters ----------------
+//
+// A future phase's rotation edits freely -- it's still being planned. A CURRENT phase's does not:
+// changing workouts mid-block is precisely what a phase exists to discourage, and the plan's slots
+// are keyed to this number. So changing it on a running phase means starting a new one, and the
+// button says so rather than silently refusing.
+function setPhaseRotationDays(id, value) {
+  const p = (STATE.phases || []).find(x => x.id === id);
+  const entry = phaseTimeline().find(s => s.phase.id === id);
+  if (!p || !entry) return;
+  const n = Math.round(Number(value));
+  if (!(n >= ROTATION_DAYS_MIN && n <= ROTATION_DAYS_MAX)) { render(); return; }
+  if (entry.state !== 'future') { showToast('A rotation is fixed once a phase starts'); render(); return; }
+  if (n === rotationDaysOf(p)) return;
+  // Shrinking drops the slots past the new length. Confirm only when one of them holds something.
+  const cur = rotationDaysOf(p);
+  const dropping = n < cur && Object.keys(p.exercisePlan || {}).some(k => Number(k) >= n && (p.exercisePlan[k] || []).some(e => e.refId));
+  const apply = () => { applyRotationDays(p, n); saveState(); render(); };
+  if (dropping) showConfirm(`A ${n}-day rotation drops what's planned past day ${n}. Continue?`, apply);
+  else apply();
+}
+// Reshapes the plans to N slots: what fits is kept, the rest is empty. Meals follow only when
+// they're on the workout rotation -- a weekday-keyed meal plan has nothing to do with this number.
+function applyRotationDays(p, n) {
+  p.workoutRotationDays = n;
+  p.exercisePlan = copyRotationPlan(p.exercisePlan, n, 0);
+  if (mealRotationOf(p) === 'workout') p.mealPlan = copyMealPlan(p.mealPlan, n, 0);
+}
+// The only way to change a running phase's rotation: a new phase. addPhase() ends a perpetual one
+// today and seeds the successor to CONTINUE the current rotation, so the new phase arrives on the
+// old length with its field editable -- you then set the number you actually wanted.
+function startPhaseWithNewRotation(id) {
+  const entry = phaseTimeline().find(s => s.phase.id === id);
+  if (!entry) return;
+  showConfirm('Changing the rotation starts a new phase. Continue?', () => {
+    addPhase();
+    showToast('New phase started — set its rotation below');
+  });
+}
+// Meals can switch between the calendar week and the workout rotation at any time; eating adjusts
+// freely. The plan is reshaped to the new slot count, and switching to fewer slots confirms first
+// if any of the slots being dropped hold a meal.
+function setPhaseMealRotation(id, mode) {
+  const p = (STATE.phases || []).find(x => x.id === id);
+  if (!p || MEAL_ROTATIONS.indexOf(mode) < 0 || mealRotationOf(p) === mode) return;
+  const n = mode === 'workout' ? rotationDaysOf(p) : 7;
+  const dropping = Object.keys(p.mealPlan || {}).some(k => Number(k) >= n && (p.mealPlan[k] || []).some(e => e.mealId));
+  const apply = () => {
+    p.mealRotation = mode;
+    p.mealPlan = copyMealPlan(p.mealPlan, n, 0);
+    saveState(); render();
+  };
+  if (dropping) showConfirm(`Switching drops the meals planned past slot ${n}. Continue?`, apply);
+  else apply();
+}
+
+// ---------------- Migration: weekday-keyed plans -> rotation slots ----------------
+//
+// A plan used to be keyed by absolute weekday. It's keyed by position in the rotation now, with
+// slot 0 being the phase's first day -- so a phase that started on a Wednesday has its Monday
+// entries at slot 5, not slot 1. This re-indexes once, then stamps the phase so it never runs again.
+//
+// Only the EXERCISE plan moves. The meal plan defaults to the calendar week (mealRotation 'week'),
+// where absolute weekday IS the key, so it is already in the right shape.
+//
+// Runs after ensurePerpetualPhase(), because it needs each phase's start date and the auto-created
+// perpetual phase -- whose plan is a copy of the old weekday-keyed global -- has to be included.
+function migratePlansToRotationSlots() {
+  phaseTimeline().forEach(entry => {
+    const p = entry.phase;
+    if (p.plansKeyedBy === 'slot') return;
+    const startWd = new Date(entry.startDate + 'T12:00:00').getDay();
+    const old = p.exercisePlan || {};
+    const fresh = emptyRotationPlan(7);
+    for (let wd = 0; wd <= 6; wd++) fresh[(wd - startWd + 7) % 7] = Array.isArray(old[wd]) ? old[wd] : [];
+    p.exercisePlan = fresh;
+    if (p.workoutRotationDays == null) p.workoutRotationDays = ROTATION_DAYS_DEFAULT;
+    if (p.mealRotation == null) p.mealRotation = 'week';
+    p.plansKeyedBy = 'slot';
+  });
 }

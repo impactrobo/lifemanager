@@ -35,6 +35,9 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // A workout, a meal and a habit all live on today's weekday.
   await page.evaluate(() => {
     const wd = new Date(todayStr() + 'T00:00:00').getDay();
+    // Anchor the rotation on this week's Sunday so slot == weekday: this fixture writes the plan by
+    // weekday, and a plan is keyed by position in the rotation from the phase's start.
+    STATE.phaseOrigin = shiftDate(todayStr(), -wd);
     STATE.workouts = STATE.workouts.filter(w => w.id !== 'wX');
     STATE.workouts.push({ id: 'wX', name: 'Lower Body', type: 'weights', style: 'P-Zero (GZCL)', exercises: [] });
     currentPhase().phase.exercisePlan[wd] = [planEntry('workout', 'wX')];
@@ -93,6 +96,9 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // announce a pause that cancelled nothing.
   const emptyDayOff = await page.evaluate(() => {
     const wd = new Date(todayStr() + 'T00:00:00').getDay();
+    // Anchor the rotation on this week's Sunday so slot == weekday: this fixture writes the plan by
+    // weekday, and a plan is keyed by position in the rotation from the phase's start.
+    STATE.phaseOrigin = shiftDate(todayStr(), -wd);
     const keptEx = currentPhase().phase.exercisePlan[wd], keptMp = currentPhase().phase.mealPlan[wd];
     currentPhase().phase.exercisePlan[wd] = []; currentPhase().phase.mealPlan[wd] = [];
     const html = renderDayUntimedItems(todayStr());

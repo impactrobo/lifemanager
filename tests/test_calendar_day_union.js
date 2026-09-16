@@ -52,6 +52,10 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   const fixture = await page.evaluate(() => {
     const today = todayStr();
     const weekday = new Date(today + 'T00:00:00').getDay();
+    // Anchor the rotation on this week's Sunday so slot == weekday -- the workout plan below is
+    // written by weekday, and a plan is keyed by position in the rotation from the phase's start.
+    // (Meals in 'week' mode are weekday-keyed regardless, which is why only workouts went missing.)
+    STATE.phaseOrigin = shiftDate(today, -weekday);
     STATE.life.anchors = []; STATE.life.schedules = [];
     const w1 = createWorkout('weights', 'P-Zero (GZCL)'); w1.name = 'Lower Body';
     const w2 = createWorkout('cardio', 'Time/Dist/Cal'); w2.name = 'Zone 2 Ride';
