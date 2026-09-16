@@ -54,4 +54,19 @@ see `tests/README.md` for that.
       anything, and note whether it arrives at all
 - [ ] DISABLE REMINDER NOTIFICATIONS — confirm no more notifications arrive after
 
+## Exercise identity migration (2026-09-16)
+The one-time migration that dissolves the six MAXES categories into per-lift maxes runs against
+your REAL save the first time the updated build boots. It is covered by `test_lift_maxes.js`
+against a synthetic old-shape save, but your actual data is the one fixture the sandbox never had.
+- [ ] After the update, open Builder → EXERCISES: every lift you had a tested number for is listed,
+      with the right T1 / T2 weights and test types. In particular, a "Squat" or "Bench" category
+      you never linked should have landed on Barbell Back Squat / Barbell Bench Press — NOT on a
+      custom lift called "Squat" beside it. If you see such a duplicate, that category was renamed
+      or the alias missed; note which.
+- [ ] Any T2 that had its own exercise name typed in (e.g. Leg Press under Squat) is now its OWN
+      lift on that screen, carrying that T2's number.
+- [ ] Open each GZCL workout in Builder → WORKOUT: the T1/T2 selects still name the right movement.
+- [ ] Open today's session on WORKOUTS: target weights match what you'd expect from your TM, and a
+      previously queued "+X starting next workout" increase is still applied.
+
 ## Add future items below as new features ship

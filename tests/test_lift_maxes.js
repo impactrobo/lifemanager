@@ -31,10 +31,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   await settle(page);
 
   // ---- 7. A fresh install ----
-  const fresh = await page.evaluate(() => {
-    localStorage.clear();
-    return null;
-  });
+  await page.evaluate(() => localStorage.clear());
   await page.reload();
   await settle(page);
   const clean = await page.evaluate(() => ({
@@ -69,6 +66,29 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
         T2b: { testType: '10RM', testWeightLb: 0,   conv: 0.90, tmLb: 0,   muscle: 'Chest', exerciseName: '' },
         T2c: { testType: '10RM', testWeightLb: 0,   conv: 0.90, tmLb: 0,   muscle: 'Chest', exerciseName: '' },
       } },
+      // NEVER linked, still wearing its default name: the common case for someone who never
+      // visited the LIFTS review screen. Must land on the library's overhead press by alias, not
+      // become a custom lift called "OHP" beside it with the max on the wrong one.
+      { id: 'ohp', name: 'OHP', lu: 'upper', tmT2Revealed: 1, tiers: {
+        T1:  { testType: '1RM',  testWeightLb: 185, conv: 0.90, tmLb: 166.5, muscle: 'S Delts', adjustments: [] },
+        T2a: { testType: '10RM', testWeightLb: 0, conv: 0.90, tmLb: 0, muscle: 'S Delts', exerciseName: '' },
+        T2b: { testType: '10RM', testWeightLb: 0, conv: 0.90, tmLb: 0, muscle: 'S Delts', exerciseName: '' },
+        T2c: { testType: '10RM', testWeightLb: 0, conv: 0.90, tmLb: 0, muscle: 'S Delts', exerciseName: '' },
+      } },
+      // Never linked and names no single lift: survives as a custom lift rather than evaporating.
+      { id: 'back', name: 'Back', lu: 'upper', tmT2Revealed: 1, tiers: {
+        T1:  { testType: '5RM',  testWeightLb: 225, conv: 1.035, tmLb: 232.9, muscle: 'Back', adjustments: [] },
+        T2a: { testType: '10RM', testWeightLb: 0, conv: 0.90, tmLb: 0, muscle: 'Back', exerciseName: '' },
+        T2b: { testType: '10RM', testWeightLb: 0, conv: 0.90, tmLb: 0, muscle: 'Back', exerciseName: '' },
+        T2c: { testType: '10RM', testWeightLb: 0, conv: 0.90, tmLb: 0, muscle: 'Back', exerciseName: '' },
+      } },
+      // An untested category: carries nothing and must not manufacture a lift or an entry.
+      { id: 'bonus', name: 'Bonus', lu: 'lower', tmT2Revealed: 1, tiers: {
+        T1:  { testType: '1RM',  testWeightLb: 0, conv: 0.90, tmLb: 0, muscle: null, adjustments: [] },
+        T2a: { testType: '10RM', testWeightLb: 0, conv: 0.90, tmLb: 0, muscle: null, exerciseName: '' },
+        T2b: { testType: '10RM', testWeightLb: 0, conv: 0.90, tmLb: 0, muscle: null, exerciseName: '' },
+        T2c: { testType: '10RM', testWeightLb: 0, conv: 0.90, tmLb: 0, muscle: null, exerciseName: '' },
+      } },
     ];
     STATE.workouts = [];
     const w = createWorkout('weights', 'P-Zero (GZCL)');
@@ -100,6 +120,10 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
       benchT2: liftMax('bb-bench', 't2'),
       // 3. Slots repointed, and the old field replaced rather than kept.
       slots: ['t1','t2a','t2b','t2c'].map(tk => ({ lift: w[tk].liftId, stillHasCategoryId: 'categoryId' in w[tk] })),
+      // Unlinked defaults: alias to the library lift, or survive as a custom lift, or vanish.
+      ohpT1: liftMax('bb-overhead-press', 't1'),
+      backLift: allLifts().find(l => l.name === 'Back') || null,
+      customLifts: (STATE.lifts || []).map(l => l.name),
     };
   });
   console.log('1-4. migration:', JSON.stringify(migrated, null, 1));
@@ -116,6 +140,11 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (migrated.slots[1].lift !== migrated.legPressId) throw new Error('T2a repoints to the Leg Press, which is what that slot was');
   if (migrated.slots[2].lift !== 'bb-bench') throw new Error('T2b repoints to bench');
   if (migrated.slots.some(s => s.stillHasCategoryId)) throw new Error('categoryId must be REPLACED, not kept alongside liftId');
+  if (!migrated.ohpT1 || migrated.ohpT1.testWeightLb !== 185) throw new Error('An unlinked default "OHP" must alias to the library overhead press, not become a custom lift');
+  if (!migrated.backLift) throw new Error('An unlinked "Back" names no single lift and must survive as a custom one');
+  const backT1 = await page.evaluate(id => liftMax(id, 't1'), migrated.backLift.id);
+  if (!backT1 || backT1.testWeightLb !== 225 || backT1.testType !== '5RM') throw new Error('...carrying its own tested number and test type');
+  if (migrated.customLifts.join(',') !== 'Back') throw new Error(`Exactly one custom lift should be manufactured (Back); untested, unreferenced "Bonus" is nothing. Got: ${migrated.customLifts}`);
 
   // Idempotent: a second load has no categories to read and must change nothing.
   const before = await page.evaluate(() => JSON.stringify(STATE.liftMaxes));

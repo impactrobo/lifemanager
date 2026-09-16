@@ -525,6 +525,17 @@ on an architecture split + a large wave of Maximalist aesthetics.
     the **phase's** length. BUILDER → WORKOUTS is four tabs now.
   - `tests/test_lift_maxes.js` pins seven contracts, the migration most of all — it runs once,
     silently, against real training data, and a mistake in it loses numbers nobody can reconstruct.
+  - **Post-commit check (same day) found three migration defects, all fixed.** (1) Only "Deadlift"
+    and "OHP" happened to name-match a library short, so an *unlinked* default "Squat" or "Bench"
+    with real numbers would have become a custom lift beside Barbell Back Squat with the max on the
+    wrong one — the four unambiguous defaults now alias by their fixed id, only while still wearing
+    the default name, and never over an explicit link. (2) A category nobody tested and no slot
+    referenced still manufactured a custom lift ("Bonus" on every save); it's skipped now. (3)
+    Migrations here are in-memory and persist with the next natural save, so a custom lift made by
+    the migration got a fresh `uid()` on every boot before that — same save, different answer. Its
+    id is now derived from the name, so the migration is idempotent by construction rather than by
+    luck. Also: the `t2Revealed` backfill read `liftId` before slots were repointed. The fixture
+    now covers linked / aliased / custom / vanishing categories.
 
 - **END PHASE, and auto-fill onto rotation slots (2026-09-16).** Commits 4 and 5 — the phases/
   rotations arc is complete.

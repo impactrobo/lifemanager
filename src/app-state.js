@@ -598,7 +598,11 @@ function migrateState() {
     // whatever's already configured, so existing T2b/T2c/T3d-f setups don't vanish.
     if (w.t1Revealed === undefined) w.t1Revealed = 1; // T1 was always shown before this feature
     if (w.t2Revealed === undefined) {
-      w.t2Revealed = w.t2c.liftId ? 3 : (w.t2b.liftId ? 2 : 1);
+      // Either field: this runs BEFORE migrateCategoriesToLiftMaxes() repoints the slots, so a save
+      // old enough to lack t2Revealed still carries categoryId here, and reading liftId alone would
+      // hide a configured T2b/T2c behind a reveal counter of 1.
+      const has = s => !!(s && (s.liftId || s.categoryId));
+      w.t2Revealed = has(w.t2c) ? 3 : (has(w.t2b) ? 2 : 1);
     }
     if (w.t3Revealed === undefined) {
       let maxIdx = 2;

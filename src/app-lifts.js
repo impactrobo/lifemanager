@@ -5,18 +5,19 @@
 // const initializer reads it (nothing does today) -- see app-goals.js's header on load order.
 //
 // ---- Why this exists ----
-// Nothing in the app could name a lift durably. GZCL's T1/T2 reference a categoryId (six of them),
-// but T3 slots use FREE TEXT -- so a single workout style carried two identity schemes. Flat-list
-// exercises have only a name and a uid() unique to that exercise in that workout.
+// Nothing in the app could name a lift durably. GZCL's T1/T2 used to reference one of six fixed
+// categories, T3 slots used FREE TEXT, and flat-list exercises had only a name and a uid() unique
+// to that exercise in that workout -- three identity schemes for one kind of thing.
 //
 // And an exercise id can never be the answer, because phases own plans: every new block builds a new
 // plan with new uid()s, so a target pointing at an exercise id would break at EVERY block boundary --
 // the exact thing the phases feature exists to make routine. Lift identity has to outlive the plan,
 // by construction.
 //
-// A Lift is PURE IDENTITY: a name and a muscle. Nothing about programs, tiers or training maxes.
-// "Bench" the lift and "Bench as a GZCL category with a T1 training max of 245" stay different
-// things, which is why a category GAINS a liftId rather than being replaced by one.
+// A Lift is the ONE record for a movement: its name, what it trains, and -- since the exercise-
+// identity arc -- its own training maxes (STATE.liftMaxes) and setup notes (STATE.liftNotes), both
+// sparse and keyed by lift id. Categories are gone; a T1/T2 slot names a lift directly. See "LIFT
+// MAXES" below for the model and the migration that dissolved them.
 //
 // ---- Equipment leads the name ----
 // Barbell Bench Press, Dumbbell Bench Press, Incline Barbell Bench Press. A bare "Bench Press" is
@@ -242,18 +243,16 @@ function unlinkedLiftRefs() {
 function assignLiftRef(ref, liftId) {
   const lift = liftById(liftId);
   if (!lift) return;
-  {
-    const w = (STATE.workouts || []).find(x => x.id === ref.workoutId);
-    if (!w) return;
-    if (ref.kind === 'exercise') {
-      const ex = (w.exercises || []).find(x => x.id === ref.id);
-      // The name follows the lift, so the two can't drift apart afterwards. The lift is the identity
-      // now; leaving a stale free-text name beside it is how you end up with two answers again.
-      if (ex) { ex.liftId = liftId; ex.name = lift.name; if (lift.muscle) ex.muscle = lift.muscle; }
-    } else if (ref.kind === 't3') {
-      const slot = (w.t3 || [])[Number(ref.id)];
-      if (slot) { slot.liftId = liftId; slot.name = lift.name; if (lift.muscle) slot.muscle = lift.muscle; }
-    }
+  const w = (STATE.workouts || []).find(x => x.id === ref.workoutId);
+  if (!w) return;
+  if (ref.kind === 'exercise') {
+    const ex = (w.exercises || []).find(x => x.id === ref.id);
+    // The name follows the lift, so the two can't drift apart afterwards. The lift is the identity
+    // now; leaving a stale free-text name beside it is how you end up with two answers again.
+    if (ex) { ex.liftId = liftId; ex.name = lift.name; if (lift.muscle) ex.muscle = lift.muscle; }
+  } else if (ref.kind === 't3') {
+    const slot = (w.t3 || [])[Number(ref.id)];
+    if (slot) { slot.liftId = liftId; slot.name = lift.name; if (lift.muscle) slot.muscle = lift.muscle; }
   }
 }
 
@@ -273,8 +272,9 @@ function setLiftPickerQuery(q) { if (UI.liftPicker) { UI.liftPicker.query = q; r
 
 // `token` identifies what's being named. The picker doesn't know or care what that is -- it routes
 // back through onPickLift(token, liftId), which parses the token and calls the right setter. That
-// keeps one picker serving categories, flat exercises, T3 slots and the review screen without any of
-// them knowing about each other.
+// keeps one picker serving flat exercises, T3 slots and the review screen without any of them
+// knowing about each other. (T1/T2 slots pick from a plain <select> in the builder instead -- see
+// tierLiftOptions() -- because they want the whole library grouped by has-a-max, not a search.)
 function renderLiftPicker(token, currentLiftId) {
   const open = UI.liftPicker && UI.liftPicker.token === token;
   const cur = liftById(currentLiftId);
@@ -435,7 +435,7 @@ function renderLiftReview() {
 // Both need the same missing thing, so it's built once.
 //
 // Mapping a LOG ENTRY back to a lift is the whole job, and it differs by workout shape:
-//   GZCL T1/T2  entry key is the tier -> workout[tier].categoryId -> that category's liftId
+//   GZCL T1/T2  entry key is the tier -> workout[tier].liftId
 //   GZCL T3     entry key is 't3_<i>' -> workout.t3[i].liftId
 //   flat list   entry key IS the exercise id -> that exercise's liftId
 // Walking every log once and asking each entry which lift it was is cheaper, and far less fragile,
@@ -910,7 +910,8 @@ function defaultLiftMaxEntry(scheme) {
     // Auto-set from the test type, and editable afterwards -- same behaviour the tier rows had.
     conv: convForTest(scheme === 't1' ? 'T1' : 'T2', testType),
     // Increases earned from a logged session, each dated and applied strictly after that date.
-    // See effectiveTMLb()'s note on why these are dated rather than keyed by session ordinal.
+    // Dated rather than keyed by session ordinal because the lift is shared across workouts that
+    // each count their own sessions -- see liftTmLb() and applySuggestion().
     adjustments: [],
   };
 }
@@ -1001,13 +1002,42 @@ function migrateCategoriesToLiftMaxes() {
     const hit = allLifts().find(l => norm(l.name) === n || norm(l.short) === n);
     if (hit) return hit.id;
     const made = addCustomLift(name, muscle || null);
-    return made ? made.id : null;
+    if (!made) return null;
+    // A DETERMINISTIC id, derived from the name, in place of the uid() addCustomLift() hands out.
+    // Migrations here are in-memory and persist with the next natural save, so this one can run
+    // on several boots before anything writes it down -- and a fresh uid() each time would mean the
+    // same save migrating to a different answer on every launch. Same name, same id, every time.
+    // No collision is possible: we only get here when no lift already carries this name.
+    made.id = 'lift-' + n.replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    return made.id;
   };
   // (categoryId, tierKey) -> liftId, so the workout slots below can be repointed to match.
   const resolved = {};
+  // The six default categories shipped with fixed ids, and four of them name one specific
+  // library lift beyond argument -- P-Zero's "Squat" IS the barbell back squat. Only "Deadlift" and
+  // "OHP" happen to match a library short name, so without this an untouched "Bench" carrying real
+  // numbers would become a custom lift called "Bench" sitting beside Barbell Bench Press, with the
+  // max on the wrong one. Applied only when the category still wears its default name: a user who
+  // renamed "Squat" to "Front Squat" meant it, and the name lookup below handles that. An explicit
+  // cat.liftId always wins over both. "Back" and "Bonus" name no single lift and fall through.
+  const DEFAULT_CATEGORY_LIFT = { squat: 'bb-back-squat', bench: 'bb-bench', deadlift: 'bb-deadlift', ohp: 'bb-overhead-press' };
+  const DEFAULT_CATEGORY_NAME = { squat: 'squat', bench: 'bench', deadlift: 'deadlift', ohp: 'ohp' };
+  // A category that was never tested AND that no workout slot points at is genuinely nothing, and
+  // resolving it would manufacture a custom lift for it -- "Bonus" on every save that shipped with
+  // the defaults. Referenced-but-untested still resolves, because the slot needs a lift to name.
+  const referenced = new Set();
+  (STATE.workouts || []).forEach(w => {
+    ['t1', 't2a', 't2b', 't2c'].forEach(tk => { if (w[tk] && w[tk].categoryId) referenced.add(w[tk].categoryId); });
+  });
   STATE.categories.forEach(cat => {
-    const catMuscle = (cat.tiers && cat.tiers.T1 && cat.tiers.T1.muscle) || null;
-    const ownLift = cat.liftId && liftById(cat.liftId) ? cat.liftId : findOrCreate(cat.name, catMuscle);
+    const tiers = cat.tiers || {};
+    const anyTested = Object.keys(tiers).some(tf => Number(tiers[tf] && tiers[tf].testWeightLb) > 0);
+    if (!anyTested && !referenced.has(cat.id)) return;
+    const catMuscle = (tiers.T1 && tiers.T1.muscle) || null;
+    const aliased = DEFAULT_CATEGORY_LIFT[cat.id] && norm(cat.name) === DEFAULT_CATEGORY_NAME[cat.id] && liftById(DEFAULT_CATEGORY_LIFT[cat.id])
+      ? DEFAULT_CATEGORY_LIFT[cat.id] : null;
+    const ownLift = cat.liftId && liftById(cat.liftId) ? cat.liftId
+                  : aliased || findOrCreate(cat.name, catMuscle);
     ['T1', 'T2a', 'T2b', 'T2c'].forEach(tf => {
       const t = cat.tiers && cat.tiers[tf];
       if (!t) return;

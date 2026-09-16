@@ -27,28 +27,31 @@ STATE = {
 
   // ---------------- EXERCISE ----------------
   meso: {
-    cycles: 8,                              // total training cycles/weeks planned
+    // `cycles` RETIRED (2026-09-16): rotations took both its consumers -- the WORKOUTS week counter is
+    // derived from the phase covering the date, Set Volume is a calendar week. Nothing reads it.
     weightsProgramStyle: null | 'P-Zero (GZCL)' | 'MESO1' | 'Free Entry',
     cardioProgramStyle: null | 'C25K' | 'C2Triathlon',
     weightsWorkoutsPerCycle: 4,
     cardioWorkoutsPerCycle: 0,
   },
-  categories: [                             // GZCL-style "movement categories" (Squat/Bench/Deadlift/OHP/Back/Bonus by default)
-    {
-      id, name, lu: 'upper' | 'lower', tmT2Revealed,
-      tiers: {
-        T1:  { testType: '1RM'|'5RM', testWeightLb, conv, tmLb, muscle },
-        T2a: { testType: '10RM'|..., testWeightLb, conv, tmLb, muscle, exerciseName },
-        T2b: { ...same shape as T2a... },
-        T2c: { ...same shape as T2a... },
-      },
-    }, ...
-  ],
+  // `categories` is GONE (2026-09-16). It held six fixed buckets (Squat/Bench/Deadlift/OHP/Back/
+  // Bonus), each owning four tier records with their own test weight/conv/cached tmLb, a shared
+  // muscle, a hand-set upper/lower flag, and a free-text `exerciseName` per T2. A LIFT owns all of
+  // that now. migrateCategoriesToLiftMaxes() (app-lifts.js) dissolves an old save's categories into
+  // liftMaxes below and deletes the key; it runs in migrateState() and, like every migration there,
+  // is in-memory and idempotent -- the result persists with the next natural saveState().
+  liftMaxes: {                              // SPARSE, keyed by liftId -- a lift never tested has no entry
+    [liftId]: {
+      t1: { testType: '1RM'|'5RM'|..., testWeightLb, conv, adjustments: [ { id, fromDate, deltaLb } ] },
+      t2: { ...same shape... },             // ONE record per SCHEME: T2a/T2b/T2c all read `t2` and
+    },                                      // differ by their own TIER_SCHEMES intensity + rep ladder.
+  },                                        // Base TM = testWeightLb * conv, DERIVED -- no cached tmLb.
+                                            // Upper/lower/core is derived from the lift's muscle (MUSCLE_LU).
   workouts: [ /* 12 slots, GZCL/P-Zero-style */
     {
       id: 'w1'..'w12', name: 'Workout 1'...,
-      t1:  { enabled, categoryId, variant: 'regular'|... },
-      t2a: { enabled, categoryId }, t2b: {...}, t2c: {...},
+      t1:  { enabled, liftId, variant: 'regular'|... },   // liftId, not categoryId -- a slot names a lift
+      t2a: { enabled, liftId }, t2b: {...}, t2c: {...},
       t1Revealed, t2Revealed,
       t3: [ { enabled, name, targetReps, muscle, adjustments: [] } ],  // 6 slots, accessory work
       t3Revealed,
