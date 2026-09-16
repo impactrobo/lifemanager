@@ -83,6 +83,10 @@ interface AppSettings {
   waterTargetMl: number;
   waterServingMl: number;
   waterUnit: 'ml' | 'cup';
+  /** Daily targets the weekly review counts DAYS HIT against (see app-review.js). Water's target
+   *  above predates them; these two exist because a "days hit" count needs something to hit. */
+  stepsTargetDaily: number;
+  sleepTargetHours: number;
   homeLayout: unknown;
   cloudSync: { enabled: boolean };
   reminderPush: { enabled: boolean };
@@ -577,6 +581,10 @@ interface LifeState {
    *  plus the day's own numbers (sleepHours, sleepQuality, waterMl, steps). One object per date
    *  rather than four parallel date-keyed maps. */
   dailyLog: Record<string, Record<string, boolean | number>>;
+  /** Per-week record, keyed by that week's MONDAY. Sparse — a week you never annotated has no
+   *  entry. `off` marks a deliberate break: it changes no count in the weekly review, only what the
+   *  review says about them, which is the difference between a lapse and a choice. */
+  weekReview: Record<string, { off: boolean; note: string }>;
   /** The hydration colour marker, 1 (pale) to 8 (dark). Deliberately NOT in dailyLog: it persists
    *  until changed rather than resetting at midnight, because it describes a current state rather
    *  than something that happened on a date. Nothing computes off it. `waterColorLog` records

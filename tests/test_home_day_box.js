@@ -118,9 +118,15 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
       order: STATE.settings.homeLayout.boxOrder, hidden: STATE.settings.homeLayout.boxHidden,
       rendered: document.querySelectorAll('.home-edit-box').length,
     }));
+    // Each case states what the MERGE should produce. loadState() also tops a saved layout up with
+    // any box added to the defaults since it was written (YOUR WEEK, and whatever comes after), so
+    // that top-up is applied here rather than hardcoded into every case — otherwise adding a box
+    // breaks five expectations that have nothing to do with it.
+    const want = await page.evaluate((c) => c.wantOrder.concat(
+      defaultHomeLayout().boxOrder.filter(id => !c.wantOrder.includes(id) && !c.wantHidden.includes(id))), c);
     console.log(`  ${c.name}:`, JSON.stringify(got.order), 'hidden', JSON.stringify(got.hidden));
-    if (JSON.stringify(got.order) !== JSON.stringify(c.wantOrder)) {
-      throw new Error(`${c.name}: boxOrder became ${JSON.stringify(got.order)}, wanted ${JSON.stringify(c.wantOrder)}`);
+    if (JSON.stringify(got.order) !== JSON.stringify(want)) {
+      throw new Error(`${c.name}: boxOrder became ${JSON.stringify(got.order)}, wanted ${JSON.stringify(want)}`);
     }
     if (JSON.stringify(got.hidden) !== JSON.stringify(c.wantHidden)) {
       throw new Error(`${c.name}: boxHidden became ${JSON.stringify(got.hidden)}, wanted ${JSON.stringify(c.wantHidden)}`);

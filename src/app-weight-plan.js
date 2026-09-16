@@ -180,8 +180,18 @@ function updateWeightGoalRate(id, value) {
 // Consecutive weeks therefore share seven days of data. That overlap is a feature here: the flag is
 // about sustained behaviour, and one brutal week inside an otherwise moderate month shouldn't trip
 // a six-week counter.
+// The window is GOAL_RATE_MIN_DAYS of SPAN, which is that many days plus one of data. It used to
+// ask for `-(GOAL_RATE_MIN_DAYS - 1)`, and that off-by-one made this function return null for every
+// input it was ever given: weightTrendRateBetween() rejects a span under GOAL_RATE_MIN_DAYS, and
+// the widest span inside a 14-DAY window is 13. The two constants meant different things -- "days
+// of data" here, "days between first and last" there -- and the gap was invisible because the
+// failure looked exactly like not having weighed in enough.
+//
+// It mattered more than a dead section: weightPlanWeeks() falls back to a week's PLANNED rate when
+// the actual is null, so every elapsed week read as planned, and longCutState() -- whose whole
+// premise is "a real walk over what you actually did, rather than a guess" -- was walking the guess.
 function actualPctPerWeekAt(dateStr) {
-  const r = weightTrendRateBetween(shiftDate(dateStr, -(GOAL_RATE_MIN_DAYS - 1)), dateStr);
+  const r = weightTrendRateBetween(shiftDate(dateStr, -GOAL_RATE_MIN_DAYS), dateStr);
   if (!r || !r.currentTrendLb) return null;
   return (r.lbPerWeek / r.currentTrendLb) * 100;
 }

@@ -292,6 +292,35 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (drift.driftingNoGoal) throw new Error('No weight goal means nothing is watched — that is the difference between the two states');
   if (drift.driftingCut) throw new Error('Drift is only for an explicit maintain; a cut that is cutting is working as asked');
 
+  // ---- 7. actualPctPerWeekAt() actually returns a rate ----
+  // A regression guard for an off-by-one that made it return null for EVERY input: it asked for a
+  // window of `GOAL_RATE_MIN_DAYS - 1` days, while weightTrendRateBetween() rejects any span under
+  // GOAL_RATE_MIN_DAYS — and the widest span inside a 14-day window is 13. The two constants meant
+  // different things ("days of data" vs "days between first and last"), and the failure was
+  // invisible because a null here is indistinguishable from not having weighed in enough.
+  //
+  // The damage was not a blank readout. weightPlanWeeks() falls back to a week's PLANNED rate when
+  // the actual is null, so every elapsed week read as planned, and the long-cut flag — whose stated
+  // premise is "a real walk over what you actually did, rather than a guess" — walked the guess.
+  const actualRate = await page.evaluate(() => {
+    const t = todayStr();
+    STATE.weightLog = [];
+    // A dense, unambiguous log: 0.2 lb/day down from 215 over 40 days ≈ 1.4 lb/wk ≈ 0.67%/wk.
+    for (let i = 40; i >= 0; i--) {
+      STATE.weightLog.push({ id: 'r' + i, date: shiftDate(t, -i), weightLb: 215 - (40 - i) * 0.2, calories: null, cardioCalories: null });
+    }
+    const pct = actualPctPerWeekAt(t);
+    // And the week walk must now SEE it as actual rather than falling back to the plan.
+    const weeks = weightPlanWeeks().filter(w => w.source === 'actual');
+    return { pct, actualWeeks: weeks.length };
+  });
+  console.log('7. actual rate:', JSON.stringify(actualRate));
+  if (actualRate.pct == null) throw new Error('actualPctPerWeekAt() returned null on a dense 40-day log — the window is off by one again');
+  if (!(actualRate.pct < -0.4 && actualRate.pct > -0.9)) {
+    throw new Error(`Expected roughly -0.67%/wk from a 0.2 lb/day drop, got ${actualRate.pct}`);
+  }
+  if (!actualRate.actualWeeks) throw new Error('With real weight data, elapsed weeks must read as actual, not planned');
+
   if (errors.length) throw new Error(errors.join('\n'));
   console.log('test_weight_plan.js: PASS');
   await browser.close();

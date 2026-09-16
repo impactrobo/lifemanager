@@ -464,6 +464,10 @@ const SLEEP_PROTOCOL_ANCHORS = [
 function defaultLifeState() {
   return {
     dailyLog: {},      // date -> { anchorId: true }
+    // Per-week record, keyed by the week's MONDAY: { off: bool, note: string }. Sparse -- a week
+    // you never annotated has no entry. `off` marks a week as a deliberate break; it changes no
+    // count in the weekly review, only what the review says about them. See app-review.js.
+    weekReview: {},
     periodicLog: {},   // anchorId -> last-done date string
     anchors: DEFAULT_DAILY_ANCHORS.map(a => Object.assign({}, a)),     // user-editable fixed daily habits — Schedule -> Setup -> Set Anchors
     periodic: DEFAULT_PERIODIC_ANCHORS.map(a => Object.assign({}, a)), // user-editable weekly/periodic check-ins — same screen
@@ -711,7 +715,7 @@ function defaultHomeLayout() {
     // so deleting an entry would silently drop those chips back to an unstyled fallback.
     sectionOrder: ['train', 'hobbies', 'notes', 'budget'],
     sectionHidden: [],
-    boxOrder: ['reminders', 'day', 'wakeup', 'calories'],
+    boxOrder: ['reminders', 'day', 'wakeup', 'calories', 'review'],
     boxHidden: [],
   };
 }
@@ -734,6 +738,9 @@ const HOME_SECTION_META = {
 const HOME_BOX_META = {
   reminders: { label: "TODAY'S REMINDERS" },
   day: { label: 'YOUR DAY' },
+  // Sits last by default, below today: a review is for reflecting on a week that has finished, not
+  // the first thing you need when you open the app in the morning. Hideable like any other box.
+  review: { label: 'YOUR WEEK' },
   // Ids kept as 'wakeup'/'calories' on purpose: the boxes changed shape, not identity, so no saved
   // layout needs migrating. Only the labels moved to the AM/PM framing.
   wakeup: { label: 'LOG \u00b7 AM' },
@@ -755,6 +762,10 @@ function defaultState() {
       accentByAesthetic: {}, noteTagNames: {}, customNoteTags: [], noteTagsMigrated: false, aesthetic: 'cyberpunk',
       restTimer: defaultRestTimerSettings(), mealUnitSystem: 'metric', defaultPage: 'home',
       waterTargetMl: 2000, waterServingMl: 250, waterUnit: 'ml', defaultReminderTime: '09:00',
+      // Daily targets the weekly review counts DAYS HIT against. Water already had one; these
+      // two are new, and exist because "hit your step target 5 of 7 days" needs a target to
+      // be a sentence at all. Edited beside their own log fields, same as water's.
+      stepsTargetDaily: 8000, sleepTargetHours: 7.5,
       homeLayout: defaultHomeLayout(),
       // Purely a user preference flag ("did I opt into this"). The actual signed-in/out truth
       // comes from Firebase Auth itself at runtime (see CLOUD SYNC section) — this just decides

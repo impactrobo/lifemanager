@@ -56,7 +56,7 @@ These are **not** requested features — they're natural extensions given the cu
 app, logged here so they're not lost, not so they get built unprompted. Confirm with the person
 before starting any of these.
 
-- **NetNavi / PET companions — discussed 2026-09-15, nothing built.** The app is already called
+- **NetNavi / PET companions — discussed 2026-09-15, nothing built.** (The weekly review it would speak on shipped 2026-09-16; its templates are the seam.) The app is already called
   LIFEMan.EXE, which is a Mega Man Battle Network reference, and that is where the idea came from.
   - **The source material is a real spec, not a sketch.** A "PET Device — Transfer Package" artifact
     holds six fully-written Navis, each with identity, backstory, appearance, personality,
@@ -146,11 +146,11 @@ before starting any of these.
 - **"Best Shape of Your Life" scope check (2026-09-14)** — for someone overweight, untrained,
   motivation-sensitive, with a longevity focus (biomarkers, supplementation) across health, money
   and personal development. Full scope published as an artifact; ranked by leverage, not size:
-  1. **Weekly review** (M) — process metrics reflected back: workouts done vs planned, habits kept,
-     water/steps/sleep target days hit, PRs set. The single highest-leverage item — every ingredient
-     already exists in `STATE`, nothing assembles it. Outcome metrics (the scale) demotivate someone
-     who struggles with motivation; process metrics ("did you show up") motivate. This is also the
-     surface most of the items below would land on.
+  1. ~~**Weekly review**~~ — **shipped 2026-09-16** (see Recently Shipped): workouts done vs
+     planned, habits kept, target days hit, PRs, weight as a rate, practice — plus a deliberate
+     off-week mark. Still the surface most of the items below would land on. **Not built:** a Navi
+     delivering it (see the NetNavi entry — templates first, deliberately), and nothing yet links
+     the review to the bad-day mode in item 6.
   2. ~~**Chart sleep & steps, add RHR/BP chips**~~ — **fully shipped 2026-09-15**: sleep hours,
      sleep quality, steps, resting heart rate and blood pressure (see Recently Shipped). BP was
      briefly held back as not fitting a single-value chart, then built once the water chip's
@@ -486,6 +486,50 @@ on an architecture split + a large wave of Maximalist aesthetics.
   pattern.
 
 ### Feature changes
+
+- **The weekly review (2026-09-16).** The Best Shape list's #1, and the top unbuilt item for two
+  weeks. `src/app-review.js`, surfaced as a YOUR WEEK box on Home.
+  - **Every section is planned vs actual**, because that is the only comparison a person controls.
+    This is also why it was only now buildable: before phases owned the plan, "planned" was a
+    weekday guess, and `plannedWorkoutsOn()` now resolves phase → plan → rotation slot for any date.
+  - `weeklyReview(mondayStr)` is **pure** — it reads STATE, renders nothing — so every count is
+    testable without the DOM. Sections: training done vs planned day by day, PRs, habits, daily
+    targets, weight as a rate, skills practice.
+  - **The denominators are the whole feature**, and `tests/test_weekly_review.js` pins nine of them.
+    A scheduled **day off leaves the denominator** (it is not a session you failed to do); an
+    **unmarked habit is its own count**, never a broken one; targets count **days hit out of days
+    logged**, not out of seven; an **opened-but-empty log is not a session**; an **unplanned session
+    is `extra`**, never a miss and never in `done`; and days still ahead inside the week in progress
+    are neither. A review that counts an unmarked habit as broken doesn't read as slightly wrong —
+    it tells you that you failed at something you didn't do.
+  - **No score, no grade, no streak, no week-completion bar** — the roadmap's own gamification line,
+    enforced by a test. Labs, measurements and budget are deliberately out: wrong cadence, and
+    stacking "you overspent" onto "you missed two sessions" is how a review becomes a screen you
+    avoid opening.
+  - **Weight is the one outcome metric allowed in, and only as a rate** — "−0.74%/wk, Standard Cut"
+    — read through the same `actualPctPerWeekAt()` the long-cut flag uses, so the two can never tell
+    you different stories about the same number.
+  - **A week can be marked a deliberate off week.** It changes no count, only what the review *says*
+    about them — the difference between a lapse and a choice, which is real data. Plus a free note.
+  - **Calendar weeks, Monday to Sunday.** Set Volume already moved to calendar weeks for the same
+    reason: a rotation can be five days, which makes "this week" meaningless if tied to it. The box
+    defaults to the most recently **completed** week and never switches mode by day-of-week.
+  - New settings: `stepsTargetDaily` and `sleepTargetHours`, edited beside their own log fields the
+    way water's target already was — "hit your step target 5 of 7 days" needs a target to be a
+    sentence at all.
+
+- **`actualPctPerWeekAt()` always returned null — found and fixed while building the review
+  (2026-09-16).** An off-by-one, live since the weight-plan work shipped. It asked for a window of
+  `GOAL_RATE_MIN_DAYS - 1` days while `weightTrendRateBetween()` rejects any span under
+  `GOAL_RATE_MIN_DAYS` — and the widest span inside a 14-day window is 13. The two constants meant
+  different things ("days of data" vs "days between first and last") and the gap was invisible
+  because a null is indistinguishable from not having weighed in enough.
+  - The damage was not a blank readout. `weightPlanWeeks()` falls back to a week's **planned** rate
+    when the actual is null, so every elapsed week read as planned — and `longCutState()`, whose
+    stated premise is "a real walk over what you actually did, rather than a guess", was walking the
+    guess. **The long-cut flag could only ever have fired on what you intended.**
+  - Guarded by `test_weight_plan.js` section 7, which asserts both a real rate off a dense log and
+    that elapsed weeks now read as `source: 'actual'`.
 
 - **Exercise identity: categories dissolve into lifts (2026-09-16).** Arc 2. The model inverted.
   - **A lift owns its own training maxes.** It used to work the other way: `STATE.categories` held

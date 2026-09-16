@@ -905,12 +905,26 @@ function renderLogPopup() {
         </div>`;
     }
     const shown = v == null ? '' : (f === 'weight' || f === 'sleepLen' ? fmt(v, 1) : v);
+    // Steps and sleep length carry a daily TARGET, set right here for the same reason water's is:
+    // this sheet is the only place the number is ever looked at. The weekly review counts days hit
+    // against them — without a target, "hit your step target 5 of 7 days" isn't a sentence.
+    const target = f === 'steps'
+      ? { value: stepsTargetDaily(), step: '500', setter: 'setStepsTarget' }
+      : f === 'sleepLen'
+      ? { value: sleepTargetHours(), step: '0.5', setter: 'setSleepTarget' }
+      : null;
     return `
       <div class="log-sheet-row">
         <span class="log-sheet-label">${LOG_FIELDS[f].label}</span>
         <input type="number" id="log_${f}" step="${LOG_FIELDS[f].step || '1'}" value="${shown}" inputmode="decimal">
         <span class="log-sheet-unit">${LOG_FIELDS[f].unit()}</span>
-      </div>`;
+      </div>
+      ${target ? `
+      <div class="log-sheet-row">
+        <span class="log-sheet-label" style="opacity:.7;">Daily target</span>
+        <input type="number" class="log-water-target" min="1" step="${target.step}" value="${target.value}" onchange="${target.setter}(this.value)">
+        <span class="log-sheet-unit">${LOG_FIELDS[f].unit()}</span>
+      </div>` : ''}`;
   }).join('');
   return `
     <div class="home-popup-backdrop" onclick="closeLogPopup()">
@@ -1063,6 +1077,7 @@ const HOME_BOX_RENDERERS = {
   day: () => renderHomeDayBox(),
   wakeup: () => renderHomeAmLogBox(),
   calories: () => renderHomePmLogBox(),
+  review: () => renderHomeReviewBox(),
 };
 function renderHomeBoxesSection() {
   const L = homeLayout();

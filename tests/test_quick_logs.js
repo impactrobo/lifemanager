@@ -52,8 +52,11 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     renderers: Object.keys(HOME_BOX_RENDERERS),
   }));
   console.log('boxes:', boxes);
-  if (JSON.stringify(boxes.order) !== JSON.stringify(['reminders', 'day', 'wakeup', 'calories'])) {
-    throw new Error(`Box ids should be unchanged, got ${JSON.stringify(boxes.order)}`);
+  // The point is that these four keep their IDS and their order, so no saved layout needs
+  // migrating — not that the list can never grow. A box appended after them (YOUR WEEK) is exactly
+  // the case loadState()'s boxOrder top-up already handles.
+  if (JSON.stringify(boxes.order.slice(0, 4)) !== JSON.stringify(['reminders', 'day', 'wakeup', 'calories'])) {
+    throw new Error(`The original four box ids should be unchanged and still lead, got ${JSON.stringify(boxes.order)}`);
   }
   if (!/AM/.test(boxes.amLabel) || !/PM/.test(boxes.pmLabel)) throw new Error('The two strips should be labelled AM and PM');
   if (!/^LOG/.test(boxes.amLabel) || !/^LOG/.test(boxes.pmLabel)) throw new Error('Both labels share the LOG prefix so they read as one section');
@@ -125,8 +128,20 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (opened.focused !== 'log_sleepQual') throw new Error(`The sheet should open focused on the chip you tapped, got ${opened.focused}`);
   if (!opened.hasWeight) throw new Error('The AM sheet holds the whole morning group, not just one field');
   if (opened.hasCalories) throw new Error('The AM sheet must not carry PM fields');
-  // weight, sleep length, sleep quality, resting HR, blood pressure.
-  if (opened.rows !== 4) throw new Error(`Expected 4 rows in the AM sheet, got ${opened.rows}`);
+  // Every AM field has a control and no PM field does — derived from LOG_FIELDS rather than a row
+  // count, which counted presentation (a field's own daily-target row is a row too) instead of the
+  // contract, and had to be re-tallied by hand whenever a row was added.
+  const groups = await page.evaluate(() => {
+    const missing = [], strays = [];
+    Object.keys(LOG_FIELDS).forEach(f => {
+      const present = !!document.getElementById('log_' + f) || f === 'water';
+      if (LOG_FIELDS[f].group === 'am' && !present) missing.push(f);
+      if (LOG_FIELDS[f].group === 'pm' && document.getElementById('log_' + f)) strays.push(f);
+    });
+    return { missing, strays };
+  });
+  if (groups.missing.length) throw new Error(`AM fields missing from the AM sheet: ${groups.missing}`);
+  if (groups.strays.length) throw new Error(`PM fields leaked into the AM sheet: ${groups.strays}`);
 
   // ---- 5. Saving writes every field in the group at once ----
   await page.fill('#log_weight', '181.2');
