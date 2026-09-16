@@ -69,4 +69,19 @@ against a synthetic old-shape save, but your actual data is the one fixture the 
 - [ ] Open today's session on WORKOUTS: target weights match what you'd expect from your TM, and a
       previously queued "+X starting next workout" increase is still applied.
 
+## Weight rate & the long-cut flag (2026-09-16)
+`actualPctPerWeekAt()` returned null for every input from the day the weight-plan work shipped
+until 2026-09-16 — an off-by-one in its window. Because `weightPlanWeeks()` falls back to a week's
+PLANNED rate when the actual is null, **every elapsed week read as planned, and the long-cut flag
+could only ever have fired on what you intended rather than what you actually did.** Now fixed, so
+the flag is seeing your real weight history for the first time. That's a behaviour change against
+real data, and only your own log can confirm it reads correctly.
+- [ ] PHASES → weight plan: elapsed weeks now show your ACTUAL rate, not the planned number. A week
+      you clearly over- or under-shot should no longer read as exactly what you scheduled.
+- [ ] The long-cut flag: it may fire now when it never did before. If it does, check the six-week
+      run it's pointing at against what you actually remember doing — a flag on a run that wasn't
+      really six hard weeks means the rate is reading wrong, not that you over-cut.
+- [ ] Home → YOUR WEEK → WEIGHT: shows a rate and a band at all (it needs ~15 days of weigh-ins). A
+      dash here with a full log would mean the window is off again.
+
 ## Add future items below as new features ship
