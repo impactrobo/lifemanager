@@ -141,9 +141,16 @@ function phaseTimeline() {
     //
     // A perpetual phase projects nothing: with no end there is no end weight, and inventing one from
     // "however long it has run so far" would show a figure that moves every day on its own.
-    const endWeightLb = (perpetual || startWeightLb == null)
-      ? null
-      : startWeightLb * Math.pow(1 + phaseSignedPct(phase) / 100, weeks);
+    // Week by WEEK, not the mean raised to a power. With a flat rate the two are identical; with a
+    // per-week schedule they are not -- (1+a)(1+b) is not (1+(a+b)/2)^2 -- and a phase that drops a
+    // Fast Cut stretch into the middle of a conservative block is exactly the case that would
+    // project wrong. The difference is second-order, but the whole point of per-week rates is that
+    // the weeks differ, so the projection has to honour that they do.
+    let endWeightLb = null;
+    if (!perpetual && startWeightLb != null) {
+      endWeightLb = startWeightLb;
+      for (let w = 0; w < weeks; w++) endWeightLb *= 1 + phaseRateForWeek(phase, w) / 100;
+    }
     weightLb = endWeightLb;
     return {
       phase, index, weeks, startDate, endDate, perpetual,
@@ -1159,7 +1166,7 @@ function renderBandNote(entry, g) {
   return `
       <div class="phase-cal-note" style="margin-top:8px;">
         ${escapeHtml(entry.band.note)}
-        ${cutting ? ' ' + escapeHtml(leannessNote(phaseSignedPct(entry.phase))) : ''}
+        ${cutting ? ' ' + escapeHtml(leannessNote()) : ''}
       </div>`;
 }
 

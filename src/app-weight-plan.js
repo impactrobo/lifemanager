@@ -203,11 +203,21 @@ function weightPlanWeeks() {
   if (!tl.length) return [];
   const today = todayStr();
   const last = tl[tl.length - 1];
-  // A perpetual tail has no planned end, so there is nothing scheduled past today to look at.
-  const horizon = last.endDate || today;
-  let cursor = tl[0].startDate;
+  // A perpetual tail has no planned end, so there is nothing scheduled past today to look at. A
+  // finite one is capped a year out: the flag needs about twelve weeks of lookahead, not a plan
+  // that runs to 2030.
+  const farthest = shiftDate(today, WEIGHT_WALK_MAX_WEEKS * 7);
+  const horizon = last.endDate ? (last.endDate < farthest ? last.endDate : farthest) : today;
+  const origin = tl[0].startDate;
+  let cursor = origin;
   const earliest = shiftDate(today, -WEIGHT_WALK_MAX_WEEKS * 7);
-  if (cursor < earliest) cursor = earliest;
+  // Clamp to a year back -- but snap to the phase's OWN week boundaries while doing it. Weeks are
+  // counted from the origin, and a per-week schedule is indexed by that count; a cursor that
+  // started on an arbitrary Wednesday would read every phase's week 3 as its week 2.
+  if (cursor < earliest) {
+    const weeksIn = Math.ceil(daysBetween(origin, earliest) / 7);
+    cursor = shiftDate(origin, weeksIn * 7);
+  }
   const out = [];
   for (let guard = 0; cursor <= horizon && guard < WEIGHT_WALK_MAX_WEEKS * 2; guard++) {
     const weekEnd = shiftDate(cursor, 6);
@@ -312,7 +322,12 @@ function maintenanceDrift(entry) {
   const g = phaseWeightGoal(entry.phase);
   if (!g || g.direction !== 'maintain') return null;
   const until = entry.state === 'current' ? todayStr() : entry.endDate;
-  const r = weightTrendRateBetween(entry.startDate, until);
+  // A TRAILING window, not the whole phase. Drift is "are you moving NOW"; the rate over a 200-day
+  // maintain would average a fortnight of real loss against six months of holding and report
+  // nothing. GOAL_RATE_WINDOW_DAYS is already the app's answer to "recent enough to be current".
+  const windowStart = shiftDate(until, -(GOAL_RATE_WINDOW_DAYS - 1));
+  const from = windowStart > entry.startDate ? windowStart : entry.startDate;
+  const r = weightTrendRateBetween(from, until);
   if (!r || !r.currentTrendLb) return null;
   const pct = (r.lbPerWeek / r.currentTrendLb) * 100;
   if (Math.abs(pct) < MAINTAIN_DRIFT_PCT) return null;
@@ -337,7 +352,7 @@ function recentBodyFatPct() {
   if (!hit || daysBetween(hit.date, t) > BODY_FAT_STALE_DAYS) return null;
   return { pct: Number(hit.bodyFatPct), date: hit.date };
 }
-function leannessNote(pctPerWeek) {
+function leannessNote() {
   const bf = recentBodyFatPct();
   if (!bf) {
     return 'The leaner you are, the slower a cut should go — fat mass sets a ceiling on how fast fat can actually come off.';

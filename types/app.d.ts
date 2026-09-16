@@ -206,9 +206,17 @@ interface GoalPhase {
   kind: 'weight' | 'exercise';
   label: string;
   weeks: number;
-  /** Weight phases only -- an exercise block carries a plan instead of a rate. */
-  direction?: 'deficit' | 'maintain' | 'surplus';
-  ratePctPerWeek?: number;
+  /** The weight goal, or null for none. Three states, not two: null means nothing is watched and
+   *  calories fall back to TDEE; {direction:'maintain'} means DELIBERATELY holding, which turns on
+   *  drift detection; a deficit/surplus carries a rate schedule -- flat via ratePctPerWeek, or
+   *  per-week when weekRates is an array (seeded from the flat rate; past its end the flat rate
+   *  carries on). Stored keys stay deficit/maintain/surplus; the labels are Cut/Maintain/Bulk.
+   *  See app-weight-plan.js. */
+  weightGoal: {
+    direction: 'deficit' | 'maintain' | 'surplus';
+    ratePctPerWeek: number;
+    weekRates: number[] | null;
+  } | null;
   /** Exercise blocks only: this block's own weekday -> workout-slot map. Seeded as a COPY of
    *  whatever plan was in effect where the block starts, never a shared reference -- aliasing it
    *  would make editing the new block silently rewrite the old one. */

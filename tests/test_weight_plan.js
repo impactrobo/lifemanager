@@ -112,6 +112,55 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     throw new Error('Toggling off drops the per-week values and keeps the flat rate');
   }
 
+  // ---- 3b. The projection compounds WEEK BY WEEK, not the mean raised to a power ----
+  // (1+a)(1+b) is not (1+(a+b)/2)^2. The difference is second-order, but a per-week schedule exists
+  // precisely because the weeks differ, so the projection has to honour that they do.
+  const compounding = await page.evaluate(() => {
+    const t = todayStr();
+    STATE.weightLog = [];
+    for (let d = 10; d >= 0; d--) STATE.weightLog.push({ id: 'w' + d, date: shiftDate(t, -d), weightLb: 200, calories: null, cardioCalories: null });
+    STATE.phases = []; STATE.phaseOrigin = t;
+    STATE.phases.push(newPhase({ id: 'v', label: 'Varied', weeks: 4,
+      weightGoal: newWeightGoal({ direction: 'deficit', ratePctPerWeek: 0.5, weekRates: [0.2, 0.2, 1.8, 1.8] }) }));
+    const e = phaseTimeline()[0];
+    let walked = e.startWeightLb;
+    [0.2, 0.2, 1.8, 1.8].forEach(r => { walked *= 1 - r / 100; });
+    const mean = e.startWeightLb * Math.pow(1 - 1.0 / 100, 4);   // mean is 1.0 -- what the OLD code did
+    return { projected: e.endWeightLb, walked, mean };
+  });
+  console.log('3b. per-week compounding:', JSON.stringify(compounding));
+  if (Math.abs(compounding.projected - compounding.walked) > 0.0001) {
+    throw new Error(`Projection must compound each week in turn: expected ${compounding.walked}, got ${compounding.projected}`);
+  }
+  if (Math.abs(compounding.walked - compounding.mean) < 0.0001) {
+    throw new Error('The fixture must make week-by-week and mean-to-a-power differ, or this test proves nothing');
+  }
+
+  // ---- 3c. A save from BETWEEN the two migrations keeps its rate ----
+  // Commit 1 left direction/ratePctPerWeek flat on the phase; commit 2 moved them into weightGoal.
+  // The move ran inside migratePhasesToOneTimeline(), which returns early for a save that is
+  // already one timeline -- so a phase saved in between had no weightGoal, and the normaliser then
+  // set it to null and dropped the rate. The conversion has to run on every load, unconditionally.
+  await page.evaluate(() => {
+    STATE.phases = []; STATE.phaseOrigin = todayStr();
+    // Exactly the shape commit 1 wrote: no kind, no goalId, no weightGoal, flat rate fields.
+    STATE.phases.push({ id: 'between', label: 'Between', weeks: 8, direction: 'deficit', ratePctPerWeek: 0.9,
+      calorieTarget: null, calorieSetOn: null, createdAt: 1,
+      exercisePlan: { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] }, mealPlan: { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] } });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(STATE));
+  });
+  await page.reload();
+  await settle(page);
+  const between = await page.evaluate(() => {
+    const p = STATE.phases.find(x => x.id === 'between');
+    return { hasGoal: !!(p && p.weightGoal), dir: p && p.weightGoal && p.weightGoal.direction,
+             rate: p && p.weightGoal && p.weightGoal.ratePctPerWeek, flatGone: p && p.direction === undefined };
+  });
+  console.log('3c. between-migrations save:', JSON.stringify(between));
+  if (!between.hasGoal) throw new Error('A flat direction/rate from the previous commit must become a weightGoal, not be nulled');
+  if (between.dir !== 'deficit' || Math.abs(between.rate - 0.9) > 0.0001) throw new Error(`The rate must survive the move: ${JSON.stringify(between)}`);
+  if (!between.flatGone) throw new Error('The flat field must be REPLACED, not kept alongside');
+
   // ---- 4. The long-cut flag: a state machine, driven week by week ----
   // Built from PLANNED rates with no weight log, which is the honest default: with nothing logged,
   // what you intended is the only evidence there is. It also means the flag warns you when you're

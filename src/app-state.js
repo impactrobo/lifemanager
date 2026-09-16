@@ -427,6 +427,12 @@ function migrateState() {
   });
   migratePhasesToOneTimeline();
   ensurePerpetualPhase();
+  // Called HERE, unconditionally, and not only from inside migratePhasesToOneTimeline(): that one
+  // returns early for any save that is already one timeline, and a save from between the two
+  // migrations has flat direction/ratePctPerWeek with no weightGoal yet. Without this call,
+  // normalisePhaseWeightGoals() below would see an undefined weightGoal, set it to null, and drop
+  // the rate on the floor. Idempotent, so running it twice on an older save costs nothing.
+  migratePhaseWeightGoals();
   normalisePhaseWeightGoals();
   // Every phase now carries BOTH plans, so both get the same normalisation -- a malformed one would
   // break every weekday read through it, and guarding seven array lookups at each call site is more

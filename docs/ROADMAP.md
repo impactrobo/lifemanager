@@ -532,6 +532,19 @@ on an architecture split + a large wave of Maximalist aesthetics.
     the present tense. `flaggedSince` also used the week's **end** date, which called a run
     "planned" whenever its sixth week merely finished in a few days. Now anchored to the start date,
     with a separate *A LONG CUT AHEAD* wording for runs still in front of you.
+  - **A second-pass review found seven more.** The serious one: `migratePhaseWeightGoals()` ran only
+    from inside `migratePhasesToOneTimeline()`, which returns early for any save that's already one
+    timeline — so a save from *between* commits 1 and 2 had flat `direction`/`rate` and no
+    `weightGoal`, and the normaliser then set it to null and **dropped the rate**. It now runs
+    unconditionally on every load, and there's a test that writes exactly that in-between shape and
+    reloads. Also: the projection compounded the **mean** rate raised to a power rather than each
+    week in turn — `(1+a)(1+b) ≠ (1+(a+b)/2)²`, a quarter-pound over four weeks on the test fixture
+    and the whole reason per-week rates exist; the week-walk's 52-week clamp could knock the cursor
+    off the phase's own week boundaries, so a per-week schedule read week 3 as week 2; drift read
+    the *whole* phase rather than a trailing window, so a 200-day maintain would average a fortnight
+    of real loss against six months of holding and report nothing; the forward horizon was capped
+    only by a loop guard; the `GoalPhase` type still declared the flat fields; and `leannessNote`
+    took a parameter it never read.
 
 - **Phases became the primary record — one timeline, goals optional (2026-09-16).** Commit 1 of the
   phases/rotations arc. The model inverted: a **goal** used to be the record, with a `kind`
