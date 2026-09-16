@@ -519,6 +519,16 @@ on an architecture split + a large wave of Maximalist aesthetics.
     evening reading in a negative-offset zone would file under tomorrow, showing as "today" a day
     early and dropping out of yesterday's average.
 
+- **The water chip opens its sheet (2026-09-16).** An access bug from the per-field sheets, caught
+  immediately: the hydration colour scale lives in the water sheet, and it had only ever been
+  reachable because the OLD pm sheet rendered *every* pm field — so you got to it through the
+  Calories chip. Making each chip open only its own field turned the water chip into the only door
+  to the colour tracker, and that door added a serving instead of opening. The chip opens now, and
+  adding moved inside: the +/- servings it always had, plus a box for an amount that isn't a
+  multiple of one glass (a 600 mL bottle), which counting glasses can't express. The `+` glyph came
+  off the chip with the behaviour it described. One extra tap for a glass of water, against a
+  tracker that had become unreachable altogether.
+
 - **"Modded" sessions, and collapsible exercise blocks (2026-09-16).** The bad-day half of the
   on-ramp item, scoped from how the person already trains: when short on time they keep the T1 (or
   the first hypertrophy exercise — in RP-style programming the ordering already encodes priority,

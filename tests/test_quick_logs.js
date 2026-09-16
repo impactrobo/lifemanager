@@ -82,20 +82,57 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (empty.water !== '0/2000') throw new Error(`Water should show progress even at zero, got "${empty.water}"`);
   if (empty.setChips !== 0) throw new Error('Nothing is logged, so no chip should read as set');
 
-  // ---- 3. Water logs straight off the chip ----
-  // It's the one of these you hit several times a day; a sheet round trip for a glass of water
-  // would be absurd, so its chip increments instead of opening anything.
+  // ---- 3. The water chip opens its sheet, and water is added from inside ----
+  // It used to increment on tap, since a glass of water is the one of these you hit several times a
+  // day. That stopped being viable when sheets became per-field: the hydration colour scale lives in
+  // the water sheet, and it had only ever been reachable because the old PM sheet rendered EVERY pm
+  // field — so you got to it through the Calories chip. Per-field sheets made the water chip the
+  // only door to it, and that door added water instead of opening. One extra tap for a glass, in
+  // exchange for a tracker you can actually reach.
   const water = await page.evaluate(async () => {
     const chip = Array.from(document.querySelectorAll('.log-chip')).find(c => /WATER/i.test(c.textContent));
     chip.click();
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-    chip.click ? null : null;
-    return { after: logFieldValue('water'), display: logFieldDisplay('water'), popupOpened: !!UI.logPopup };
+    return {
+      popupOpened: !!UI.logPopup, field: UI.logPopup && UI.logPopup.field,
+      hasColorScale: !!document.querySelector('.log-color-scale'),
+      hasAddBox: !!document.getElementById('waterAddAmount'),
+      before: logFieldValue('water'),
+    };
   });
-  console.log('after one tap on the water chip:', water);
-  if (water.after !== 250) throw new Error(`Tapping water should log one serving in mL, got ${water.after}`);
-  if (water.display !== '250/2000') throw new Error(`Water chip should read 250/2000, got ${water.display}`);
-  if (water.popupOpened) throw new Error('The water chip logs directly — it must not open the sheet');
+  console.log('after tapping the water chip:', water);
+  if (!water.popupOpened || water.field !== 'water') throw new Error('The water chip must open the water sheet');
+  if (!water.hasColorScale) throw new Error('...which is the only way to reach the hydration colour scale');
+  if (water.before) throw new Error('Opening the sheet must not log anything by itself');
+
+  // +/- adds one serving; the box adds an amount that isn't a multiple of one.
+  const added = await page.evaluate(async () => {
+    addWater(1);
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const oneServing = logFieldValue('water');
+    addWaterAmount('600');
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const custom = logFieldValue('water');
+    addWaterAmount('');            // nothing typed
+    addWaterAmount('0');
+    addWaterAmount('-50');         // no going backwards through the add box
+    return { oneServing, custom, afterJunk: logFieldValue('water'),
+             boxCleared: (document.getElementById('waterAddAmount') || {}).value };
+  });
+  console.log('adding water:', JSON.stringify(added));
+  if (added.oneServing !== 250) throw new Error(`+ should add one serving, got ${added.oneServing}`);
+  if (added.custom !== 850) throw new Error(`The box should add exactly what you typed (250+600), got ${added.custom}`);
+  if (added.afterJunk !== 850) throw new Error('Blank, zero and negative amounts add nothing');
+  if (added.boxCleared !== '') throw new Error('The box empties after adding, ready for the next one');
+  await page.evaluate(() => { closeLogPopup(); todayLifeLog().waterMl = 0; saveState(); });
+  await settle(page);
+  const water2 = await page.evaluate(async () => {
+    addWater(1);
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    return { after: logFieldValue('water'), display: logFieldDisplay('water') };
+  });
+  if (water2.after !== 250) throw new Error(`One serving should be 250 mL, got ${water2.after}`);
+  if (water2.display !== '250/2000') throw new Error(`Water chip should read 250/2000, got ${water2.display}`);
 
   const clamped = await page.evaluate(() => {
     addWater(-5);                 // past the bottom

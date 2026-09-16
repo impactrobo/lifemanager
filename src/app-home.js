@@ -807,9 +807,16 @@ function waterColorInsight() {
 }
 function logChip(field) {
   const logged = field === 'water' ? (logFieldValue('water') || 0) > 0 : logFieldValue(field) != null;
-  // Water's chip logs instead of opening the sheet -- a glass of water is the one of these you hit
-  // several times a day, and making that a sheet-open-type-save round trip would be absurd.
-  const onclick = field === 'water' ? `addWater(1)` : `openLogPopup('${field}')`;
+  // Water's chip used to log a serving on tap, on the reasoning that it's the one of these you hit
+  // several times a day. That stopped working the moment sheets became per-field: the colour scale
+  // lives in the water sheet, and it had been reachable only because the old PM sheet rendered
+  // EVERY pm field, so you got to it through the Calories chip. Per-field sheets made the water
+  // chip the only door to it, and that door added water instead of opening.
+  //
+  // So the chip opens, and the adding moved inside: the +/- servings it always had, plus a box for
+  // an amount that isn't a multiple of one glass. One extra tap for a glass of water, against a
+  // tracker you could no longer reach at all.
+  const onclick = `openLogPopup('${field}')`;
   // Water carries two extras: its unit (the numbers are meaningless without it) and a dot of the
   // current colour marker, which is the whole point of a marker that "lasts until changed" -- it
   // has to be visible without opening anything.
@@ -829,7 +836,7 @@ function logChip(field) {
   if (pulse) UI.waterPulse = false;
   return `<button class="log-chip ${logged ? 'log-chip-set' : ''} ${wide ? 'log-chip-wide' : ''} ${field === 'water' ? 'log-chip-water' : ''} ${pulse ? 'log-chip-pulse' : ''}" onclick="${onclick}">
     <span class="log-chip-label">${label}</span>
-    <span class="log-chip-value">${logFieldDisplay(field)}${field === 'water' ? '<i class="log-chip-plus">+</i>' : ''}${dot}</span>
+    <span class="log-chip-value">${logFieldDisplay(field)}${dot}</span>
   </button>`;
 }
 function renderLogStrip(group, fields) {
@@ -888,6 +895,17 @@ function saveLogField(field, raw, quiet) {
 }
 // Water increments straight off the chip. Clamped at zero so tapping past the bottom in the sheet
 // can't drive it negative; there's deliberately no upper clamp -- the target is a target, not a cap.
+// An arbitrary amount, in whatever unit is set. The +/- buttons add ONE serving, which is right for
+// a glass you drink all day; this is for the bottle that isn't a multiple of one.
+function addWaterAmount(raw) {
+  const ml = displayToMl(raw);
+  if (!ml || !isFinite(ml) || ml <= 0) return;
+  const log = todayLifeLog();
+  log.waterMl = Math.max(0, (log.waterMl || 0) + ml);
+  UI.waterPulse = true;
+  saveState();
+  render();   // the input is rebuilt empty, which is the "added, ready for the next one" signal
+}
 function addWater(servings) {
   const log = todayLifeLog();
   log.waterMl = Math.max(0, (log.waterMl || 0) + servings * waterServingMl());
@@ -950,8 +968,9 @@ function renderLogPopup() {
   const rows = fields.map(f => {
     const v = logFieldValue(f);
     if (f === 'water') {
-      // Water is a counter, not a text field -- it gets the same +/- it has on the chip plus the
-      // target, which is set here because this is the only place the number is ever looked at.
+      // Water is a counter, not a text field: the +/- add one serving, which is the right shape for
+      // a glass you refill all day. The box under it takes an amount that ISN'T a multiple of one
+      // -- a 600 mL bottle, the last third of a flask -- which counting glasses can't express.
       const cur = waterColorValue();
       return `
         <div class="log-sheet-row">
@@ -963,6 +982,14 @@ function renderLogPopup() {
             <span class="log-sheet-unit">of ${fmtWater(waterTargetMl())}</span>
             <span class="log-sheet-unit">${waterUnitLabel()}</span>
           </div>
+        </div>
+        <div class="log-sheet-row">
+          <span class="log-sheet-label">Add</span>
+          <input type="number" id="waterAddAmount" min="0" step="${waterUnit() === 'cup' ? '0.25' : '10'}"
+                 placeholder="0" inputmode="decimal"
+                 onkeydown="if(event.key==='Enter'){event.preventDefault();addWaterAmount(this.value);}">
+          <span class="log-sheet-unit">${waterUnitLabel()}</span>
+          <button class="btn btn-sm btn-primary" onclick="addWaterAmount(inputVal('waterAddAmount'))">+ ADD</button>
         </div>
         <div class="log-sheet-row">
           <span class="log-sheet-label">Units</span>
