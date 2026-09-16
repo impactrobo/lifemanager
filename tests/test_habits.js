@@ -74,8 +74,15 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   const brokeBtn = await page.$(`button[onclick="toggleHabitOn('${habit.id}','broken','${today}')"]`);
   await brokeBtn.click();
   await settle(page);
+  // A break is irreversible, so it is gated behind two confirmations — the first asks whether you
+  // mean it, the second says plainly that it can't be undone. One click now writes nothing.
+  // test_habit_break.js owns that behaviour; this only has to get through the gate.
+  const midGate = await page.evaluate((id) => habitStatusOn(id, todayStr()), habit.id);
+  if (midGate !== 'kept') throw new Error(`One click on BROKE must not write yet, got '${midGate}'`);
+  await page.evaluate(() => { confirmYes(); confirmYes(); });
+  await settle(page);
   const afterBroke = await page.evaluate((id) => habitStatusOn(id, todayStr()), habit.id);
-  if (afterBroke !== 'broken') throw new Error(`Expected 'broken' after clicking BROKE, got '${afterBroke}'`);
+  if (afterBroke !== 'broken') throw new Error(`Expected 'broken' after confirming BROKE twice, got '${afterBroke}'`);
   await page.evaluate((id) => setHabitStatus(id, todayStr(), null), habit.id); // reset for the rest of the test
 
   // 4. Streak math against a fully hand-computed fixture — kept for 6 days, then a broken day,

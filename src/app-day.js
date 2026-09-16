@@ -244,6 +244,7 @@ function renderDayUntimedItems(dateStr) {
   // whole point of being able to look back at a day you forgot to log.
   const habitsHtml = !habits.length ? '' : group('HABITS', entityColor('habit'), habits.map(h => {
     const status = habitStatusOn(h.id, dateStr);
+    const locked = status === 'broken';
     // A habit you've MARKED -- either way -- is settled for the day and stops competing with the
     // ones still open. `.done-keep` on the button pair so the marks you'd tap to change your mind
     // stay at full strength; see the .is-done block in styles.css for why that matters.
@@ -253,9 +254,13 @@ function renderDayUntimedItems(dateStr) {
         ${/* The tooltips say what the marks MEAN for this habit: "Did it / Skipped it" for one you
               perform, "Avoided it / Gave in" for one you abstain from. Same two stored values
               either way -- only the words change, so switching a habit's type never inverts its
-              history. */''}
-        <button class="btn btn-sm ${status==='kept'?'btn-good':''}" onclick="toggleHabitOn('${h.id}','kept','${dateStr}')" title="${habitMarkLabels(h).kept}">${icon('check')}</button>
-        <button class="btn btn-sm ${status==='broken'?'btn-danger':''}" onclick="toggleHabitOn('${h.id}','broken','${dateStr}')" title="${habitMarkLabels(h).broken}">${icon('close')}</button>
+              history.
+
+              A broken day is LOCKED (see toggleHabitOn). Both buttons stay on screen and stay
+              legible, because the cross is the record -- hiding or greying it to nothing would
+              erase from the eye what the data still says. They just no longer act. */''}
+        <button class="btn btn-sm ${status==='kept'?'btn-good':''}${locked?' habit-mark-locked':''}" onclick="toggleHabitOn('${h.id}','kept','${dateStr}')" title="${locked ? 'Locked — a break can’t be undone' : habitMarkLabels(h).kept}">${icon('check')}</button>
+        <button class="btn btn-sm ${status==='broken'?'btn-danger':''}${locked?' habit-mark-locked':''}" onclick="toggleHabitOn('${h.id}','broken','${dateStr}')" title="${locked ? 'Locked — a break can’t be undone' : habitMarkLabels(h).broken}">${icon('close')}</button>
       </span>
     </div>`;
   }).join(''));

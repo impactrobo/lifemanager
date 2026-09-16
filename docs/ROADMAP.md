@@ -519,6 +519,33 @@ on an architecture split + a large wave of Maximalist aesthetics.
     evening reading in a negative-offset zone would file under tomorrow, showing as "today" a day
     early and dropping out of yesterday's average.
 
+- **Breaking a habit is permanent (2026-09-16).** The only irreversible write in the app, and the
+  reason is the point: **a streak you can quietly repair on a bad Tuesday is decoration.** The
+  record is yours to make and nobody's to edit afterwards, including yours.
+  - This was initially pushed back on, as sitting near the roadmap's own "no streak-shaming" line
+    and as friction on honest self-reporting. That reading was wrong, and worth writing down: the
+    double-confirm isn't there to *discourage* marking a fail, it's the gate before an **irreversible
+    write**. That makes it a commitment device — you binding your future self — rather than the app
+    judging you, which is a different thing entirely and squarely the person's own call.
+  - **Two confirmations**: the first asks whether you mean it, the second says plainly that it can't
+    be undone. An irreversible write behind a single tap is a mis-tap waiting to happen.
+  - **The asymmetry runs one way only.** `kept` stays freely changeable, `kept → broken` included,
+    because admitting a failure later is honest. Only `broken → anything` is refused, because that
+    is the direction that rewrites history in your own favour. Both buttons stay on screen and
+    legible when locked — the cross is the *record*, and greying it away would erase from the eye
+    what the data still says — they simply no longer act, and say so.
+  - `broken` **implies** locked; there is no separate lock registry. A second store for "is this one
+    locked" is a second thing to keep in step, and the status already answers it.
+  - **A shake and a red wash**, once, after the write — it reacts to what happened rather than
+    trying to talk you out of it. Both are skipped under `prefers-reduced-motion`; the line carries
+    the message, the movement is only the delivery.
+  - **`habitBreakLine()` is the seam where a Navi will speak.** Templates, deliberately: the roadmap
+    is explicit that building prompt-first bakes the personalities into strings nothing can test
+    offline, turning a later model swap into an architecture change rather than a content one. A
+    test asserts the line never mentions the streak it just cost, never asks for better, and never
+    makes the app the injured party — *"a Navi reacts to what you did, it never asks you to do it
+    for the Navi."*
+
 - **The hydration strip carries yesterday; habits know "do" from "don't" (2026-09-16).**
   - **One strip instead of three rows.** `YEST ▪ | OLDER ▪▪▪▪▪▪▪▪ NOW`. Yesterday's reference used
     to sit on its own line under the scale, so a swatch and a strip were both claiming to say where

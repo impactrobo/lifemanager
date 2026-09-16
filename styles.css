@@ -1504,6 +1504,35 @@ input[type="number"].lab-range-in {
   -webkit-tap-highlight-color: transparent;
 }
 .log-color-clear:hover { border-color: var(--bad); color: var(--bad); }
+/* ---------- Breaking a habit ---------- */
+/* A shake and a red wash, once, on an irreversible write. Deliberately short: it marks the moment
+   and gets out of the way. Both are skipped under prefers-reduced-motion -- the line in the toast
+   carries the message, the movement is only the delivery. */
+@keyframes break-shake {
+  0%, 100% { transform: translateX(0); }
+  15% { transform: translateX(-7px); }
+  30% { transform: translateX(6px); }
+  45% { transform: translateX(-5px); }
+  60% { transform: translateX(4px); }
+  75% { transform: translateX(-2px); }
+}
+body.break-shake { animation: break-shake 0.52s cubic-bezier(.36,.07,.19,.97); }
+@keyframes break-flash {
+  0% { opacity: 0; }
+  22% { opacity: 0.5; }
+  100% { opacity: 0; }
+}
+.break-flash {
+  position: fixed; inset: 0; z-index: 400; pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 35%, var(--bad) 100%);
+  animation: break-flash 0.52s ease-out forwards;
+}
+/* A locked day: the cross stays legible as a RECORD, but stops presenting itself as a control. */
+.habit-mark-locked { cursor: not-allowed; }
+@media (prefers-reduced-motion: reduce) {
+  body.break-shake { animation: none; }
+  .break-flash { display: none; }
+}
 /* Fixed swatch hex again, same reason as the scale itself: a physical reference must not follow
    the aesthetic's palette. */
 .log-trend-dot {

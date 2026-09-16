@@ -255,10 +255,82 @@ function setHabitStatus(habitId, dateStr, status) {
 // dateStr is optional and defaults to today — Home's habits box always means today, while the
 // Calendar's Day view passes the date actually being viewed, so a habit can be marked on a day
 // you forgot to log. Exactly the same arrangement toggleDailyAnchor() already uses for anchors.
+// ---- A break is permanent, and that is the whole point ----
+//
+// Marking a habit broken is the one write in this app you cannot take back. It is a COMMITMENT
+// DEVICE, not a punishment: the value of a streak is that it can actually be lost, and a streak you
+// can quietly repair on a bad Tuesday is decoration. So the record is yours to make and nobody's to
+// edit afterwards -- including yours.
+//
+// The asymmetry is deliberate and it only runs one way. 'kept' stays freely changeable, including
+// kept -> broken, because admitting a failure later is honest. Only broken -> anything is refused,
+// because that is the direction that rewrites history in your own favour.
+//
+// Two confirmations, for the same reason a permanent thing gets two: the first asks whether you
+// mean it, the second says plainly that it cannot be undone. An irreversible write behind a single
+// tap is a mis-tap waiting to happen.
+// The moment itself: a shake, a red wash, and a line. It lands AFTER the write, never before -- it
+// reacts to what happened rather than trying to talk you out of it.
+//
+// Honoured `prefers-reduced-motion` by skipping the movement and keeping the line, because the
+// message is the content and the shake is the delivery.
+const HABIT_BREAK_MS = 520;
+function breakHabitFeedback(habit) {
+  showToast(habitBreakLine(habit));
+  const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reduced) return;
+  const flash = document.createElement('div');
+  flash.className = 'break-flash';
+  document.body.appendChild(flash);
+  document.body.classList.add('break-shake');
+  setTimeout(() => {
+    document.body.classList.remove('break-shake');
+    flash.remove();
+  }, HABIT_BREAK_MS);
+}
+// WHERE A NAVI WILL SPEAK. Written as templates on purpose, and the roadmap's NetNavi entry says
+// why: built prompt-first, the personalities bake into strings nothing can test offline, and
+// swapping a model in later becomes an architecture change rather than a content one. This is the
+// seam -- one function, one habit, one line -- so a Navi replaces the body and nothing else.
+//
+// The line reacts and stops. It never asks you to do better, never invokes a streak you just lost,
+// and never makes the app the injured party: "A Navi reacts to what you did. It never asks you to
+// do it for the Navi."
+const HABIT_BREAK_LINES = [
+  'Logged. Tomorrow is its own day.',
+  'Recorded. That is what honest looks like.',
+  'Noted — and it stays noted. Onward.',
+  'Marked. One day is a day, not a verdict.',
+];
+function habitBreakLine(habit) {
+  const i = Math.floor(Math.random() * HABIT_BREAK_LINES.length);
+  return HABIT_BREAK_LINES[i];
+}
+function habitIsLocked(habitId, dateStr) {
+  return habitStatusOn(habitId, dateStr || todayStr()) === 'broken';
+}
 function toggleHabitOn(habitId, status, dateStr) {
   const d = dateStr || todayStr();
   const current = habitStatusOn(habitId, d);
+  if (current === 'broken') {
+    // Locked. Said out loud rather than silently ignored -- a button that does nothing reads as a
+    // bug, and the point here is that the app is holding you to something you chose.
+    showToast('That day is locked — a break can’t be undone');
+    return;
+  }
+  if (status === 'broken') { confirmHabitBreak(habitId, d); return; }
   setHabitStatus(habitId, d, current === status ? null : status);
+}
+function confirmHabitBreak(habitId, dateStr) {
+  const h = (STATE.life.habits || []).find(x => x.id === habitId);
+  if (!h) return;
+  const verb = habitPolarity(h) === 'avoid' ? 'gave in on' : 'skipped';
+  showConfirm(`Mark that you ${verb} “${h.name}”?`, () => {
+    showConfirm('This is permanent — a break can’t be undone, and it ends the streak. Sure?', () => {
+      setHabitStatus(habitId, dateStr, 'broken');
+      breakHabitFeedback(h);
+    });
+  });
 }
 // Walk backward from today (or the habit's own end date, if it's already passed) counting 'kept'
 // days; 'unmarked' days are skipped over (neither counted nor breaking the streak — the whole
