@@ -281,6 +281,35 @@ function rotationDaysOf(phase) {
   const n = Math.round(Number(phase && phase.workoutRotationDays));
   return (n >= ROTATION_DAYS_MIN && n <= ROTATION_DAYS_MAX) ? n : ROTATION_DAYS_DEFAULT;
 }
+
+// ---- When a rotation is actually fixed ----
+//
+// "Once the phase starts" was the wrong test, and it made the rotation effectively unchangeable.
+// A fresh install has exactly ONE phase, perpetual and current from day one, so its rotation was
+// locked before anyone had trained a single session -- and the only way out was CHANGE…, which ends
+// the block you're in. Setting up a five-day split meant burning a phase you never trained, and the
+// dialog for it talked about ending a phase rather than about rotations, so it read as broken.
+//
+// What the lock is FOR is not changing the plan out from under sessions you've already logged
+// against it: the slots are keyed to this number, so reshaping them mid-block moves what "day 3"
+// meant. A phase you haven't trained in yet has nothing to move. So the test is whether anything is
+// logged inside it, not whether the calendar has reached it.
+//
+// A past phase stays locked whatever it holds -- editing a finished block rewrites the record of
+// what you did, which is a different thing from planning.
+function phaseHasLoggedSessions(entry) {
+  if (!entry) return false;
+  const today = todayStr();
+  // A perpetual phase has no end date, and a current one runs to today whatever its end says.
+  const end = (entry.endDate && entry.endDate < today) ? entry.endDate : today;
+  return sessionsLoggedBetween(entry.startDate, end).length > 0;
+}
+function rotationIsLocked(entry) {
+  if (!entry) return true;
+  if (entry.state === 'future') return false;
+  if (entry.state === 'past') return true;
+  return phaseHasLoggedSessions(entry);
+}
 function mealRotationOf(phase) {
   return (phase && phase.mealRotation === 'workout') ? 'workout' : 'week';
 }
@@ -1294,10 +1323,11 @@ function renderExercisePhaseBody(entry) {
   const days = rotationDaysOf(p);
   const mealMode = mealRotationOf(p);
   const mis = rotationMisalignment(entry);
-  // The rotation is IMMUTABLE once the phase is current: changing workouts mid-block is exactly
-  // what a phase exists to discourage, and the plan's slots are keyed to this number. A future
-  // phase is still being planned and edits freely. Meals aren't held to that -- eating adjusts.
-  const locked = entry.state !== 'future';
+  // Fixed once you have TRAINED in the phase, not merely once the calendar reaches it -- see
+  // rotationIsLocked(). The plan's slots are keyed to this number, so reshaping them after sessions
+  // are logged moves what "day 3" meant; before that there is nothing to move. Meals aren't held to
+  // it at all -- eating adjusts.
+  const locked = rotationIsLocked(entry);
   return `
       <div class="phase-controls" style="margin-top:10px;">
         <label class="field"><span class="lbl">Rotation (days)</span>
@@ -1312,7 +1342,9 @@ function renderExercisePhaseBody(entry) {
           ? `<button class="btn btn-sm" style="align-self:flex-end;" onclick="startPhaseWithNewRotation('${p.id}')">CHANGE…</button>`
           : ''}
       </div>
-      ${locked ? `<div class="phase-cal-note">A rotation is fixed once a phase starts — changing it starts a new phase.</div>` : ''}
+      ${locked ? `<div class="phase-cal-note">${entry.state === 'past'
+          ? 'A finished phase keeps the rotation it ran.'
+          : 'You’ve trained in this phase, so its rotation is fixed — the slots are keyed to it. CHANGE… ends this block and starts the next one, where you set the new length.'}</div>` : ''}
       ${mis ? `<div class="phase-cal-note">${mis.rotationDays} days doesn't divide into ${mis.weeks} weeks — the final pass stops ${mis.lastRotationDays} day${mis.lastRotationDays === 1 ? '' : 's'} in.</div>` : ''}
       <div class="goal-rows">
         <div class="goal-row">
@@ -1679,7 +1711,13 @@ function setPhaseRotationDays(id, value) {
   if (!p || !entry) return;
   const n = Math.round(Number(value));
   if (!(n >= ROTATION_DAYS_MIN && n <= ROTATION_DAYS_MAX)) { render(); return; }
-  if (entry.state !== 'future') { showToast('A rotation is fixed once a phase starts'); render(); return; }
+  if (rotationIsLocked(entry)) {
+    showToast(entry.state === 'past'
+      ? 'A finished phase keeps the rotation it ran'
+      : 'You’ve already trained in this phase — changing the rotation starts a new one');
+    render();
+    return;
+  }
   if (n === rotationDaysOf(p)) return;
   // Shrinking drops the slots past the new length. Confirm only when one of them holds something.
   const cur = rotationDaysOf(p);
