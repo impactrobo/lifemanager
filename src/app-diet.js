@@ -713,30 +713,28 @@ function mealPlannerEntry() { return mealPlanInEffect(mealPlannerDate()).slotEnt
 // The one addition over the exercise version is the calorie target, because that is the whole reason
 // a meal plan became phase-owned. Seeing "Phase 2 -- 2,300 cal/day" above the week is the difference
 // between planning meals and planning meals FOR something.
+// The meal half of the same control. It used to stay quiet with only one phase, on the reasoning
+// that naming the only option is noise -- but "which phase am I writing into" is the question, and
+// leaving it unanswered in the commonest case is how a planner starts feeling like it edits
+// something vague. See renderPlannerScope() in app-train-setup.js; the two match on purpose.
 function renderMealPlannerScope() {
-  const sched = phaseTimeline();
   const eff = mealPlanInEffect(mealPlannerDate());
-  // A single perpetual phase is the everyone-by-default state. Announcing "you are editing Current
-  // block's meal plan" when there is exactly one plan and no alternative is noise, so it stays quiet
-  // until there's actually a choice to describe.
-  if (sched.length < 2 && eff.source !== 'carried') return '';
+  const selectedId = eff.entry ? eff.entry.phase.id : null;
   const note = eff.source === 'carried'
-    ? `Still running <b style="color:var(--text)">${escapeHtml(eff.label)}</b>'s meal plan — no phase covers ${fmtGoalDate(mealPlannerDate())}.`
-    : eff.source === 'none'
-      ? `No phase covers ${fmtGoalDate(mealPlannerDate())}.`
-      : `Editing <b style="color:var(--text)">${escapeHtml(eff.label)}</b>'s meal plan.`;
+    ? `No phase covers ${fmtGoalDate(mealPlannerDate())} — still running <b style="color:var(--text)">${escapeHtml(eff.label)}</b>'s meal plan.`
+    : eff.source === 'none' ? `No phase covers ${fmtGoalDate(mealPlannerDate())}.` : '';
   // Read through calorieTargetForDate() rather than off the phase, so this can never disagree with
   // what the rest of the app says you're eating against on that day.
   const target = calorieTargetForDate(mealPlannerDate());
+  const line = [note, target ? `Planning against <b style="color:var(--text)">${target.calories.toLocaleString()} cal/day</b>${target.source === 'tdee' ? ' (maintenance)' : ''}.` : '']
+    .filter(Boolean).join(' ');
   return `
     <div class="planner-scope">
-      <div>${note}${target ? ` Planning against <b style="color:var(--text)">${target.calories.toLocaleString()} cal/day</b>${target.source === 'tdee' ? ' (maintenance)' : ''}.` : ''}</div>
-      <div class="planner-scope-tabs">
-        ${sched.map(s => `
-          <button class="btn btn-sm ${eff.entry && eff.entry.phase.id === s.phase.id ? 'btn-primary' : ''}"
-                  onclick="setMealPlannerDate('${s.state === 'current' ? todayStr() : s.startDate}')">${escapeHtml(s.phase.label)}</button>`).join('')}
-        <button class="btn btn-sm" onclick="setMealPlannerDate(null)">TODAY</button>
-      </div>
+      <label class="field" style="margin-bottom:0;">
+        <span class="lbl">Adding to which phase</span>
+        <select onchange="setMealPlannerDate(this.value)">${phaseScopeOptions(selectedId)}</select>
+      </label>
+      ${line ? `<div style="margin-top:8px;">${line}</div>` : ''}
     </div>`;
 }
 

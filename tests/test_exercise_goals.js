@@ -189,7 +189,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
       // The resolver hands back the phase's own object, not a copy -- an edit has to land on it.
       isThePhaseObject: eff.plan === STATE.phases[0].exercisePlan,
       wroteToPhase,
-      scopeBannerHidden: renderPlannerScope() === '',
+      scopeHtml: renderPlannerScope(),
       mondayStillWorks: dayModel(t).workouts.length >= 0,
     };
   });
@@ -198,7 +198,12 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (untouched.source !== 'phase') throw new Error('The perpetual phase governs — there is no global plan behind it');
   if (!untouched.isThePhaseObject) throw new Error("The resolver should hand back the phase's own plan, not a copy");
   if (!untouched.wroteToPhase) throw new Error('The Planner writes to the phase in effect');
-  if (!untouched.scopeBannerHidden) throw new Error('With one plan there is nothing to disambiguate — the banner should not render');
+  // The scope control used to HIDE itself with only one phase, on the reasoning that naming the
+  // only option is noise. But "which phase am I writing into" is the question the planner has to
+  // answer, and leaving it unanswered in the commonest case -- every fresh install -- is how a
+  // planner starts feeling like it edits something vague. It is a select now, always shown.
+  if (!/<select/.test(untouched.scopeHtml)) throw new Error('The planner must always say which phase it is writing into');
+  if (!/Current block/.test(untouched.scopeHtml)) throw new Error('...and name it');
   wIds = await seed();
 
   // ---- 8. The day-off notice asks the right week ----

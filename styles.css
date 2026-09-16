@@ -1504,6 +1504,16 @@ input[type="number"].lab-range-in {
   -webkit-tap-highlight-color: transparent;
 }
 .log-color-clear:hover { border-color: var(--bad); color: var(--bad); }
+/* "saved", on a phase card, for one render. Fades itself out rather than sitting there: a
+   permanent badge saying SAVED is just chrome once you have read it the first time. */
+@keyframes phase-saved-fade { 0%,55% { opacity: 1; } 100% { opacity: 0; } }
+.phase-saved {
+  display: inline-flex; align-items: center; gap: 4px; flex: none;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--good); animation: phase-saved-fade 2.2s ease-out forwards;
+}
+.phase-saved svg { width: 11px; height: 11px; }
+@media (prefers-reduced-motion: reduce) { .phase-saved { animation: none; opacity: 1; } }
 /* ---------- Breaking a habit ---------- */
 /* A shake and a red wash, once, on an irreversible write. Deliberately short: it marks the moment
    and gets out of the way. Both are skipped under prefers-reduced-motion -- the line in the toast

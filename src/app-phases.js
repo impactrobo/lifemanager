@@ -1163,8 +1163,27 @@ function updatePhaseField(id, field, value) {
   // direction and ratePctPerWeek moved onto phase.weightGoal, which can be null -- setting them
   // through here would have had to invent a goal for a phase that deliberately has none. They have
   // their own setters: setPhaseWeightGoal() and updateWeightGoalRate() in app-weight-plan.js.
+  markPhaseSaved(id);
   saveState();
   render();
+}
+
+// ---- Showing that it saved, rather than a button that claims to ----
+//
+// There is no SAVE button on a phase, and adding one would be a lie: every control here already
+// commits on change. A button that "saves" what is already saved teaches you that the app needs
+// permission to keep your work, and then the day you dismiss a screen without pressing it you have
+// to wonder. The app lost the AM/PM quick logs to exactly that shape -- values held in the DOM
+// until a button was pressed, and a tap outside threw them away.
+//
+// What was missing is not a commit, it's the CONFIRMATION of one. So: the card says "saved" for a
+// moment. Same consumed-flag trick as the water chip's pulse -- the flag is cleared as the markup
+// is built, so exactly one render carries it and it can't replay on the next unrelated one.
+function markPhaseSaved(id) { UI.phaseSaved = id; }
+function renderPhaseSavedChip(id) {
+  if (UI.phaseSaved !== id) return '';
+  UI.phaseSaved = null;
+  return `<span class="phase-saved">${icon('check')} saved</span>`;
 }
 
 // Extending is the operation the whole derived-dates design exists for. Every later phase moves by
@@ -1289,6 +1308,7 @@ function renderPhaseCard(entry) {
       <div class="ehead">
         <input type="text" class="phase-label" value="${escapeHtml(p.label)}"
                onchange="updatePhaseField('${p.id}','label',this.value)">
+        ${renderPhaseSavedChip(p.id)}
         <span class="phase-chip phase-chip-${entry.state}">${stateLabel}</span>
       </div>
       <div class="phase-when">${when}${projection}</div>
@@ -1722,7 +1742,7 @@ function setPhaseRotationDays(id, value) {
   // Shrinking drops the slots past the new length. Confirm only when one of them holds something.
   const cur = rotationDaysOf(p);
   const dropping = n < cur && Object.keys(p.exercisePlan || {}).some(k => Number(k) >= n && (p.exercisePlan[k] || []).some(e => e.refId));
-  const apply = () => { applyRotationDays(p, n); saveState(); render(); };
+  const apply = () => { applyRotationDays(p, n); markPhaseSaved(id); saveState(); render(); };
   if (dropping) showConfirm(`A ${n}-day rotation drops what's planned past day ${n}. Continue?`, apply);
   else apply();
 }

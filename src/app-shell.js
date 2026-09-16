@@ -79,6 +79,10 @@ function defaultTransientUi() {
     // and UNDO removes it. Cleared when the sheet closes, so tomorrow's -- or this afternoon's --
     // visit starts a genuinely new reading. See setScaleReading() in app-home.js.
     scaleSessionId: { waterColor: null, stool: null },
+    // The phase whose card should show a "saved" mark on the next render, consumed as the markup
+    // is built. See renderPhaseSavedChip() -- there is no SAVE button because everything already
+    // commits on change; what was missing is the confirmation.
+    phaseSaved: null,
     homeEditMode: false,
     homeAddPopup: null,                // 'sections' | 'boxes' | null
     goalFormOpen: false,

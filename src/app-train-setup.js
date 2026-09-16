@@ -537,26 +537,41 @@ function renderRotationHeader(entry, kind) {
 // With a single perpetual phase — the state everyone is in before they plan anything — this renders
 // nothing at all. There's exactly one plan, naming it would be noise, and the Planner looks
 // precisely as it always has.
+// Which phase you are editing, as a CONTROL rather than a consequence.
+//
+// This used to be a row of buttons that hid itself when you only had one phase -- which is every
+// fresh install -- so the commonest case showed nothing at all and you had to infer the answer. And
+// underneath, choosing a phase means setting a DATE, because the plan resolvers key off dates. That
+// indirection is right for the model and wrong for the person: you pick a phase, and the date is an
+// implementation detail of how the app finds its plan.
+//
+// So: a select, always visible, naming the phase you're writing into. It is the same pattern for
+// meals (renderMealPlannerScope) deliberately -- two planners that pick their target differently
+// would be two things to learn.
+function phaseScopeOptions(selectedId) {
+  return phaseTimeline().map(s => {
+    const when = s.state === 'current' ? 'now'
+               : s.state === 'past' ? 'past'
+               : fmtGoalDate(s.startDate);
+    return `<option value="${s.state === 'current' ? todayStr() : s.startDate}" ${s.phase.id === selectedId ? 'selected' : ''}>
+      ${escapeHtml(s.phase.label)} · ${when}</option>`;
+  }).join('');
+}
 function renderPlannerScope() {
-  const sched = phaseTimeline();
   const eff = exercisePlanInEffect(plannerDate());
-  if (sched.length < 2 && eff.source !== 'carried') return '';
+  const selectedId = eff.entry ? eff.entry.phase.id : null;
+  // A plan that was working doesn't stop working because a date passed: it carries on, and says so
+  // rather than reverting you to nothing.
   const note = eff.source === 'carried'
-    // Deliberate: a plan that was working doesn't stop working because a date passed. It carries on,
-    // and says that it's doing so rather than reverting you to nothing.
-    ? `Still running <b style="color:var(--text)">${escapeHtml(eff.label)}</b>'s plan — no phase covers ${fmtGoalDate(plannerDate())}.`
-    : eff.source === 'none'
-      ? `No phase covers ${fmtGoalDate(plannerDate())}.`
-      : `Editing <b style="color:var(--text)">${escapeHtml(eff.label)}</b>'s plan.`;
+    ? `No phase covers ${fmtGoalDate(plannerDate())} — still running <b style="color:var(--text)">${escapeHtml(eff.label)}</b>'s plan.`
+    : eff.source === 'none' ? `No phase covers ${fmtGoalDate(plannerDate())}.` : '';
   return `
     <div class="planner-scope">
-      <div>${note}</div>
-      <div class="planner-scope-tabs">
-        ${sched.map(s => `
-          <button class="btn btn-sm ${eff.entry && eff.entry.phase.id === s.phase.id ? 'btn-primary' : ''}"
-                  onclick="setPlannerDate('${s.state === 'current' ? todayStr() : s.startDate}')">${escapeHtml(s.phase.label)}</button>`).join('')}
-        <button class="btn btn-sm" onclick="setPlannerDate(null)">TODAY</button>
-      </div>
+      <label class="field" style="margin-bottom:0;">
+        <span class="lbl">Adding to which phase</span>
+        <select onchange="setPlannerDate(this.value)">${phaseScopeOptions(selectedId)}</select>
+      </label>
+      ${note ? `<div style="margin-top:8px;">${note}</div>` : ''}
     </div>`;
 }
 
