@@ -57,7 +57,10 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     saveState();
     const home = renderHomeDayBox();
     return {
-      homeHasTimeline: home.includes(renderDailySchedule(today)),
+      // `true` = compact, which is what Home passes: it drops the time-budget panel that sat above
+      // a pane already saying what is on now. The identity guarantee is unchanged -- same renderer,
+      // same arguments -- which is what makes divergence impossible rather than merely unlikely.
+      homeHasTimeline: home.includes(renderDailySchedule(today, true)),
       homeHasUntimed: home.includes(renderDayUntimedItems(today)),
       homeShowsWorkout: /Lower Body/.test(home),
       homeShowsHabit: /Stretches/.test(home),

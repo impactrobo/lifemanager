@@ -1636,6 +1636,27 @@ body.break-shake { animation: break-shake 0.52s cubic-bezier(.36,.07,.19,.97); }
 .day-band-list { padding-bottom: 2px; }
 /* A folded day with nothing underway still has to say so — otherwise the two bands sit flush
    against each other and read as a rendering fault rather than a genuine gap in the day. */
+/* The timeline's own header: what day this is, how many anchors are done, and -- when something
+   went by unmarked -- a pulsing alert that opens the fold holding them. */
+.day-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 10px 0 8px; border-bottom: 1px solid var(--border-soft); margin-bottom: 2px;
+}
+.day-head-title { font-size: 13px; color: var(--text-dim); min-width: 0; }
+.day-head-right { display: flex; align-items: center; gap: 8px; flex: none; }
+.day-head-count { font-weight: 700; font-size: 13px; }
+@keyframes day-missed-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 transparent; }
+  50% { box-shadow: 0 0 9px 1px var(--accent); }
+}
+.day-missed {
+  width: 20px; height: 20px; border-radius: 50%; flex: none; cursor: pointer; padding: 0;
+  background: var(--accent-soft); border: 1px solid var(--accent); color: var(--accent);
+  font-weight: 800; font-size: 12px; line-height: 1;
+  animation: day-missed-pulse 1.9s ease-in-out infinite;
+  -webkit-tap-highlight-color: transparent;
+}
+@media (prefers-reduced-motion: reduce) { .day-missed { animation: none; } }
 .day-nownothing { padding: 12px 0 12px 14px; font-size: 12px; color: var(--text-faint); font-style: italic; }
 /* A completed anchor inside a fold reads as finished rather than just listed. */
 .day-row-done .day-body { opacity: 0.55; }

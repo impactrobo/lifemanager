@@ -104,7 +104,17 @@ function renderDayBand(which, blocks, hint, ctx) {
     </button>
     ${open ? `<div class="day-band-list">${renderDayTimelineRows(blocks, ctx)}</div>` : ''}`;
 }
-function renderDailySchedule(dateStr) {
+// `compact` drops the standalone summary panel above the timeline. Home passes it; the Calendar's
+// Day view doesn't.
+//
+// That panel said "Today's Schedule", a done/total count, and how much of the day was booked. On
+// Home it sat directly above a pane that already says what's on now, what's passed and what's
+// coming -- two panels answering "what does today look like" one after the other, and the top one
+// costing a full card's height on the screen with the least room to spare. The count was the only
+// thing on it that wasn't said better below, so the count moved INTO the timeline's own header and
+// the panel went. The Day view keeps it: you go there to study a day, and the time budget is the
+// reason you went.
+function renderDailySchedule(dateStr, compact) {
   const log = lifeLogForDate(dateStr);
   const day = dayModel(dateStr);
   const { schedule, blocks } = day;
@@ -123,6 +133,14 @@ function renderDailySchedule(dateStr) {
     overlaps: dayOverlapWarnings(blocks),
   };
 
+  // Partitioned unconditionally: the header needs to know what's gone by even when the timeline
+  // isn't folded, and folding is only about how the ROWS are laid out.
+  const { passed, now, coming } = partitionDayBlocks(blocks, nowMin);
+  // Something scheduled that came and went without being marked. Only anchors have a done state --
+  // they're the ones you tick -- so only they can be left hanging. Today only: a past day is a
+  // record, and there is nothing to chase on it.
+  const missed = isToday ? passed.filter(b => b.kind === 'anchor' && !log[b.anchorId]).length : 0;
+
   // Folding only means anything on today: a past or future date has no "now" to fold around, and
   // every block would land in one band, which is just the full day with an extra tap in front.
   const folded = isToday && blocks.length >= DAY_COLLAPSE_MIN;
@@ -130,7 +148,6 @@ function renderDailySchedule(dateStr) {
   if (!folded) {
     rows = renderDayTimelineRows(blocks, ctx);
   } else {
-    const { passed, now, coming } = partitionDayBlocks(blocks, nowMin);
     const passedAnchors = passed.filter(b => b.kind === 'anchor');
     const passedDone = passedAnchors.filter(b => log[b.anchorId]).length;
     // What each fold is worth knowing without opening it.
@@ -145,20 +162,33 @@ function renderDailySchedule(dateStr) {
       + renderDayBand('coming', coming, comingHint, ctx);
   }
 
-  return `
+  // The count lives on the timeline's own header now. The alert beside it is the thing the old
+  // summary couldn't say: not "you have twelve anchors" but "three of them went by and you didn't
+  // mark them". It's a nudge to look, never a scold -- it names the number and opens the fold that
+  // holds them, and an unmarked anchor stays neutral everywhere else in the app (see habitLog's
+  // comment on why unmarked is not failed).
+  const head = `
+    <div class="day-head">
+      <span class="day-head-title">${isToday ? 'Today' : 'Day'}'s Schedule${schedule && schedule.name ? ` &middot; ${escapeHtml(schedule.name)}` : ''}</span>
+      <span class="day-head-right">
+        ${missed ? `<button class="day-missed" onclick="revealPassedDay()"
+            title="${missed} scheduled item${missed === 1 ? '' : 's'} went by unmarked — tap to look">!</button>` : ''}
+        ${anchorBlocks.length ? `<span class="mono day-head-count">${doneCount} / ${anchorBlocks.length}</span>` : ''}
+      </span>
+    </div>`;
+
+  const summary = compact ? '' : `
     <div class="panel" style="margin-bottom:14px;">
       <div class="row">
-        <span style="font-size:13px;color:var(--text-dim)">${isToday ? 'Today' : 'Day'}'s Schedule${schedule && schedule.name ? ` &middot; ${escapeHtml(schedule.name)}` : ''}</span>
-        ${anchorBlocks.length ? `<span class="mono" style="font-weight:700">${doneCount} / ${anchorBlocks.length}</span>` : ''}
-      </div>
-      <div class="row" style="margin-top:6px;">
         <span style="font-size:11px; color:var(--text-faint);">${fmtDuration(1440 - booked)} unscheduled</span>
         <span class="mono" style="font-size:11px; color:var(--text-faint);">${fmtDuration(booked)} booked</span>
       </div>
-    </div>
-    <div class="panel" style="padding:2px 14px;">${rows}</div>
-  `;
+    </div>`;
+
+  return `${summary}<div class="panel" style="padding:2px 14px;">${head}${rows}</div>`;
 }
+// The alert's whole job is to get you to the things it's about, so it opens the fold they're in.
+function revealPassedDay() { VIEW.dayBandsOpen.passed = true; render(); }
 
 // ---- Calendar Day: the untimed half of a day ----
 // The timeline above can only show things that occupy a span of clock time. Three of this app's

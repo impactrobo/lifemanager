@@ -1344,7 +1344,8 @@ function renderHomeSectionsGrid() {
 // renderDailySchedule), so "one box" doesn't mean "twelve rows on Home".
 function renderHomeDayBox() {
   const today = todayStr();
-  const timeline = renderDailySchedule(today);
+  // compact: Home drops the time-budget panel. See renderDailySchedule().
+  const timeline = renderDailySchedule(today, true);
   const untimed = renderDayUntimedItems(today);
   // Nothing set up at all yet -- no anchors, no plan, no habits. Returning '' lets the Home box
   // system treat this like any other empty conditional box rather than showing an empty panel.

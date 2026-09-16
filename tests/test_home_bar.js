@@ -68,7 +68,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     const far = dateKey(d.getFullYear(), d.getMonth(), d.getDate());
     NAV.calSelectedDate = far; NAV.calZoom = 'month';
     switchTab('home');
-    const homeShowsToday = /YOUR DAY/.test(renderHomeDayBox()) && renderHomeDayBox().includes(renderDailySchedule(todayStr()));
+    const homeShowsToday = /YOUR DAY/.test(renderHomeDayBox()) && renderHomeDayBox().includes(renderDailySchedule(todayStr(), true));
     goSchedule('calendar');
     return { browsedTo: far, backOn: NAV.calSelectedDate, zoom: NAV.calZoom, today: todayStr(), homeShowsToday };
   });
