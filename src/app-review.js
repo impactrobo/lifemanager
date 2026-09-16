@@ -139,6 +139,34 @@ const REVIEW_TARGETS = [
   { key: 'sleep', label: 'Sleep', get: l => (l.sleepHours == null ? null : Number(l.sleepHours)),
     target: () => sleepTargetHours(), fmt: v => fmt(v, 1) + 'h' },
 ];
+// All three targets in one place, in SETTINGS rather than beside their own log fields. Water's
+// target had always sat in the water sheet, on the reasoning that it's the only place the number is
+// looked at -- which stopped being true once a weekly review counted days hit against all three. A
+// setting you tune once belongs with the other settings, not in the sheet you open every day to
+// type one number into; and it kept the daily-log sheets to exactly the field you came to log.
+function renderDailyTargetsSetting() {
+  const rows = [
+    { label: 'Water', value: fmtWater(waterTargetMl()), unit: waterUnitLabel(),
+      step: waterUnit() === 'cup' ? '0.5' : '50', setter: 'setWaterTarget' },
+    { label: 'Steps', value: stepsTargetDaily(), unit: 'steps', step: '500', setter: 'setStepsTarget' },
+    { label: 'Sleep', value: sleepTargetHours(), unit: 'hrs', step: '0.5', setter: 'setSleepTarget' },
+  ];
+  return `
+    <div class="subtle-label" style="margin:18px 0 10px;">DAILY TARGETS</div>
+    <div class="panel">
+      ${rows.map(r => `
+        <div class="row" style="margin-bottom:8px;">
+          <span class="lbl" style="margin-bottom:0;">${r.label}</span>
+          <div style="display:flex; align-items:center; gap:6px;">
+            <input type="number" class="log-water-target" min="0.5" step="${r.step}" value="${r.value}"
+                   onchange="${r.setter}(this.value)">
+            <span style="font-size:11px; color:var(--text-faint);">${r.unit}</span>
+          </div>
+        </div>`).join('')}
+      <div style="font-size:11px; color:var(--text-faint); margin-top:4px;">The weekly review counts how many DAYS you hit each of these, rather than averaging them — an average quietly forgives one enormous day.</div>
+    </div>`;
+}
+
 function stepsTargetDaily() { return Number(STATE.settings.stepsTargetDaily) || 8000; }
 function sleepTargetHours() { return Number(STATE.settings.sleepTargetHours) || 7.5; }
 function setStepsTarget(v) { STATE.settings.stepsTargetDaily = Math.max(1, Math.round(Number(v) || 8000)); saveState(); render(); }

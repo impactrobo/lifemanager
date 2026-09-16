@@ -84,4 +84,19 @@ real data, and only your own log can confirm it reads correctly.
 - [ ] Home → YOUR WEEK → WEIGHT: shows a rate and a band at all (it needs ~15 days of weigh-ins). A
       dash here with a full log would mean the window is off again.
 
+## Home quick logs — the save bug (2026-09-16)
+Reported from a real device and **never reproduced in the sandbox**, which is itself the evidence:
+the sheet committed only on SAVE and its backdrop closed it, so dismissing the iOS number pad by
+tapping outside the field discarded everything typed. A headless browser has no keyboard to dismiss,
+so the same script passed every time. The fix commits each field as you type — but the diagnosis was
+inferred, not observed, so it needs your device to confirm.
+- [ ] Tap a chip, type a value, then tap **outside the sheet** to dismiss the keyboard. The value
+      should be there when you reopen it. (This is the exact gesture that used to lose it.)
+- [ ] Tap a chip, type a value, then close with the **X**. Same.
+- [ ] Type a value, then swipe/kill the app without closing the sheet. Reopen — should still be
+      there, since it commits on every keystroke.
+- [ ] Each chip now opens only its own field. Sleep opens with Quality; nothing else pairs.
+- [ ] Hydration colour: the scale should be **blank** each morning, with yesterday's average shown
+      beneath it. Log two or three across a day and confirm tomorrow's reference is their average.
+
 ## Add future items below as new features ship

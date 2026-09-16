@@ -487,6 +487,38 @@ on an architecture split + a large wave of Maximalist aesthetics.
 
 ### Feature changes
 
+- **The AM/PM quick logs lost what you typed — fixed, plus one field per sheet (2026-09-16).**
+  Reported from a real device: "logs on Home don't save for some reason."
+  - **Not reproducible in the sandbox**, and the reason it wasn't is the bug. The sheet opened a
+    whole GROUP of fields and committed them only on SAVE; the backdrop was `closeLogPopup()`. On
+    iOS you dismiss a number pad by tapping outside the field — the backdrop **is** outside the
+    field — so the sheet closed, `render()` replaced `#app.innerHTML`, and every typed value went
+    with it. A headless browser has no keyboard to dismiss, so the same script passes every time.
+    Same class as the Cloud Sync keyboard item already on `TESTING_CHECKLIST.md`.
+  - **A field now commits on `input` AND on `change`.** `change` alone fires on blur, and blur does
+    precede the backdrop's click — but that still leaves a window where the value exists only in the
+    DOM, and the DOM is what a render throws away. Writing on every keystroke closes it. The input
+    path passes `quiet` so it *doesn't* re-render, because re-rendering would destroy the very input
+    being typed into.
+  - **One field per sheet**, so there is never a set of pending edits to lose. Sleep and its quality
+    stay paired: one observation, one moment. The SAVE button is gone — it would imply the value
+    wasn't already stored.
+  - **Daily targets moved to Settings** (water, steps, sleep together). Water's target had lived in
+    the water sheet on the reasoning that it was the only place the number was looked at, which
+    stopped being true once the weekly review counted days hit against all three.
+  - **The hydration colour marker resets daily.** It was one sticky value that survived until
+    changed, with a staleness warning past twelve hours — a warning that existed only because the
+    marker outlived its day. Today starts blank; yesterday shows beneath the scale as a reference
+    (averaged across that day's readings, rounded), walking back to the most recent day that has
+    any so a skipped day doesn't erase it. Nothing needed migrating: every reading was already going
+    into `waterColorLog` with a timestamp, and the sticky `STATE.life.waterColor` was a duplicate of
+    the latest one — now derived, so two sources for one fact can't disagree. Values stay 1–8;
+    renumbering to 0–7 would migrate every stored reading to move a scale nobody reads as a number.
+  - **A timezone bug caught by its own test:** the first cut sliced the date out of the ISO string,
+    which is UTC. `dateKeyOf()` already existed with a comment warning about exactly this — an
+    evening reading in a negative-offset zone would file under tomorrow, showing as "today" a day
+    early and dropping out of yesterday's average.
+
 - **"Modded" sessions, and collapsible exercise blocks (2026-09-16).** The bad-day half of the
   on-ramp item, scoped from how the person already trains: when short on time they keep the T1 (or
   the first hypertrophy exercise — in RP-style programming the ordering already encodes priority,

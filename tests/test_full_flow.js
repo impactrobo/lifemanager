@@ -62,7 +62,6 @@ const SECTIONS = ['schedule', 'train', 'hobbies', 'notes', 'budget'];
   await amChip.click();
   await settle(page);
   await page.fill('#log_weight', '181.2');
-  await page.evaluate(() => saveLogPopup());
   await settle(page);
   const loggedWeight = await page.evaluate(() => {
     const e = STATE.weightLog.find(x => x.date === todayStr());

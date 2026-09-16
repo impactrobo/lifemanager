@@ -458,7 +458,7 @@ function migrateState() {
       delete log.water;
     }
   });
-  if (!STATE.life.waterColor || typeof STATE.life.waterColor !== 'object') STATE.life.waterColor = { value: null, at: null };
+  delete STATE.life.waterColor;   // retired: the marker is derived from waterColorLog now
   if (!Array.isArray(STATE.life.waterColorLog)) STATE.life.waterColorLog = [];
   // dueDay/reminderRecurrenceId are new fields on an existing array -- nothing to backfill beyond
   // making sure they're not `undefined` (harmless either way, but keeps the shape consistent with

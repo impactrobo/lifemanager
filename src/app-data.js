@@ -474,11 +474,10 @@ function defaultLifeState() {
     schedules: [],     // [{id, name, days:[0-6, 0=Sun], wakeStart, wakeEnd, bedStart, bedEnd, activities:[{id,start,end,title,description}]}] — built in Schedule -> Setup -> Schedule Builder
     guitar: { chordStatus: {}, songStatus: {}, techStatus: {}, practiceLog: [], chordLearnedDate: {}, songLearnedDate: {} }, // status: 0 none, 1 learning, 2 learned; *LearnedDate: index -> date string, for the Hobbies Progress timeline
     skinCycleStart: null, // date string the 4-night rotation started
-    // The hydration colour marker. NOT in dailyLog on purpose: it deliberately persists until you
-    // change it rather than resetting at midnight, because it describes your current state, not
-    // something that happened on a date. Every change is appended to waterColorLog anyway -- it
-    // costs nothing and is what any future trend view would need.
-    waterColor: { value: null, at: null },
+    // Every hydration colour reading, each with its own timestamp -- the marker shown on the scale
+    // is DERIVED from these (the latest one taken today), and yesterday's average is derived from
+    // them too. A separate `waterColor` field used to hold a sticky copy of the latest value; it was
+    // a second source for the same fact and is gone. See app-home.js "hydration colour marker".
     waterColorLog: [],
     supplementLog: {}, // date -> { suppName: true }
     // Habits (added 2026-09-12) are distinct from anchors on purpose: an anchor is a permanent,

@@ -585,11 +585,10 @@ interface LifeState {
    *  entry. `off` marks a deliberate break: it changes no count in the weekly review, only what the
    *  review says about them, which is the difference between a lapse and a choice. */
   weekReview: Record<string, { off: boolean; note: string }>;
-  /** The hydration colour marker, 1 (pale) to 8 (dark). Deliberately NOT in dailyLog: it persists
-   *  until changed rather than resetting at midnight, because it describes a current state rather
-   *  than something that happened on a date. Nothing computes off it. `waterColorLog` records
-   *  every change — unused today, and what a trend view would be built from. */
-  waterColor: { value: number | null; at: string | null };
+  /** Every hydration colour reading (1 pale to 8 dark), each timestamped. The marker on the scale
+   *  is DERIVED -- the latest reading taken today -- so it clears at midnight, and the prior day's
+   *  average is derived from the same list. A sticky `waterColor` field held a duplicate of the
+   *  latest value and was removed: two sources for one fact can disagree. */
   waterColorLog: { value: number; at: string }[];
   periodicLog: Record<string, string>;
   anchors: ScheduleAnchor[];

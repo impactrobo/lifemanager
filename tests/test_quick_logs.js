@@ -108,7 +108,11 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // No upper clamp on purpose: the target is a target, not a cap.
   if (clamped.high !== 3000) throw new Error(`Water should be free to pass its target, got ${clamped.high}`);
 
-  // ---- 4. Tapping a chip opens its group's sheet, focused on that field ----
+  // ---- 4. A chip opens ONE field, and typing commits it ----
+  // The sheet used to open a whole group and commit only on SAVE, which lost data on a real phone:
+  // iOS dismisses a number pad by tapping outside the field, the backdrop IS outside the field, and
+  // the backdrop closed the sheet and discarded every value in it. A sandbox can never show that —
+  // there's no keyboard to dismiss — so what's pinned here is the fix rather than the symptom.
   await page.evaluate(() => { addWater(-12); });
   await settle(page);
   const opened = await page.evaluate(async () => {
@@ -116,40 +120,64 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     chip.click();
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
     return {
-      group: UI.logPopup && UI.logPopup.group,
+      field: UI.logPopup && UI.logPopup.field,
       focused: document.activeElement ? document.activeElement.id : null,
-      rows: document.querySelectorAll('.log-sheet-row').length,
-      hasWeight: !!document.getElementById('log_weight'),
-      hasCalories: !!document.getElementById('log_calories'),
+      ids: [...document.querySelectorAll('.home-popup [id^="log_"]')].map(e => e.id),
+      // Nothing to press: every control commits itself, so a SAVE button would be a lie about
+      // whether the value was already stored.
+      hasSave: !!document.querySelector('.home-popup .btn-primary'),
     };
   });
   console.log('after tapping the QUALITY chip:', opened);
-  if (opened.group !== 'am') throw new Error('The quality chip belongs to the AM group');
-  if (opened.focused !== 'log_sleepQual') throw new Error(`The sheet should open focused on the chip you tapped, got ${opened.focused}`);
-  if (!opened.hasWeight) throw new Error('The AM sheet holds the whole morning group, not just one field');
-  if (opened.hasCalories) throw new Error('The AM sheet must not carry PM fields');
-  // Every AM field has a control and no PM field does — derived from LOG_FIELDS rather than a row
-  // count, which counted presentation (a field's own daily-target row is a row too) instead of the
-  // contract, and had to be re-tallied by hand whenever a row was added.
-  const groups = await page.evaluate(() => {
-    const missing = [], strays = [];
-    Object.keys(LOG_FIELDS).forEach(f => {
-      const present = !!document.getElementById('log_' + f) || f === 'water';
-      if (LOG_FIELDS[f].group === 'am' && !present) missing.push(f);
-      if (LOG_FIELDS[f].group === 'pm' && document.getElementById('log_' + f)) strays.push(f);
-    });
-    return { missing, strays };
-  });
-  if (groups.missing.length) throw new Error(`AM fields missing from the AM sheet: ${groups.missing}`);
-  if (groups.strays.length) throw new Error(`PM fields leaked into the AM sheet: ${groups.strays}`);
+  if (opened.field !== 'sleepQual') throw new Error(`The sheet should open on the field you tapped, got ${opened.field}`);
+  if (opened.focused !== 'log_sleepQual') throw new Error(`...and focus it, got ${opened.focused}`);
+  // Sleep and its quality are the one pair: they're a single observation made at a single moment.
+  if (JSON.stringify(opened.ids.sort()) !== JSON.stringify(['log_sleepLen', 'log_sleepQual'])) {
+    throw new Error(`Sleep opens with its quality and nothing else, got ${JSON.stringify(opened.ids)}`);
+  }
+  if (opened.hasSave) throw new Error('No SAVE button — a field commits on change, so a button would imply it had not');
 
-  // ---- 5. Saving writes every field in the group at once ----
-  await page.fill('#log_weight', '181.2');
-  await page.fill('#log_sleepLen', '7.5');
-  await page.selectOption('#log_sleepQual', '4');
-  await page.fill('#log_restingHR', '58');
-  await page.evaluate(() => saveLogPopup());
+  // A value is stored the moment it changes, with the sheet still open and nothing pressed.
+  await page.selectOption('#log_sleepQual', '3');
+  const committed = await page.evaluate(() => ({ stored: logFieldValue('sleepQual'), open: !!UI.logPopup }));
+  console.log('committed on change:', JSON.stringify(committed));
+  if (committed.stored !== 3) throw new Error(`Changing a field must store it immediately, got ${committed.stored}`);
+  if (!committed.open) throw new Error('...without closing the sheet');
+  // And dismissing via the backdrop — the exact gesture that used to discard everything — keeps it.
+  await page.evaluate(() => closeLogPopup());
   await settle(page);
+  const survived = await page.evaluate(() => logFieldValue('sleepQual'));
+  if (survived !== 3) throw new Error(`Dismissing the sheet must never discard a value, got ${survived}`);
+  await page.evaluate(() => { saveLogField('sleepQual', ''); });
+  await settle(page);
+
+  // A chip opens only its own field, PM included.
+  const pmOpen = await page.evaluate(async () => {
+    openLogPopup('steps');
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    return [...document.querySelectorAll('.home-popup [id^="log_"]')].map(e => e.id);
+  });
+  if (JSON.stringify(pmOpen) !== JSON.stringify(['log_steps'])) {
+    throw new Error(`Steps opens alone, got ${JSON.stringify(pmOpen)}`);
+  }
+  await page.evaluate(() => closeLogPopup());
+  await settle(page);
+
+  // ---- 5. Each field logs through its own sheet, and the chip catches up ----
+  // One sheet per field now, so this walks them the way a person would: open, type, dismiss.
+  for (const [field, value] of [['weight', '181.2'], ['sleepLen', '7.5'], ['restingHR', '58']]) {
+    await page.evaluate(f => openLogPopup(f), field);
+    await settle(page);
+    await page.fill('#log_' + field, value);
+    await page.evaluate(() => closeLogPopup());
+    await settle(page);
+  }
+  await page.evaluate(() => openLogPopup('sleepQual'));
+  await settle(page);
+  await page.selectOption('#log_sleepQual', '4');
+  await page.evaluate(() => closeLogPopup());
+  await settle(page);
+
   const saved = await page.evaluate(() => ({
     weight: logFieldValue('weight'), sleepLen: logFieldValue('sleepLen'), sleepQual: logFieldValue('sleepQual'),
     restingHR: logFieldValue('restingHR'),
@@ -158,11 +186,11 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     chipRestingHR: logFieldDisplay('restingHR'),
     setChips: document.querySelectorAll('.log-chip-set').length,
   }));
-  console.log('after saving the AM sheet:', saved);
+  console.log('after logging each AM field:', saved);
   if (Math.abs(saved.weight - 181.2) > 0.05) throw new Error(`Weight should be 181.2, got ${saved.weight}`);
   if (saved.sleepLen !== 7.5 || saved.sleepQual !== 4) throw new Error('Sleep length and quality should both save');
   if (saved.restingHR !== 58) throw new Error(`Resting HR should be 58, got ${saved.restingHR}`);
-  if (!saved.closed) throw new Error('Saving should close the sheet');
+  if (!saved.closed) throw new Error('Dismissing should close the sheet');
   if (saved.chipWeight !== '181.2') throw new Error(`The chip must show what the sheet saved, got ${saved.chipWeight}`);
   if (saved.chipRestingHR !== '58') throw new Error(`The resting HR chip must show what the sheet saved, got ${saved.chipRestingHR}`);
   if (saved.setChips !== 4) throw new Error(`All 4 AM chips should now read as set, got ${saved.setChips}`);
@@ -174,10 +202,9 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // ---- 6. A blank field CLEARS, rather than being skipped ----
   // The sheet opens pre-filled with what's already logged, so a blank is a deliberate act. Without
   // this there'd be no way to undo a typo'd weight from Home at all.
-  await page.evaluate(() => openLogPopup('am', 'weight'));
+  await page.evaluate(() => openLogPopup('weight'));
   await settle(page);
   await page.fill('#log_weight', '');
-  await page.evaluate(() => saveLogPopup());
   await settle(page);
   const cleared = await page.evaluate(() => ({
     weight: logFieldValue('weight'),
@@ -194,16 +221,15 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // quietly skew the estimate. Only actual values create one.
   await page.evaluate(() => { STATE.weightLog = []; STATE.life.dailyLog = {}; saveState(); });
   const noGhost = await page.evaluate(() => {
-    openLogPopup('am', 'weight');
+    openLogPopup('weight');
     closeLogPopup();
     const afterBrowse = STATE.weightLog.length;
     // Saving ONLY sleep — which lives on the life log, not the weight entry — must not create one.
-    openLogPopup('am', 'sleepLen');
+    openLogPopup('sleepLen');
     return { afterBrowse };
   });
   await settle(page);
   await page.fill('#log_sleepLen', '8');
-  await page.evaluate(() => saveLogPopup());
   await settle(page);
   const ghost = await page.evaluate(() => ({
     rows: STATE.weightLog.length, sleep: logFieldValue('sleepLen'),
@@ -259,67 +285,56 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (Math.abs(serving.storedMl - 473) > 1) throw new Error(`2 cups should store as ~473 mL, got ${serving.storedMl}`);
   if (serving.after !== serving.storedMl) throw new Error('One tap adds exactly one serving');
 
-  // ---- 8c. The colour marker ----
-  // Deliberately inert -- nothing computes off it. What it must do is persist until changed and
-  // stay visible, which is the entire point of a marker.
+  // ---- 8c. The colour marker: one day at a time ----
+  // It used to be a single sticky value that survived until you changed it, with a staleness
+  // warning past twelve hours. Hydration turns over across a night, so the day is the honest unit:
+  // today starts blank, and yesterday appears as a reference mark rather than as a current reading.
   const color = await page.evaluate(() => {
+    STATE.life.waterColorLog = [];
     setWaterColor(3);
     const set = { value: waterColorValue(), age: waterColorAge(), logged: STATE.life.waterColorLog.length };
     const onChip = /log-chip-dot/.test(logChip('water'));
     setWaterColor(6);
     const changed = { value: waterColorValue(), logged: STATE.life.waterColorLog.length };
-    setWaterColor(6);                          // tapping the active one clears it
-    const cleared = { value: waterColorValue(), dot: /log-chip-dot/.test(logChip('water')) };
-    return { set, onChip, changed, cleared, scale: WATER_COLORS.length };
+    setWaterColor(6);                          // tapping the active one UNDOES that reading
+    const undone = { value: waterColorValue(), logged: STATE.life.waterColorLog.length };
+    STATE.life.waterColorLog = [];
+    const blank = { value: waterColorValue(), dot: /log-chip-dot/.test(logChip('water')) };
+    return { set, onChip, changed, undone, blank, scale: WATER_COLORS.length };
   });
   console.log('colour marker:', color);
   if (color.scale !== 8) throw new Error('The hydration scale is eight steps');
   if (color.set.value !== 3) throw new Error('Setting a colour should stick');
   if (!color.onChip) throw new Error('The marker must show on the chip — one that lives only inside the sheet is not a marker');
   if (color.set.age !== 'just now') throw new Error(`A freshly set marker should read as just now, got ${color.set.age}`);
-  if (color.changed.value !== 6) throw new Error('Changing the colour should replace it');
-  if (color.changed.logged !== 2) throw new Error('Each change should be recorded for a future trend view');
-  if (color.cleared.value !== null) throw new Error('Tapping the active swatch clears it, like the habit buttons');
-  if (color.cleared.dot) throw new Error('A cleared marker leaves no dot on the chip');
+  if (color.changed.value !== 6) throw new Error('Changing the colour should replace what shows');
+  if (color.changed.logged !== 2) throw new Error('Each reading is recorded — a day can hold several');
+  // An UNDO, not a wipe: several readings a day is the point, so removing the last one reveals the
+  // one before it rather than blanking a day you did record.
+  if (color.undone.value !== 3) throw new Error(`Undoing the last reading should reveal the previous one, got ${color.undone.value}`);
+  if (color.undone.logged !== 1) throw new Error('...and drop exactly one reading');
+  if (color.blank.value !== null || color.blank.dot) throw new Error('With no readings today, the scale is blank and the chip has no dot');
 
-  // It does NOT reset at midnight the way the daily logs do -- that's what "lasts until changed"
-  // means, and it's the one behaviour that separates it from everything else on these strips.
-  const survivesDay = await page.evaluate(() => {
-    setWaterColor(4);
-    STATE.life.dailyLog = {};                 // as if the day rolled over
-    return { value: waterColorValue(), todaysWater: logFieldValue('water') };
+  // ---- 8d. Today starts blank; yesterday is a reference mark ----
+  const daily = await page.evaluate(() => {
+    const at = (dayOffset, h) => { const d = new Date(); d.setDate(d.getDate() + dayOffset); d.setHours(h, 0, 0, 0); return d.toISOString(); };
+    // Three readings yesterday averaging 4 (3 + 4 + 5), and nothing today.
+    STATE.life.waterColorLog = [
+      { value: 3, at: at(-1, 8) }, { value: 4, at: at(-1, 13) }, { value: 5, at: at(-1, 20) },
+    ];
+    const today = { value: waterColorValue(), dot: /log-chip-dot/.test(logChip('water')) };
+    const prior = waterColorPriorDay();
+    // A gap: the most recent day WITH readings is what shows, not a blank for yesterday.
+    STATE.life.waterColorLog = [{ value: 7, at: at(-4, 9) }];
+    const gap = waterColorPriorDay();
+    return { today, prior, gap };
   });
-  console.log('after the day rolls over:', survivesDay);
-  if (survivesDay.value !== 4) throw new Error('The colour marker must outlive the day it was set on');
-  if (survivesDay.todaysWater !== null) throw new Error("...while the day's own logs do reset");
-
-  // ---- 9. Navigating away closes the sheet ----
-  const nav = await page.evaluate(() => {
-    openLogPopup('pm', 'calories');
-    switchTab('budget');
-    return UI.logPopup === null;
-  });
-  if (!nav) throw new Error('The sheet should close on navigation, like every other transient panel');
-
-  // ---- 8d. Staleness: the marker stays, but stops claiming to be current ----
-  // Clearing it automatically would throw away the only reading there is; dimming it says "this is
-  // old" without destroying anything. Twelve hours because hydration turns over across a night.
-  const stale = await page.evaluate(() => {
-    const hoursAgo = h => new Date(Date.now() - h * 3600 * 1000).toISOString();
-    STATE.life.waterColor = { value: 5, at: hoursAgo(3) };
-    const fresh = { stale: waterColorIsStale(), dimmed: /log-chip-dot-stale/.test(logChip('water')), note: /Worth a fresh look/.test(renderLogPopup()) };
-    STATE.life.waterColor = { value: 5, at: hoursAgo(13) };
-    UI.logPopup = { group: 'pm', focus: 'calories' };
-    const old = { stale: waterColorIsStale(), dimmed: /log-chip-dot-stale/.test(logChip('water')), note: /Worth a fresh look/.test(renderLogPopup()), value: waterColorValue() };
-    UI.logPopup = null;
-    return { fresh, old };
-  });
-  console.log('staleness:', stale);
-  if (stale.fresh.stale || stale.fresh.dimmed) throw new Error('A 3-hour-old marker is still current');
-  if (!stale.old.stale || !stale.old.dimmed) throw new Error('A 13-hour-old marker should read as stale');
-  if (!stale.old.note) throw new Error('The sheet should say a stale marker is worth refreshing');
-  if (stale.old.value !== 5) throw new Error('Going stale must not clear the marker — it is the only reading there is');
-
+  console.log('daily reset:', JSON.stringify(daily));
+  if (daily.today.value !== null) throw new Error('A new day starts with a blank scale — yesterday is not today');
+  if (daily.today.dot) throw new Error('...and no dot on the chip until you log one');
+  if (!daily.prior || daily.prior.value !== 4) throw new Error(`Yesterday should average to 4, got ${daily.prior && daily.prior.value}`);
+  if (daily.prior.readings !== 3 || !daily.prior.isYesterday) throw new Error('...from three readings, and known to BE yesterday');
+  if (!daily.gap || daily.gap.value !== 7 || daily.gap.isYesterday) throw new Error('A skipped day falls back to the last day that has readings, and says so');
   // ---- 8e. The trend strip ----
   const trend = await page.evaluate(() => {
     const dayAgo = d => new Date(Date.now() - d * 86400000).toISOString();
@@ -399,7 +414,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     setWaterServing(250);
     STATE.life.dailyLog = {};
     STATE.life.dailyLog[todayStr()] = { sleepHours: 8, waterMl: 750 };
-    STATE.life.waterColor = { value: 4, at: new Date().toISOString() };
+    STATE.life.waterColorLog = [{ value: 4, at: new Date().toISOString() }];
     saveState();
   });
   await page.reload();

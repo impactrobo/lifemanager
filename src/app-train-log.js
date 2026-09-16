@@ -1506,6 +1506,7 @@ function renderHomeSetup() {
       </div>
       <div style="font-size:11px; color:var(--text-faint); margin-top:8px;">Applies everywhere a weight or a measurement is shown — body weight, measurements, lab results and lifts alike. Stored values never change; only how they're displayed.</div>
     </div>
+    ${renderDailyTargetsSetting()}
     <div class="subtle-label" style="margin:18px 0 10px;">AESTHETIC</div>
     <div class="stack" id="aestheticOptions"></div>
     <div class="subtle-label" style="margin:22px 0 10px;">INTERFACE</div>

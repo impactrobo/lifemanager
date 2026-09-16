@@ -653,29 +653,95 @@ function setWaterServing(val) {
 }
 
 // The hydration colour marker: eight steps, pale to dark, the scale every hydration chart uses.
-// It is deliberately inert -- nothing computes off it. Its whole job is to still be showing what
-// you last saw, so the number in front of you means something.
+//
+// ---- It resets each day ----
+// It used to be one sticky value that survived until you changed it, with an age ("set 14h ago") and
+// a staleness warning past twelve hours. That made the marker describe a body you no longer had,
+// and the warning was an apology for a model that outlived its subject. Hydration turns over across
+// a night, so the day is the honest unit: today starts BLANK, and yesterday shows as a reference
+// mark beneath the scale rather than as a current reading.
+//
+// Nothing was migrated because nothing had to be: setWaterColor() always pushed every reading into
+// waterColorLog with its timestamp, so the per-day history was already there. `STATE.life.waterColor`
+// held a duplicate of the latest one, and deriving it from the log instead removes a second copy
+// that could disagree.
+//
+// The values stay 1-8 rather than becoming 0-7. Averaging is what the numbers are for and the
+// arithmetic is identical either way, so renumbering would mean migrating every stored reading to
+// move a scale that nobody reads as a number.
 const WATER_COLORS = ['#F8F7D4', '#F5EFA6', '#F2E778', '#EDDA4C', '#E3C93A', '#D6AF2A', '#C08F1E', '#A16B17'];
-function waterColorValue() { return (STATE.life.waterColor && STATE.life.waterColor.value) || null; }
+function waterColorLog() {
+  if (!Array.isArray(STATE.life.waterColorLog)) STATE.life.waterColorLog = [];
+  return STATE.life.waterColorLog;
+}
+// The LOCAL day a reading belongs to. Slicing the ISO string would take the UTC date, which is the
+// exact trap dateKeyOf()'s own comment warns about: an evening reading in a negative-offset zone
+// would be filed under tomorrow, so the scale would show it as "today" a day early and yesterday's
+// average would be missing its last reading.
+function waterColorDateOf(r) {
+  if (!r || !r.at) return null;
+  const d = new Date(r.at);
+  return isNaN(d.getTime()) ? null : dateKeyOf(d);
+}
+// Today's readings, oldest first.
+function waterColorReadingsOn(dateStr) {
+  return waterColorLog().filter(r => waterColorDateOf(r) === dateStr);
+}
+// The marker showing on the scale right now: the latest reading taken TODAY, or nothing.
+function waterColorValue() {
+  const today = waterColorReadingsOn(todayStr());
+  return today.length ? Number(today[today.length - 1].value) || null : null;
+}
+// Yesterday as one figure. Averaged rather than last-of-day because several readings across a day
+// are several samples of the same thing, and rounded because the scale has no half-steps.
+// Walks back for the most recent day that actually HAS readings, so a day you forgot doesn't erase
+// the reference -- and reports which day it came from, since "yesterday" and "last Tuesday" are
+// different claims.
+function waterColorPriorDay() {
+  const today = todayStr();
+  const byDate = {};
+  waterColorLog().forEach(r => {
+    const d = waterColorDateOf(r);
+    if (!d || d >= today) return;
+    (byDate[d] = byDate[d] || []).push(Number(r.value) || 0);
+  });
+  const days = Object.keys(byDate).sort();
+  if (!days.length) return null;
+  const d = days[days.length - 1];
+  const vals = byDate[d];
+  return {
+    date: d,
+    value: Math.round(vals.reduce((a, b) => a + b, 0) / vals.length),
+    readings: vals.length,
+    isYesterday: d === shiftDate(today, -1),
+  };
+}
 function waterColorHex(v) { return WATER_COLORS[(v || 1) - 1] || WATER_COLORS[0]; }
 function setWaterColor(v) {
   const n = Number(v);
-  // Tapping the swatch you're already on clears it, the same toggle-off the habit buttons use.
-  const next = waterColorValue() === n ? null : n;
-  STATE.life.waterColor = { value: next, at: next ? new Date().toISOString() : null };
-  if (next) {
-    STATE.life.waterColorLog.push({ value: next, at: STATE.life.waterColor.at });
+  const log = waterColorLog();
+  // Tapping the swatch you're already on clears it, the same toggle-off the habit buttons use --
+  // which now means dropping today's last reading rather than blanking a sticky value.
+  if (waterColorValue() === n) {
+    for (let i = log.length - 1; i >= 0; i--) {
+      if (waterColorDateOf(log[i]) === todayStr()) { log.splice(i, 1); break; }
+    }
+  } else {
+    log.push({ value: n, at: new Date().toISOString() });
     // A marker you change a couple of times a day will never approach this; the cap just stops an
     // unbounded array from riding along in every cloud sync forever.
-    if (STATE.life.waterColorLog.length > 400) STATE.life.waterColorLog = STATE.life.waterColorLog.slice(-400);
+    if (log.length > 400) STATE.life.waterColorLog = log.slice(-400);
   }
   saveState();
   render();
 }
-// "Lasts until changed" only reads as useful if you can tell how old it is -- a marker from three
-// days ago says nothing about right now.
+// How long ago today's latest reading was taken. Still worth saying -- a reading from first thing
+// this morning and one from ten minutes ago are different claims -- but it can no longer run past
+// a day, because the marker clears at midnight.
 function waterColorAgeMinutes() {
-  const at = STATE.life.waterColor && STATE.life.waterColor.at;
+  const today = waterColorReadingsOn(todayStr());
+  if (!today.length) return null;
+  const at = today[today.length - 1].at;
   return at ? Math.floor((Date.now() - new Date(at).getTime()) / 60000) : null;
 }
 function waterColorAge() {
@@ -683,18 +749,24 @@ function waterColorAge() {
   if (mins == null) return '';
   if (mins < 1) return 'just now';
   if (mins < 60) return mins + 'm ago';
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return hrs + 'h ago';
-  const days = Math.floor(hrs / 24);
-  return days + 'd ago';
+  return Math.floor(mins / 60) + 'h ago';
 }
-// Past this, the marker is describing a body you no longer have. It stays on screen -- clearing it
-// automatically would throw away the only reading you've got -- but it stops presenting itself as
-// current. Twelve hours because hydration turns over across a night, not across an afternoon.
-const WATER_COLOR_STALE_MIN = 12 * 60;
-function waterColorIsStale() {
-  const mins = waterColorAgeMinutes();
-  return mins != null && mins >= WATER_COLOR_STALE_MIN;
+// waterColorIsStale() and WATER_COLOR_STALE_MIN are gone. They warned that a marker older than
+// twelve hours was describing a body you no longer had -- a warning that only existed because the
+// marker outlived its day. It doesn't any more, so there is nothing to warn about.
+// Yesterday's average, shown UNDER the scale rather than on it: it's a reference point, not a
+// reading, and putting it on the scale itself would read as today's answer already filled in.
+function renderWaterColorPrior() {
+  const prior = waterColorPriorDay();
+  if (!prior) return '';
+  // Named, not "3 days ago": the gap is the point when you skipped a day, and a date says which.
+  const d = new Date(prior.date + 'T12:00:00');
+  const when = prior.isYesterday ? 'Yesterday' : MONTH_NAMES[d.getMonth()].slice(0, 3) + ' ' + d.getDate();
+  return `
+    <div class="log-color-prior">
+      <i class="log-color-prior-sw" style="background:${waterColorHex(prior.value)};"></i>
+      <span>${when}: <b>${prior.value}</b> of 8${prior.readings > 1 ? ` <span class="log-insight-n">(avg of ${prior.readings})</span>` : ''}</span>
+    </div>`;
 }
 // The most recent readings, oldest-first, for the trend strip.
 function waterColorTrend(n) {
@@ -737,7 +809,7 @@ function logChip(field) {
   const logged = field === 'water' ? (logFieldValue('water') || 0) > 0 : logFieldValue(field) != null;
   // Water's chip logs instead of opening the sheet -- a glass of water is the one of these you hit
   // several times a day, and making that a sheet-open-type-save round trip would be absurd.
-  const onclick = field === 'water' ? `addWater(1)` : `openLogPopup('${LOG_FIELDS[field].group}','${field}')`;
+  const onclick = field === 'water' ? `addWater(1)` : `openLogPopup('${field}')`;
   // Water carries two extras: its unit (the numbers are meaningless without it) and a dot of the
   // current colour marker, which is the whole point of a marker that "lasts until changed" -- it
   // has to be visible without opening anything.
@@ -746,7 +818,7 @@ function logChip(field) {
     ? `${LOG_FIELDS[field].label} <i class="log-chip-unit">&middot; ${waterUnitLabel()}</i>`
     : LOG_FIELDS[field].label;
   const dot = colorVal
-    ? `<i class="log-chip-dot ${waterColorIsStale() ? 'log-chip-dot-stale' : ''}" style="background:${waterColorHex(colorVal)};" title="Colour ${colorVal} &middot; ${waterColorAge()}"></i>` : '';
+    ? `<i class="log-chip-dot" style="background:${waterColorHex(colorVal)};" title="Colour ${colorVal} &middot; ${waterColorAge()}"></i>` : '';
   // Both a/b chips take the narrower value font -- "120/80" needs the same room "1250/2000" does.
   const wide = field === 'water';
   // CONSUMED HERE, which is a renderer touching state and worth the note: the pulse is a CSS
@@ -768,8 +840,52 @@ function renderLogStrip(group, fields) {
 function renderHomeAmLogBox() { return renderLogStrip('am', ['weight', 'sleepLen', 'sleepQual', 'restingHR']); }
 function renderHomePmLogBox() { return renderLogStrip('pm', ['calories', 'water', 'steps']); }
 
-function openLogPopup(group, focus) { UI.logPopup = { group, focus }; render(); }
+// ---- The log sheet: ONE field at a time, saved as you type ----
+//
+// It used to open a whole GROUP -- four AM fields at once -- and commit them only when you pressed
+// SAVE. That lost data on a real phone, invisibly, and the sandbox could never show it: with no
+// on-screen keyboard, there is nothing to dismiss. On iOS you close a number pad by tapping outside
+// the field, the sheet's backdrop IS outside the field, and the backdrop closed the sheet and threw
+// away every value in it. From the person's side: "I typed it and it didn't save."
+//
+// Two changes, either of which would have been enough, both worth having:
+//   - A field commits on `change`, so no dismissal path can discard anything. The backdrop, the X,
+//     the hardware back button and DONE all now do the same harmless thing.
+//   - One field per sheet, so there is never a set of pending edits to lose in the first place.
+//     Sleep and its quality are the exception: they are one observation made at one moment, and
+//     splitting them would mean opening two sheets every morning.
+const LOG_FIELD_PAIRS = { sleepLen: ['sleepLen', 'sleepQual'], sleepQual: ['sleepLen', 'sleepQual'] };
+function logFieldsOfSheet(field) { return LOG_FIELD_PAIRS[field] || [field]; }
+function openLogPopup(field, focus) { UI.logPopup = { field, focus: focus || field }; render(); }
 function closeLogPopup() { UI.logPopup = null; render(); }
+
+// Commits one field. Every write goes through here, so the chip, the sheet and the stored value
+// cannot drift apart.
+//
+// Called on BOTH `input` and `change`, which is deliberate belt-and-braces. `change` alone fires on
+// blur, and blur does precede the backdrop's click -- but that still leaves a window where what you
+// typed exists only in the DOM, and the DOM is what a render() throws away. Writing on every
+// keystroke closes it: there is no moment when a typed value isn't already stored.
+//
+// `quiet` is what makes that safe. render() replaces #app.innerHTML wholesale, so re-rendering on
+// each keystroke would destroy the very input being typed into. The input path stores and stops;
+// the change path stores and renders, which is when the chip behind the sheet catches up.
+function saveLogField(field, raw, quiet) {
+  const blank = raw === '' || raw == null;
+  if (field === 'weight' || field === 'calories') {
+    // The weight row is only created when there's something to put in it -- browsing a sheet and
+    // closing it must not leave an empty row that the TDEE window then counts as a weigh-in.
+    const e = getTodayWeightEntry(!blank) || getTodayWeightEntry(false);
+    if (!e) return;
+    if (field === 'weight') e.weightLb = blank ? null : displayToLb(raw);
+    else e.calories = blank ? null : Number(raw);
+  } else {
+    const key = field === 'sleepLen' ? 'sleepHours' : field === 'sleepQual' ? 'sleepQuality' : field;
+    setOrClear(todayLifeLog(), key, blank ? '' : raw);
+  }
+  saveState();
+  if (!quiet) render();
+}
 // Water increments straight off the chip. Clamped at zero so tapping past the bottom in the sheet
 // can't drive it negative; there's deliberately no upper clamp -- the target is a target, not a cap.
 function addWater(servings) {
@@ -792,31 +908,8 @@ function setWaterTarget(val) {
 // Writes every field in the open sheet at once. A blank field CLEARS that value rather than being
 // skipped: the inputs open pre-filled with what's already logged, so blank is a deliberate act, and
 // without this there'd be no way to undo a typo'd weight from Home at all.
-function saveLogPopup() {
-  if (!UI.logPopup) return;
-  const group = UI.logPopup.group;
-  const fields = Object.keys(LOG_FIELDS).filter(f => LOG_FIELDS[f].group === group && f !== 'water');
-  const vals = {};
-  fields.forEach(f => { vals[f] = inputVal('log_' + f); });
-  const log = todayLifeLog();
-  if (fields.includes('sleepLen')) setOrClear(log, 'sleepHours', vals.sleepLen);
-  if (fields.includes('sleepQual')) setOrClear(log, 'sleepQuality', vals.sleepQual);
-  if (fields.includes('restingHR')) setOrClear(log, 'restingHR', vals.restingHR);
-  // Its two inputs have their own ids, so they aren't in `vals` -- read them directly. Either half
-  if (fields.includes('steps')) setOrClear(log, 'steps', vals.steps);
-  // The weight entry is only created if there's something to put in it -- browsing the sheet and
-  // closing it must not leave an empty row in weightLog that the TDEE window then counts.
-  const wantsEntry = (vals.weight !== undefined && vals.weight !== '') || (vals.calories !== undefined && vals.calories !== '');
-  const e = getTodayWeightEntry(wantsEntry) || getTodayWeightEntry(false);
-  if (e) {
-    if (fields.includes('weight')) e.weightLb = vals.weight === '' ? null : displayToLb(vals.weight);
-    if (fields.includes('calories')) e.calories = vals.calories === '' ? null : Number(vals.calories);
-  }
-  UI.logPopup = null;
-  saveState();
-  showToast(group === 'am' ? 'Morning log saved' : 'Evening log saved');
-  render();
-}
+// saveLogPopup() is gone. It read every input in a group and committed them together, which is
+// exactly what made a dismissed sheet lose data. saveLogField() commits one field on change.
 function setOrClear(obj, key, raw) {
   if (raw === '' || raw == null) delete obj[key];
   else obj[key] = Number(raw);
@@ -852,8 +945,8 @@ function renderWaterColorInsight() {
 }
 function renderLogPopup() {
   if (!UI.logPopup) return '';
-  const { group } = UI.logPopup;
-  const fields = Object.keys(LOG_FIELDS).filter(f => LOG_FIELDS[f].group === group);
+  const field = UI.logPopup.field;
+  const fields = logFieldsOfSheet(field).filter(f => LOG_FIELDS[f]);
   const rows = fields.map(f => {
     const v = logFieldValue(f);
     if (f === 'water') {
@@ -867,8 +960,7 @@ function renderLogPopup() {
             <button class="btn btn-sm" onclick="addWater(-1)">&minus;</button>
             <span class="log-water-count mono">${fmtWater(v || 0)}</span>
             <button class="btn btn-sm" onclick="addWater(1)">+</button>
-            <span class="log-sheet-unit">of</span>
-            <input type="number" class="log-water-target" min="1" step="${waterUnit() === 'cup' ? '0.5' : '50'}" value="${fmtWater(waterTargetMl())}" onchange="setWaterTarget(this.value)">
+            <span class="log-sheet-unit">of ${fmtWater(waterTargetMl())}</span>
             <span class="log-sheet-unit">${waterUnitLabel()}</span>
           </div>
         </div>
@@ -888,9 +980,10 @@ function renderLogPopup() {
           </div>
         </div>
         ${renderWaterColorTrend()}
+        ${renderWaterColorPrior()}
         <div class="log-color-note">${cur
-          ? `Showing <b>${cur}</b> of 8 &middot; set ${waterColorAge()}.${waterColorIsStale() ? ' <b class="log-color-stale">Worth a fresh look.</b>' : ' Stays until you change it.'}`
-          : 'Lighter is more hydrated. Tap a shade to set your marker &mdash; it stays until you change it.'}</div>
+          ? `Today: <b>${cur}</b> of 8, ${waterColorAge()}. Tap again to undo, or pick another to log a fresh reading.`
+          : 'Lighter is more hydrated. Tap a shade to log today’s first reading &mdash; it clears again tomorrow.'}</div>
         ${renderWaterColorInsight()}`;
     }
     if (f === 'sleepQual') {
@@ -901,41 +994,31 @@ function renderLogPopup() {
       return `
         <div class="log-sheet-row">
           <span class="log-sheet-label">Quality</span>
-          <select id="log_sleepQual"><option value="">--</option>${opts}</select>
+          <select id="log_sleepQual" onchange="saveLogField('sleepQual', this.value)"><option value="">--</option>${opts}</select>
         </div>`;
     }
     const shown = v == null ? '' : (f === 'weight' || f === 'sleepLen' ? fmt(v, 1) : v);
-    // Steps and sleep length carry a daily TARGET, set right here for the same reason water's is:
-    // this sheet is the only place the number is ever looked at. The weekly review counts days hit
-    // against them — without a target, "hit your step target 5 of 7 days" isn't a sentence.
-    const target = f === 'steps'
-      ? { value: stepsTargetDaily(), step: '500', setter: 'setStepsTarget' }
-      : f === 'sleepLen'
-      ? { value: sleepTargetHours(), step: '0.5', setter: 'setSleepTarget' }
-      : null;
     return `
       <div class="log-sheet-row">
         <span class="log-sheet-label">${LOG_FIELDS[f].label}</span>
-        <input type="number" id="log_${f}" step="${LOG_FIELDS[f].step || '1'}" value="${shown}" inputmode="decimal">
+        <input type="number" id="log_${f}" step="${LOG_FIELDS[f].step || '1'}" value="${shown}"
+               inputmode="decimal"
+               oninput="saveLogField('${f}', this.value, true)"
+               onchange="saveLogField('${f}', this.value)">
         <span class="log-sheet-unit">${LOG_FIELDS[f].unit()}</span>
-      </div>
-      ${target ? `
-      <div class="log-sheet-row">
-        <span class="log-sheet-label" style="opacity:.7;">Daily target</span>
-        <input type="number" class="log-water-target" min="1" step="${target.step}" value="${target.value}" onchange="${target.setter}(this.value)">
-        <span class="log-sheet-unit">${LOG_FIELDS[f].unit()}</span>
-      </div>` : ''}`;
+      </div>`;
   }).join('');
+  const title = fields.length > 1 ? 'SLEEP' : LOG_FIELDS[field].label.toUpperCase();
   return `
     <div class="home-popup-backdrop" onclick="closeLogPopup()">
       <div class="panel home-popup" onclick="event.stopPropagation()">
         <div class="row" style="margin-bottom:8px;">
-          <div class="subtle-label" style="margin-bottom:0;">LOG &middot; ${group.toUpperCase()}</div>
+          <div class="subtle-label" style="margin-bottom:0;">${title}</div>
           <button class="icon-btn" onclick="closeLogPopup()">${icon('close')}</button>
         </div>
         ${rows}
-        <div style="font-size:10px; color:var(--text-faint); margin:8px 0 10px;">Log only what you have &mdash; clearing a field removes it from tracking.</div>
-        <button class="btn btn-primary btn-block" onclick="saveLogPopup()">SAVE</button>
+        <div style="font-size:10px; color:var(--text-faint); margin:8px 0 10px;">Saved as you go &mdash; clearing a field removes it from tracking.</div>
+        <button class="btn btn-block" onclick="closeLogPopup()">DONE</button>
       </div>
     </div>`;
 }
