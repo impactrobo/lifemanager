@@ -96,12 +96,38 @@ inferred, not observed, so it needs your device to confirm.
 - [ ] Type a value, then swipe/kill the app without closing the sheet. Reopen — should still be
       there, since it commits on every keystroke.
 - [ ] Each chip now opens only its own field. Sleep opens with Quality; nothing else pairs.
-- [ ] Hydration colour: the scale should be **blank** each morning, with yesterday's average shown
-      beneath it. Log two or three across a day and confirm tomorrow's reference is their average.
 - [ ] **Drag the water number with a finger.** Up adds, down subtracts, 50 mL a step (1 fl oz in
       cups). This is the one thing here that can't be verified at all without a touchscreen — a mouse
       drag passes in the sandbox and proves nothing about Safari's gesture handling. Watch for: the
       page scrolling instead of the number changing (means `touch-action: none` isn't taking), the
       drag dying after one step, or the value jumping when you lift your finger.
+
+## The observation scales (2026-09-16)
+Hydration colour and Bristol share one mechanism: several readings a day, each timestamped, resetting
+at midnight, one reading per opening of the sheet.
+- [ ] Hydration colour starts **blank** each morning, with yesterday as a labelled swatch at the left
+      of the strip: `YEST ▪ | OLDER ▪▪▪ NOW`. Log two or three across one day, then check the next
+      day's YEST swatch is their average.
+- [ ] Tap a shade, then tap **the same shade again** — it must stay logged. (It used to delete the
+      reading, which is the bug that prompted this: two readings the same colour is an ordinary day.)
+- [ ] Tap a different shade in the same visit — it should *correct* the reading, not add a second.
+      Close the sheet, reopen, tap again — now it should be a genuine second reading.
+- [ ] The **↶ clear** sits at the left of the swatches and only appears once something's selected.
+- [ ] Bristol (new **STOOL** chip on the PM strip): seven types, tap one, chip shows it. A second
+      reading the same day shows as `4 ·2`. Yesterday lists its readings rather than averaging them.
+- [ ] The PM strip is four chips wide now (calories, water, steps, stool) — confirm it doesn't
+      overrun or clip on your device. Related to the tabbar overrun item in ROADMAP.
+
+## Breaking a habit is permanent (2026-09-16)
+The only irreversible write in the app. Worth confirming it behaves *before* relying on it, since a
+bug here can't be undone by definition.
+- [ ] Tap the ✗ on a habit: a dialog appears naming that habit and saying it can't be undone.
+      Cancel it — the day must be untouched.
+- [ ] Confirm it. The day locks: tapping ✓ or ✗ again does nothing and shows "That day is locked".
+- [ ] A **kept** day is still freely changeable, including changing it to broken. Only broken is sealed.
+- [ ] **The shake and red flash** — does it feel right on a real screen, or is it too much / not
+      enough? Timing is 520ms. This is a judgement call that can only be made on the device.
+- [ ] Turn on iOS **Settings → Accessibility → Motion → Reduce Motion**, then break a habit: the
+      shake and flash should be skipped entirely while the toast line still appears.
 
 ## Add future items below as new features ship
