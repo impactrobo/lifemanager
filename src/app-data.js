@@ -487,9 +487,7 @@ function defaultLifeState() {
     // time-of-day-scoped routine item that's always there; a habit is a discipline push with a
     // start (and optionally an end — a defined challenge like "no drinking, 30 days" vs. just
     // ongoing), where the streak/history itself is the point. See habitCurrentStreak() etc.
-    // polarity: 'do' (kept = you did it) | 'avoid' (kept = you didn't). Absent on habits that
-    // predate the field and read as 'do', which leaves their existing marks meaning what they meant.
-    habits: [], // [{id, name, startDate, endDate, polarity, createdAt}] — Schedule -> Setup -> Habits
+    habits: [], // [{id, name, startDate, endDate, createdAt}] — Schedule -> Setup -> Habits
     habitLog: {}, // habitId -> { 'YYYY-MM-DD': true|false } — true=kept, false=broke, absent=unmarked (neutral, doesn't break a streak)
     // Date-range overrides of the weekday schedule templates — a holiday, a vacation week, a sick
     // day. See scheduleExceptionForDate() / scheduleForDate(). Stored as explicit start/end ranges

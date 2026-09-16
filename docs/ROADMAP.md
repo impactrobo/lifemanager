@@ -527,8 +527,15 @@ on an architecture split + a large wave of Maximalist aesthetics.
     double-confirm isn't there to *discourage* marking a fail, it's the gate before an **irreversible
     write**. That makes it a commitment device — you binding your future self — rather than the app
     judging you, which is a different thing entirely and squarely the person's own call.
-  - **Two confirmations**: the first asks whether you mean it, the second says plainly that it can't
-    be undone. An irreversible write behind a single tap is a mis-tap waiting to happen.
+  - **The X is the first confirmation**, and one dialog is the second. A dialog before it asking
+    whether you meant it was asking a question the tap had already answered, and two dialogs where
+    the first only repeats the gesture is the kind of double-check people learn to click through
+    without reading -- the opposite of what should guard an irreversible write. The one dialog
+    names the habit (so a mis-tap on the wrong row shows up there, not afterwards) and states the
+    cost.
+  - **No do/avoid field on habits.** One was added and removed the same day: it changed nothing but
+    the words on two tooltips, and a habit called "No drinking" already says which way it runs --
+    better than a dropdown would, because the name is what you actually read on the row every day.
   - **The asymmetry runs one way only.** `kept` stays freely changeable, `kept → broken` included,
     because admitting a failure later is honest. Only `broken → anything` is refused, because that
     is the direction that rewrites history in your own favour. Both buttons stay on screen and

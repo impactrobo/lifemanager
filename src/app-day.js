@@ -251,16 +251,11 @@ function renderDayUntimedItems(dateStr) {
     return `<div class="day-extra-row${status === 'unmarked' ? '' : ' is-done'}">
       <span class="day-extra-name">${escapeHtml(h.name)}</span>
       <span class="done-keep" style="display:flex; gap:6px; flex-shrink:0;">
-        ${/* The tooltips say what the marks MEAN for this habit: "Did it / Skipped it" for one you
-              perform, "Avoided it / Gave in" for one you abstain from. Same two stored values
-              either way -- only the words change, so switching a habit's type never inverts its
-              history.
-
-              A broken day is LOCKED (see toggleHabitOn). Both buttons stay on screen and stay
+        ${/* A broken day is LOCKED (see toggleHabitOn). Both buttons stay on screen and stay
               legible, because the cross is the record -- hiding or greying it to nothing would
               erase from the eye what the data still says. They just no longer act. */''}
-        <button class="btn btn-sm ${status==='kept'?'btn-good':''}${locked?' habit-mark-locked':''}" onclick="toggleHabitOn('${h.id}','kept','${dateStr}')" title="${locked ? 'Locked — a break can’t be undone' : habitMarkLabels(h).kept}">${icon('check')}</button>
-        <button class="btn btn-sm ${status==='broken'?'btn-danger':''}${locked?' habit-mark-locked':''}" onclick="toggleHabitOn('${h.id}','broken','${dateStr}')" title="${locked ? 'Locked — a break can’t be undone' : habitMarkLabels(h).broken}">${icon('close')}</button>
+        <button class="btn btn-sm ${status==='kept'?'btn-good':''}${locked?' habit-mark-locked':''}" onclick="toggleHabitOn('${h.id}','kept','${dateStr}')" title="${locked ? 'Locked — a break can’t be undone' : 'Kept'}">${icon('check')}</button>
+        <button class="btn btn-sm ${status==='broken'?'btn-danger':''}${locked?' habit-mark-locked':''}" onclick="toggleHabitOn('${h.id}','broken','${dateStr}')" title="${locked ? 'Locked — a break can’t be undone' : 'Broke'}">${icon('close')}</button>
       </span>
     </div>`;
   }).join(''));

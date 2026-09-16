@@ -1,18 +1,17 @@
-// test_habit_break.js — breaking a habit is permanent, and polarity says what "kept" means.
+// test_habit_break.js — breaking a habit is permanent.
 //
 // This is the only irreversible write in the app, so its guarantees are worth pinning hard. It is a
 // COMMITMENT DEVICE, not a punishment: a streak you can quietly repair on a bad Tuesday is
 // decoration, so the record is yours to make and nobody's to edit afterwards — including yours.
 //
 // What's pinned:
-//   1. Two confirmations. One tap does nothing; the write happens only after both.
-//   2. Cancelling either one leaves the day exactly as it was.
+//   1. The X is the first confirmation and the dialog is the second: one tap writes nothing, and
+//      the dialog names the habit and states the cost before anything lands.
+//   2. Cancelling leaves the day exactly as it was.
 //   3. Once broken, the day is LOCKED — broken -> kept, broken -> unmarked and a re-tap all refuse.
 //   4. The asymmetry runs one way only: kept -> broken is always allowed, because admitting a
 //      failure later is honest. It is rewriting one in your favour that's refused.
-//   5. Polarity changes the WORDS, never the stored values — so switching a habit's type can never
-//      silently invert its history.
-//   6. The shake/flash fires after the write, and is skipped under prefers-reduced-motion.
+//   5. The shake/flash fires after the write, and is skipped under prefers-reduced-motion.
 const { chromium } = require('playwright');
 const { settle, pinClock } = require('./helpers');
 const path = require('path');
@@ -35,9 +34,8 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   const reset = () => page.evaluate(() => {
     STATE.life.habits = [
-      { id: 'hDo', name: 'Stretch', startDate: null, endDate: null, polarity: 'do', createdAt: Date.now() },
-      { id: 'hNo', name: 'No drinking', startDate: null, endDate: null, polarity: 'avoid', createdAt: Date.now() },
-      { id: 'hOld', name: 'Legacy', startDate: null, endDate: null, createdAt: Date.now() },  // predates polarity
+      { id: 'hDo', name: 'Stretch', startDate: null, endDate: null, createdAt: Date.now() },
+      { id: 'hNo', name: 'No drinking', startDate: null, endDate: null, createdAt: Date.now() },
     ];
     STATE.life.habitLog = {};
     closeConfirm();
@@ -46,38 +44,39 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   await reset();
   await settle(page);
 
-  // ---- 1 & 2. Two confirmations, and cancelling leaves nothing behind ----
+  // ---- 1 & 2. The X asks, the dialog confirms, cancelling leaves nothing behind ----
+  // There used to be a dialog BEFORE this one asking whether you meant it — a question the tap had
+  // already answered. Two dialogs where the first only repeats the gesture is the kind of
+  // double-check people learn to click through without reading, which is the opposite of what you
+  // want guarding an irreversible write.
   const gates = await page.evaluate(() => {
     const t = todayStr();
     const out = {};
-    // One tap: the first dialog opens, nothing is written.
     toggleHabitOn('hDo', 'broken', t);
-    out.afterTap = { status: habitStatusOn('hDo', t), dialogOpen: !document.getElementById('confirmOverlay').classList.contains('hidden') };
-    // Cancel the first: still nothing.
+    out.afterTap = {
+      status: habitStatusOn('hDo', t),
+      dialogOpen: !document.getElementById('confirmOverlay').classList.contains('hidden'),
+      msg: document.getElementById('confirmMsg').textContent,
+    };
     closeConfirm();
-    out.afterCancel1 = { status: habitStatusOn('hDo', t), dialogOpen: !document.getElementById('confirmOverlay').classList.contains('hidden') };
-    // Confirm the first: the SECOND opens, still nothing written.
+    out.afterCancel = { status: habitStatusOn('hDo', t), dialogOpen: !document.getElementById('confirmOverlay').classList.contains('hidden') };
     toggleHabitOn('hDo', 'broken', t);
     confirmYes();
-    out.afterConfirm1 = { status: habitStatusOn('hDo', t), dialogOpen: !document.getElementById('confirmOverlay').classList.contains('hidden') };
-    // Cancel the second: still nothing. This is the last moment it can be called off.
-    closeConfirm();
-    out.afterCancel2 = { status: habitStatusOn('hDo', t) };
-    // Both: now it lands.
-    toggleHabitOn('hDo', 'broken', t);
-    confirmYes();
-    confirmYes();
-    out.afterBoth = { status: habitStatusOn('hDo', t) };
+    out.afterConfirm = { status: habitStatusOn('hDo', t) };
     return out;
   });
   console.log('1&2. gates:', JSON.stringify(gates));
-  if (gates.afterTap.status !== 'unmarked') throw new Error('One tap must not write — it opens a dialog');
+  if (gates.afterTap.status !== 'unmarked') throw new Error('The tap must not write on its own — it opens the dialog');
   if (!gates.afterTap.dialogOpen) throw new Error('...and it must actually open one');
-  if (gates.afterCancel1.status !== 'unmarked') throw new Error('Cancelling the first confirm leaves the day untouched');
-  if (gates.afterConfirm1.status !== 'unmarked') throw new Error('The FIRST confirm must not write — a permanent thing gets two');
-  if (!gates.afterConfirm1.dialogOpen) throw new Error('...it opens the second dialog');
-  if (gates.afterCancel2.status !== 'unmarked') throw new Error('Cancelling the second is the last chance, and it works');
-  if (gates.afterBoth.status !== 'broken') throw new Error(`Both confirms should write the break, got ${gates.afterBoth.status}`);
+  // The dialog has to name the habit (so a mis-tap on the wrong row is visible HERE, not after) and
+  // state the cost (so "permanent" isn't a surprise later).
+  if (!/Stretch/.test(gates.afterTap.msg)) throw new Error(`The dialog must name the habit, got "${gates.afterTap.msg}"`);
+  if (!/permanent|can’t be undone|cannot be undone/i.test(gates.afterTap.msg)) {
+    throw new Error(`The dialog must say it can't be undone, got "${gates.afterTap.msg}"`);
+  }
+  if (gates.afterCancel.status !== 'unmarked') throw new Error('Cancelling leaves the day untouched');
+  if (gates.afterCancel.dialogOpen) throw new Error('...and closes the dialog');
+  if (gates.afterConfirm.status !== 'broken') throw new Error(`Confirming should write the break, got ${gates.afterConfirm.status}`);
 
   // ---- 3. Locked: nothing gets it back ----
   const locked = await page.evaluate(() => {
@@ -107,38 +106,14 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     const cleared = habitStatusOn('hNo', t);
     setHabitStatus('hNo', t, 'kept');
     toggleHabitOn('hNo', 'broken', t);         // kept -> broken: allowed, still gated
-    confirmYes(); confirmYes();
+    confirmYes();
     return { wasKept, cleared, keptToBroken: habitStatusOn('hNo', t) };
   });
   console.log('4. asymmetry:', JSON.stringify(asym));
   if (asym.wasKept !== 'kept' || asym.cleared !== 'unmarked') throw new Error('A kept day stays freely changeable');
   if (asym.keptToBroken !== 'broken') throw new Error('kept -> broken must be allowed — admitting a failure later is honest');
 
-  // ---- 5. Polarity is words, not data ----
-  const polarity = await page.evaluate(() => {
-    const t = shiftDate(todayStr(), -3);
-    setHabitStatus('hDo', t, 'kept');
-    const storedBefore = STATE.life.habitLog.hDo[t];
-    const labelsDo = habitMarkLabels(STATE.life.habits.find(h => h.id === 'hDo'));
-    const labelsAvoid = habitMarkLabels(STATE.life.habits.find(h => h.id === 'hNo'));
-    // Flip the type and confirm the stored value and the derived status are untouched.
-    updateHabitField('hDo', 'polarity', 'avoid');
-    return {
-      storedBefore, storedAfter: STATE.life.habitLog.hDo[t], statusAfter: habitStatusOn('hDo', t),
-      labelsDo, labelsAvoid,
-      legacyDefaults: habitPolarity(STATE.life.habits.find(h => h.id === 'hOld')),
-    };
-  });
-  console.log('5. polarity:', JSON.stringify(polarity));
-  if (polarity.labelsDo.kept !== 'Did it' || polarity.labelsAvoid.kept !== 'Avoided it') {
-    throw new Error(`The two types read differently: ${JSON.stringify(polarity)}`);
-  }
-  if (polarity.storedAfter !== polarity.storedBefore || polarity.statusAfter !== 'kept') {
-    throw new Error('Switching a habit type must not touch a single stored mark — that would invert its history');
-  }
-  if (polarity.legacyDefaults !== 'do') throw new Error("A habit predating the field reads as 'do', so its marks keep meaning what they meant");
-
-  // ---- 6. The moment ----
+  // ---- 5. The moment ----
   const feedback = await page.evaluate(async () => {
     const t = shiftDate(todayStr(), -5);
     breakHabitFeedback(STATE.life.habits[0]);
@@ -147,7 +122,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     const after = { flash: !!document.querySelector('.break-flash'), shake: document.body.classList.contains('break-shake') };
     return { during, after, line: habitBreakLine(STATE.life.habits[0]) };
   });
-  console.log('6. feedback:', JSON.stringify(feedback));
+  console.log('5. feedback:', JSON.stringify(feedback));
   if (!feedback.during.flash || !feedback.during.shake) throw new Error('The break should shake and flash');
   if (feedback.after.flash || feedback.after.shake) throw new Error('...and clean both up after, or every later render inherits them');
   // The line reacts and stops. It must never invoke the streak it just cost, or ask for better.
@@ -166,7 +141,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     breakHabitFeedback(STATE.life.habits[0]);
     return { flash: !!document.querySelector('.break-flash'), shake: document.body.classList.contains('break-shake') };
   });
-  console.log('6. reduced motion:', JSON.stringify(noMotion));
+  console.log('5. reduced motion:', JSON.stringify(noMotion));
   if (noMotion.flash || noMotion.shake) throw new Error('prefers-reduced-motion must skip the movement entirely');
   await reduced.close();
 

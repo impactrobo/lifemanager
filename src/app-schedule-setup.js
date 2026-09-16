@@ -221,18 +221,9 @@ function habitShapeFor(id) {
   const idx = STATE.life.habits.findIndex(h => h.id === id);
   return HABIT_SHAPES[(idx < 0 ? 0 : idx) % HABIT_SHAPES.length];
 }
-// 'do' or 'avoid'. Defaults to 'do' for every habit that predates the field -- which is the safe
-// way round: an existing habit's marks keep meaning exactly what they meant, and the only thing
-// that changes is that the BUTTONS now say which is which.
-function habitPolarity(habit) { return (habit && habit.polarity === 'avoid') ? 'avoid' : 'do'; }
-// What the two buttons mean for this habit. 'kept' and 'broken' stay the stored values either way --
-// the polarity changes the words and the icon, never the data, so switching a habit's type later
-// doesn't silently invert its history.
-function habitMarkLabels(habit) {
-  return habitPolarity(habit) === 'avoid'
-    ? { kept: 'Avoided it', broken: 'Gave in' }
-    : { kept: 'Did it',     broken: 'Skipped it' };
-}
+// There is no 'do' vs 'avoid' field. One was added and removed the same day: it changed nothing but
+// the words on two tooltips, and a habit called "No drinking" already says which way it runs --
+// better than a dropdown would, because the name is what you actually read on the row every day.
 function habitIsActiveOn(habit, dateStr) {
   if (habit.startDate && dateStr < habit.startDate) return false;
   if (habit.endDate && dateStr > habit.endDate) return false;
@@ -266,9 +257,11 @@ function setHabitStatus(habitId, dateStr, status) {
 // kept -> broken, because admitting a failure later is honest. Only broken -> anything is refused,
 // because that is the direction that rewrites history in your own favour.
 //
-// Two confirmations, for the same reason a permanent thing gets two: the first asks whether you
-// mean it, the second says plainly that it cannot be undone. An irreversible write behind a single
-// tap is a mis-tap waiting to happen.
+// THE X IS THE FIRST CONFIRMATION. There was a dialog before this one asking whether you meant it,
+// which is a question the tap had already answered -- two dialogs where the first only repeats the
+// gesture is the kind of double-check people learn to click through without reading, which is
+// exactly what you don't want guarding an irreversible write. One deliberate tap, then one dialog
+// that says plainly what it costs.
 // The moment itself: a shake, a red wash, and a line. It lands AFTER the write, never before -- it
 // reacts to what happened rather than trying to talk you out of it.
 //
@@ -324,12 +317,11 @@ function toggleHabitOn(habitId, status, dateStr) {
 function confirmHabitBreak(habitId, dateStr) {
   const h = (STATE.life.habits || []).find(x => x.id === habitId);
   if (!h) return;
-  const verb = habitPolarity(h) === 'avoid' ? 'gave in on' : 'skipped';
-  showConfirm(`Mark that you ${verb} “${h.name}”?`, () => {
-    showConfirm('This is permanent — a break can’t be undone, and it ends the streak. Sure?', () => {
-      setHabitStatus(habitId, dateStr, 'broken');
-      breakHabitFeedback(h);
-    });
+  // Names the habit and states the cost. Both matter: the name so a mis-tap on the wrong row is
+  // visible here rather than after the fact, and the cost so "permanent" isn't a surprise later.
+  showConfirm(`Break “${h.name}”? This is permanent — it can’t be undone, and it ends the streak.`, () => {
+    setHabitStatus(habitId, dateStr, 'broken');
+    breakHabitFeedback(h);
   });
 }
 // Walk backward from today (or the habit's own end date, if it's already passed) counting 'kept'
@@ -374,8 +366,7 @@ function addHabit() {
   const endEl = document.getElementById('habitEnd');
   const startDate = startEl.value || todayStr();
   const endDate = endEl.value || null;
-  const polarity = (document.getElementById('habitPolarity') || {}).value === 'avoid' ? 'avoid' : 'do';
-  STATE.life.habits.push({ id: uid(), name, startDate, endDate, polarity, createdAt: Date.now() });
+  STATE.life.habits.push({ id: uid(), name, startDate, endDate, createdAt: Date.now() });
   saveState();
   nameEl.value = ''; startEl.value = ''; endEl.value = '';
   showToast('Habit added');
@@ -387,7 +378,6 @@ function updateHabitField(id, field, value) {
   if (field === 'name') { const trimmed = value.trim(); if (trimmed) h.name = trimmed; }
   else if (field === 'startDate') h.startDate = value;
   else if (field === 'endDate') h.endDate = value || null;
-  else if (field === 'polarity') h.polarity = value === 'avoid' ? 'avoid' : 'do';
   saveState(); render();
 }
 function endHabitNow(id) {
@@ -410,16 +400,6 @@ function renderHabitsSetup() {
     <div class="subtle-label" style="margin-bottom:8px;">NEW HABIT</div>
     <div class="panel">
       <label class="field"><span class="lbl">Name</span><input type="text" id="habitName" placeholder="e.g. No drinking"></label>
-      ${/* A habit is either something you DO or something you DON'T, and until now the app couldn't
-            tell -- "Stretch daily" and "No drinking" both just had a tick and a cross, leaving the
-            marks to mean whatever you remembered they meant. It decides what KEPT is: showing up,
-            or abstaining. */''}
-      <label class="field"><span class="lbl">Type</span>
-        <select id="habitPolarity">
-          <option value="do">Do it — kept means you did</option>
-          <option value="avoid">Avoid it — kept means you didn’t</option>
-        </select>
-      </label>
       <div class="field-row">
         <label class="field"><span class="lbl">Start date</span><input type="date" id="habitStart" value="${todayStr()}"></label>
         <label class="field"><span class="lbl">End date (optional)</span><input type="date" id="habitEnd"></label>
@@ -440,12 +420,6 @@ function renderHabitSetupRow(h) {
       <label class="field" style="flex:2;"><span class="lbl">Name</span><input type="text" value="${escapeHtml(h.name)}" onchange="updateHabitField('${h.id}','name',this.value)"></label>
       <button class="icon-btn" style="align-self:flex-end; margin-bottom:10px; color:var(--bad);" onclick="deleteHabit('${h.id}')" title="Delete habit">${icon('close')}</button>
     </div>
-    <label class="field"><span class="lbl">Type</span>
-      <select onchange="updateHabitField('${h.id}','polarity',this.value)">
-        <option value="do" ${habitPolarity(h) === 'do' ? 'selected' : ''}>Do it — kept means you did</option>
-        <option value="avoid" ${habitPolarity(h) === 'avoid' ? 'selected' : ''}>Avoid it — kept means you didn’t</option>
-      </select>
-    </label>
     <div class="field-row">
       <label class="field"><span class="lbl">Start date</span><input type="date" value="${h.startDate}" onchange="updateHabitField('${h.id}','startDate',this.value)"></label>
       <label class="field"><span class="lbl">End date</span><input type="date" value="${h.endDate || ''}" onchange="updateHabitField('${h.id}','endDate',this.value)"></label>
