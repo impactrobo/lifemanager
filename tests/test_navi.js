@@ -147,22 +147,37 @@ const EMOJI = /[⌚-⌛⏩-⏺▪-➿⬀-⯿️\u{1F000}-\u{1FAFF}]/u;
     }
   }
 
-  // ---- 5. Vitalya's nickname is stable per week, and she is who she is ----
+  // ---- 5. Vitalya's nickname: rare, and NOT in the weekly review ----
   // Her profile says she calls the Operator something "slightly mean or degrading about being
   // overweight, inactive, or lazy — delivered casually without real malice." Both halves are the
   // spec. The escape hatch is the one the Operator already has: pick a different Navi.
+  //
+  // It used to open every weekly review, and reading a few weeks in a row turned it into a
+  // catchphrase — once per box, but every single week. Rotating the WORD never fixed that, because
+  // the repetitive part was the shape of the sentence. So the review drops it entirely and it
+  // survives only on a broken habit: rare by nature, and the one line where the casual meanness
+  // does real work, since the rest of that line is kind.
   await page.evaluate(() => setNavi('vitalya'));
   await settle(page);
   const vit = await page.evaluate((w) => {
     const r = weeklyReview(w);
     const a = naviReviewLines(r).map(l => l.t).join(' ');
     const b = naviReviewLines(r).map(l => l.t).join(' ');
-    return { a, b, nick: vitalyaNick(naviReviewFacts(r)), pool: VITALYA_NICKS.length };
+    return { a, b, nicks: VITALYA_NICKS.slice(), pool: VITALYA_NICKS.length,
+             habit: naviHabitBreakLines({ name: 'Stretch daily' }).map(l => l.t).join(' '),
+             habitNick: vitalyaNick({ range: 'Stretch daily' }) };
   }, WEEK);
-  console.log('\nvitalya:', vit.a);
+  console.log('\nvitalya review:', vit.a);
+  console.log('vitalya on a broken habit:', vit.habit);
   if (vit.a !== vit.b) throw new Error('Re-reading the same week should say the same thing, not reshuffle');
-  if (!vit.a.includes(vit.nick)) throw new Error('She uses the nickname: ' + vit.a + ' / ' + vit.nick);
   if (vit.pool < 2) throw new Error('One nickname is a catchphrase, not a habit');
+  const inReview = vit.nicks.filter(n => vit.a.includes(n));
+  if (inReview.length) {
+    throw new Error(`The weekly review must not use the nickname — it reads as a catchphrase when every week opens with it. Found: ${inReview.join(', ')}`);
+  }
+  if (!vit.habit.includes(vit.habitNick)) {
+    throw new Error(`A broken habit is where the nickname lives now, got "${vit.habit}" (expected ${vit.habitNick})`);
+  }
 
   // ---- 6. The box: portrait left, text right, tap advances, last tap closes ----
   await page.evaluate(() => { switchTab('home'); });

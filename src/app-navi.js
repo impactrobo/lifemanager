@@ -106,9 +106,15 @@ function naviLine(t, s) { return s ? { t: t, s: s } : { t: t }; }
 
 // Vitalya's spec: she calls the Operator "a nickname that is slightly mean or degrading about being
 // overweight, inactive, or lazy -- delivered casually without real malice." Both halves are in the
-// spec, so the set stays at the casual end rather than the cruel one. Rotated by week so it doesn't
-// read as one catchphrase. If this lands wrong, the escape hatch is the one the Operator already
-// has: pick a different Navi.
+// spec, so the set stays at the casual end rather than the cruel one. If this lands wrong, the
+// escape hatch is the one the Operator already has: pick a different Navi.
+//
+// USED SPARINGLY, and that took a correction to get right. It was on the opening line of every
+// weekly review, which is once per box but *every single week* -- and read as a catchphrase rather
+// than as her talking to you. Rotating the word didn't help, because the shape of the sentence was
+// the repetitive part, not the word. It now appears only on a broken habit: rare by nature, and the
+// one place the casual meanness does real work, since it sits on a line that is otherwise kind.
+// The review lines just drop it — she doesn't need to call you anything to say "zero out of four".
 const VITALYA_NICKS = ['couch gremlin', 'sloth', 'lazybones', 'my little potato', 'sleepy'];
 function vitalyaNick(f) {
   // Keyed off the week being reviewed, so re-reading the same week says the same thing.
@@ -152,18 +158,17 @@ const NAVI_VOICES = {
   // sentence. 💅 is retired — it read as a bit she was doing rather than a reaction she was having,
   // which is exactly the difference between the two halves of her brief.
   vitalya(f) {
-    const nick = vitalyaNick(f);
     const out = [];
     if (f.off) return [naviLine('An off week. *On purpose.* Okay 😐'),
-                       naviLine('Fine. Genuinely. Rest is a thing. Drink some water, ' + nick + '.')];
+                       naviLine('Fine. Genuinely. Rest is a thing. Drink some water.')];
     if (f.allDone) {
-      out.push(naviLine('Oh my god. You did *all of them*, ' + nick + '……'));
+      out.push(naviLine('Oh my god. You did *all of them*……'));
       out.push(naviLine(f.planned + ' out of ' + f.planned + '. I am choosing not to be surprised.'));
     } else if (f.someDone) {
-      out.push(naviLine(f.done + ' of ' + f.planned + '. *Literally* so close, ' + nick + ' 🙄'));
+      out.push(naviLine(f.done + ' of ' + f.planned + '. *Literally* so close 🙄'));
       out.push(naviLine('I am not going to say anything. *I am not.*'));
     } else if (f.nothingDone) {
-      out.push(naviLine('Zero. Out of ' + f.planned + '. That is actually insane, ' + nick + ' 😬'));
+      out.push(naviLine('Zero. Out of ' + f.planned + '. That is actually insane 😬'));
     } else {
       out.push(naviLine('Nothing planned, nothing logged. *Cool.* Very intentional, I am sure……'));
     }
