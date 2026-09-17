@@ -30,7 +30,7 @@ see `tests/README.md` for that.
 - [x] Import that file back in → "Backup restored" → data intact
 
 ## Aesthetics
-- [ ] C.R.E.A.M's Home tiles: the chaos emeralds (`aesthetics/cream/gem-*.webp`) were slow to
+- [x] C.R.E.A.M's Home tiles: the chaos emeralds (`aesthetics/cream/gem-*.webp`) were slow to
       first-load on the phone even after the update toast — confirm they now appear promptly, and
       that once cached the tab switch to C.R.E.A.M shows them immediately. Glow halo should follow
       the stone's outline, not a square; icon + label readable over the crown in daylight.
@@ -58,15 +58,15 @@ see `tests/README.md` for that.
 The one-time migration that dissolves the six MAXES categories into per-lift maxes runs against
 your REAL save the first time the updated build boots. It is covered by `test_lift_maxes.js`
 against a synthetic old-shape save, but your actual data is the one fixture the sandbox never had.
-- [ ] After the update, open Builder → EXERCISES: every lift you had a tested number for is listed,
+- [x] After the update, open Builder → EXERCISES: every lift you had a tested number for is listed,
       with the right T1 / T2 weights and test types. In particular, a "Squat" or "Bench" category
       you never linked should have landed on Barbell Back Squat / Barbell Bench Press — NOT on a
       custom lift called "Squat" beside it. If you see such a duplicate, that category was renamed
       or the alias missed; note which.
-- [ ] Any T2 that had its own exercise name typed in (e.g. Leg Press under Squat) is now its OWN
+- [x] Any T2 that had its own exercise name typed in (e.g. Leg Press under Squat) is now its OWN
       lift on that screen, carrying that T2's number.
-- [ ] Open each GZCL workout in Builder → WORKOUT: the T1/T2 selects still name the right movement.
-- [ ] Open today's session on WORKOUTS: target weights match what you'd expect from your TM, and a
+- [x] Open each GZCL workout in Builder → WORKOUT: the T1/T2 selects still name the right movement.
+- [x] Open today's session on WORKOUTS: target weights match what you'd expect from your TM, and a
       previously queued "+X starting next workout" increase is still applied.
 
 ## Weight rate & the long-cut flag (2026-09-16)
@@ -90,13 +90,13 @@ the sheet committed only on SAVE and its backdrop closed it, so dismissing the i
 tapping outside the field discarded everything typed. A headless browser has no keyboard to dismiss,
 so the same script passed every time. The fix commits each field as you type — but the diagnosis was
 inferred, not observed, so it needs your device to confirm.
-- [ ] Tap a chip, type a value, then tap **outside the sheet** to dismiss the keyboard. The value
+- [x] Tap a chip, type a value, then tap **outside the sheet** to dismiss the keyboard. The value
       should be there when you reopen it. (This is the exact gesture that used to lose it.)
-- [ ] Tap a chip, type a value, then close with the **X**. Same.
-- [ ] Type a value, then swipe/kill the app without closing the sheet. Reopen — should still be
+- [x] Tap a chip, type a value, then close with the **X**. Same.
+- [x] Type a value, then swipe/kill the app without closing the sheet. Reopen — should still be
       there, since it commits on every keystroke.
-- [ ] Each chip now opens only its own field. Sleep opens with Quality; nothing else pairs.
-- [ ] **Drag the water number with a finger.** Up adds, down subtracts, 50 mL a step (1 fl oz in
+- [x] Each chip now opens only its own field. Sleep opens with Quality; nothing else pairs.
+- [x] **Drag the water number with a finger.** Up adds, down subtracts, 50 mL a step (1 fl oz in
       cups). This is the one thing here that can't be verified at all without a touchscreen — a mouse
       drag passes in the sandbox and proves nothing about Safari's gesture handling. Watch for: the
       page scrolling instead of the number changing (means `touch-action: none` isn't taking), the
@@ -105,29 +105,29 @@ inferred, not observed, so it needs your device to confirm.
 ## The observation scales (2026-09-16)
 Hydration colour and Bristol share one mechanism: several readings a day, each timestamped, resetting
 at midnight, one reading per opening of the sheet.
-- [ ] Hydration colour starts **blank** each morning, with yesterday as a labelled swatch at the left
+- [x] Hydration colour starts **blank** each morning, with yesterday as a labelled swatch at the left
       of the strip: `YEST ▪ | OLDER ▪▪▪ NOW`. Log two or three across one day, then check the next
       day's YEST swatch is their average.
-- [ ] Tap a shade, then tap **the same shade again** — it must stay logged. (It used to delete the
+- [x] Tap a shade, then tap **the same shade again** — it must stay logged. (It used to delete the
       reading, which is the bug that prompted this: two readings the same colour is an ordinary day.)
-- [ ] Tap a different shade in the same visit — it should *correct* the reading, not add a second.
+- [x] Tap a different shade in the same visit — it should *correct* the reading, not add a second.
       Close the sheet, reopen, tap again — now it should be a genuine second reading.
-- [ ] The **↶ clear** sits at the left of the swatches and only appears once something's selected.
-- [ ] Bristol (new **STOOL** chip on the PM strip): seven types, tap one, chip shows it. A second
+- [x] The **↶ clear** sits at the left of the swatches and only appears once something's selected.
+- [x] Bristol (new **STOOL** chip on the PM strip): seven types, tap one, chip shows it. A second
       reading the same day shows as `4 ·2`. Yesterday lists its readings rather than averaging them.
-- [ ] The PM strip is four chips wide now (calories, water, steps, stool) — confirm it doesn't
+- [x] The PM strip is four chips wide now (calories, water, steps, stool) — confirm it doesn't
       overrun or clip on your device. Related to the tabbar overrun item in ROADMAP.
 
 ## Breaking a habit is permanent (2026-09-16)
 The only irreversible write in the app. Worth confirming it behaves *before* relying on it, since a
 bug here can't be undone by definition.
-- [ ] Tap the ✗ on a habit: a dialog appears naming that habit and saying it can't be undone.
+- [x] Tap the ✗ on a habit: a dialog appears naming that habit and saying it can't be undone.
       Cancel it — the day must be untouched.
-- [ ] Confirm it. The day locks: tapping ✓ or ✗ again does nothing and shows "That day is locked".
-- [ ] A **kept** day is still freely changeable, including changing it to broken. Only broken is sealed.
-- [ ] **The shake and red flash** — does it feel right on a real screen, or is it too much / not
+- [x] Confirm it. The day locks: tapping ✓ or ✗ again does nothing and shows "That day is locked".
+- [x] A **kept** day is still freely changeable, including changing it to broken. Only broken is sealed.
+- [x] **The shake and red flash** — does it feel right on a real screen, or is it too much / not
       enough? Timing is 520ms. This is a judgement call that can only be made on the device.
-- [ ] Turn on iOS **Settings → Accessibility → Motion → Reduce Motion**, then break a habit: the
+- [x] Turn on iOS **Settings → Accessibility → Motion → Reduce Motion**, then break a habit: the
       shake and flash should be skipped entirely while the toast line still appears.
 
 ## The navigation restructure (2026-09-17) — DO FIRST
@@ -135,62 +135,127 @@ Seven moves across builds `-23` to `2026.09.17-1`. Most of it is verifiable in a
 is that **your installed app carries a saved nav snapshot pointing at tabs that no longer exist**,
 and that your real data made the journey. `test_diet_dissolved.js` covers the redirects against a
 synthetic snapshot — yours is the one fixture the sandbox never had.
-- [ ] Open the installed app cold. It should land on a real screen, not a blank one with the bottom
+- [x] Open the installed app cold. It should land on a real screen, not a blank one with the bottom
       bar missing its section buttons. (A stale `diet` subtab now redirects to **D&E → MEALS**;
       `longevity` to **BUILDER → SUPPLEMENTS**; `lifts` to **BUILDER → EXERCISES**.)
-- [ ] Whichever tab it lands on, the bottom bar has the matching button **lit**. A bar and a screen
+- [x] Whichever tab it lands on, the bottom bar has the matching button **lit**. A bar and a screen
       disagreeing about where you are is how the last stale-tab bug showed itself.
-- [ ] **The bottom bar is four buttons now** (D&E / PHASES / BUILDER / BODY) — down from five, then
-      six. Does it still overrun on your device? This is the open ROADMAP item; if four fits, it
-      closes. If it still clips, say so and the chevron affordance goes on.
-- [ ] Your **supplement regimen** is intact under BUILDER → DIET → SUPPLEMENTS — same items, doses,
+- [x] **The bottom bar is four buttons now** (DIET & EXERCISE / PHASES / BUILDER / PROGRESS) — down
+      from five, then six. Confirmed to fit on device, which closes the ROADMAP overrun item. The
+      exercise tab reads DIET & EXERCISE over two lines rather than the D&E initialism, and BODY was
+      renamed PROGRESS once WEIGHT and MEASUREMENTS merged into a BODY *sub*tab beneath it.
+- [x] Your **supplement regimen** is intact under BUILDER → DIET → SUPPLEMENTS — same items, doses,
       stacks and slots. The daily tick is still on Home.
-- [ ] Your **calorie and macro targets** show up in PHASES → MEAL PLAN under TARGETS TO MEET, with
+- [x] Your **calorie and macro targets** show up in PHASES → MEAL PLAN under TARGETS TO MEET, with
       the right phase named as their source.
-- [ ] The **gear** on that panel opens TDEE, the rolling estimate, and the averaging window.
-- [ ] Your **diet log** history is intact under D&E → MEALS, paging back through days.
-- [ ] Past phases are under PHASES → ARCHIVED, newest first, and the live ones are still on NEW.
-- [ ] BODY → COMPARE offers a **MUSCLES** group, and it lists the parts you've actually measured
+- [ ] TDEE now sits in its **own panel above** the calorie/macro targets, opened with a disclosure
+      arrow rather than a gear, showing the current value even while closed. (TDEE is what the target
+      is derived *from*, so it sits above rather than hidden behind what it produces; a gear implies
+      "configure this", and what's there is a readout.) Still unticked in the field.
+- [x] Your **diet log** history is intact under D&E → MEALS, paging back through days.
+- [x] Past phases are under PHASES → ARCHIVED, newest first, and the live ones are still on NEW.
+- [x] BODY → COMPARE offers a **MUSCLES** group, and it lists the parts you've actually measured
       twice — not all sixteen.
-- [ ] Adding a lift to training maxes offers a **Nickname** field under the name, and the shorthand
+- [x] Adding a lift to training maxes offers a **Nickname** field under the name, and the shorthand
       shows up where that lift is referenced.
 
 ## NetNavis (2026-09-17)
 Nothing is selected by default, so none of this appears until you pick one in Settings.
-- [ ] Settings → NETNAVI: six portraits load. Pick one; tap **HEAR &lt;NAME&gt;** — the dialogue box
+- [x] Settings → NETNAVI: six portraits load. Pick one; tap **HEAR &lt;NAME&gt;** — the dialogue box
       rises from the bottom.
-- [ ] **The box sits above the bottom bar without colliding with the home indicator.** It carries
+- [x] **The box sits above the bottom bar without colliding with the home indicator.** It carries
       `env(safe-area-inset-bottom)`, which a sandbox viewport can't reproduce.
-- [ ] Tapping the box advances a line; the last tap closes it. Navigating away closes it too.
-- [ ] Home → YOUR WEEK → **ASK &lt;NAVI&gt;** delivers your actual week in that Navi's voice, and the
+- [x] Tapping the box advances a line; the last tap closes it. Navigating away closes it too.
+- [x] Home → YOUR WEEK → **ASK &lt;NAVI&gt;** delivers your actual week in that Navi's voice, and the
       numbers agree with the headline and chips above it.
 - [ ] **Vitalya's register is a judgement call only you can make.** Her profile has her calling you
       something "slightly mean… about being overweight, inactive, or lazy". It ships as written. Read
       it on a real screen on a real week and say whether it lands or grates — the set is one line to
       change, and picking someone else is always the other answer.
-- [ ] Airplane mode, open the app, tap a Navi: **the portrait still renders.** The six icons are
+- [x] Airplane mode, open the app, tap a Navi: **the portrait still renders.** The six icons are
       precached; a box with a broken portrait is worse than no box.
 
 ## Offline cache & self-update (2026-09-17)
 `CACHE_NAME` went `lifeman-v16` → `v17` and `APP_SHELL` gained seven entries (`app-navi.js` plus six
 portraits). `addAll()` rejects **wholesale** on a single 404, and the failure is silent — the offline
 cache simply never installs, and you'd only find out with no signal.
-- [ ] After updating, put the phone in airplane mode and cold-launch the installed app. It should
+- [x] After updating, put the phone in airplane mode and cold-launch the installed app. It should
       load fully, not show a browser error page.
-- [ ] The app self-updated to build `2026.09.17-2` without being reinstalled — check the stamp via
+- [x] The app self-updated to build `2026.09.17-2` without being reinstalled — check the stamp via
       the update toast, or `window._lmCheckForUpdate()` from a console.
 
 ## Phases: rotation length, folding cards, planner scope (2026-09-16)
-- [ ] The bug you reported: **a rotation can now be set to something other than 7 days.** It locks
+- [x] The bug you reported: **a rotation can now be set to something other than 7 days.** It locks
       only once you've actually logged a session inside that phase, not the moment it starts.
-- [ ] Phase cards fold, one open at a time; **DONE** closes one and the card shows a brief
+- [x] Phase cards fold, one open at a time; **DONE** closes one and the card shows a brief
       "✓ saved" when a field commits.
-- [ ] Both planners show **"Adding to which phase"** even when there's only one phase.
+- [x] Both planners show **"Adding to which phase"** even when there's only one phase.
 
 ## YOUR DAY (2026-09-16)
-- [ ] Home's day panel is one panel, not two — the old "today's schedule" summary is gone and the
+- [x] Home's day panel is one panel, not two — the old "today's schedule" summary is gone and the
       count moved into the header.
-- [ ] Let a scheduled activity's time pass without marking it: a **glowing `!`** appears in the
+- [x] Let a scheduled activity's time pass without marking it: a **glowing `!`** appears in the
       schedule header. Does the pulse read clearly on a real screen, or is it too subtle / too loud?
+
+## The debug clock (2026-09-17)
+Settings → DEBUG CLOCK. `nowDate()` is the app's only wall-clock read, so shifting it moves the
+app's entire idea of "now" — date **and** time. **Anything logged while it's shifted is really
+written to the shifted date**, so this is a real write path, not a preview.
+- [x] The −1w / −1d / +1d / +1w buttons and NEXT MONDAY move the date, and the red banner appears.
+      The banner is deliberately not dismissable.
+- [x] The −1h / −15m / +15m / +1h buttons and the time field move the TIME independently, and the
+      clock keeps *running* from wherever you put it (set 9pm, wait a minute, it reads 9:01pm).
+      This is what makes "watch a scheduled activity pass" testable at all.
+- [x] The shift and the banner survive backgrounding, force-closing and relaunching.
+- [x] BACK TO THE REAL DATE & TIME clears everything, banner included.
+
+## PROGRESS → BODY: weight and measurements merged (2026-09-17)
+WEIGHT and MEASUREMENTS were two subtabs, two buttons, two forms for one act of stepping on a scale
+with a tape in your hand. Now one BODY tab, one form, keyed by **date** — which is what retires the
+old "replace today's entry?" prompt: a second entry on one day is no longer a shape you can create.
+The bottom-bar tab is renamed **PROGRESS**.
+- [x] Nothing logged today → **+ ADD ENTRY**; something logged → **Δ EDIT TODAY'S ENTRY**; it
+      reverts on its own when the day turns (verify with the debug clock above).
+- [x] Tapping **any** entry card — not just today's — opens it with its own numbers and its own date.
+      Re-dating on save was a real bug: the save path used to read `#mDate`/`#wDate`, which don't
+      exist on an edit form, and fell back to today.
+- [x] Circumferences fold behind a DETAILED MEASUREMENTS disclosure, which opens itself when the
+      day being edited actually has measurements. OTHER 1 / OTHER 2 sit after the calves.
+- [x] Sleep, Quality and Resting HR are on this form **and** on Home, reading and writing the same
+      daily-log entry — genuinely two-way, not a synced copy. Someone who never opens Home can still
+      log sleep. (This was the call that mattered: a field you cannot reach is worse than a third store.)
+- [ ] **Open flag (2026-09-17):** deleting a card currently clears only what the card shows — weight,
+      measurements, sleep, quality, resting HR — leaving water/steps/stool. Field feedback says the
+      entry should be the day's *whole* record: carry water/steps/stool on the form too and delete
+      as one. Queued; re-check when it ships.
+
+## Phases: the shelf and the popup editor (2026-09-17)
+Adding a phase used to start it immediately, which made planning two blocks in a row impossible to
+do calmly. A new phase now lands on `STATE.phaseShelf` instead. `phaseTimeline()` never sees the
+shelf, so no date-chaining or projection code changed.
+- [x] **+ ADD PHASE** does not start anything. It appears under NOT SCHEDULED.
+- [x] With nothing deliberate running: **SAVE AND BEGIN** starts it today (replacing an unlogged
+      placeholder outright rather than ending it mid-week — phases run in whole weeks).
+- [x] With a real phase running, the same button reads **QUEUE NEXT** and schedules it to start the
+      day the current one ends.
+- [x] **SAVE FOR LATER** leaves it shelved, and that survives a relaunch.
+- [ ] The editor is a **popup** now (2026-09-17). Nine phases got added unnoticed because each new
+      card landed below the shelf and off-screen; a modal can't be scrolled away from.
+- [ ] **Every field on a shelved phase commits** — rate %bw/wk, goal weight, label, weeks, rotation
+      days, meal rotation. Fifteen mutators looked the phase up in `STATE.phases` only, so on a
+      shelved phase all fifteen silently wrote nothing. They use `anyPhaseById()` now. If any field
+      on a shelved phase refuses to stick, there is a sixteenth.
+
+## Settings CLOSE stays red (2026-09-17)
+- [ ] Settings → the **X CLOSE** in the bottom bar is red on every aesthetic — check Liminal, Space
+      Highway, Hedge and Cartomancer especially. Greying the bar out in those four was written as
+      `[data-aesthetic="x"] .tabbar button`, which **ties** `.tabbar button.tabbar-close` on
+      specificity and wins on source order because `theme.css` loads after `styles.css`. A losing
+      CSS rule renders a plausible-looking page and says nothing — `test_css_contract.js` now asserts
+      CLOSE's computed colour across all 23 aesthetics so a new theme can't quietly repaint it.
+
+## NetNavi voice — open note (2026-09-17)
+- [ ] **Vitalya's register.** Field feedback: she works, but wants less 💅 and more grimace, eye-roll
+      and trailing ellipses. A pass over her lines in `src/app-navi.js`. Queued.
 
 ## Add future items below as new features ship
