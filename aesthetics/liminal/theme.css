@@ -307,6 +307,10 @@
   color: #fffdf0;
   text-shadow: 0 0 10px color-mix(in srgb, var(--lm-tube) 80%, transparent);
 }
+/* CLOSE stays --bad regardless of aesthetic (see styles.css's own comment on .tabbar-close) --
+   the line above sets `color` at the same specificity, and being later in this file it would
+   otherwise win by source order. */
+[data-aesthetic="liminal"] .tabbar button.tabbar-close { color: var(--bad); }
 [data-aesthetic="liminal"] .toast { z-index: 60; }
 
 /* ---------- Lettering: office signage ---------- */

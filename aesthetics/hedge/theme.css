@@ -302,6 +302,10 @@
   background: color-mix(in srgb, var(--accent) 14%, transparent);
   box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent);
 }
+/* CLOSE stays --bad regardless of aesthetic (see styles.css's own comment on .tabbar-close) --
+   the generic button rule above sets `color` at the same specificity, and being later in this
+   file it would otherwise win by source order. */
+[data-aesthetic="hedge"] .tabbar button.tabbar-close { color: var(--bad); }
 [data-aesthetic="hedge"] .toast { z-index: 60; }
 
 /* ---------- Lettering ----------

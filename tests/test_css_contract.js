@@ -119,6 +119,18 @@ const CONTRACTS = [
     probe: '.lab-bar-mark',
     assert: cs => (cs.width !== '0px' && cs.backgroundColor !== 'rgba(0, 0, 0, 0)') ? null
       : `mark is ${cs.width} wide and ${cs.backgroundColor}` },
+  // CLOSE always reads as dismiss/exit (styles.css's own comment on .tabbar-close), fixed to
+  // --bad regardless of aesthetic or active state. Four themes (liminal, spacehighway, hedge,
+  // cartomancer) each restate a bare `.tabbar button { color: ... }` at the SAME (0,2,1)
+  // specificity as `.tabbar button.tabbar-close`, and being later in the cascade (external
+  // theme.css loads after styles.css) that silently won -- CLOSE went grey on exactly those four
+  // themes with nothing in the markup or the base stylesheet changed. Caught only by reading
+  // getComputedStyle() under every aesthetic, which is this whole file's reason to exist.
+  { name: 'the tabbar CLOSE button stays --bad under every theme',
+    html: '<div class="tabbar"><button class="tabbar-close"><span class="ic">X</span>CLOSE</button></div>',
+    probe: '.tabbar-close',
+    assert: (cs, ctx) => cs.color === ctx.color('--bad') ? null
+      : `CLOSE is ${cs.color}, --bad is ${ctx.color('--bad')}` },
 ];
 
 (async () => {

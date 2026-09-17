@@ -354,6 +354,10 @@
     0 0 16px -2px color-mix(in srgb, var(--accent) 70%, transparent);
   text-shadow: var(--sh-glow);
 }
+/* CLOSE stays --bad regardless of aesthetic (see styles.css's own comment on .tabbar-close) --
+   the generic button rule above sets `color` at the same specificity, and being later in this
+   file it would otherwise win by source order. Same fix needed in liminal/hedge/cartomancer. */
+[data-aesthetic="spacehighway"] .tabbar button.tabbar-close { color: var(--bad); }
 [data-aesthetic="spacehighway"] .toast { z-index: 60; }
 
 /* ---------- Lettering ---------- */
