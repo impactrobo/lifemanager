@@ -669,9 +669,6 @@ function _doRender() {
   const app = document.getElementById('app');
   if (NAV.currentTab === 'home') {
     app.innerHTML = renderHome();
-    // The clock box paints itself on an interval rather than through render(); this starts that
-    // when it is on screen and stops it when it isn't. Same shape as syncSkillTimer() below.
-    syncHomeClock();
   } else if (NAV.currentTab === 'schedule') {
     app.innerHTML = renderSchedule();
   } else if (NAV.currentTab === 'train') {
@@ -751,7 +748,12 @@ function _doRender() {
   // reachable from anywhere, the same way it always has been.
   document.getElementById('settingsBtn').classList.toggle('hidden', NAV.currentTab === 'setup');
   // Edit layout only makes sense on Home — hidden everywhere else, highlighted while active.
-  document.getElementById('homeEditBtn').classList.toggle('hidden', NAV.currentTab !== 'home');
+  // HIDDEN FOR NOW (2026-09-17), by request. The edit mode itself is untouched and still works --
+  // toggleHomeEditMode(), the drag handlers, hideHomeBox() and the add-back popup are all intact,
+  // so this is one line to put back. Only the way IN is gone. A saved layout someone already
+  // arranged keeps being honoured; what stops is rearranging it.
+  const HOME_EDIT_ENABLED = false;
+  document.getElementById('homeEditBtn').classList.toggle('hidden', !HOME_EDIT_ENABLED || NAV.currentTab !== 'home');
   document.getElementById('homeEditBtn').classList.toggle('home-edit-toggle-active', UI.homeEditMode);
   renderRestTimerWidget(); // re-checks isInWorkoutLogScreen() so the FAB/widget show only there
   attachScrollIndicators();

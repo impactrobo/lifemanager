@@ -1367,72 +1367,7 @@ function renderHomeDayBox() {
 // before its declaration exists and throws, taking the whole file's evaluation with it. Wrapping
 // each in an arrow defers the lookup to call time, by which point every script has loaded. The
 // call site below is unchanged either way: it already invoked whatever it found here.
-// ---------------- THE CLOCK ----------------
-// LIFEMan.EXE is a PET device, and a PET device tells you the time. It is also the one box that
-// earns its space without you logging anything into it.
-//
-// IT TICKS WITHOUT RENDERING. render() replaces #app.innerHTML wholesale and is rAF-deferred, so
-// calling it once a second to move a colon would rebuild every screen sixty times a minute and
-// wipe anything half-typed. Instead the markup ships once and syncHomeClock() paints the two spans
-// by id on an interval -- the same shape the practice timer (syncSkillTimer) and the rest timer
-// already use. The interval only runs while the element is actually on screen.
-//
-// It reads nowDate(), so the debug clock moves it along with everything else. That is deliberate:
-// a clock still showing the real date while the rest of the app is three weeks ahead would be the
-// single most confusing thing on the screen.
-let HOME_CLOCK_HANDLE = null;
-function homeClockParts() {
-  const d = nowDate();
-  const h24 = d.getHours();
-  // 12-hour with a meridiem, because that is how the time gets said out loud here. Seconds are
-  // shown but sized down -- they are what makes a clock look alive rather than a printed number.
-  const h = h24 % 12 || 12;
-  const pad = (n) => String(n).padStart(2, '0');
-  return {
-    time: h + ':' + pad(d.getMinutes()),
-    secs: pad(d.getSeconds()),
-    meridiem: h24 < 12 ? 'AM' : 'PM',
-    date: d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' }),
-  };
-}
-function renderHomeClockBox() {
-  const p = homeClockParts();
-  return `
-    <div class="subtle-label" style="margin:18px 0 8px;">${HOME_BOX_META.clock.label}</div>
-    <div class="panel home-clock">
-      <div class="home-clock-time">
-        <span id="homeClockTime">${p.time}</span><span class="home-clock-secs" id="homeClockSecs">${p.secs}</span><span class="home-clock-mer">${p.meridiem}</span>
-      </div>
-      <div class="home-clock-date" id="homeClockDate">${escapeHtml(p.date)}</div>
-    </div>`;
-}
-// Called from _doRender() after Home paints. Starts the interval when the box is on screen and
-// stops it the moment it isn't -- a timer left running behind another tab is the leak the FX
-// modules' destroy() contract exists to prevent, and the same discipline applies here.
-function syncHomeClock() {
-  const el = document.getElementById('homeClockTime');
-  if (!el) {
-    if (HOME_CLOCK_HANDLE) { clearInterval(HOME_CLOCK_HANDLE); HOME_CLOCK_HANDLE = null; }
-    return;
-  }
-  if (!HOME_CLOCK_HANDLE) HOME_CLOCK_HANDLE = setInterval(paintHomeClock, 1000);
-  paintHomeClock();
-}
-function paintHomeClock() {
-  const t = document.getElementById('homeClockTime');
-  if (!t) { if (HOME_CLOCK_HANDLE) { clearInterval(HOME_CLOCK_HANDLE); HOME_CLOCK_HANDLE = null; } return; }
-  const p = homeClockParts();
-  const s = document.getElementById('homeClockSecs');
-  const d = document.getElementById('homeClockDate');
-  // Written only when it actually changed: the date span changes once a day, and rewriting it every
-  // second is a layout invalidation for nothing.
-  if (t.textContent !== p.time) t.textContent = p.time;
-  if (s && s.textContent !== p.secs) s.textContent = p.secs;
-  if (d && d.textContent !== p.date) d.textContent = p.date;
-}
-
 const HOME_BOX_RENDERERS = {
-  clock: () => renderHomeClockBox(),
   reminders: () => renderTodaysReminders(),
   day: () => renderHomeDayBox(),
   wakeup: () => renderHomeAmLogBox(),

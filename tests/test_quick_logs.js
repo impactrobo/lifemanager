@@ -54,8 +54,8 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   console.log('boxes:', boxes);
   // The point is that these four keep their IDS and their ORDER RELATIVE TO EACH OTHER, so no saved
   // layout needs migrating — not that the list can never grow, or that nothing may be added before
-  // them. A box appended after them (YOUR WEEK) or ahead of them (TIME) is exactly the case
-  // loadState()'s boxOrder top-up already handles.
+  // them. A box appended after them (YOUR WEEK), or one added ahead of them and later removed
+  // again, is exactly the case loadState()'s boxOrder top-up and stale-id filter already handle.
   const four = ['reminders', 'day', 'wakeup', 'calories'];
   if (JSON.stringify(boxes.order.filter(id => four.includes(id))) !== JSON.stringify(four)) {
     throw new Error(`The original four box ids should be unchanged and in order, got ${JSON.stringify(boxes.order)}`);

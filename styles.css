@@ -2731,29 +2731,6 @@ button.brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 4
 /* Two-line labels (DIET & EXERCISE) shouldn't make the bar noticeably taller. */
 .tabbar button { line-height: 1.1; }
 
-/* ---- HOME: the digital clock (see renderHomeClockBox() in app-home.js) ----
-   A PET-device readout: big tabular time, seconds sized down because they are what makes it read as
-   running rather than printed, and the date underneath. tabular-nums matters more here than almost
-   anywhere else in the app — proportional digits make the whole line jiggle once a second as the
-   glyph widths change. */
-.home-clock { text-align: center; padding: 18px 12px 14px; }
-.home-clock-time {
-  font-family: var(--font-head);
-  font-size: clamp(38px, 13vw, 54px); font-weight: 800;
-  line-height: 1; letter-spacing: 0.01em;
-  color: var(--accent);
-  font-variant-numeric: tabular-nums;
-  display: flex; align-items: baseline; justify-content: center; gap: 4px;
-}
-.home-clock-secs {
-  font-size: 0.42em; font-weight: 700; color: var(--text-dim);
-  font-variant-numeric: tabular-nums;
-}
-.home-clock-mer { font-size: 0.3em; font-weight: 700; letter-spacing: 0.1em; color: var(--text-faint); }
-.home-clock-date {
-  margin-top: 8px; font-size: 12px; font-weight: 600;
-  letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-dim);
-}
 
 /* ---- A disclosure header: caret, label, and the current value on the right ----
    Used where a panel's contents are a second readout you open to look at rather than a setting you

@@ -717,7 +717,7 @@ function defaultHomeLayout() {
     // so deleting an entry would silently drop those chips back to an unstyled fallback.
     sectionOrder: ['train', 'hobbies', 'notes', 'budget'],
     sectionHidden: [],
-    boxOrder: ['clock', 'reminders', 'day', 'wakeup', 'calories', 'review'],
+    boxOrder: ['reminders', 'day', 'wakeup', 'calories', 'review'],
     boxHidden: [],
   };
 }
@@ -738,9 +738,6 @@ const HOME_SECTION_META = {
   budget: { label: 'FINANCIAL', icon: 'budget', color: '#B2FF5D' },
 };
 const HOME_BOX_META = {
-  // First by default: the one box that says something the moment the app opens, without needing
-  // anything logged into it. Hideable and re-orderable like any other.
-  clock: { label: 'TIME' },
   reminders: { label: "TODAY'S REMINDERS" },
   day: { label: 'YOUR DAY' },
   // Sits last by default, below today: a review is for reflecting on a week that has finished, not

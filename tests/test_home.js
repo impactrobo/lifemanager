@@ -35,11 +35,19 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (tileCount === 0) throw new Error('Expected at least one .home-tile on Home, found 0');
 
   // 2. Edit mode toggles and shows per-tile hide ("x") buttons
-  await page.click('#homeEditBtn');
+  // THE WAY IN IS HIDDEN (2026-09-17, by request) — the mode itself is untouched. So this drives it
+  // through toggleHomeEditMode() rather than the button, and asserts the button's absence as the
+  // deliberate state it is rather than discovering it as a timeout.
+  const entryHidden = await page.evaluate(() =>
+    document.getElementById('homeEditBtn').classList.contains('hidden'));
+  console.log('#homeEditBtn hidden on Home:', entryHidden);
+  if (!entryHidden) throw new Error('The Home edit button is deliberately hidden — flip HOME_EDIT_ENABLED in app-shell.js to bring it back');
+
+  await page.evaluate(() => toggleHomeEditMode());
   await settle(page);
   const editMode = await page.evaluate(() => UI.homeEditMode === true);
   console.log('UI.homeEditMode after toggle:', editMode);
-  if (!editMode) throw new Error('Expected UI.homeEditMode to be true after clicking #homeEditBtn');
+  if (!editMode) throw new Error('Expected UI.homeEditMode to be true after toggleHomeEditMode()');
 
   const hideButtons = await page.$$eval('.home-edit-x', els => els.length);
   console.log('hide (x) buttons visible in edit mode:', hideButtons);
@@ -50,8 +58,13 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // be attached while a same-specificity, later-in-file rule (.icon-btn) silently overrides its
   // styling, which is exactly the bug this once shipped as (see styles.css's
   // .icon-btn.home-edit-toggle-active comment). A plain classList check would never have caught it.
+  // DORMANT while the button is hidden, not deleted: the cascade bug it guards is still latent in
+  // styles.css, and this comes back the moment the entry point does.
   const hasClass = await page.evaluate(() => document.getElementById('homeEditBtn').classList.contains('home-edit-toggle-active'));
   if (!hasClass) throw new Error('Expected #homeEditBtn to carry .home-edit-toggle-active while UI.homeEditMode is true');
+  if (entryHidden) {
+    console.log('#homeEditBtn active-styling check skipped — the button is hidden, so it has no rendered border to settle');
+  } else {
   // The border ANIMATES: styles.css gives .icon-btn a 150ms border-color transition (for hover), so
   // an immediate computed-style read lands mid-transition and reports an in-between colour. This
   // used to pass only because the old waitForTimeout(150) happened to equal the transition -- a
@@ -63,17 +76,18 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     const warn = getComputedStyle(probe).color; probe.remove();
     return { border: getComputedStyle(document.getElementById('homeEditBtn')).borderColor, warn };
   };
-  try {
-    await page.waitForFunction(() => {
-      const probe = document.createElement('span'); probe.style.color = 'var(--warn)'; document.body.appendChild(probe);
-      const warn = getComputedStyle(probe).color; probe.remove();
-      return getComputedStyle(document.getElementById('homeEditBtn')).borderColor === warn;
-    }, null, { timeout: 2000 });
-  } catch (e) {
-    const got = await page.evaluate(borderVsWarn);
-    throw new Error(`Expected #homeEditBtn's border to resolve to --warn (${got.warn}) while active -- waited 2s for the 150ms transition and it never did, got ${got.border}`);
+    try {
+      await page.waitForFunction(() => {
+        const probe = document.createElement('span'); probe.style.color = 'var(--warn)'; document.body.appendChild(probe);
+        const warn = getComputedStyle(probe).color; probe.remove();
+        return getComputedStyle(document.getElementById('homeEditBtn')).borderColor === warn;
+      }, null, { timeout: 2000 });
+    } catch (e) {
+      const got = await page.evaluate(borderVsWarn);
+      throw new Error(`Expected #homeEditBtn's border to resolve to --warn (${got.warn}) while active -- waited 2s for the 150ms transition and it never did, got ${got.border}`);
+    }
+    console.log('#homeEditBtn while active: class present, border settled to --warn');
   }
-  console.log('#homeEditBtn while active: class present, border settled to --warn');
 
   // 2c. Tapping into a box's own content must NOT navigate away while in edit mode — it's easy to
   // accidentally tap a box while trying to drag-reorder it. A real click (not calling the handler
@@ -102,10 +116,10 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   await page.evaluate((id) => showHomeBox(id), hiddenBoxId); // restore it for the rest of the test
 
   // 2e. Leaving edit mode restores normal tap-to-navigate behavior on the same control
-  await page.click('#homeEditBtn'); // toggle edit mode back off
+  await page.evaluate(() => toggleHomeEditMode()); // toggle edit mode back off
   await settle(page);
   const editModeOff = await page.evaluate(() => UI.homeEditMode === false);
-  if (!editModeOff) throw new Error('Expected UI.homeEditMode to be false after toggling #homeEditBtn a second time');
+  if (!editModeOff) throw new Error('Expected UI.homeEditMode to be false after toggling a second time');
   const dayBoxLinkAgain = await page.$('[onclick*="goSchedule"]');
   if (!dayBoxLinkAgain) throw new Error("Expected the day box's link through to Schedule to still be present outside edit mode");
   await dayBoxLinkAgain.click();
