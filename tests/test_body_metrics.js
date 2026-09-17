@@ -35,10 +35,14 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     saveState();
   });
 
-  // ---- 1. The selector offers all seven, in one place ----
+  // ---- 1. The selector offers them all, in one place ----
+  // The last four come from the observation scales and are a different SOURCE shape — a flat log of
+  // timestamped readings, folded to one point per day (see test_bathroom.js). They are listed here
+  // because this assertion is about the selector being one list rather than several.
   const keys = await page.evaluate(() => WEIGHT_METRICS.map(m => m.key));
   console.log('metric keys:', keys);
-  const want = ['weight', 'bodyFatPct', 'bodyWaterPct', 'sleepHours', 'sleepQuality', 'steps', 'restingHR'];
+  const want = ['weight', 'bodyFatPct', 'bodyWaterPct', 'sleepHours', 'sleepQuality', 'steps', 'restingHR',
+                'stoolAvg', 'stoolCount', 'urineColorAvg', 'urineCount'];
   if (keys.join(',') !== want.join(',')) throw new Error('Metric list changed shape: ' + keys.join(','));
 
   // ---- 2. weightLog metrics: unit conversion happens in get(), sorted by date ----

@@ -110,6 +110,7 @@ function defaultTransientUi() {
     bodyFormOpen: false,
     bodyEditDate: null,          // which DAY is being edited; null means adding
     bodyDetailOpen: false,       // the circumferences disclosure
+    bathroomSheet: null,         // the date whose stool/urine readings the bathroom sheet is showing
     builderStylePickerOpen: false,
     autofillPickerOpen: false,
     cloudSyncModalOpen: false,

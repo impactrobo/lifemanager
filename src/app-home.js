@@ -721,6 +721,49 @@ function scaleValue(scale) {
   const today = scaleReadingsOn(scale, todayStr());
   return today.length ? Number(today[today.length - 1].value) || null : null;
 }
+// ---- A day, summarised ----
+// The two things worth comparing over time, DERIVED on every read: the day's average reading, and
+// how many readings there were. Both matter and they answer different questions — average urine
+// colour is hydration, average Bristol is consistency, but the COUNT is frequency, which is the
+// number that actually moves when you change fibre. Neither is stored: the readings are the only
+// copy, and a cached average is a number that can quietly stop matching the log it came from.
+function scaleDayStats(scale, dateStr) {
+  const vals = scaleReadingsOn(scale, dateStr).map(r => Number(r.value)).filter(v => Number.isFinite(v));
+  if (!vals.length) return { count: 0, avg: null, values: [] };
+  const sum = vals.reduce((a, b) => a + b, 0);
+  return { count: vals.length, avg: Math.round((sum / vals.length) * 10) / 10, values: vals };
+}
+// Every local day this scale has a reading on, oldest first — the x-axis for its charts.
+function scaleDatesWithReadings(scale) {
+  const seen = new Set();
+  scaleLog(scale).forEach(r => { const d = scaleDateOf(r); if (d) seen.add(d); });
+  return Array.from(seen).sort();
+}
+// Writing a reading onto a SPECIFIC date, for the BODY screen's bathroom sheet — you might be
+// filling in yesterday. Deliberately NOT setScaleReading(): that one implements "one reading per
+// opening of the sheet", which is right for the live Home tap (a correction, not a second trip) and
+// wrong here, where the whole point is entering three trips in a row. Every call adds a row; the
+// sheet removes them individually.
+//
+// Midday local for a past date, so the timestamp lands squarely inside the day it is filed under
+// whatever the timezone does at its edges. Today keeps the real clock, since the time is true.
+function addScaleReadingOn(scale, v, dateStr) {
+  const n = Number(v);
+  if (!n || n < 1 || n > SCALES[scale].steps) return null;
+  const at = dateStr === todayStr() ? nowDate() : new Date(dateStr + 'T12:00:00');
+  if (isNaN(at.getTime())) return null;
+  const log = scaleLog(scale);
+  const rec = { id: uid(), value: n, at: at.toISOString() };
+  log.push(rec);
+  if (log.length > 400) STATE.life[SCALES[scale].field] = log.slice(-400);
+  saveState();
+  return rec;
+}
+function removeScaleReading(scale, id) {
+  STATE.life[SCALES[scale].field] = scaleLog(scale).filter(r => r.id !== id);
+  saveState();
+}
+
 function setScaleReading(scale, v) {
   const n = Number(v);
   if (!n || n < 1 || n > SCALES[scale].steps) return;

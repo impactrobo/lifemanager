@@ -47,6 +47,103 @@ function measurementHasTrend(key) { return measurementSeries(key).length >= 2; }
 // is a form inviting them to disagree.
 function measureLengthFields() { return MEASURE_FIELDS.filter(f => f.unit === 'length'); }
 
+// ---------------- THE BATHROOM SHEET ----------------
+// Both observation scales, for one date, in one place. On Home they are two separate chips on the
+// PM strip, tapped once each as the day goes — that surface is right for logging as it happens and
+// wrong for the other case, which is sitting down on the BODY screen and filling in a day.
+//
+// It writes READINGS, to the same STATE.life.*Log arrays Home writes. There is no second store and
+// no "bathroom entry" record: the day's average and the day's count are derived from those readings
+// (scaleDayStats), so this sheet and the Home chips can never report different numbers.
+//
+// Each tap here ADDS a reading rather than correcting the last one — the opposite of Home's
+// one-per-visit rule, and deliberately: entering three trips in a row is the whole reason to be
+// here. Every reading shows as its own removable chip so a mistake costs one tap.
+const BATHROOM_SCALES = [
+  { scale: 'stool', label: 'Stool', hint: '3 and 4 are the healthy middle' },
+  { scale: 'waterColor', label: 'Urine', hint: 'lighter is more hydrated' },
+];
+function bathroomStatsOn(dateStr) {
+  const stool = scaleDayStats('stool', dateStr);
+  const urine = scaleDayStats('waterColor', dateStr);
+  return { stool, urine, any: stool.count > 0 || urine.count > 0 };
+}
+function bathroomButtonHtml(dateStr) {
+  const s = bathroomStatsOn(dateStr);
+  const n = s.stool.count + s.urine.count;
+  return `<button class="btn btn-ghost bathroom-btn" onclick="openBathroomSheet('${dateStr}')"
+    title="Log a bathroom reading" aria-label="Log a bathroom reading">
+    ${icon('toilet')}${n ? `<span class="bathroom-n mono">${n}</span>` : ''}</button>`;
+}
+function openBathroomSheet(dateStr) { UI.bathroomSheet = dateStr || todayStr(); render(); }
+function closeBathroomSheet() { UI.bathroomSheet = null; render(); }
+function addBathroomReading(scale, v) {
+  const d = UI.bathroomSheet;
+  if (!d) return;
+  addScaleReadingOn(scale, v, d);
+  render();
+}
+function dropBathroomReading(scale, id) {
+  removeScaleReading(scale, id);
+  render();
+}
+function renderBathroomSheet() {
+  const d = UI.bathroomSheet;
+  if (!d) return '';
+  const isToday = d === todayStr();
+  return `
+    <div class="link-picker-backdrop" onclick="closeBathroomSheet()"></div>
+    <div class="link-picker bathroom-sheet">
+      <div class="row" style="margin-bottom:10px;">
+        <div style="min-width:0;">
+          <div class="subtle-label" style="margin-bottom:2px;">BATHROOM</div>
+          <div style="font-size:12px; color:var(--text-dim);">${isToday ? 'Today' : escapeHtml(d)}</div>
+        </div>
+        <button class="icon-btn" onclick="closeBathroomSheet()">${icon('close')}</button>
+      </div>
+      <div class="bathroom-body">
+        ${BATHROOM_SCALES.map(s => renderBathroomScale(s, d)).join('')}
+      </div>
+      ${/* Says out loud what the day's numbers will be, because those — not the individual taps —
+            are what ends up on the entry and in COMPARE. */''}
+      <div class="bathroom-summary">${bathroomSummaryLine(d) || 'Nothing logged for this day yet.'}</div>
+    </div>`;
+}
+function renderBathroomScale(s, dateStr) {
+  const readings = scaleReadingsOn(s.scale, dateStr);
+  const stats = scaleDayStats(s.scale, dateStr);
+  const isStool = s.scale === 'stool';
+  const steps = isStool ? 7 : 8;
+  const hex = n => (isStool ? bristolHex(n) : waterColorHex(n));
+  return `<div class="bathroom-scale">
+    <div class="row" style="align-items:baseline; margin-bottom:6px;">
+      <span class="subtle-label" style="margin-bottom:0;">${s.label}</span>
+      <span style="font-size:11px; color:var(--text-faint); margin-left:auto;">${s.hint}</span>
+    </div>
+    <div class="bathroom-swatches">
+      ${Array.from({ length: steps }, (_, i) => i + 1).map(n => `
+        <button class="bathroom-sw" style="background:${hex(n)};" onclick="addBathroomReading('${s.scale}',${n})"
+          aria-label="${escapeHtml(s.label)} ${n} of ${steps}">${isStool ? `<span class="bathroom-sw-n">${n}</span>` : ''}</button>`).join('')}
+    </div>
+    ${readings.length ? `<div class="bathroom-readings">
+      ${readings.map(r => `<span class="bathroom-chip" style="--bc:${hex(r.value)}">
+        <i style="background:${hex(r.value)}"></i>${r.value}
+        <button onclick="dropBathroomReading('${s.scale}','${r.id}')" aria-label="Remove this reading">×</button>
+      </span>`).join('')}
+      <span class="bathroom-avg mono">avg ${stats.avg} · ${stats.count}×</span>
+    </div>` : `<div class="bathroom-empty">No readings — tap a shade to add one.</div>`}
+  </div>`;
+}
+// The two numbers that reach the rest of the app, said plainly.
+function bathroomSummaryLine(dateStr) {
+  const s = bathroomStatsOn(dateStr);
+  if (!s.any) return '';
+  const bits = [];
+  if (s.stool.count) bits.push(`<b>${s.stool.count}</b> bathroom trip${s.stool.count === 1 ? '' : 's'}, consistency averaging <b>${s.stool.avg}</b>`);
+  if (s.urine.count) bits.push(`<b>${s.urine.count}</b> hydration reading${s.urine.count === 1 ? '' : 's'}, averaging <b>${s.urine.avg}</b>`);
+  return bits.join('. ') + '.';
+}
+
 // The daily readings that belong to a BODY entry rather than to your day. Exactly the AM strip:
 // weight (already here, via weightLog) plus these three, all taken on waking.
 //
@@ -59,8 +156,14 @@ function measureLengthFields() { return MEASURE_FIELDS.filter(f => f.unit === 'l
 // logging sleep on Home fills this form in and editing it here moves the Home chip. There is one
 // copy of the number; only the way in differs.
 //
-// Steps, water and stool are NOT here. Those are your day rather than your body, and water in
-// particular is a running tally you tap at through the afternoon, not a figure you type once.
+// Steps and water are NOT here. Those are your day rather than your body, and water in particular
+// is a running tally you tap at through the afternoon, not a figure you type once.
+//
+// Stool and urine ARE reachable from this screen, but not as fields on this form — they are
+// MULTI-INPUT, several readings a day, and a form you fill in once a morning is the wrong shape for
+// them. They get their own sheet instead (see renderBathroomSheet below), reached by the toilet
+// button beside the entry button. What lands on the entry is the pair of numbers derived from that
+// day's readings: the average, and the count.
 const BODY_DAILY_FIELDS = [
   { key: 'sleepHours',   id: 'bSleep',   label: 'Sleep',      unit: 'hrs', step: '0.1' },
   { key: 'sleepQuality', id: 'bSleepQ',  label: 'Quality',    unit: '1-5', step: '1' },
@@ -131,8 +234,18 @@ function renderBodyLog() {
       // Today's entry takes the button: the correction you actually make is to the reading you just
       // took. Nothing resets this tomorrow -- it asks whether TODAY has an entry, so the answer
       // changes when the day does.
-      ? `<button class="btn btn-primary btn-block" onclick="openBodyEditor('${today}')">&#916; EDIT TODAY'S ENTRY</button>`
-      : `<button class="btn btn-primary btn-block" onclick="openBodyAdd()">+ ADD ENTRY</button>`;
+      // The bathroom sheet sits BESIDE the entry button rather than inside the form, because the
+      // two are used at different moments: the form is a once-a-morning act, and a trip to the loo
+      // is three times a day. It writes readings to the same log Home's chips do, so neither
+      // surface owns them — see openBathroomSheet().
+      ? `<div class="row" style="gap:8px;">
+           <button class="btn btn-primary" style="flex:1;" onclick="openBodyEditor('${today}')">&#916; EDIT TODAY'S ENTRY</button>
+           ${bathroomButtonHtml(today)}
+         </div>`
+      : `<div class="row" style="gap:8px;">
+           <button class="btn btn-primary" style="flex:1;" onclick="openBodyAdd()">+ ADD ENTRY</button>
+           ${bathroomButtonHtml(today)}
+         </div>`;
 
   const cards = dates.map(d => {
     const e = bodyEntryOn(d);
@@ -148,6 +261,11 @@ function renderBodyLog() {
     BODY_DAILY_FIELDS.forEach(f => {
       if (e.daily[f.key] != null) bits.push(`<span>${f.label} <b>${fmt(e.daily[f.key], 1)}</b> ${f.unit}</span>`);
     });
+    // Derived from that day's readings, never stored. Count first: it is the number that moves when
+    // you change fibre, and the average is what it moved to.
+    const bath = bathroomStatsOn(d);
+    if (bath.stool.count) bits.push(`<span>Trips <b>${bath.stool.count}</b> · avg <b>${bath.stool.avg}</b>/7</span>`);
+    if (bath.urine.count) bits.push(`<span>Hydration <b>${bath.urine.avg}</b>/8 · ${bath.urine.count}×</span>`);
     if (m) {
       measureLengthFields().forEach(f => {
         if (m.fields[f.key] != null && m.fields[f.key] !== '') {
@@ -175,7 +293,8 @@ function renderBodyLog() {
         Charting a measurement over time lives in <b style="color:var(--text)">COMPARE</b>, under <b style="color:var(--text)">MUSCLES</b> — alongside your body weight and your lifts.
         <button class="btn btn-ghost btn-sm" style="margin-top:8px;" onclick="setBodySubtab('compare')">OPEN COMPARE</button>
       </div>` : ''}
-    <div class="entry-list">${cards || emptyState('Nothing logged yet.')}</div>`;
+    <div class="entry-list">${cards || emptyState('Nothing logged yet.')}</div>
+    ${renderBathroomSheet()}`;
 }
 
 function renderBodyForm() {
@@ -593,6 +712,21 @@ const WEIGHT_METRICS = [
     has: l => l.steps != null, get: l => l.steps, suffix: () => '' },
   { key: 'restingHR', label: 'Resting Heart Rate', source: 'dailyLog',
     has: l => l.restingHR != null, get: l => l.restingHR, suffix: () => ' bpm' },
+  // The two observation scales, as four metrics: what the readings SAID on average, and how many
+  // there were. Both halves earn their place — average Bristol is consistency and average colour is
+  // hydration, but the COUNT is frequency, and frequency is the number that actually moves when you
+  // change fibre. Charting quality without quantity would answer half the question.
+  //
+  // `source: 'scale'` is a third shape (a flat log of timestamped readings rather than one row per
+  // day), so metricSeries() aggregates it per day. Nothing is stored: see scaleDayStats().
+  { key: 'stoolAvg', label: 'Stool Consistency', source: 'scale', scale: 'stool', agg: 'avg',
+    suffix: () => ' /7' },
+  { key: 'stoolCount', label: 'Bathroom Trips', source: 'scale', scale: 'stool', agg: 'count',
+    suffix: () => '/day' },
+  { key: 'urineColorAvg', label: 'Hydration Colour', source: 'scale', scale: 'waterColor', agg: 'avg',
+    suffix: () => ' /8' },
+  { key: 'urineCount', label: 'Urine Readings', source: 'scale', scale: 'waterColor', agg: 'count',
+    suffix: () => '/day' },
   // BP was the one metric here that wasn't a scalar -- one field with two `parts` drawing two
   // lines. It moved to Labs, where systolic and diastolic are two ordinary markers with their own
   // reference ranges, position bars and trails, and where COMPARE already picks them up under its
@@ -607,6 +741,15 @@ const WEIGHT_METRICS = [
 // line up with the shared x-axis rather than each filtering its own way and silently desyncing.
 function metricSeries(metric, get) {
   const read = get || metric.get;
+  // A scale's log is neither shape: one row per READING, several a day, timestamped. Folded to one
+  // point per day here (see scaleDayStats in app-home.js) so everything downstream — charts,
+  // trailingAverage, COMPARE's range clipping — keeps receiving the same {date, value} list.
+  if (metric.source === 'scale') {
+    return scaleDatesWithReadings(metric.scale)
+      .map(d => ({ date: d, s: scaleDayStats(metric.scale, d) }))
+      .filter(p => (metric.agg === 'count' ? p.s.count > 0 : p.s.avg != null))
+      .map(p => ({ date: p.date, value: metric.agg === 'count' ? p.s.count : p.s.avg }));
+  }
   if (metric.source === 'dailyLog') {
     return Object.keys(STATE.life.dailyLog)
       .filter(d => metric.has(STATE.life.dailyLog[d]))

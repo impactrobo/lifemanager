@@ -3109,3 +3109,45 @@ textarea.tmpl-input { line-height: 1.5; }
 }
 .ing-skipped b { color: var(--amber); }
 .ing-skipped div { margin-top: 4px; color: var(--text); }
+
+/* ---- The bathroom sheet (BODY) ----
+   Both observation scales for one date. The swatches are the reading: tapping one adds a row, and
+   every row shows as its own removable chip, because entering three trips in a row is the whole
+   reason this exists rather than the one-tap-per-visit chips on Home. */
+.bathroom-btn { flex: none; display: flex; align-items: center; gap: 6px; padding-left: 12px; padding-right: 12px; }
+/* The glyph carries this button on its own — there is no label beside it — so it is sized to be
+   read rather than to match the 1em text icons elsewhere. */
+.bathroom-btn .icon-svg { width: 20px !important; height: 20px !important; }
+.bathroom-n { font-size: 11px; font-weight: 700; color: var(--text-dim); }
+.bathroom-sheet { max-height: 84vh; display: flex; flex-direction: column; }
+.bathroom-body { overflow-y: auto; flex: 1; min-height: 0; }
+.bathroom-scale + .bathroom-scale { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border-soft); }
+.bathroom-swatches { display: flex; gap: 5px; }
+.bathroom-sw {
+  flex: 1; height: 42px; border: 1px solid var(--border-soft); border-radius: 7px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+.bathroom-sw:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Bristol swatches carry their number; the hydration strip deliberately doesn't — a position on a
+   colour strip is not a reading anyone repeats, and printing an index invites treating it as a
+   score. Same reasoning as the Home strip. */
+.bathroom-sw-n { font-family: var(--font-mono); font-size: 12px; font-weight: 800; color: rgba(0,0,0,0.6); }
+.bathroom-readings { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; margin-top: 8px; }
+.bathroom-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--text-dim);
+  background: var(--surface2); border: 1px solid var(--bc, var(--border)); border-radius: 20px; padding: 2px 4px 2px 6px;
+}
+.bathroom-chip i { width: 9px; height: 9px; border-radius: 50%; display: block; }
+.bathroom-chip button {
+  background: none; border: 0; padding: 0 3px; cursor: pointer;
+  color: var(--text-faint); font-size: 13px; line-height: 1;
+}
+.bathroom-avg { font-size: 10px; color: var(--text-faint); margin-left: 2px; }
+.bathroom-empty { font-size: 12px; color: var(--text-faint); margin-top: 8px; }
+.bathroom-summary {
+  margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border-soft);
+  font-size: 12px; color: var(--text-dim);
+}
+.bathroom-summary b { color: var(--text); }

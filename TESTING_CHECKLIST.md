@@ -389,4 +389,21 @@ can't judge is whether the hub is a good way to work, which is the actual questi
       phone, or is dragging worth building properly? (It would mean generalising Home's edit-mode
       drag, which is why it isn't here yet.)
 
+## Stool & urine as tracked measurements (2026-09-17)
+Both scales were already logged on Home; now the day's figures reach BODY and COMPARE.
+`tests/test_bathroom.js` covers the maths, the local-day filing and the shared store.
+- [ ] **PROGRESS → BODY**: a toilet button sits beside ADD/EDIT ENTRY, with a count badge. Tap it —
+      **both** scales appear in one sheet.
+- [ ] Tap a few shades on each. Every tap ADDS a reading (not a correction — that's Home's rule),
+      each shows as a removable chip, and the running average and count are shown.
+- [ ] The line at the bottom says what the day's two figures will be. Those are what reach the
+      entry card and COMPARE — check the card underneath shows **Trips** and **Hydration**.
+- [ ] Log a reading on **Home's PM strip** instead, then reopen this sheet: it should be there.
+      There is one log, two ways in — if they ever disagree, that's the bug to report.
+- [ ] **COMPARE → BODY** now offers Stool Consistency, Bathroom Trips, Hydration Colour and Urine
+      Readings. Chart a couple of weeks and see whether the frequency line is actually useful when
+      you change fibre — that's the question this was built for.
+- [ ] Fill in **yesterday** from the sheet (open it from a past entry) and confirm the readings file
+      under that day, not today.
+
 ## Add future items below as new features ship

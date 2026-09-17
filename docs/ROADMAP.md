@@ -298,6 +298,26 @@ Newest first. Keep this reasonably current so a fresh session can see what alrea
 without re-reading the whole diff history. Roughly grouped: this project spent early Sept 2026
 on an architecture split + a large wave of Maximalist aesthetics.
 
+- **Stool and urine become tracked measurements (2026-09-17).** Both scales were already logged as
+  several timestamped readings a day; what was missing was any way to compare them over time, or to
+  reach them from the BODY screen at all.
+  - **Two derived numbers per day, not one**: the average of the readings AND how many there were.
+    Average Bristol is consistency and average colour is hydration, but the COUNT is frequency —
+    and frequency is the number that actually moves when you change fibre. Charting quality without
+    quantity answers half the question.
+  - **Nothing is stored.** `scaleDayStats()` derives both on read from the same
+    `STATE.life.*Log` arrays Home writes, so the Home chips and the BODY screen cannot report
+    different numbers for a day. No "bathroom entry" record exists.
+  - **Four new metrics** (`stoolAvg`, `stoolCount`, `urineColorAvg`, `urineCount`) on a third
+    `source: 'scale'` in `WEIGHT_METRICS`, folded to one point per day by `metricSeries()`. Being in
+    that list means they appear in COMPARE's BODY group and the body chart selector for free.
+  - **A bathroom sheet on BODY**, behind a toilet button beside the entry button, showing BOTH
+    scales at once for one date. It sits beside the form rather than inside it because the two are
+    used at different moments — the form is a once-a-morning act, a trip to the loo is three times a
+    day. Every tap ADDS a reading rather than correcting the last, which is the opposite of Home's
+    one-per-visit rule and deliberately so: entering three trips in a row is the point.
+    `addScaleReadingOn()` files a past date at local midday so it lands inside the day it belongs to.
+
 - **The actual weight rate needed DAILY weigh-ins, and was never meant to (2026-09-17).** Reported
   from a device: "don't see anything in Actual, but I didn't log a weight every day." The lookback
   in `actualPctPerWeekAt()` was `GOAL_RATE_MIN_DAYS` — the same 14 as the minimum SPAN — so the

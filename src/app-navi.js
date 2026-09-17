@@ -115,7 +115,12 @@ function naviLine(t, s) { return s ? { t: t, s: s } : { t: t }; }
 // the repetitive part, not the word. It now appears only on a broken habit: rare by nature, and the
 // one place the casual meanness does real work, since it sits on a line that is otherwise kind.
 // The review lines just drop it — she doesn't need to call you anything to say "zero out of four".
-const VITALYA_NICKS = ['couch gremlin', 'sloth', 'lazybones', 'my little potato', 'sleepy'];
+//
+// The pool is calibrated to PLAYFUL, off the one piece of feedback there is on it: "lazybones was
+// good — playful and fun." The earlier set had 'sloth' and 'sleepy' in it, which land flat rather
+// than fond; every one here is the kind of thing an exasperated friend says, which is the "without
+// real malice" half of the spec doing its job.
+const VITALYA_NICKS = ['lazybones', 'couch gremlin', 'my little potato', 'sleepyhead', 'slowpoke'];
 function vitalyaNick(f) {
   // Keyed off the week being reviewed, so re-reading the same week says the same thing.
   const n = (f.range || '').split('').reduce((a, c) => a + c.charCodeAt(0), 0);
@@ -284,14 +289,20 @@ const NAVI_VOICES = {
 // None of these do that. They react to what happened and stop. Nobody mentions the streak you just
 // ended -- you know, you just pressed the button that ended it -- and nobody asks you to do better
 // for their sake. What each Navi brings is a different way of being unbothered about it.
+// "TRACKED", not "marked", for the young ones — StrikeMan and Vitalya. Requested, and it is the
+// better word anyway: "marked" carries a whiff of a mark against you, which is the opposite of what
+// this moment is for. The two who keep their own word keep it on purpose. Wenceslas says "it is
+// written" because he is a medieval king and everything is a chronicle to him; ClayMan says
+// "marked" because he is the older, been-there one and it reads as steady rather than stern.
+// DigiMan says "RECORDED" because he is a machine reading out a log.
 const NAVI_HABIT_BREAK = {
   strike: (h) => [
-    naviLine('You marked it, bro. That took more than skipping it would have.'),
+    naviLine('You tracked it, bro. That took more than skipping it would have.'),
     naviLine('Tomorrow is a different day and I am still here. Let us GET IT.'),
   ],
   vitalya: (h, nick) => [
     naviLine('Oh no. *Anyway* 🙄'),
-    naviLine('It is marked, ' + nick + '. Genuinely — better than pretending you did it.'),
+    naviLine('It is tracked, ' + nick + '. Genuinely — better than pretending you did it.'),
   ],
   digi: (h) => [
     naviLine('HABIT "' + String(h.name || '').toUpperCase() + '" RECORDED AS BROKEN. ENTRY IS PERMANENT.', 'mono'),
