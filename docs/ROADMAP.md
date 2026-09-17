@@ -298,6 +298,34 @@ Newest first. Keep this reasonably current so a fresh session can see what alrea
 without re-reading the whole diff history. Roughly grouped: this project spent early Sept 2026
 on an architecture split + a large wave of Maximalist aesthetics.
 
+- **Notes Phase 2, "Links" (2026-09-17).** Entries point at each other two ways, and both are read
+  by one function: the `links` array (added through the picker) and `[[id]]` tokens written inline.
+  - **Stored as an id, shown as a title.** That's what makes renaming safe — a rename rewrites
+    nothing. The editor is the risky part, so it shows `[[Title]]` and resolves back on save: the
+    original id first (so a re-save can't drift when two entries share a title), then an exact
+    title match. A name that matches nothing is *reported*, not flattened into prose, and offers
+    to create the note.
+  - **`[[` autocomplete.** Every typed word must appear in the title, in any order — "notes setup"
+    finds "Setup notes". Prefix matches rank first, then most recently touched; five rows, hubs
+    marked, the current entry never offered. Arrows/Enter/Tab/Escape, and a "create as a new note"
+    row that makes the target and keeps you where you were.
+  - **Backlinks carry their sentence.** "Linked from" shows each linking entry and the sentence the
+    link sits in, rendered as prose — a bare list of titles never answers *why* something links here.
+  - **Unlinked mentions.** Entries that name this one in plain text without linking, with a LINK IT
+    that rewrites the first occurrence into a real token. Whole words only, and titles under four
+    characters are skipped, or a note called "Gym" claims every sentence in the library.
+  - **Press and hold an inline link** to peek: a card with the target's title and first sentence.
+    Tap it to go, release to stay. The click that follows a long press is swallowed, or "peek"
+    would always also navigate.
+  - **A back stack**, separate from the app's nav history — note → note → note all happen on one
+    screen, so `goBack()` would have nothing to pop. Skips anything deleted in the meantime.
+  - **The index is memoised, not incrementally patched.** The spec asks for incremental
+    maintenance; a hand-patched backlink map is a thing that silently drifts from the text it
+    describes, and a full rebuild is one pass (3ms at 1,000 entries, measured in the test). It
+    invalidates on a version counter *and* on the entries array's length and identity — that last
+    one means a reload, import, cloud pull or sign-out can't leave it describing notes that are
+    gone, without every one of those call sites having to remember.
+
 - **Notes rebuilt on one entry model — Phase 1, "Capture" (2026-09-17).** The spec is
   `docs/NOTES_SPEC.md`, which replaces the Notes section in five phases; this is the first.
   - **One record shape for six types.** `STATE.entries` — `{id, type, title, body, fields, tags,

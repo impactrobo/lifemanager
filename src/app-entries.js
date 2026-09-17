@@ -78,8 +78,13 @@ function blankEntry(type) {
 }
 
 // The one place an entry is marked changed. Every mutator goes through it so "Edited" sort and
-// any future per-record merge can trust updatedAt rather than hoping each call site remembered.
-function touchEntry(e) { if (e) e.updatedAt = Date.now(); return e; }
+// any future per-record merge can trust updatedAt rather than hoping each call site remembered —
+// and so the link index (see entryIndex, below) has exactly one thing to listen to.
+function touchEntry(e) {
+  if (e) e.updatedAt = Date.now();
+  invalidateEntryIndex();
+  return e;
+}
 
 // A displayable name. The spec makes title optional on every type, so the body's first non-empty
 // line stands in -- which is what makes a Quick note genuinely quick: type and save, and it still
@@ -189,7 +194,7 @@ function entryOutgoingLinks(e) {
 }
 function entryBacklinks(e) {
   if (!e) return [];
-  return liveEntries().filter(o => o.id !== e.id && entryOutgoingLinks(o).includes(e.id));
+  return (entryIndex().backlinks.get(e.id) || []).filter(o => o.id !== e.id);
 }
 function linkEntries(fromId, toId) {
   const from = entryById(fromId);
@@ -272,7 +277,8 @@ function renderEntryInline(escaped) {
       const target = entryById(id);
       if (!target) return `<span class="entry-link entry-link-missing">Missing note</span>`;
       if (target.deleted) return `<span class="entry-link entry-link-dead">Deleted note</span>`;
-      return `<a class="entry-link" style="color:${entryTypeColor(target.type)}" href="#" onclick="openEntry('${escapeHtml(id)}'); return false;">${escapeHtml(entryTitleOf(target))}</a>`;
+      // data-entry-link is what the long-press preview handler looks for (app-notes.js).
+      return `<a class="entry-link" data-entry-link="${escapeHtml(id)}" style="color:${entryTypeColor(target.type)}" href="#" onclick="onEntryLinkClick(event,'${escapeHtml(id)}'); return false;">${escapeHtml(entryTitleOf(target))}</a>`;
     })
     .replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/g, (m, pre, url) =>
       `${pre}<a class="entry-url" href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`)
@@ -397,6 +403,216 @@ function cycleEntryHeading(text, caret) {
     text: text.slice(0, lineStart) + next + text.slice(lineEnd),
     caret: Math.max(lineStart, caret + (next.length - line.length)),
   };
+}
+
+// ================= LINKS (NOTES_SPEC Phase 2) =================
+// Entries point at each other two ways: the `links` array (added through the picker) and `[[id]]`
+// tokens written inline in the text. Both are read by entryOutgoingLinks() above; everything here
+// is what makes them usable — finding a target while typing, showing a token as a title rather
+// than an id, and surfacing the other direction.
+
+// ---- The index ----
+// The spec asks for an index maintained incrementally rather than rebuilt on every read. It is
+// MEMOISED rather than incrementally patched: one version counter, bumped by any entry write, and
+// the whole index recomputed on the next read that finds it stale. Incremental patching of a
+// backlink map is the kind of thing that silently drifts out of sync with the text it describes —
+// and since a rebuild is a single pass over the entries, the thing the spec actually wants
+// (no rebuild per read, no delay at a thousand entries) is bought without that risk.
+let ENTRY_INDEX_VERSION = 0;
+let ENTRY_INDEX_CACHE = null;
+// Called by every path that changes an entry. touchEntry() covers ordinary edits; deletion,
+// undelete and an incoming sync call it directly, because those change the index without
+// necessarily changing an updatedAt this code can see.
+function invalidateEntryIndex() { ENTRY_INDEX_VERSION += 1; ENTRY_INDEX_CACHE = null; }
+function entryIndex() {
+  const source = allEntries();
+  // Three staleness tests, not one. The version counter catches edits (every mutator calls
+  // touchEntry); the array's LENGTH catches a plain push or splice that never touched an entry;
+  // and its IDENTITY catches STATE being replaced wholesale — a reload, an import, a cloud pull,
+  // a sign-out. That last one is why this is checked here rather than by invalidating from each
+  // of those call sites: a new one gets added eventually, and an index that silently describes
+  // the previous user's notes is a bad way to find out.
+  if (ENTRY_INDEX_CACHE && ENTRY_INDEX_CACHE.version === ENTRY_INDEX_VERSION &&
+      ENTRY_INDEX_CACHE.source === source && ENTRY_INDEX_CACHE.sourceLength === source.length) {
+    return ENTRY_INDEX_CACHE;
+  }
+  const live = liveEntries();
+  const outgoing = new Map();     // id -> [target id]
+  const backlinks = new Map();    // id -> [source entry]
+  const byTitle = new Map();      // lowercased title -> entry (first wins)
+  live.forEach(e => {
+    const out = entryOutgoingLinks(e);
+    outgoing.set(e.id, out);
+    const key = entryTitleOf(e).toLowerCase();
+    if (!byTitle.has(key)) byTitle.set(key, e);
+  });
+  live.forEach(e => {
+    (outgoing.get(e.id) || []).forEach(targetId => {
+      if (!backlinks.has(targetId)) backlinks.set(targetId, []);
+      backlinks.get(targetId).push(e);
+    });
+  });
+  // Newest first, which is what the "Linked from" list shows.
+  backlinks.forEach(list => list.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)));
+  ENTRY_INDEX_CACHE = { version: ENTRY_INDEX_VERSION, source, sourceLength: source.length,
+                        outgoing, backlinks, byTitle, entries: live };
+  return ENTRY_INDEX_CACHE;
+}
+function entryByTitle(title) {
+  const key = String(title || '').trim().toLowerCase();
+  return key ? (entryIndex().byTitle.get(key) || null) : null;
+}
+
+// ---- Autocomplete ----
+// Every typed word has to appear somewhere in the title, in any order — "notes setup" finds
+// "Setup notes". Titles that START with what was typed rank first (that's the common case: you
+// know the beginning of the name), then the most recently touched.
+function entryAutocompleteMatches(query, excludeId, limit) {
+  const q = String(query || '').trim().toLowerCase();
+  const words = q.split(/\s+/).filter(Boolean);
+  const rows = [];
+  entryIndex().entries.forEach(e => {
+    if (e.id === excludeId) return;                       // never offer the entry you're in
+    const title = entryTitleOf(e);
+    const hay = title.toLowerCase();
+    if (words.length && !words.every(w => hay.includes(w))) return;
+    rows.push({ entry: e, title, starts: q ? hay.startsWith(q) : false });
+  });
+  rows.sort((a, b) =>
+    (b.starts ? 1 : 0) - (a.starts ? 1 : 0) ||
+    (b.entry.updatedAt || 0) - (a.entry.updatedAt || 0));
+  return rows.slice(0, limit || 5);
+}
+// Where an unclosed "[[" sits relative to the caret, and what has been typed since — or null when
+// the caret isn't inside one. A "]]" between the brackets and the caret means that token is
+// finished and typing after it is just text.
+function entryTokenAtCaret(text, caret) {
+  const before = String(text || '').slice(0, caret);
+  const open = before.lastIndexOf('[[');
+  if (open === -1) return null;
+  const since = before.slice(open + 2);
+  if (since.includes(']]') || since.includes('\n')) return null;
+  return { start: open, query: since };
+}
+
+// ---- Tokens: id on disk, title on screen ----
+// Stored as [[id]] so renaming a target can never break a link, but an id is unreadable and
+// un-typeable, so EDIT mode shows [[Title]] and save turns it back. The map generated on the way
+// in is what makes the round trip lossless: it remembers which id each title stood for, so
+// re-saving without touching a link resolves to the same target even if two entries now share a
+// title, or the target was renamed by another device in between.
+function entryBodyForEditing(text) {
+  const map = {};
+  const out = String(text || '').replace(ENTRY_TOKEN_RE, (m, raw) => {
+    const id = raw.trim();
+    const target = entryById(id);
+    if (!target) return m;                                // unknown id: leave it visible as-is
+    const title = entryTitleOf(target);
+    map[title.toLowerCase()] = id;
+    return '[[' + title + ']]';
+  });
+  return { text: out, map };
+}
+// The way back. Returns the resolved text plus any token that matched nothing, so the caller can
+// ask what to do about it rather than silently dropping a link the person meant to make.
+function resolveEntryBodyTokens(text, map) {
+  const unresolved = [];
+  const out = String(text || '').replace(ENTRY_TOKEN_RE, (m, raw) => {
+    const label = raw.trim();
+    if (!label) return m;
+    if (entryById(label)) return '[[' + label + ']]';     // already an id, and it exists
+    const mapped = map && map[label.toLowerCase()];       // what this title meant on the way in
+    if (mapped && entryById(mapped)) return '[[' + mapped + ']]';
+    const byTitle = entryByTitle(label);                  // else an exact title match, today
+    if (byTitle) return '[[' + byTitle.id + ']]';
+    unresolved.push(label);
+    return m;
+  });
+  return { text: out, unresolved };
+}
+// Entry ids that this entry links to FROM ITS TEXT specifically. The Links section marks these
+// "in text" and gives them no × — the text is where they live, so the text is where they're
+// removed.
+function entryTextLinkIds(e) {
+  const seen = new Set();
+  const out = [];
+  const push = id => { if (id && id !== e.id && !seen.has(id)) { seen.add(id); out.push(id); } };
+  entryTokenIds(e.body).forEach(push);
+  Object.keys((e && e.fields) || {}).forEach(k => entryTokenIds(e.fields[k]).forEach(push));
+  return out;
+}
+
+// ---- Sentences ----
+// A backlink is far more useful with the sentence it sits in than as a bare title: "why does this
+// link here" is the question being answered, and the title alone never answers it.
+function entrySentences(text) {
+  return stripEntryMarkdown(text)
+    .split(/\n+/).join(' ')
+    .split(/(?<=[.!?])\s+/)
+    .map(s => s.trim())
+    .filter(Boolean);
+}
+function entryFirstSentence(e, max) {
+  const s = entrySentences((e && e.body) || '')[0] || '';
+  const limit = max || 120;
+  return s.length > limit ? s.slice(0, limit) + '…' : s;
+}
+// The sentence in `source` that links to `targetId`. Works on the RAW text so the token can be
+// located, then renders that one sentence with titles substituted, so it reads as prose.
+function entrySentenceLinkingTo(source, targetId, max) {
+  const raw = String((source && source.body) || '');
+  const limit = max || 140;
+  const pieces = raw.split(/\n+/).join(' ').split(/(?<=[.!?])\s+/);
+  const hit = pieces.find(p => entryTokenIds(p).includes(targetId));
+  const s = stripEntryMarkdown(hit || raw.split('\n').find(Boolean) || '').replace(/\s+/g, ' ').trim();
+  return s.length > limit ? s.slice(0, limit) + '…' : s;
+}
+
+// ---- Unlinked mentions ----
+// Entries whose text says this entry's name without linking to it. Whole words only, case
+// insensitive — a substring match would flag "Oats" inside "Oatscake" and, worse, would fire on
+// every short title. Titles under four characters are skipped entirely for the same reason: a
+// note called "Gym" would claim every sentence containing the word.
+const ENTRY_MENTION_MIN = 4;
+function entryMentionRegex(title) {
+  const escaped = String(title).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp('(^|[^\\p{L}\\p{N}_])(' + escaped + ')(?=[^\\p{L}\\p{N}_]|$)', 'iu');
+}
+function unlinkedMentions(e) {
+  const title = entryTitleOf(e);
+  if (!e || title.length < ENTRY_MENTION_MIN || title === 'Untitled') return [];
+  const re = entryMentionRegex(title);
+  const alreadyLinked = new Set(entryIndex().backlinks.get(e.id) ? entryIndex().backlinks.get(e.id).map(s => s.id) : []);
+  return entryIndex().entries.filter(other => {
+    if (other.id === e.id || alreadyLinked.has(other.id)) return false;
+    // Search the text with its OWN tokens stripped, so a mention that is already a link to some
+    // other entry (or to this one) is never offered again.
+    const plain = String(other.body || '').replace(ENTRY_TOKEN_RE, ' ');
+    return re.test(plain);
+  }).map(other => ({ entry: other, sentence: entryMentionSentence(other, title) }));
+}
+function entryMentionSentence(other, title) {
+  const re = entryMentionRegex(title);
+  const plain = String(other.body || '').replace(ENTRY_TOKEN_RE, ' ');
+  const hit = entrySentences(plain).find(s => re.test(s)) || '';
+  return hit.length > 140 ? hit.slice(0, 140) + '…' : hit;
+}
+// "Link it": turn the first bare mention of `target`'s title inside `source` into a real token.
+// Only the FIRST, deliberately — turning every occurrence into a link makes a paragraph unreadable
+// and is not what the button appears to promise.
+function linkifyMention(sourceId, targetId) {
+  const source = liveEntryById(sourceId), target = liveEntryById(targetId);
+  if (!source || !target) return false;
+  const title = entryTitleOf(target);
+  const re = entryMentionRegex(title);
+  const m = source.body.match(re);
+  if (!m) return false;
+  const at = source.body.indexOf(m[0]);
+  const lead = m[1] || '';
+  source.body = source.body.slice(0, at) + lead + '[[' + target.id + ']]' +
+                source.body.slice(at + m[0].length);
+  touchEntry(source);
+  return true;
 }
 
 // ---- Migration off STATE.notes ----

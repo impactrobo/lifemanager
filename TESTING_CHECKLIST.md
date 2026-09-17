@@ -283,8 +283,33 @@ this is the only migration in the app that can destroy something you personally 
 - [ ] The sort you pick is still there after a relaunch; the filter and search are deliberately not.
 - [ ] Photos still attach, up to four, and open full-size.
 
-**Known gaps, not bugs — later phases:** the type chip is a readout (Convert is Phase 4), `[[ ]]`
-links render and resolve but have no autocomplete or picker yet and show the raw id while editing
-(Phase 2), and hubs exist as a type with no hub view (Phase 3).
+**Known gaps, not bugs — later phases:** the type chip is a readout (Convert is Phase 4), and hubs
+exist as a type with no hub view (Phase 3).
+
+## Notes Phase 2 — Links (2026-09-17)
+`tests/test_entry_links.js` is the spec's own acceptance list turned into assertions, including a
+1,000-entry timing check. What it can't judge is the two real *gestures*, both of which need a
+touchscreen and an on-screen keyboard.
+- [ ] **Type `[[` in a note's body.** The suggestion list appears. Every word you type has to be in
+      the title but the ORDER doesn't matter — "notes setup" should find "Setup notes". Tap one.
+- [ ] **With the iOS keyboard up, is the suggestion list actually visible?** It sits under the
+      textarea and gets scrolled into view; the keyboard is what makes this uncertain, and it's the
+      single most likely thing to be wrong on a real phone. If it's hidden, say so and it moves
+      above the textarea instead.
+- [ ] Type `[[` and a name that doesn't exist, then pick **Create as a new note** — the note is
+      made, the link works, and you stay in the note you were writing.
+- [ ] Save a note whose `[[ ]]` names nothing: you're asked whether to create it, rather than the
+      brackets silently staying in the prose.
+- [ ] **Edit mode shows `[[Setup notes]]`, not `[[b7x9…]]`.** Rename the target, reopen: the link
+      text follows the new name everywhere, in view AND in the editor.
+- [ ] **Press and hold an inline link.** A card appears with the target's title and first sentence.
+      Releasing must NOT navigate — it stays so you can read it. Tapping the card opens the target.
+      Judge the hold duration (450ms): too twitchy, too slow, or about right?
+- [ ] Follow a link, then the **back chevron** top-left returns you to where you came from.
+- [ ] **LINKED FROM** shows the sentence each link sits in, and reads as prose — no raw `[[ ]]`.
+- [ ] **UNLINKED MENTIONS**: write a note that names another by title without linking. It should be
+      offered, and LINK IT should turn that text into a working link.
+- [ ] Delete a note something links to: the link reads **"Deleted note"**, struck through. Undo
+      from the toast and the link works again.
 
 ## Add future items below as new features ship

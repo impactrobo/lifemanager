@@ -339,6 +339,7 @@ function switchTab(tab) {
     VIEW.entryOpenId = null;
     VIEW.entryMode = 'view';
     VIEW.entryDraftTitle = null; VIEW.entryDraftBody = null; VIEW.entryTagQuery = '';
+    VIEW.entryBackStack = []; VIEW.entryAutocomplete = null; VIEW.entryPreview = null;
     NAV.notesSubtab = 'view';
   }
   if (tab === 'schedule') {

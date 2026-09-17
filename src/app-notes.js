@@ -10,16 +10,18 @@
 //
 // ================= NOTES =================
 // The record model, the Markdown and the migration live in src/app-entries.js; this file is the
-// screens. Phase 1 of docs/NOTES_SPEC.md: capture, formatting, checklists, favourites, search,
-// filter, sort and tags.
+// screens. docs/NOTES_SPEC.md Phases 1 (Capture) and 2 (Links).
 //
-// PHASE 1 DELIBERATELY STOPS SHORT of three things the spec describes, so that what ships is
-// finished rather than half-present:
+// Phase 2 (Links) added the [[ ]] system on top: autocomplete, title-tokens in the editor,
+// backlinks with the sentence each link sits in, unlinked mentions, the press-and-hold preview and
+// a back stack for following links. The index and the text transforms behind all of it are in
+// src/app-entries.js.
+//
+// STILL DELIBERATELY SHORT of two things the spec describes, so that what ships is finished
+// rather than half-present:
 //   - The type chip is a READOUT. Types exist as data and as colour, but Convert (rule sort,
 //     review, Undo) is Phase 4, and a type picker with no templates behind it would let you set
 //     an entry to Journal and see nothing change but a dot.
-//   - `[[id]]` tokens RENDER (and resolve, and show their two failure states) but there is no
-//     autocomplete and no link picker yet -- Phase 2.
 //   - Hubs are a type the model knows; the hub view is Phase 3.
 // Recipes are the exception to "everything starts as a Quick note": they arrived already
 // structured from the old Notes and keep working, ingredients and "add to Meals" included.
@@ -64,16 +66,26 @@ function onEntrySearchInput(val) {
   const host = document.getElementById('entryResults');
   if (host) host.innerHTML = renderEntryResults();
 }
-// There is deliberately no expand-to-see-links on a card. The cross-entity chip row
-// (renderLinkChips) already shows every connection in both directions, on the card AND in the
-// editor — a second, entry-only chip list beside it showed the same relationship twice under two
-// headings. docs/NOTES_SPEC.md's richer "Linked from", with the sentence each link sits in, is
-// Phase 2; the counts in the card's meta row stand in until then.
+// There is deliberately no expand-to-see-links on a CARD. The cross-entity chip row
+// (renderLinkChips) already shows every connection in both directions there, and a second,
+// entry-only chip list beside it showed the same relationship twice under two headings. A card
+// gets the counts; the full picture — "Linked from" with the sentence each link sits in, plus
+// unlinked mentions — lives in the editor, where there is room to read it.
 
 // ---- Opening, creating, closing ----
-function openEntry(id) {
+// Following a link from inside an entry pushes where you were, so there is a way back. This is
+// its OWN stack rather than the app's nav history: goBack() moves between screens, and note ->
+// note -> note all happen on one screen, so nav history would have nothing to pop.
+function openEntry(id, opts) {
   const e = liveEntryById(id);
   if (!e) { showToast('That note no longer exists'); return; }
+  const from = VIEW.entryOpenId;
+  if (from && from !== id && !(opts && opts.replace)) {
+    commitEntryDraft();          // don't lose what was typed in the entry being left
+    saveState();
+    if (!Array.isArray(VIEW.entryBackStack)) VIEW.entryBackStack = [];
+    VIEW.entryBackStack.push(from);
+  }
   ensureTab('notes');            // before the VIEW writes below: switchTab() clears transient UI
   VIEW.entryOpenId = id;
   VIEW.entryMode = (e.body || '').trim() || (e.title || '').trim() ? 'view' : 'edit';
@@ -81,22 +93,41 @@ function openEntry(id) {
   NAV.notesSubtab = 'view';
   render();
 }
+function entryBackStack() {
+  if (!Array.isArray(VIEW.entryBackStack)) VIEW.entryBackStack = [];
+  return VIEW.entryBackStack;
+}
+// Pops back to wherever the last link was followed from. Skips anything deleted in the meantime
+// rather than showing "that note no longer exists" for a step you never chose to take.
+function goBackEntry() {
+  const stack = entryBackStack();
+  while (stack.length) {
+    const prev = stack.pop();
+    if (liveEntryById(prev)) { openEntry(prev, { replace: true }); return; }
+  }
+  closeEntry();
+}
 // A new entry is saved to STATE immediately rather than living as a draft. An unsaved buffer is a
 // thing that can be lost by a stray tap; an empty entry that gets abandoned is cleaned up on
 // close (see closeEntry), which is recoverable and obvious.
 function newQuickEntry() {
   const e = blankEntry('quick');
   allEntries().push(e);
+  invalidateEntryIndex();
   ensureTab('notes');
   VIEW.entryOpenId = e.id;
   VIEW.entryMode = 'edit';
+  VIEW.entryBackStack = [];   // a note you started fresh isn't "behind" anything
   clearEntryDraft();
   NAV.notesSubtab = 'view';
   saveState();
   render();
 }
 function openEntryRecord() { return VIEW.entryOpenId ? liveEntryById(VIEW.entryOpenId) : null; }
-function clearEntryDraft() { VIEW.entryDraftTitle = null; VIEW.entryDraftBody = null; }
+function clearEntryDraft() {
+  VIEW.entryDraftTitle = null; VIEW.entryDraftBody = null;
+  VIEW.entryTokenMap = null; VIEW.entryAutocomplete = null;
+}
 // Park what's typed before anything that re-renders, exactly as the old note composer did: the
 // textarea IS the draft, and render() replaces #app wholesale.
 function captureEntryDraft() {
@@ -104,6 +135,15 @@ function captureEntryDraft() {
   const b = document.getElementById('entryBody');
   if (t) VIEW.entryDraftTitle = t.value;
   if (b) VIEW.entryDraftBody = b.value;
+}
+// What the textarea should contain: the stored body with [[id]] swapped for [[Title]]. The map it
+// returns is parked in VIEW, because resolving on the way back out needs to know which id each
+// title stood for when editing began — see resolveEntryBodyTokens().
+function entryEditText(e) {
+  if (VIEW.entryDraftBody !== null && VIEW.entryDraftBody !== undefined) return VIEW.entryDraftBody;
+  const { text, map } = entryBodyForEditing(e.body || '');
+  VIEW.entryTokenMap = map;
+  return text;
 }
 function commitEntryDraft() {
   const e = openEntryRecord();
@@ -113,8 +153,12 @@ function commitEntryDraft() {
   if (VIEW.entryDraftTitle !== null && VIEW.entryDraftTitle !== undefined && VIEW.entryDraftTitle !== e.title) {
     e.title = VIEW.entryDraftTitle; changed = true;
   }
-  if (VIEW.entryDraftBody !== null && VIEW.entryDraftBody !== undefined && VIEW.entryDraftBody !== e.body) {
-    e.body = VIEW.entryDraftBody; changed = true;
+  if (VIEW.entryDraftBody !== null && VIEW.entryDraftBody !== undefined) {
+    // [[Title]] back to [[id]]. Anything that resolved to nothing is left as typed and reported,
+    // so a link you meant to make never disappears quietly into plain text.
+    const resolved = resolveEntryBodyTokens(VIEW.entryDraftBody, VIEW.entryTokenMap);
+    VIEW.entryUnresolved = resolved.unresolved;
+    if (resolved.text !== e.body) { e.body = resolved.text; changed = true; }
   }
   if (changed) touchEntry(e);
   clearEntryDraft();
@@ -125,7 +169,37 @@ function saveOpenEntry() {
   if (!e) return;
   VIEW.entryMode = 'view';
   saveState();
+  const stuck = VIEW.entryUnresolved || [];
+  VIEW.entryUnresolved = null;
+  if (stuck.length) {
+    // A [[name]] that matched nothing is almost always a note you meant to write next. Offering to
+    // create it is the useful answer; the alternative — silently leaving brackets in the prose —
+    // reads as a bug.
+    const name = stuck[0];
+    const more = stuck.length > 1 ? ` (and ${stuck.length - 1} more)` : '';
+    showConfirm(`No note called “${name}”${more}. Create it?`, () => createAndLinkEntry(name, e.id));
+    render();
+    return;
+  }
   showToast('Saved');
+  render();
+}
+// "Create as new note": makes the target, points the current entry's token at it, and keeps you
+// where you were. Creating a note you then have to navigate back out of would break the thought
+// you were in the middle of writing down.
+function createAndLinkEntry(title, fromId) {
+  const from = liveEntryById(fromId);
+  const made = Object.assign(blankEntry('quick'), { title: String(title || '').trim() });
+  allEntries().push(made);
+  invalidateEntryIndex();
+  if (from) {
+    // Swap the unresolved [[title]] for the real id, now that there is one.
+    const re = new RegExp('\\[\\[\\s*' + String(title).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*\\]\\]', 'gi');
+    from.body = from.body.replace(re, '[[' + made.id + ']]');
+    touchEntry(from);
+  }
+  saveState();
+  showToast(`Created “${entryTitleOf(made)}”`);
   render();
 }
 function closeEntry() {
@@ -138,7 +212,10 @@ function closeEntry() {
   }
   VIEW.entryOpenId = null;
   VIEW.entryMode = 'view';
+  VIEW.entryBackStack = [];
+  VIEW.entryPreview = null;
   clearEntryDraft();
+  invalidateEntryIndex();
   saveState();
   render();
 }
@@ -222,7 +299,7 @@ function renderNotes() {
   return `<div class="screen">
     <div class="section-title">Notes</div>
     ${open ? renderEntryEditor(open) : renderEntryList()}
-  </div>`;
+  </div>${renderEntryPreview()}`;
 }
 
 function renderEntryList() {
@@ -311,10 +388,13 @@ function renderEntryEditor(e) {
   const color = entryTypeColor(e.type);
   const editing = VIEW.entryMode !== 'view';
   const titleVal = VIEW.entryDraftTitle !== null && VIEW.entryDraftTitle !== undefined ? VIEW.entryDraftTitle : (e.title || '');
-  const bodyVal = VIEW.entryDraftBody !== null && VIEW.entryDraftBody !== undefined ? VIEW.entryDraftBody : (e.body || '');
+  // Edit mode shows [[Title]]; VIEW mode renders from the stored body, where the tokens are ids.
+  const editVal = entryEditText(e);
+  const back = entryBackStack();
   return `
     <div class="row" style="align-items:center; margin:14px 0 10px;">
       <div style="display:flex; align-items:center; gap:8px;">
+        ${back.length ? `<button class="icon-btn" onclick="goBackEntry()" title="Back to ${escapeHtml(entryTitleOf(liveEntryById(back[back.length - 1]) || {}))}" aria-label="Back">${icon('back')}</button>` : ''}
         <span class="entry-dot ${meta.dot === 'square' ? 'is-square' : ''}" style="background:${color}"></span>
         <span class="note-tag-label" style="color:${color}; border-color:${color};">${meta.short}</span>
         <button class="entry-star ${e.favorite ? 'is-on' : ''}" onclick="toggleEntryFavorite('${e.id}')" aria-pressed="${!!e.favorite}" aria-label="Favourite">★</button>
@@ -328,10 +408,14 @@ function renderEntryEditor(e) {
       </label>
       ${editing ? renderEntryToolbar() : ''}
       ${editing
-        ? `<textarea id="entryBody" class="entry-editor" rows="14" placeholder="Write it down…"
-             oninput="onEntryBodyInput()" onkeydown="onEntryBodyKeydown(event)">${escapeHtml(bodyVal)}</textarea>`
+        ? `<div class="entry-editor-wrap">
+             <textarea id="entryBody" class="entry-editor" rows="14" placeholder="Write it down…  Type [[ to link another note."
+               oninput="onEntryBodyInput()" onkeydown="onEntryBodyKeydown(event)"
+               onblur="closeEntryAutocompleteSoon()">${escapeHtml(editVal)}</textarea>
+             <div id="entryAutocomplete">${renderEntryAutocomplete(e)}</div>
+           </div>`
         : `<div class="entry-view rich-text" onclick="setEntryMode('edit')" title="Tap to edit">${
-             bodyVal.trim() ? renderEntryMarkdown(bodyVal, 'toggleOpenEntryCheck') : '<p class="entry-empty-line">Nothing written yet — tap to start.</p>'
+             (e.body || '').trim() ? renderEntryMarkdown(e.body, 'toggleOpenEntryCheck') : '<p class="entry-empty-line">Nothing written yet — tap to start.</p>'
            }</div>`}
     </div>
     ${isRecipeEntry(e) ? renderRecipeEditor(e) : ''}
@@ -343,11 +427,208 @@ function renderEntryEditor(e) {
     <div id="entryTagBox">${renderEntryTagBox(e)}</div>
     <div class="subtle-label" style="margin:16px 0 8px;">LINKED</div>
     ${renderLinkChips('note', e.id)}
+    ${renderEntryTextLinks(e)}
+    <div class="subtle-label" style="margin:16px 0 8px;">LINKED FROM</div>
+    ${renderEntryBacklinks(e)}
+    ${renderEntryUnlinkedMentions(e)}
     <div class="row" style="gap:8px; margin-top:20px;">
       <button class="btn btn-primary" style="flex:1;" onclick="saveOpenEntry()">SAVE</button>
       <button class="btn btn-ghost" onclick="closeEntry()">DONE</button>
     </div>
     <button class="btn btn-ghost btn-sm btn-block" style="margin-top:10px; color:var(--bad);" onclick="deleteEntry('${e.id}')">DELETE NOTE</button>`;
+}
+
+// ---- The three link surfaces ----
+// Links written INTO the text. They get no × — the text is where they live, so the text is where
+// they're removed, and an × that silently rewrote your prose would be worse than no × at all.
+function renderEntryTextLinks(e) {
+  const ids = entryTextLinkIds(e);
+  if (!ids.length) return '';
+  return `<div class="entry-link-row" style="margin-top:8px;">${ids.map(id => {
+    const t = entryById(id);
+    if (!t) return `<span class="entry-textlink is-dead">Missing note <b>in text</b></span>`;
+    if (t.deleted) return `<span class="entry-textlink is-dead">${escapeHtml(entryTitleOf(t))} <b>in text</b></span>`;
+    return `<button class="entry-textlink" style="--tc:${entryTypeColor(t.type)}" onclick="openEntry('${t.id}')">${escapeHtml(entryTitleOf(t))} <b>in text</b></button>`;
+  }).join('')}</div>`;
+}
+// Newest first, each showing WHY it links here — the sentence the link sits in. A bare list of
+// titles never answers that, which is the whole reason to look at backlinks at all.
+function renderEntryBacklinks(e) {
+  const back = entryBacklinks(e);
+  if (!back.length) return `<div class="entry-empty-line">Nothing links here yet.</div>`;
+  return `<div class="entry-ref-list">${back.map(o => `
+    <button class="entry-ref" onclick="openEntry('${o.id}')">
+      <span class="entry-ref-dot" style="background:${entryTypeColor(o.type)}"></span>
+      <span class="entry-ref-body">
+        <span class="entry-ref-title">${escapeHtml(entryTitleOf(o))}</span>
+        <span class="entry-ref-sentence">${escapeHtml(entrySentenceLinkingTo(o, e.id))}</span>
+      </span>
+    </button>`).join('')}</div>`;
+}
+// Entries that NAME this one without linking to it. The point is to catch the link you meant to
+// make and didn't; "LINK IT" turns that text into a real link in place.
+function renderEntryUnlinkedMentions(e) {
+  const mentions = unlinkedMentions(e);
+  if (!mentions.length) return '';
+  return `<div class="subtle-label" style="margin:16px 0 8px;">UNLINKED MENTIONS</div>
+    <div class="entry-ref-list">${mentions.map(m => `
+      <div class="entry-ref is-mention">
+        <span class="entry-ref-dot" style="background:${entryTypeColor(m.entry.type)}"></span>
+        <span class="entry-ref-body" onclick="openEntry('${m.entry.id}')">
+          <span class="entry-ref-title">${escapeHtml(entryTitleOf(m.entry))}</span>
+          <span class="entry-ref-sentence">${escapeHtml(m.sentence)}</span>
+        </span>
+        <button class="btn btn-sm btn-ghost entry-ref-action" onclick="linkThisMention('${m.entry.id}','${e.id}')">LINK IT</button>
+      </div>`).join('')}</div>`;
+}
+function linkThisMention(sourceId, targetId) {
+  if (!linkifyMention(sourceId, targetId)) { showToast('Could not find that mention any more'); return; }
+  saveState();
+  showToast('Linked');
+  render();
+}
+
+// ---- Link preview (press and hold) ----
+// A tap follows a link; a HOLD shows what's on the other side without leaving where you are. That
+// second gesture is the point — checking whether a link goes where you think it does shouldn't
+// cost you your place in what you were reading.
+const ENTRY_PRESS_MS = 450;
+let ENTRY_PRESS_TIMER = null;
+let ENTRY_PRESS_FIRED = false;
+function openEntryPreview(id, x, y) {
+  const t = liveEntryById(id);
+  if (!t) return;
+  VIEW.entryPreview = { id, x, y };
+  render();
+}
+function closeEntryPreview() {
+  if (!VIEW.entryPreview) return;
+  VIEW.entryPreview = null;
+  render();
+}
+// A long press ends in a click on most browsers, so the click that follows one has to be eaten —
+// otherwise "hold to peek" would always also navigate on release.
+function onEntryLinkClick(evt, id) {
+  if (ENTRY_PRESS_FIRED) { ENTRY_PRESS_FIRED = false; evt.preventDefault(); return; }
+  openEntry(id);
+}
+function renderEntryPreview() {
+  const p = VIEW.entryPreview;
+  const t = p && liveEntryById(p.id);
+  if (!t) return '';
+  const sentence = entryFirstSentence(t);
+  // Clamped so a link near the right edge or the bottom doesn't push the card off screen.
+  const left = Math.max(10, Math.min((p.x || 0) - 130, (window.innerWidth || 390) - 270));
+  const top = Math.max(10, (p.y || 0) - 96);
+  return `<div class="entry-preview-backdrop" onclick="closeEntryPreview()"></div>
+    <div class="entry-preview" style="left:${Math.round(left)}px; top:${Math.round(top)}px;">
+      <button class="entry-ref" onclick="closeEntryPreview(); openEntry('${t.id}')">
+        <span class="entry-ref-dot" style="background:${entryTypeColor(t.type)}"></span>
+        <span class="entry-ref-body">
+          <span class="entry-ref-title">${escapeHtml(entryTitleOf(t))}</span>
+          <span class="entry-ref-sentence">${sentence ? escapeHtml(sentence) : 'Nothing written yet.'}</span>
+        </span>
+      </button>
+    </div>`;
+}
+// Registered once, on document, because render() replaces #app wholesale — a listener bound to a
+// link would be thrown away on the next render. Safe at file-evaluation time: it only NAMES the
+// functions above, and doesn't call anything until a real pointer event arrives.
+document.addEventListener('pointerdown', (evt) => {
+  const el = /** @type {HTMLElement} */ (evt.target);
+  const a = el && el.closest ? el.closest('[data-entry-link]') : null;
+  if (!a) return;
+  ENTRY_PRESS_FIRED = false;
+  const id = a.getAttribute('data-entry-link');
+  const x = evt.clientX, y = evt.clientY;
+  clearTimeout(ENTRY_PRESS_TIMER);
+  ENTRY_PRESS_TIMER = setTimeout(() => { ENTRY_PRESS_FIRED = true; openEntryPreview(id, x, y); }, ENTRY_PRESS_MS);
+});
+['pointerup', 'pointercancel', 'pointermove', 'scroll'].forEach(kind => {
+  document.addEventListener(kind, () => clearTimeout(ENTRY_PRESS_TIMER), true);
+});
+
+// ---- [[ autocomplete ----
+function renderEntryAutocomplete(e) {
+  const ac = VIEW.entryAutocomplete;
+  if (!ac) return '';
+  const rows = entryAutocompleteMatches(ac.query, e.id, 5);
+  const canCreate = ac.query.trim().length > 0;
+  if (!rows.length && !canCreate) return '';
+  const sel = ac.selected || 0;
+  return `<div class="entry-ac" role="listbox">
+    ${rows.map((r, i) => `
+      <button class="entry-ac-row ${i === sel ? 'is-sel' : ''}" role="option" aria-selected="${i === sel}"
+        onmousedown="event.preventDefault()" onclick="acceptEntryAutocomplete(${i})">
+        <span class="entry-ac-dot ${entryTypeMeta(r.entry.type).dot === 'square' ? 'is-square' : ''}" style="background:${entryTypeColor(r.entry.type)}"></span>
+        <span class="entry-ac-title">${escapeHtml(r.title)}</span>
+        ${r.entry.type === 'hub' ? '<span class="entry-ac-kind">HUB</span>' : ''}
+      </button>`).join('')}
+    ${canCreate ? `<button class="entry-ac-row is-create ${sel === rows.length ? 'is-sel' : ''}"
+        onmousedown="event.preventDefault()" onclick="acceptEntryAutocomplete(${rows.length})">
+        + Create “${escapeHtml(ac.query.trim())}” as a new note</button>` : ''}
+  </div>`;
+}
+function repaintEntryAutocomplete() {
+  const e = openEntryRecord();
+  const host = document.getElementById('entryAutocomplete');
+  if (!e || !host) return;
+  host.innerHTML = renderEntryAutocomplete(e);
+  // The body is a tall textarea, so the list hangs below the fold as often as not — and with an
+  // on-screen keyboard up there is very little fold left. Nudge it into view rather than leaving
+  // suggestions that are technically rendered and practically invisible. 'nearest' so it does
+  // nothing when the list is already on screen, which is the common case on a desktop.
+  const list = host.querySelector('.entry-ac');
+  if (list && list.scrollIntoView) list.scrollIntoView({ block: 'nearest' });
+}
+function closeEntryAutocomplete() {
+  if (!VIEW.entryAutocomplete) return;
+  VIEW.entryAutocomplete = null;
+  repaintEntryAutocomplete();
+}
+// Blur fires before a tap on a row lands, so the close is deferred by a frame. The rows also carry
+// onmousedown="preventDefault()", which stops the blur on desktop; this covers touch.
+function closeEntryAutocompleteSoon() { setTimeout(closeEntryAutocomplete, 150); }
+// Replaces the open "[[query" with the chosen title, closed. The TITLE is written, not the id —
+// the textarea is the title view of the body, and save resolves it (see resolveEntryBodyTokens).
+function acceptEntryAutocomplete(index) {
+  const e = openEntryRecord();
+  const ac = VIEW.entryAutocomplete;
+  const ta = /** @type {HTMLTextAreaElement} */ (document.getElementById('entryBody'));
+  if (!e || !ac || !ta) return;
+  const rows = entryAutocompleteMatches(ac.query, e.id, 5);
+  const chosen = rows[index];
+  const title = chosen ? chosen.title : ac.query.trim();
+  if (!title) return;
+  const before = ta.value.slice(0, ac.start);
+  const after = ta.value.slice(ac.start + 2 + ac.query.length);
+  const insert = '[[' + title + ']]';
+  ta.value = before + insert + after;
+  const caret = before.length + insert.length;
+  ta.setSelectionRange(caret, caret);
+  VIEW.entryDraftBody = ta.value;
+  VIEW.entryAutocomplete = null;
+  ta.focus();
+  repaintEntryAutocomplete();
+  // Picking "create" makes the note straight away, so the name resolves to something real rather
+  // than waiting to become an unresolved-token prompt on save.
+  if (!chosen) {
+    commitEntryDraft();
+    createAndLinkEntry(title, e.id);
+  }
+}
+// Runs on every keystroke: is the caret inside an unclosed "[["?
+function syncEntryAutocomplete(ta) {
+  const token = entryTokenAtCaret(ta.value, ta.selectionStart);
+  if (!token) { closeEntryAutocomplete(); return; }
+  const prev = VIEW.entryAutocomplete;
+  VIEW.entryAutocomplete = {
+    start: token.start,
+    query: token.query,
+    // Keep the highlighted row only while the query is unchanged; a new query means a new list.
+    selected: prev && prev.query === token.query ? (prev.selected || 0) : 0,
+  };
+  repaintEntryAutocomplete();
 }
 
 function renderEntryToolbar() {
@@ -362,6 +643,7 @@ function renderEntryToolbar() {
     ${b("entryFmt('bullet')", '&bull;&nbsp;List', 'Bullet')}
     ${b("entryFmt('number')", '1.&nbsp;List', 'Numbered')}
     ${b("entryFmt('check')", '&#9744;&nbsp;Todo', 'Checklist')}
+    ${b('insertEntryToken()', '[[&nbsp;]]', 'Link a note')}
   </div>`;
 }
 
@@ -383,13 +665,47 @@ function entryFmt(kind) {
   VIEW.entryDraftBody = ta.value;
 }
 function onEntryBodyInput() {
-  const ta = document.getElementById('entryBody');
-  if (ta) VIEW.entryDraftBody = ta.value;
+  const ta = /** @type {HTMLTextAreaElement} */ (document.getElementById('entryBody'));
+  if (!ta) return;
+  VIEW.entryDraftBody = ta.value;
+  syncEntryAutocomplete(ta);
 }
-// Enter continues a list; an empty item ends it. Anything else falls through to the browser.
+// The "[[ " toolbar button: drops an empty pair in and opens the picker on the spot, for anyone
+// who doesn't want to type two brackets on a phone keyboard.
+function insertEntryToken() {
+  const ta = /** @type {HTMLTextAreaElement} */ (document.getElementById('entryBody'));
+  if (!ta) return;
+  const at = ta.selectionStart;
+  ta.value = ta.value.slice(0, at) + '[[]]' + ta.value.slice(ta.selectionEnd);
+  ta.setSelectionRange(at + 2, at + 2);
+  ta.focus();
+  VIEW.entryDraftBody = ta.value;
+  syncEntryAutocomplete(ta);
+}
+// Keyboard for the editor. While the autocomplete is open it owns the arrows, Enter, Tab and
+// Escape — otherwise Enter would break the line underneath an open list of suggestions. When it's
+// closed, Enter continues a list; anything else falls through to the browser.
 function onEntryBodyKeydown(evt) {
-  if (evt.key !== 'Enter' || evt.shiftKey) return;
   const ta = /** @type {HTMLTextAreaElement} */ (evt.target);
+  const ac = VIEW.entryAutocomplete;
+  if (ac) {
+    const rows = entryAutocompleteMatches(ac.query, VIEW.entryOpenId, 5);
+    const count = rows.length + (ac.query.trim() ? 1 : 0);   // +1 for "create as new note"
+    if (evt.key === 'Escape') { evt.preventDefault(); closeEntryAutocomplete(); return; }
+    if (count && (evt.key === 'ArrowDown' || evt.key === 'ArrowUp')) {
+      evt.preventDefault();
+      const dir = evt.key === 'ArrowDown' ? 1 : -1;
+      ac.selected = ((ac.selected || 0) + dir + count) % count;
+      repaintEntryAutocomplete();
+      return;
+    }
+    if (count && (evt.key === 'Enter' || evt.key === 'Tab')) {
+      evt.preventDefault();
+      acceptEntryAutocomplete(ac.selected || 0);
+      return;
+    }
+  }
+  if (evt.key !== 'Enter' || evt.shiftKey) return;
   if (ta.selectionStart !== ta.selectionEnd) return;
   const next = continueEntryList(ta.value, ta.selectionStart);
   if (!next) return;
