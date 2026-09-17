@@ -283,7 +283,34 @@ this is the only migration in the app that can destroy something you personally 
 - [ ] The sort you pick is still there after a relaunch; the filter and search are deliberately not.
 - [ ] Photos still attach, up to four, and open full-size.
 
-**Known gaps, not bugs — later phases:** the type chip is a readout (Convert is Phase 4).
+**Known gaps, not bugs — later phases:** Recipe→Meal matching and shopping lists are Phase 5.
+
+## Notes Phase 4 — Convert (2026-09-17)
+The type chip is a button now: tap it to turn a Quick note into a Journal, Writing, Travel, Recipe
+or Hub — and back. `tests/test_entry_convert.js` checks every rule in the spec's table, every
+type-to-type path, and that no line is ever lost. What it can't judge is whether the rules guess
+*well* on your actual notes, which is the only question that matters here.
+- [ ] Write a messy Quick note with a bit of everything — a numbered list, "2 cups flour", a
+      bulleted line, "Serves 4", "Book the tickets", a URL, and some plain prose. Convert it to
+      **Recipe**, then read the review screen. **Does the split match what you'd have done?**
+- [ ] Convert the same note to **Travel** instead. Different rules apply — the numbered list and
+      the flour should now be unsorted, the bullet should become packing.
+- [ ] **UNSORTED is the thing to watch.** Anything no rule claimed lands there, and it stays on the
+      entry in an amber box afterwards. Confirm nothing you wrote ever disappears.
+- [ ] Use **MOVE** on a sorted line and **PLACE** on an unsorted one. BACK returns to the type
+      choice without losing anything.
+- [ ] **UNDO on the toast** puts the note back exactly as it was — type, body, every field.
+- [ ] Convert a typed entry **back to Quick**: everything flattens into the body in field order.
+- [ ] Convert something with **links in it to a Hub**: the linked lines become real members, and
+      the rest of each line becomes that member's line of context.
+- [ ] Empty template fields show as **"+ Add …"**, never as blank boxes. Tap one and type.
+- [ ] **Recipes specifically:** converting must not disturb ingredients you'd already matched to
+      real foods — check ADD TO MEALS still works and the macros are unchanged. The written list
+      ("INGREDIENTS, AS WRITTEN") and the matched rows ("MATCHED INGREDIENTS") are two different
+      things on purpose; Phase 5 is the bridge between them.
+- [ ] **A judgement call:** are twelve fixed rules the right ones? If something consistently lands
+      in the wrong place, tell me the line and where it should have gone — the rules are a table,
+      and adding to it is cheap.
 
 ## Notes Phase 2 — Links (2026-09-17)
 `tests/test_entry_links.js` is the spec's own acceptance list turned into assertions, including a

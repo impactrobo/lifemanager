@@ -32,12 +32,45 @@ const ENTRY_TYPES = {
   journal: { label: 'Journal',    short: 'JOURNAL', token: '--note-journal', dot: 'round',  fields: ['mood', 'notes', 'highlight', 'gratitude'] },
   writing: { label: 'Writing',    short: 'WRITING', token: '--note-writing', dot: 'round',  fields: ['status', 'outline', 'draft'] },
   travel:  { label: 'Travel',     short: 'TRAVEL',  token: '--note-travel',  dot: 'round',  fields: ['trip', 'places', 'todo', 'packing', 'dayLog'] },
-  recipe:  { label: 'Recipe',     short: 'RECIPE',  token: '--note-recipe',  dot: 'round',  fields: ['servings', 'time', 'ingredients', 'steps', 'source', 'rating'] },
+  // `ingredientText` is the written list ("2 cups flour"), which is what Convert can produce from
+  // prose. `fields.ingredients` beside it is the STRUCTURED {foodId, qty, unit} rows that carry
+  // exact macros and drive add-to-Meals. Two fields on purpose, not an oversight: text is what you
+  // can type, rows are what the app can compute with, and Phase 5's Match button is the bridge.
+  recipe:  { label: 'Recipe',     short: 'RECIPE',  token: '--note-recipe',  dot: 'round',  fields: ['servings', 'time', 'ingredientText', 'steps', 'source', 'rating'] },
   // A hub is an entry too -- that's what lets a hub sit inside another hub, be tagged, be
   // searched and be linked like anything else. Its square dot is the one place type is signalled
   // without relying on colour, since a hub behaves differently from everything else in the list.
-  hub:     { label: 'Hub',        short: 'HUB',     token: '--note-hub',     dot: 'square', fields: ['intro'] },
+  // No `intro` field: a hub's BODY is its intro (see the Hubs section below for why).
+  hub:     { label: 'Hub',        short: 'HUB',     token: '--note-hub',     dot: 'square', fields: [] },
 };
+// How each template field is written and shown. `lines` means one item per line and gets a
+// multi-line box; `text` is a single value; `select` is a fixed choice.
+const ENTRY_FIELD_META = {
+  mood:          { label: 'Mood',        kind: 'text' },
+  notes:         { label: 'Notes',       kind: 'lines' },
+  highlight:     { label: 'Highlight',   kind: 'text' },
+  gratitude:     { label: 'Gratitude',   kind: 'lines' },
+  status:        { label: 'Status',      kind: 'select', options: ['idea', 'draft', 'done'] },
+  outline:       { label: 'Outline',     kind: 'lines' },
+  draft:         { label: 'Draft',       kind: 'lines' },
+  trip:          { label: 'Trip',        kind: 'text' },
+  places:        { label: 'Places',      kind: 'lines' },
+  todo:          { label: 'To do',       kind: 'lines' },
+  packing:       { label: 'Packing',     kind: 'lines' },
+  dayLog:        { label: 'Day log',     kind: 'lines' },
+  servings:      { label: 'Servings',    kind: 'text' },
+  time:          { label: 'Time',        kind: 'text' },
+  ingredientText:{ label: 'Ingredients, as written', kind: 'lines' },
+  steps:         { label: 'Steps',       kind: 'lines' },
+  source:        { label: 'Source',      kind: 'text' },
+  rating:        { label: 'Rating',      kind: 'text' },
+  unsorted:      { label: 'Unsorted',    kind: 'lines' },
+};
+function entryFieldMeta(key) { return ENTRY_FIELD_META[key] || { label: key, kind: 'lines' }; }
+function entryFieldValue(e, key) {
+  const v = e && e.fields ? e.fields[key] : '';
+  return typeof v === 'string' ? v : '';
+}
 const ENTRY_TYPE_ORDER = ['quick', 'journal', 'writing', 'travel', 'recipe', 'hub'];
 
 function entryTypeMeta(type) { return ENTRY_TYPES[type] || ENTRY_TYPES.quick; }

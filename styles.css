@@ -3003,3 +3003,73 @@ button.brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 4
   font-family: var(--font-mono); font-size: 9px; font-weight: 700; font-style: normal;
   letter-spacing: 0.08em; text-transform: uppercase; color: var(--note-hub); margin-left: 6px;
 }
+
+/* ---- Convert (NOTES_SPEC Phase 4) ----
+   Two steps in one sheet: pick a type, then read where every piece landed. The review is the
+   point — the rules are a first guess, and a guess you can't inspect is worse than none. */
+.convert-sheet { max-height: 80vh; display: flex; flex-direction: column; }
+.convert-types { display: flex; flex-direction: column; gap: 6px; }
+.convert-type {
+  display: flex; align-items: center; gap: 9px; width: 100%; text-align: left;
+  background: var(--surface); border: 1px solid var(--border-soft);
+  border-radius: var(--radius); padding: 10px 12px; cursor: pointer;
+  font-size: 13px; color: var(--text);
+}
+.convert-type.is-current { border-color: var(--accent); }
+.convert-type:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.convert-type-label { flex: 1; min-width: 0; font-weight: 600; }
+.convert-type-now {
+  font-family: var(--font-mono); font-size: 9px; font-weight: 700; letter-spacing: 0.08em;
+  color: var(--accent); flex: none;
+}
+.convert-review { overflow-y: auto; flex: 1; min-height: 0; }
+.convert-group { margin-bottom: 12px; }
+.convert-group-head {
+  font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--text-faint); margin-bottom: 5px;
+}
+/* Unsorted is amber, the app's "needs your attention" colour — it is not an error, but it is the
+   one group you should not scroll past. */
+.convert-group.is-unsorted .convert-group-head { color: var(--amber); }
+.convert-group.is-unsorted .convert-line { border-color: var(--amber); }
+.convert-line {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--surface); border: 1px solid var(--border-soft);
+  border-radius: 8px; padding: 6px 8px; margin-bottom: 4px;
+}
+.convert-line-text {
+  flex: 1; min-width: 0; font-size: 12.5px; color: var(--text-dim);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.convert-line .btn { flex: none; }
+/* The type chip is a button now — it's how you reach Convert. */
+.type-chip { cursor: pointer; background: transparent; }
+.type-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ---- Template fields ----
+   An empty field shows as "+ Add …" rather than a blank box, so a six-field Recipe with two
+   filled in reads as a shape rather than as unfinished work. */
+.tmpl-list { display: flex; flex-direction: column; gap: 8px; }
+.tmpl-field {
+  background: var(--surface); border: 1px solid var(--border-soft);
+  border-radius: var(--radius); padding: 8px 10px;
+}
+.tmpl-field.is-unsorted { border-color: var(--amber); }
+.tmpl-label {
+  font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--text-faint); margin-bottom: 5px;
+}
+.tmpl-field.is-unsorted .tmpl-label { color: var(--amber); }
+.tmpl-input {
+  width: 100%; background: transparent; border: 0; padding: 2px 0;
+  font-family: inherit; font-size: 13px; color: var(--text); resize: vertical;
+}
+.tmpl-input:focus { outline: none; }
+textarea.tmpl-input { line-height: 1.5; }
+.tmpl-add {
+  text-align: left; background: transparent; cursor: pointer;
+  border: 1px dashed var(--border); border-radius: var(--radius); padding: 9px 11px;
+  font-size: 12.5px; color: var(--text-faint);
+}
+.tmpl-add:hover { color: var(--text-dim); border-color: var(--text-faint); }
+.tmpl-add:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

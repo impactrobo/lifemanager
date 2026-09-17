@@ -298,6 +298,34 @@ Newest first. Keep this reasonably current so a fresh session can see what alrea
 without re-reading the whole diff history. Roughly grouped: this project spent early Sept 2026
 on an architecture split + a large wave of Maximalist aesthetics.
 
+- **Notes Phase 4, "Convert" (2026-09-17).** Everything starts as a Quick note so that writing
+  something down never requires deciding what it is first. Convert is the other half of that
+  bargain: the moment you know, the note sorts itself into the right shape. `src/app-entry-convert.js`.
+  - **Fixed, local rules — no AI.** The spec's twelve, in order, first applicable match wins. A
+    rule with no target for the type you're converting TO doesn't apply at all, so the next one
+    gets a look; otherwise converting to Journal would be a list of rules that match and do nothing.
+  - **The one hard guarantee is that no text is ever dropped.** The test asserts it by
+    reassembling every line back out of the plan for all six types. It is also why the
+    `servings` rule stores the whole sentence ("Serves 4 generously") rather than trimming it to a
+    digit — `recipeServings()` extracts the count from whatever is written instead. The tolerant
+    reader is the right place for that, not a lossy rule.
+  - **The review screen is the point.** The rules are a first guess, and a guess you can't inspect
+    is worse than none. Every piece lands under a field with MOVE; anything unclaimed sits in an
+    amber UNSORTED group with PLACE, survives onto the entry, and is shown there — never guessed at.
+    Moves are by index, so two identical lines stay two separate pieces of text.
+  - **Undo restores from a snapshot**, taken before the write, including `updatedAt` — an undo is
+    not an edit. Reversing step by step would be merely nearly right, which is worse than no undo.
+  - **Templates**: each type's fields render in place, and an empty one shows as "+ Add …" rather
+    than a blank box, so a six-field Recipe with two filled in reads as a shape rather than as
+    unfinished work. A typed entry's empty body says where its content actually lives.
+  - **Converting to a hub** turns linked lines into real members, keeping the rest of each line as
+    that member's context. **Converting back to Quick** flattens every field into the body in field
+    order. Tags, links and structured recipe ingredients carry over untouched — the last of those
+    because rebuilding `{foodId, qty, unit}` rows from text is exactly the guesswork this avoids.
+  - Screenshot review caught three things the tests didn't: `servings` holding prose where the
+    recipe code wanted a number, servings/time rendering in two places at once, and a converted
+    entry showing an empty body box that invited you to write in the wrong place.
+
 - **Notes Phase 3, "Hubs" (2026-09-17).** A hub is an entry whose job is to gather other entries in
   an order you chose, each with an optional line saying why it's there. Manual only — nothing fills
   a hub for you, which is what separates it from the saved-search "smart hubs" in the Backlog.

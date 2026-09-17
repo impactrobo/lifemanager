@@ -321,7 +321,7 @@ function renderNotes() {
   return `<div class="screen">
     <div class="section-title">Notes</div>
     ${open ? renderEntryEditor(open) : renderEntryList()}
-  </div>${renderEntryPreview()}${renderHubPicker()}`;
+  </div>${renderEntryPreview()}${renderHubPicker()}${renderConvertSheet()}`;
 }
 
 function renderEntryList() {
@@ -419,7 +419,10 @@ function renderEntryEditor(e) {
       <div style="display:flex; align-items:center; gap:8px;">
         ${back.length ? `<button class="icon-btn" onclick="goBackEntry()" title="Back to ${escapeHtml(entryTitleOf(liveEntryById(back[back.length - 1]) || {}))}" aria-label="Back">${icon('back')}</button>` : ''}
         <span class="entry-dot ${meta.dot === 'square' ? 'is-square' : ''}" style="background:${color}"></span>
-        <span class="note-tag-label" style="color:${color}; border-color:${color};">${meta.short}</span>
+        ${/* The type chip is the way in to Convert — the thing you tap when you've worked out
+              what this note actually is. */ ''}
+        <button class="note-tag-label type-chip" style="color:${color}; border-color:${color};"
+          onclick="openConvert('${e.id}')" title="Convert to another type">${meta.short} ▾</button>
         <button class="entry-star ${e.favorite ? 'is-on' : ''}" onclick="toggleEntryFavorite('${e.id}')" aria-pressed="${!!e.favorite}" aria-label="Favourite">★</button>
       </div>
       <span class="mono" style="font-size:11px; color:var(--text-faint);">${fmtEntryDate(e)}</span>
@@ -438,9 +441,18 @@ function renderEntryEditor(e) {
              <div id="entryAutocomplete">${renderEntryAutocomplete(e)}</div>
            </div>`
         : `<div class="entry-view rich-text" onclick="setEntryMode('edit')" title="Tap to edit">${
-             (e.body || '').trim() ? renderEntryMarkdown(e.body, 'toggleOpenEntryCheck') : '<p class="entry-empty-line">Nothing written yet — tap to start.</p>'
+             (e.body || '').trim() ? renderEntryMarkdown(e.body, 'toggleOpenEntryCheck')
+             : `<p class="entry-empty-line">${
+                  /* A typed entry keeps its content in its FIELDS — Convert empties the body on the
+                     way in. Inviting you to write in a box that isn't where the note lives would be
+                     the wrong prompt, so say what the box is for instead. */
+                  entryTypeMeta(e.type).fields.length
+                    ? 'Nothing here — this ' + entryTypeMeta(e.type).label.toLowerCase() + '’s content is in its fields below. Tap to add loose notes.'
+                    : 'Nothing written yet — tap to start.'
+                }</p>`
            }</div>`}
     </div>
+    ${renderEntryTemplateFields(e)}
     ${isRecipeEntry(e) ? renderRecipeEditor(e) : ''}
     ${isHubEntry(e) ? renderHubMembers(e) : ''}
     <div class="subtle-label" style="margin:16px 0 8px;">PHOTOS</div>
@@ -461,6 +473,202 @@ function renderEntryEditor(e) {
       <button class="btn btn-ghost" onclick="closeEntry()">DONE</button>
     </div>
     <button class="btn btn-ghost btn-sm btn-block" style="margin-top:10px; color:var(--bad);" onclick="deleteEntry('${e.id}')">DELETE NOTE</button>`;
+}
+
+// ---- Convert ----
+// Two steps: pick a type, then review where every piece landed before anything is written. The
+// review is the point — the rules are a first guess, and a guess you can't inspect is worse than
+// no guess. VIEW.convert holds {id, step, toType, plan, moving}.
+function openConvert(id) {
+  const e = liveEntryById(id);
+  if (!e) return;
+  commitEntryDraft();
+  saveState();
+  VIEW.convert = { id, step: 'type', toType: null, plan: null, moving: null };
+  render();
+}
+function closeConvert() { VIEW.convert = null; render(); }
+function chooseConvertType(toType) {
+  const c = VIEW.convert;
+  const e = c && liveEntryById(c.id);
+  if (!e) return;
+  c.toType = toType;
+  c.plan = planEntryConvert(e, toType);
+  c.step = 'review';
+  c.moving = null;
+  render();
+}
+function backToConvertType() {
+  if (!VIEW.convert) return;
+  VIEW.convert.step = 'type';
+  VIEW.convert.moving = null;
+  render();
+}
+// MOVE / PLACE both open the same picker; the only difference is where the line is coming from.
+function startConvertMove(field, index) {
+  if (!VIEW.convert) return;
+  VIEW.convert.moving = { field, index };
+  render();
+}
+function cancelConvertMove() { if (VIEW.convert) { VIEW.convert.moving = null; render(); } }
+function finishConvertMove(toField) {
+  const c = VIEW.convert;
+  if (!c || !c.moving) return;
+  moveConvertLine(c.plan, c.moving.field, c.moving.index, toField);
+  c.moving = null;
+  render();
+}
+function applyConvert() {
+  const c = VIEW.convert;
+  const e = c && liveEntryById(c.id);
+  if (!e) return;
+  const snap = applyEntryConvert(e, c.plan);
+  VIEW.convert = null;
+  clearEntryDraft();
+  saveState();
+  showToast(`Converted to ${entryTypeMeta(snap.type === c.toType ? c.toType : c.toType).label}`, {
+    label: 'UNDO',
+    onClick: () => { restoreEntryConvert(snap); saveState(); showToast('Convert undone'); render(); },
+  });
+  render();
+}
+function renderConvertSheet() {
+  const c = VIEW.convert;
+  const e = c && liveEntryById(c.id);
+  if (!e) return '';
+  return `
+    <div class="link-picker-backdrop" onclick="closeConvert()"></div>
+    <div class="link-picker convert-sheet">
+      <div class="row" style="margin-bottom:8px;">
+        <div style="min-width:0;">
+          <div class="subtle-label" style="margin-bottom:2px;">${c.step === 'type' ? 'CONVERT TO' : 'REVIEW'}</div>
+          <div style="font-size:12px; color:var(--text-dim);">${escapeHtml(entryTitleOf(e))}</div>
+        </div>
+        <button class="icon-btn" onclick="closeConvert()">${icon('close')}</button>
+      </div>
+      ${c.step === 'type' ? renderConvertTypeStep(e) : renderConvertReviewStep(e)}
+    </div>`;
+}
+function renderConvertTypeStep(e) {
+  return `
+    <div class="convert-types">
+      ${ENTRY_TYPE_ORDER.map(t => {
+        const meta = ENTRY_TYPES[t];
+        const current = t === e.type;
+        return `<button class="convert-type ${current ? 'is-current' : ''}" onclick="chooseConvertType('${t}')">
+          <span class="entry-dot ${meta.dot === 'square' ? 'is-square' : ''}" style="background:${entryTypeColor(t)}"></span>
+          <span class="convert-type-label">${meta.label}</span>
+          ${current ? '<span class="convert-type-now">NOW</span>' : ''}
+        </button>`;
+      }).join('')}
+    </div>
+    <div style="font-size:11px; color:var(--text-faint); margin-top:10px;">
+      Nothing changes until you review and apply. Tags and links always carry over.
+    </div>`;
+}
+function renderConvertReviewStep(e) {
+  const c = VIEW.convert;
+  const plan = c.plan;
+  if (c.moving) return renderConvertMovePicker();
+  const fields = convertTargets(plan.toType).filter(f => f !== 'unsorted');
+  const rows = fields.map(f => {
+    const lines = plan.buckets[f] || [];
+    if (!lines.length) return '';
+    return `<div class="convert-group">
+      <div class="convert-group-head">${escapeHtml(convertTargetLabel(f))}</div>
+      ${lines.map((l, i) => convertLineRow(f, i, l)).join('')}
+    </div>`;
+  }).join('');
+  const unsorted = plan.unsorted.length ? `<div class="convert-group is-unsorted">
+      <div class="convert-group-head">Unsorted — nothing claimed these</div>
+      ${plan.unsorted.map((l, i) => convertLineRow('unsorted', i, l, true)).join('')}
+    </div>` : '';
+  const empty = !rows && !unsorted;
+  return `
+    <div class="convert-review">
+      ${empty ? '<div class="entry-empty-line">This note has no text to sort. Converting just changes its type.</div>' : rows + unsorted}
+    </div>
+    ${plan.unsorted.length ? `<div style="font-size:11px; color:var(--amber); margin-top:8px;">
+      Unsorted text is kept and shown on the entry — it is never dropped.</div>` : ''}
+    <div class="row" style="gap:8px; margin-top:12px;">
+      <button class="btn btn-sm" onclick="backToConvertType()">BACK</button>
+      <button class="btn btn-sm btn-primary" style="flex:1;" onclick="applyConvert()">CONVERT</button>
+    </div>`;
+}
+function convertLineRow(field, index, line, isUnsorted) {
+  const text = stripEntryMarkdown(line).trim() || line.trim();
+  return `<div class="convert-line">
+    <span class="convert-line-text">${escapeHtml(text)}</span>
+    <button class="btn btn-sm btn-ghost" onclick="startConvertMove('${field}',${index})">${isUnsorted ? 'PLACE' : 'MOVE'}</button>
+  </div>`;
+}
+function renderConvertMovePicker() {
+  const c = VIEW.convert;
+  const src = c.moving.field === 'unsorted' ? c.plan.unsorted : (c.plan.buckets[c.moving.field] || []);
+  const line = src[c.moving.index] || '';
+  return `
+    <div style="font-size:12px; color:var(--text-dim); margin-bottom:8px;">“${escapeHtml(stripEntryMarkdown(line).trim())}”</div>
+    <div class="convert-types">
+      ${convertTargets(c.plan.toType).map(f => `
+        <button class="convert-type" onclick="finishConvertMove('${f}')">
+          <span class="convert-type-label">${escapeHtml(convertTargetLabel(f))}</span>
+        </button>`).join('')}
+    </div>
+    <button class="btn btn-sm btn-block" style="margin-top:10px;" onclick="cancelConvertMove()">CANCEL</button>`;
+}
+
+// ---- Template fields ----
+// Every field a type declares, each editable in place. An empty one shows as "+ Add …" rather
+// than as a blank box, so the shape of the type reads at a glance without looking like unfinished
+// work — that's the spec's rule, and it is also what keeps a six-field Recipe from looking broken
+// when you've only filled in two.
+// Fields a type's own dedicated editor already owns, so the generic template list doesn't render
+// a second box for them. A recipe's servings and time are edited in the ingredients panel beside
+// the macro totals they affect — showing them twice invites you to fill in one and wonder why the
+// other disagrees.
+const ENTRY_FIELDS_OWNED_ELSEWHERE = { recipe: ['servings', 'time'] };
+function renderEntryTemplateFields(e) {
+  const owned = ENTRY_FIELDS_OWNED_ELSEWHERE[e.type] || [];
+  const fields = entryTypeMeta(e.type).fields.filter(f => owned.indexOf(f) === -1);
+  if (entryFieldValue(e, 'unsorted')) fields.push('unsorted');
+  if (!fields.length) return '';
+  return `<div class="subtle-label" style="margin:16px 0 8px;">${entryTypeMeta(e.type).short} FIELDS</div>
+    <div class="tmpl-list">${fields.map(f => renderEntryField(e, f)).join('')}</div>`;
+}
+function renderEntryField(e, key) {
+  const meta = entryFieldMeta(key);
+  const val = entryFieldValue(e, key);
+  const open = (VIEW.entryFieldOpen || {})[key] || !!val;
+  const unsorted = key === 'unsorted';
+  if (!open) {
+    return `<button class="tmpl-add" onclick="openEntryField('${key}')">+ Add ${escapeHtml(meta.label.toLowerCase())}</button>`;
+  }
+  const body = meta.kind === 'select'
+    ? `<select class="tmpl-input" onchange="setEntryField('${key}', this.value)">
+         <option value="" ${val ? '' : 'selected'}>—</option>
+         ${meta.options.map(o => `<option value="${o}" ${val === o ? 'selected' : ''}>${o}</option>`).join('')}
+       </select>`
+    : meta.kind === 'text'
+      ? `<input type="text" class="tmpl-input" value="${escapeHtml(val)}" onchange="setEntryField('${key}', this.value)">`
+      : `<textarea class="tmpl-input" rows="${Math.min(10, Math.max(2, val.split('\n').length + 1))}" onchange="setEntryField('${key}', this.value)">${escapeHtml(val)}</textarea>`;
+  return `<div class="tmpl-field ${unsorted ? 'is-unsorted' : ''}">
+    <div class="tmpl-label">${escapeHtml(meta.label)}${unsorted ? ' — nothing claimed this, move it where it belongs' : ''}</div>
+    ${body}
+  </div>`;
+}
+function openEntryField(key) {
+  if (!VIEW.entryFieldOpen) VIEW.entryFieldOpen = {};
+  VIEW.entryFieldOpen[key] = true;
+  render();
+}
+function setEntryField(key, val) {
+  const e = openEntryRecord();
+  if (!e) return;
+  if (!e.fields) e.fields = {};
+  const v = String(val || '').trim();
+  if (v) e.fields[key] = v; else delete e.fields[key];
+  touchEntry(e);
+  saveState();
 }
 
 // ---- Hubs ----
@@ -985,7 +1193,15 @@ function renderEntryPhotoRow() {
 // parsed one's are a guess.
 function isRecipeEntry(e) { return !!e && e.type === 'recipe'; }
 function recipeIngredients(e) { return Array.isArray(e && e.fields && e.fields.ingredients) ? e.fields.ingredients : []; }
-function recipeServings(e) { return Number(e && e.fields && e.fields.servings) || 0; }
+// Reads the count out of whatever is written there. Convert stores the whole line ("Serves 4
+// generously") because dropping words is the one thing it must never do, so the number has to be
+// extracted here rather than trimmed on the way in.
+function recipeServings(e) {
+  const raw = e && e.fields ? e.fields.servings : null;
+  if (raw == null) return 0;
+  const m = String(raw).match(/\d+(?:\.\d+)?/);
+  return m ? Number(m[0]) : 0;
+}
 function recipeTotals(e) {
   const totals = computeMealTotals(recipeIngredients(e));
   const servings = recipeServings(e);
@@ -1001,11 +1217,15 @@ function ensureRecipeIngredients(e) {
 }
 function renderRecipeEditor(e) {
   const q = VIEW.entryIngredientQuery || '';
-  return `<div class="subtle-label" style="margin:16px 0 8px;">INGREDIENTS</div>
+  return `<div class="subtle-label" style="margin:16px 0 8px;">MATCHED INGREDIENTS</div>
     <div class="panel">
       <div class="field-row">
+        ${/* TEXT, not number: Convert can write a whole sentence here ("Serves 4 generously"),
+              which a number input renders as blank — the value would be live and invisible, and
+              the next person to touch the box would overwrite it without knowing. recipeServings()
+              reads the count out of whatever is written. */ ''}
         <label class="field"><span class="lbl">Servings</span>
-          <input type="number" min="0" step="1" placeholder="4" value="${escapeHtml(e.fields && e.fields.servings != null ? String(e.fields.servings) : '')}"
+          <input type="text" inputmode="decimal" placeholder="4" value="${escapeHtml(e.fields && e.fields.servings != null ? String(e.fields.servings) : '')}"
             onchange="setRecipeField('servings', this.value)"></label>
         <label class="field"><span class="lbl">Time</span>
           <input type="text" placeholder="15 min prep + 30 min cook" value="${escapeHtml(e.fields && e.fields.time || '')}"
