@@ -860,7 +860,7 @@ function defaultState() {
       // mealPlan above (a reusable weekly TEMPLATE) — this is per real date. See "DIET LOG".
       foodLog: {},
       // How many weeks of weight-log data rollingTdeeEstimate() averages over — see the
-      // "ROLLING TDEE" section below. Adjustable under Diet -> Setup -> TDEE.
+      // "ROLLING TDEE" section below. Adjustable behind the gear on PHASES / MEAL PLAN.
       tdeeWindowWeeks: 12,
     },
     budget: defaultBudgetState(),

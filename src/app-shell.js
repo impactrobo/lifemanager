@@ -105,6 +105,7 @@ function defaultTransientUi() {
     shoppingListFormOpen: false,
     tdeeCalcOpen: false,
     macroCalcOpen: false,
+    mealTargetSettingsOpen: false,     // the gear on MEAL PLAN's TARGETS panel: TDEE + averaging window
     measureFormOpen: false,
     weightLogFormOpen: false,
     builderStylePickerOpen: false,
@@ -191,7 +192,7 @@ let VIEW = {
 const NAV_SNAPSHOT_KEYS = [
   'currentTab', 'fitnessSubtab', 'skillId', 'skillSubtab', 'setupPanel', 'setupSubtab', 'setupContext',
   'notesSubtab', 'scheduleSubtab', 'budgetSubtab', 'scheduleSetupSubtab', 'healthSetupSubtab',
-  'phasesSubtab',
+  'phasesSubtab', 'trainLogTab',
 ];
 // Which tab to boot into. Validated rather than read straight out of settings, because this runs
 // at NAV's declaration -- top-level, in source order -- which is BEFORE loadState()'s migrations
@@ -227,10 +228,13 @@ let NAV = {
   trainView: { mode: 'grid', workoutId: null, cardioId: null, date: null, cycle: null },
   // The Monday of the week the WORKOUTS screen is showing. null = this week.
   trainWeekStart: null,
+  // D&E's own strip: 'exercise' | 'meals'. Both are LOGS of the same day, which is why they share
+  // a tab; what you're planning against lives in PHASES.
+  trainLogTab: 'exercise',
   // The one subtab key for the whole Health & Wellness tab: 'workouts' | 'phases' | 'builder' |
-  // 'body' | 'diet'. Replaced trainTopSubtab + healthSubtab when Exercise and Health & Diet merged
-  // -- they described a split that no longer exists. 'goal', 'setup' and 'longevity' are retired
-  // values that still ride in on saved nav snapshots; _doRender() lands each on its successor.
+  // 'body'. Replaced trainTopSubtab + healthSubtab when Exercise and Health & Diet merged
+  // -- they described a split that no longer exists. 'goal', 'setup', 'longevity' and 'diet' are
+  // retired values that still ride in on saved nav snapshots; _doRender() lands each on its successor.
   fitnessSubtab: 'workouts',
   // PHASES' own subnav: 'goal' | 'workouts' | 'meals' -- the goal, and the two weekday plans that
   // belong to a phase.
@@ -602,7 +606,7 @@ function renderTabbar() {
     // Retired values map onto their successors before the active check, or a nav snapshot carrying
     // 'goal' would render PHASES' contents with no button lit -- the bar and the screen disagreeing
     // about where you are.
-    const cur = { goal: 'phases', setup: 'builder', longevity: 'diet' }[NAV.fitnessSubtab] || NAV.fitnessSubtab;
+    const cur = { goal: 'phases', setup: 'builder', longevity: 'builder', diet: 'workouts' }[NAV.fitnessSubtab] || NAV.fitnessSubtab;
     const fb = (key, ic, label) =>
       `<button class="${cur===key?'active':''}" onclick="setFitnessSubtab('${key}')"><span class="ic">${icon(ic)}</span>${label}</button>`;
     // PHASES and BUILDER replaced GOAL and SETUP (2026-09-15), same five buttons. The old pair split
@@ -611,12 +615,15 @@ function renderTabbar() {
     // is a plan and the other is a thing. The new pair splits by WHAT YOU'RE DOING: PHASES sets the
     // goal and maps workouts and meals onto time, BUILDER constructs the workouts and meals those
     // plans point at. Builds are standalone and reusable; plans belong to a phase.
+    // FOUR now. DIET retired (2026-09-16): its targets went to PHASES / MEAL PLAN, where the week
+    // they govern is planned, and its log joined the session log under D&E -- Diet and Exercise,
+    // which is what that tab holds once both logs are on it. The bar's overflow bug is logged
+    // against exactly this strip, so every button that leaves it is worth keeping off.
     sectionBtns =
-      fb('workouts', 'exercise', 'WORKOUTS') +
+      fb('workouts', 'exercise', 'D&amp;E') +
       fb('phases', 'planner', 'PHASES') +
       fb('builder', 'setup', 'BUILDER') +
-      fb('body', 'progress', 'BODY') +
-      fb('diet', 'drumstick', 'DIET');
+      fb('body', 'progress', 'BODY');
   } else if (NAV.currentTab === 'hobbies') {
     // Inside a Skill the bottom bar stays at TWO fixed buttons, because that skill's list strip is
     // variable-width and lives in the in-screen .subnav instead -- the strip that has scroll
@@ -673,7 +680,13 @@ function _doRender() {
       // contains what it used to show rather than on nothing.
       app.innerHTML = renderPhasesScreen();
     } else if (NAV.fitnessSubtab === 'diet') {
-      app.innerHTML = renderFitnessScreen(renderDietSetup());
+      // DIET retired: its targets (calories, macros, TDEE) went to PHASES / MEAL PLAN, where the
+      // week they govern is planned, and its log went to D&E / MEALS beside the session log. A stale
+      // subtab lands on the log, which is what someone tapping DIET was usually after.
+      NAV.fitnessSubtab = 'workouts';
+      NAV.trainLogTab = 'meals';
+      resetTrainViewForSubtab('workouts');
+      app.innerHTML = renderTrainScreen();
     } else if (NAV.fitnessSubtab === 'longevity') {
       // Longevity retired: its supplements became an editable regimen, and its skin cycling and
       // circadian guidance became anchor presets. A stale subtab value rides in nav snapshots, so
@@ -683,7 +696,7 @@ function _doRender() {
       NAV.setupPanel = 'meals';
       NAV.healthSetupSubtab = 'supplements';
       app.innerHTML = renderFitnessSetup();
-    } else if (NAV.trainView.mode === 'grid') app.innerHTML = renderTrainGrid();
+    } else if (NAV.trainView.mode === 'grid') app.innerHTML = renderTrainScreen();
     else if (NAV.trainView.mode === 'cardioLog') app.innerHTML = renderCardioLog(NAV.trainView.cardioId);
     else if (NAV.trainView.mode === 'rpLog') app.innerHTML = renderRpWorkoutLog(NAV.trainView.workoutId);
     else { app.innerHTML = renderWorkoutLog(NAV.trainView.workoutId); attachWorkoutLogHandlers(NAV.trainView.workoutId); }

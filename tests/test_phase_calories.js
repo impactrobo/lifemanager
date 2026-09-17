@@ -203,23 +203,27 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (manual.negative !== null) throw new Error('A negative calorie target is not a target');
 
   // ---- 7. Both screens name which number they're showing ----
+  // The planning side is PHASES / MEAL PLAN's TARGETS panel now. It used to be a note on the TDEE
+  // field saying "this is NOT what today is compared against" -- a correction, needed because a TDEE
+  // field on a diet screen reads as the target. Stating what IS in force, above the week it governs,
+  // answers the same question without needing the reader to already have the wrong idea.
   await page.evaluate(() => {
     // One real food logged today, via the app's own path, so the totals panel renders at all.
     ensureDietLogState();
     NAV.dietLogDate = todayStr();
     addFoodToLog(allFoods()[0].id);
-    switchTab('train'); setFitnessSubtab('diet');
+    switchTab('train'); setFitnessSubtab('phases'); setPhasesSubtab('meals');
   });
   await settle(page);
   const screens = await page.evaluate(() => {
     const body = document.getElementById('app').innerText;
     return {
-      tdeePanelNamesPhase: /Not what today is compared against/.test(body) && /Push to race/.test(body),
+      targetsNamePhase: /TARGETS TO MEET/.test(body) && /from phase/.test(body) && /Push to race/.test(body),
       sourceNotes: document.querySelectorAll('.cal-source').length,
     };
   });
-  console.log('TDEE screen:', screens);
-  if (!screens.tdeePanelNamesPhase) throw new Error('The TDEE field must say when a phase target is what today is actually compared against');
+  console.log('MEAL PLAN targets:', screens);
+  if (!screens.targetsNamePhase) throw new Error('The TARGETS panel must name the phase whose calorie target the week is planned against');
 
   const logScreen = await page.evaluate(() => {
     const t = calorieTargetForDate(NAV.dietLogDate || todayStr());

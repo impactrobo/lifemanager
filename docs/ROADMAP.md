@@ -298,6 +298,29 @@ Newest first. Keep this reasonably current so a fresh session can see what alrea
 without re-reading the whole diff history. Roughly grouped: this project spent early Sept 2026
 on an architecture split + a large wave of Maximalist aesthetics.
 
+- **DIET dissolves; the tab becomes D&E (2026-09-16).** The largest of the restructure moves, and
+  the one that explains the rest. DIET held two unrelated things behind one button: **the numbers
+  you plan against** (calories, macros, TDEE) and **the log of what you actually ate**. Those answer
+  different questions at different moments, and neither was near the thing it belonged with.
+  - **The targets went to PHASES / MEAL PLAN**, as a `TARGETS TO MEET` panel directly above the week
+    they govern. Planning a week of food with the calories you're planning *for* on another tab is
+    the same seam that once put a weight entry and its own chart two tabs apart. The panel leads
+    with the calorie figure **and its provenance** — a phase target and maintenance-from-TDEE are
+    different claims — then the macro split, then the calculator that turns one into the other.
+  - **TDEE went behind a gear** on that panel, with the rolling estimate and its averaging window.
+    The split is by how often you touch each: calories and macros are READ every time you plan; TDEE
+    is what they're DERIVED from, adjusted rarely, and the averaging window is a setting about a
+    setting.
+  - The old TDEE field carried a note reading *"Not what today is compared against — phase X sets
+    …"*. A correction like that is needed when a screen invites the wrong reading; stating what **is**
+    in force, above the week it applies to, makes the correction unnecessary.
+  - **The log went to D&E / MEALS**, beside the session log. Logging a meal and logging a set are
+    the same act at the same moment of the day; they were only ever apart because one of them shared
+    a tab with its own targets. WORKOUTS is now **D&E** — Diet and Exercise — with an
+    EXERCISE / MEALS strip.
+  - **The bottom bar is four buttons**, down from five. Its overflow bug is logged against exactly
+    this strip, so every button that leaves it counts. A saved nav snapshot still pointing at DIET
+    lands on D&E / MEALS with D&E lit, rather than on a blank screen.
 - **Navigation restructure, part 1 of 2 (2026-09-16).** Four of seven moves, all of them the same
   correction: a thing had been filed where it was *built*, not where it is *used*.
   - **Set Volume moved into WORKOUTS.** It was in the planner, which is where you set landmarks

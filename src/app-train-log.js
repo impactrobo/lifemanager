@@ -107,6 +107,29 @@ function renderTrainSection(type, list, dateStr, openFn) {
   }).join('');
   return `<div class="workout-grid">${cells}</div>`;
 }
+// D&E -- Diet and Exercise. The tab is the LOG: what you did today, on both fronts. Meals arrived
+// here when DIET dissolved, because logging a meal and logging a session are the same act at the
+// same moment of the day, and the only reason they sat on separate tabs is that one of them used to
+// share a tab with the targets it's measured against. Those went to PHASES / MEAL PLAN, where
+// they're planned; what's left is the log, and the log belongs with the other log.
+function setTrainLogTab(t) { NAV.trainLogTab = t; render(); }
+function renderTrainScreen() {
+  const tab = NAV.trainLogTab === 'meals' ? 'meals' : 'exercise';
+  const btn = (key, label) =>
+    `<button class="${tab === key ? 'active' : ''}" onclick="setTrainLogTab('${key}')">${label}</button>`;
+  const strip = subNav(btn('exercise', 'EXERCISE') + btn('meals', 'MEALS'), { marginTop: false });
+  if (tab === 'meals') {
+    return `<div class="screen">
+      <div class="section-title">Health &amp; Wellness</div>
+      ${strip}
+      ${renderDietLog()}
+    </div>`;
+  }
+  // renderTrainGrid() returns its own complete `.screen` with the title already in it -- splice the
+  // strip in after that title rather than wrapping, so the page has one header, not two. Same move
+  // renderFitnessSetup() makes with its panel switcher.
+  return renderTrainGrid().replace('</div>', '</div>' + strip);
+}
 function renderTrainGrid() {
   const weights = workoutsByType('weights');
   const cardio = workoutsByType('cardio');

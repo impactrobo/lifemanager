@@ -167,7 +167,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (breakdown.avgCardioPerDay + breakdown.nonExerciseTdee !== breakdown.tdee) throw new Error('Expected the two portions to sum back to the same tdee — this is a decomposition, not a new total');
 
   // The panel actually renders the breakdown line
-  await page.evaluate(() => { switchTab('train'); setFitnessSubtab('diet'); });
+  await page.evaluate(() => { switchTab('train'); setFitnessSubtab('phases'); setPhasesSubtab('meals'); UI.mealTargetSettingsOpen = true; render(); });
   await settle(page);
   const breakdownShown = await page.evaluate(() => document.body.textContent.includes('non-exercise'));
   if (!breakdownShown) throw new Error('Expected the ROLLING TDEE panel to render the cardio breakdown line');
@@ -185,7 +185,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   console.log('rollingTdeeEstimate() with only 1 week of data:', oneWeekOnly);
   if (oneWeekOnly !== null) throw new Error(`Expected null with only 1 week of data, got ${JSON.stringify(oneWeekOnly)}`);
 
-  // 7. The Diet -> Setup TDEE screen actually renders the rolling estimate + "USE THIS" applies it
+  // 7. The TDEE panel behind MEAL PLANs gear actually renders the rolling estimate + "USE THIS" applies it
   await page.evaluate(() => {
     STATE.weightLog = [];
     const mostRecent = new Date('2026-06-15T00:00:00');
@@ -197,11 +197,11 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
       }
     });
     saveState();
-    switchTab('train'); setFitnessSubtab('diet');
+    switchTab('train'); setFitnessSubtab('phases'); setPhasesSubtab('meals'); UI.mealTargetSettingsOpen = true; render();
   });
   await settle(page);
   const panelText = await page.evaluate(() => document.body.textContent);
-  if (!panelText.includes('ROLLING TDEE')) throw new Error('Expected the ROLLING TDEE panel to render on Diet -> Setup');
+  if (!panelText.includes('ROLLING TDEE')) throw new Error('Expected the ROLLING TDEE panel to render behind MEAL PLANs gear');
   const useThisBtn = await page.evaluateHandle(() => [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'USE THIS' && b.getAttribute('onclick') && b.getAttribute('onclick').includes('applyTDEEResult')));
   const btnExists = await page.evaluate(el => !!el, useThisBtn);
   if (!btnExists) throw new Error('Expected a "USE THIS" button for the rolling TDEE estimate');

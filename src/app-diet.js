@@ -448,8 +448,8 @@ function renderCustomFoodCard(f) {
 // separate thing from Meal Plan (activeMealPlan(date), which is a weight phase's own plan or
 // STATE.diet.mealPlan before any phase claims one): that's a reusable weekly TEMPLATE keyed by
 // weekday (0=Sun..6=Sat, recurring every week); this is keyed by real date and only ever holds
-// what actually got logged that day. Lives at the bottom of the DIET tab (renderDietSetup()),
-// under the TDEE/macro targets, so today's actual totals sit right next to what you're aiming for.
+// what actually got logged that day. Lives on D&E / MEALS, beside the session log -- both are the
+// same act at the same moment of the day. What it is measured AGAINST is planned in PHASES.
 function ensureDietLogState() { if (!NAV.dietLogDate) NAV.dietLogDate = todayStr(); }
 function dietLogEntriesFor(dateStr) {
   if (!STATE.diet.foodLog[dateStr]) STATE.diet.foodLog[dateStr] = [];
@@ -557,9 +557,10 @@ function renderDietLog() {
   const d = new Date(NAV.dietLogDate + 'T00:00:00');
   const label = d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
   const isToday = NAV.dietLogDate === todayStr();
+  // No "DIET LOG" heading: the MEALS tab above it already said so, and a screen that names itself
+  // twice reads as two sections with nothing between them.
   return `
-    <div class="subtle-label" style="margin:22px 0 10px;">DIET LOG</div>
-    <div class="week-selector" style="margin-bottom:12px;">
+    <div class="week-selector" style="margin:18px 0 12px;">
       <div class="cycle-label" style="font-size:16px;">${label}${isToday ? ' (Today)' : ''}</div>
       <div class="cycle-btns">
         <button onclick="goToLogDate(-1)">&#8249;</button>
@@ -573,7 +574,9 @@ function renderDietLog() {
           ${STATE.diet.meals.map(m => `<option value="${m.id}">${escapeHtml(m.name)}</option>`).join('')}
         </select>
       </label>` : ''}
-    <label class="field" style="margin-bottom:8px;"><span class="lbl">Or log one food</span>
+    ${/* "Or" only if there was a first option. With no saved meals the select above doesn't render,
+          and the label was offering an alternative to nothing. */''}
+    <label class="field" style="margin-bottom:8px;"><span class="lbl">${STATE.diet.meals.length ? 'Or log one food' : 'Log one food'}</span>
       <input type="text" placeholder="Search foods…" value="${escapeHtml(VIEW.dietLogSearchQuery)}" oninput="onLogSearchInput(this.value)">
     </label>
     <div id="dietLogFoodPicker">
@@ -699,6 +702,7 @@ function renderMealPlanTab() {
   return `
     <div style="font-size:11px; color:var(--text-dim); margin:18px 0 14px;">Assign saved meals to each day. Copy a day's plan to reuse it elsewhere.</div>
     ${renderMealPlannerScope()}
+    ${renderMealPlanTargets()}
     ${renderShoppingListGenerator()}
     ${clipboardLabel ? `<div class="panel" style="margin-bottom:14px; font-size:11px; color:var(--text-dim);">Clipboard: ${escapeHtml(clipboardLabel)}</div>` : ''}
     ${renderRotationHeader(mealPlannerEntry(), 'meal')}
@@ -731,19 +735,73 @@ function renderMealPlannerScope() {
   const note = eff.source === 'carried'
     ? `No phase covers ${fmtGoalDate(mealPlannerDate())} — still running <b style="color:var(--text)">${escapeHtml(eff.label)}</b>'s meal plan.`
     : eff.source === 'none' ? `No phase covers ${fmtGoalDate(mealPlannerDate())}.` : '';
-  // Read through calorieTargetForDate() rather than off the phase, so this can never disagree with
-  // what the rest of the app says you're eating against on that day.
-  const target = calorieTargetForDate(mealPlannerDate());
-  const line = [note, target ? `Planning against <b style="color:var(--text)">${target.calories.toLocaleString()} cal/day</b>${target.source === 'tdee' ? ' (maintenance)' : ''}.` : '']
-    .filter(Boolean).join(' ');
+  // The calorie figure used to be stated here too. It now leads the TARGETS panel directly below,
+  // which is the panel about targets -- saying it twice, two lines apart, only invites the reader to
+  // check whether the two agree.
   return `
     <div class="planner-scope">
       <label class="field" style="margin-bottom:0;">
         <span class="lbl">Adding to which phase</span>
         <select onchange="setMealPlannerDate(this.value)">${phaseScopeOptions(selectedId)}</select>
       </label>
-      ${line ? `<div style="margin-top:8px;">${line}</div>` : ''}
+      ${note ? `<div style="margin-top:8px;">${note}</div>` : ''}
     </div>`;
+}
+
+// ---- TARGETS TO MEET: what the week below is being planned against ----
+// This is the numbers half of what used to be the DIET tab, moved to sit directly above the meals
+// it governs. Planning a week of food while the calories and macros you're planning FOR live on
+// another tab is the same seam that put a weight entry and its own chart two tabs apart.
+//
+// The split inside it is by how often you touch each thing. Calories and macros are what you READ
+// every time you plan, so they're the panel. TDEE is what those are DERIVED from, adjusted rarely,
+// so it's behind the gear -- along with the averaging window, which is a setting about a setting.
+function toggleMealTargetSettings() { UI.mealTargetSettingsOpen = !UI.mealTargetSettingsOpen; render(); }
+function renderMealPlanTargets() {
+  const target = calorieTargetForDate(mealPlannerDate());
+  const m = { p: STATE.diet.proteinG, f: STATE.diet.fatG, c: STATE.diet.carbG };
+  const macroSet = m.p != null || m.f != null || m.c != null;
+  // Calories carry their own provenance: a phase target and maintenance-from-TDEE are different
+  // claims, and which one is in force changes what a deficit even means.
+  const calLine = target
+    ? `<div class="row"><span style="font-size:13px;color:var(--text-dim)">Calories</span><span class="mono" style="font-weight:700">${target.calories.toLocaleString()}</span></div>
+       <div class="cal-source">${target.source === 'phase'
+         ? `from phase &ldquo;${escapeHtml(target.label)}&rdquo;`
+         : 'your TDEE &mdash; no phase target covers this week, so this is maintenance'}</div>`
+    : `<div style="font-size:11px; color:var(--text-faint);">No calorie target for this week yet — set one on this phase, or a TDEE below.</div>`;
+  return `
+    <div class="panel" style="margin-bottom:14px;">
+      <div class="row" style="margin-bottom:8px;">
+        <span class="subtle-label" style="margin:0;">TARGETS TO MEET</span>
+        <button class="icon-btn" style="width:28px; height:28px;" title="TDEE &amp; averaging window"
+                aria-label="TDEE and averaging window" onclick="toggleMealTargetSettings()">${icon('settings')}</button>
+      </div>
+      ${calLine}
+      <div class="row" style="margin-top:8px;">
+        <span style="font-size:13px;color:var(--text-dim)">Protein / Fat / Carb (g)</span>
+        <span class="mono" style="font-weight:700">${m.p ?? '—'} / ${m.f ?? '—'} / ${m.c ?? '—'}</span>
+      </div>
+      ${macroSet ? '' : `<div style="font-size:11px; color:var(--text-faint); margin-top:4px;">No macro split set — the calculator turns the calories above into grams.</div>`}
+      <button class="btn btn-ghost btn-sm" style="margin-top:10px;" onclick="toggleMacroCalc()">${UI.macroCalcOpen ? 'HIDE' : 'OPEN'} MACRO CALCULATOR</button>
+    </div>
+    ${UI.macroCalcOpen ? renderMacroCalcPanel() : ''}
+    ${UI.mealTargetSettingsOpen ? renderTdeeSettings() : ''}`;
+}
+// Everything behind the gear: the TDEE the maintenance figure comes from, its own calculator, the
+// adaptive estimate read off real weight-and-calorie history, and the window that estimate averages.
+function renderTdeeSettings() {
+  return `
+    <div class="panel">
+      <div class="subtle-label" style="margin-bottom:8px;">TDEE</div>
+      <label class="field">
+        <span class="lbl">TDEE (calories/day)</span>
+        <input type="number" value="${STATE.diet.tdee ?? ''}" onchange="updateTDEE(this.value)">
+      </label>
+      <div style="font-size:11px; color:var(--text-faint); margin-top:4px;">Your estimated Total Daily Energy Expenditure — what the calorie target falls back to when no phase sets one.</div>
+      <button class="btn btn-ghost btn-sm" style="margin-top:10px;" onclick="toggleTDEECalc()">${UI.tdeeCalcOpen ? 'HIDE' : 'OPEN'} CALCULATOR</button>
+    </div>
+    ${UI.tdeeCalcOpen ? renderTdeeCalcPanel() : ''}
+    ${renderRollingTdeePanel()}`;
 }
 
 // ---- Shopping list: aggregates every food + quantity across the whole week's assigned meals
@@ -1007,14 +1065,12 @@ function updateTdeeWindowWeeks(val) {
   saveState(); render();
 }
 
-function renderDietSetup() {
-  // Supplements used to share this tab behind an in-screen strip. They now have their own tab in
-  // BUILDER, next to the meal builder, so this screen is one thing again and needs no strip.
+// The TDEE calculator's own panel. Callers gate on UI.tdeeCalcOpen; this just draws it.
+function renderTdeeCalcPanel() {
   const calc = STATE.diet.calc;
   const hasAllInputs = calc.weight && calc.height && calc.age && calc.sex && calc.heightUnit && calc.weightUnit && calc.activity;
   const result = hasAllInputs ? computeTDEE(calc) : null;
-
-  const calcPanel = UI.tdeeCalcOpen ? `
+  return `
     <div class="panel">
       <div class="subtle-label" style="margin-bottom:8px;">TDEE CALCULATOR</div>
       <div class="field-row">
@@ -1062,32 +1118,7 @@ function renderDietSetup() {
         <button class="btn btn-ghost btn-sm btn-close" onclick="toggleTDEECalc()">CLOSE CALCULATOR</button>
         <button class="btn btn-ghost btn-sm" style="color:var(--bad)" onclick="resetTDEECalc()">RESET</button>
       </div>
-    </div>` : '';
-
-  return `
-    <div class="panel">
-      <div class="subtle-label" style="margin-bottom:8px;">TDEE</div>
-      <label class="field">
-        <span class="lbl">TDEE (calories/day)</span>
-        <input type="number" value="${STATE.diet.tdee ?? ''}" onchange="updateTDEE(this.value)">
-      </label>
-      <div style="font-size:11px; color:var(--text-faint); margin-top:4px;">Your estimated Total Daily Energy Expenditure — used as a reference point for diet planning.</div>
-      ${(() => {
-        // Naming which number is actually in effect. Per-phase targets mean the figure you're
-        // eating against lives in two places depending on context, so the screen that ISN'T
-        // currently winning has to say so — otherwise this field silently reads as the target
-        // while the Diet log compares against something else entirely.
-        const t = calorieTargetForDate(todayStr());
-        return t && t.source === 'phase'
-          ? `<div class="cal-source" style="margin-top:6px;">Not what today is compared against — phase &ldquo;${escapeHtml(t.label)}&rdquo; sets <b style="color:var(--text)">${t.calories} cal/day</b>. Health &amp; Wellness &rarr; GOAL to change it.</div>`
-          : '';
-      })()}
-      <button class="btn btn-ghost btn-sm" style="margin-top:10px;" onclick="toggleTDEECalc()">${UI.tdeeCalcOpen ? 'HIDE' : 'OPEN'} CALCULATOR</button>
-    </div>
-    ${calcPanel}
-    ${renderRollingTdeePanel()}
-    ${renderMacroCalc()}
-    ${renderDietLog()}`;
+    </div>`;
 }
 // Adaptive estimate from actual weight trend + calories in, alongside (not replacing) the manual
 // TDEE above — see rollingTdeeEstimate() for the math and why. A "USE THIS" button lets it be
@@ -1107,7 +1138,7 @@ function renderRollingTdeePanel() {
           </div>
           <button class="btn btn-good btn-sm" onclick="applyTDEEResult(${rolling.estimate})">USE THIS</button>
         </div>
-        ${cardio && cardio.avgCardioPerDay > 0 ? `<div style="font-size:11px; color:var(--text-faint); margin-top:8px;">Of that, ~<b style="color:var(--text)">${cardio.avgCardioPerDay} cal/day</b> came from logged cardio sessions over those same weeks — <b style="color:var(--text)">${cardio.nonExerciseTdee} cal/day</b> non-exercise. A breakdown of the number above, not a separate target — logging more cardio here already moves the estimate itself, no extra math needed on top.</div>` : ''}` : `<div style="font-size:11px; color:var(--text-faint);">Not enough data yet — keep logging daily weight (Health & Wellness → Body) and calories (there or via the Diet log) to see this.</div>`}
+        ${cardio && cardio.avgCardioPerDay > 0 ? `<div style="font-size:11px; color:var(--text-faint); margin-top:8px;">Of that, ~<b style="color:var(--text)">${cardio.avgCardioPerDay} cal/day</b> came from logged cardio sessions over those same weeks — <b style="color:var(--text)">${cardio.nonExerciseTdee} cal/day</b> non-exercise. A breakdown of the number above, not a separate target — logging more cardio here already moves the estimate itself, no extra math needed on top.</div>` : ''}` : `<div style="font-size:11px; color:var(--text-faint);">Not enough data yet — keep logging daily weight (Health & Wellness → Body) and calories (there or via D&amp;E → Meals) to see this.</div>`}
       <label class="field" style="margin-top:12px; margin-bottom:0;">
         <span class="lbl">Averaging window (weeks)</span>
         <input type="number" step="1" min="1" value="${STATE.diet.tdeeWindowWeeks}" onchange="updateTdeeWindowWeeks(this.value)">
@@ -1171,13 +1202,14 @@ function computeMacros(macro) {
   return { proteinG, fatG, carbG };
 }
 function toggleMacroCalc() { UI.macroCalcOpen = !UI.macroCalcOpen; render(); }
-function renderMacroCalc() {
+// The macro calculator's own panel. Its readout -- the target split it produces -- lives in
+// renderMealPlanTargets(), above the week it's a target for; this is just the machinery.
+function renderMacroCalcPanel() {
   const m = STATE.diet.macro;
   const weightLabel = m.weightUnit === 'Kg' ? 'kg' : 'lb';
   const hasAllInputs = m.energy && m.weight && m.proteinPerUnit !== null && m.proteinPerUnit !== undefined;
   const result = hasAllInputs ? computeMacros(m) : null;
-
-  const calcPanel = UI.macroCalcOpen ? `
+  return `
     <div class="panel">
       <div class="subtle-label" style="margin-bottom:8px;">MACRO CALCULATOR</div>
       <div class="field-row">
@@ -1223,19 +1255,7 @@ function renderMacroCalc() {
         <button class="btn btn-ghost btn-sm btn-close" onclick="toggleMacroCalc()">CLOSE CALCULATOR</button>
         <button class="btn btn-ghost btn-sm" style="color:var(--bad)" onclick="resetMacroCalc()">RESET</button>
       </div>
-    </div>` : '';
-
-  return `
-    <div class="panel">
-      <div class="subtle-label" style="margin-bottom:8px;">MACROS</div>
-      <div class="row">
-        <span style="font-size:13px;color:var(--text-dim)">Protein / Fat / Carb (g)</span>
-        <span class="mono" style="font-weight:700">${STATE.diet.proteinG ?? '—'} / ${STATE.diet.fatG ?? '—'} / ${STATE.diet.carbG ?? '—'}</span>
-      </div>
-      <div style="font-size:11px; color:var(--text-faint); margin-top:4px;">Your target daily macro split.</div>
-      <button class="btn btn-ghost btn-sm" style="margin-top:10px;" onclick="toggleMacroCalc()">${UI.macroCalcOpen ? 'HIDE' : 'OPEN'} CALCULATOR</button>
-    </div>
-    ${calcPanel}`;
+    </div>`;
 }
 function updateMacroCalc(field, val) {
   if (field === 'energyUnit' || field === 'weightUnit') {

@@ -1360,14 +1360,6 @@ const MEASURE_FIELDS = [
   { key: 'lCalf', label: 'L Calf', unit: 'length' },
 ];
 
-// The shared chrome for the merged tab's simpler screens -- GOAL, DIET and LONGEVITY are just a
-// title over someone else's render function, and each used to grow its own copy of this.
-function renderFitnessScreen(body) {
-  return `<div class="screen">
-    <div class="section-title">Health &amp; Wellness</div>
-    ${body}
-  </div>`;
-}
 function setFitnessSubtab(t) { NAV.fitnessSubtab = t; resetTrainViewForSubtab(t); render(); }
 
 // BODY -- what Exercise's PROGRESS and Health's SPECS used to be between them.
