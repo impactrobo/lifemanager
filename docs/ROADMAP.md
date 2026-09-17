@@ -298,6 +298,23 @@ Newest first. Keep this reasonably current so a fresh session can see what alrea
 without re-reading the whole diff history. Roughly grouped: this project spent early Sept 2026
 on an architecture split + a large wave of Maximalist aesthetics.
 
+- **COMPARE owns the measurement trend (2026-09-16).** The last of the restructure moves. COMPARE
+  already held every trend in the app — body weight, lifts, lab markers — except the one that had
+  two of its own inside MEASUREMENTS.
+  - A **MUSCLES** group of chips now sits between BODY and LIFTS, which is what a tape measurement
+    is between: the body's answer to what the lifts did. Only parts with two readings are offered;
+    sixteen chips, most of them dead, would bury the three you actually track.
+  - **Two surfaces retired from MEASUREMENTS.** An A-vs-B delta table between two hand-picked
+    entries — confusingly also titled COMPARE, one tab from the real one — and a one-field-at-a-time
+    chart behind a dropdown. Sixteen fields can only ever be charted one at a time that way, and
+    one at a time isn't a question anyone asks of a tape. COMPARE draws up to four together, over a
+    date range, and states each one's first → last in the period summary.
+  - Weight and body fat recorded in a measurement entry are a **second, sparser series** from the
+    one the daily log keeps, and the two can honestly disagree. They keep their own chips in BODY,
+    labelled `(measured)`, rather than being silently merged into the daily log's or dropped.
+  - No band and no verdict on a measurement: a circumference rising is growth on an arm and
+    something else on a waist, and which one depends on what phase you're in. The app states the
+    number and the direction.
 - **DIET dissolves; the tab becomes D&E (2026-09-16).** The largest of the restructure moves, and
   the one that explains the rest. DIET held two unrelated things behind one button: **the numbers
   you plan against** (calories, macros, TDEE) and **the log of what you actually ate**. Those answer

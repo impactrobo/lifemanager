@@ -1383,8 +1383,11 @@ function renderBody() {
     body = renderBodyWeightChart() + `<div class="divider"></div>
       <div class="subtle-label" style="margin-bottom:8px;">LOG</div>` + renderWeightLog();
   } else if (NAV.bodySubtab === 'measurements') {
-    body = renderBodyMeasurementChart() + `<div class="divider"></div>
-      <div class="subtle-label" style="margin-bottom:8px;">LOG</div>` + renderMeasurements();
+    // No chart above this log, unlike WEIGHT. Measurements are SIXTEEN fields, so a chart here can
+    // only ever be one-at-a-time behind a dropdown -- and one at a time is the question nobody
+    // asks of a tape. COMPARE draws up to four of them together, against the same range control as
+    // everything else, so that is where the trend lives.
+    body = `<div class="subtle-label" style="margin-bottom:8px;">LOG</div>` + renderMeasurements();
   }
   else if (NAV.bodySubtab === 'labs') body = renderLabPanels();
   else if (NAV.bodySubtab === 'compare') body = renderCompareView();

@@ -8,14 +8,42 @@
 // only reach what earlier files have already defined. src/app-boot.js runs the startup sequence
 // and must stay last.
 // ---------------- BODY MEASUREMENTS ----------------
+// One measurement field's history, oldest-first, in display units. Derived on every read rather
+// than cached: STATE.measurements is the only copy, and a chart built from a stale one is worse
+// than no chart at all. Lengths are stored in cm and weights in lb, so the conversion is per field.
+function measurementConv(unit) {
+  return unit === 'weight' ? lbToDisplay : unit === 'length' ? cmToDisplay : (x => x);
+}
+function measurementUnitLabel(unit) {
+  return unit === 'weight' ? weightUnitLabel() : unit === 'length' ? lengthUnitLabel() : '%';
+}
+function measurementSeries(key) {
+  const f = MEASURE_FIELDS.find(x => x.key === key);
+  if (!f) return [];
+  const conv = measurementConv(f.unit);
+  return STATE.measurements
+    .filter(m => m.fields && m.fields[key] !== undefined && m.fields[key] !== null && m.fields[key] !== '')
+    .map(m => ({ date: m.date, value: conv(Number(m.fields[key])) }))
+    .filter(p => Number.isFinite(p.value))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+// Only fields with two readings can be a trend. Used by both COMPARE groups that offer them, so a
+// chip can never appear for a chart that would draw nothing.
+function measurementHasTrend(key) { return measurementSeries(key).length >= 2; }
+// MEASUREMENTS is entry now: the form and the log. Its trend moved to COMPARE, which already owns
+// every other trend in the app -- see the MUSCLES group in compareMetricGroups(). What used to sit
+// here was an A-vs-B delta table between two hand-picked entries; COMPARE answers the same question
+// over a date range, against the same shared range control as everything else, and charts the shape
+// instead of only stating the endpoints.
 function renderMeasurements() {
   const list = [...STATE.measurements].sort((a,b) => b.date.localeCompare(a.date));
   const addForm = UI.measureFormOpen ? renderMeasureForm() : `<button class="btn btn-primary btn-block" onclick="toggleMeasureForm()">+ ADD MEASUREMENT</button>`;
-
-  let compareBlock = '';
-  if (list.length >= 2) {
-    compareBlock = renderCompareBlock(list);
-  }
+  // Pointing at where the trend went, only once there is a trend to see.
+  const trendLink = list.length >= 2 ? `
+    <div class="panel" style="margin-bottom:12px; font-size:11px; color:var(--text-dim);">
+      Charting these over time lives in <b style="color:var(--text)">COMPARE</b>, under <b style="color:var(--text)">MUSCLES</b> — alongside your body weight and your lifts.
+      <button class="btn btn-ghost btn-sm" style="margin-top:8px;" onclick="setBodySubtab('compare')">OPEN COMPARE</button>
+    </div>` : '';
 
   const cards = list.map(m => `
     <div class="entry-card">
@@ -33,7 +61,7 @@ function renderMeasurements() {
 
   return `
     <div style="margin-bottom:12px;">${addForm}</div>
-    ${compareBlock}
+    ${trendLink}
     <div class="entry-list">${cards || emptyState('No measurements logged yet.')}</div>`;
 }
 function toggleMeasureForm() {
@@ -109,38 +137,6 @@ function deleteMeasurement(id) {
     STATE.measurements = STATE.measurements.filter(m => m.id !== id);
     saveState(); render();
   });
-}
-function renderCompareBlock(list) {
-  if (!VIEW.compareA) VIEW.compareA = list[list.length - 1].id;
-  if (!VIEW.compareB) VIEW.compareB = list[0].id;
-  const a = STATE.measurements.find(m => m.id === VIEW.compareA);
-  const b = STATE.measurements.find(m => m.id === VIEW.compareB);
-  const opts = list.map(m => `<option value="${m.id}">${m.date}</option>`).join('');
-  let rows = '';
-  if (a && b) {
-    const weeks = Math.max(1, (new Date(b.date).getTime() - new Date(a.date).getTime()) / (1000*60*60*24*7));
-    rows = MEASURE_FIELDS.map(f => {
-      const va = a.fields[f.key], vb = b.fields[f.key];
-      if (va === undefined || vb === undefined) return '';
-      const conv = f.unit === 'weight' ? lbToDisplay : f.unit === 'length' ? cmToDisplay : (x=>x);
-      const dispA = conv(va), dispB = conv(vb);
-      const delta = dispB - dispA;
-      const cls = delta === 0 ? '' : (delta > 0 ? (f.key==='bf'||f.key==='waist'?'delta-neg':'delta-pos') : (f.key==='bf'||f.key==='waist'?'delta-pos':'delta-neg'));
-      return `<div class="row" style="font-size:12px;">
-        <span style="color:var(--text-dim)">${f.label}</span>
-        <span class="mono ${cls}">${delta >= 0 ? '+' : ''}${fmt(delta,1)} (${fmt(delta/weeks,2)}/wk)</span>
-      </div>`;
-    }).join('');
-  }
-  return `
-    <div class="panel">
-      <div class="subtle-label">COMPARE</div>
-      <div class="field-row" style="margin-bottom:10px;">
-        <select onchange="VIEW.compareA=this.value; render();">${opts.replace(`value="${VIEW.compareA}"`, `value="${VIEW.compareA}" selected`)}</select>
-        <select onchange="VIEW.compareB=this.value; render();">${opts.replace(`value="${VIEW.compareB}"`, `value="${VIEW.compareB}" selected`)}</select>
-      </div>
-      ${rows || '<div style="font-size:12px;color:var(--text-faint)">No overlapping fields between these two entries.</div>'}
-    </div>`;
 }
 
 // ---------------- WEIGHT & CALORIES ----------------
@@ -433,60 +429,6 @@ function renderBodyWeightChart() {
   }
   return selector + `<div class="chart-wrap"><canvas id="weightChart" height="180"></canvas></div>`;
 }
-function setMeasurementField(field) { VIEW.selectedMeasurementField = field; render(); }
-function renderBodyMeasurementChart() {
-  const fieldSelect = `
-    <label class="field" style="margin-bottom:12px;">
-      <span class="lbl">Measurement</span>
-      <select onchange="setMeasurementField(this.value)">
-        ${MEASURE_FIELDS.map(f => `<option value="${f.key}" ${f.key===VIEW.selectedMeasurementField?'selected':''}>${f.label}</option>`).join('')}
-      </select>
-    </label>`;
-  const field = MEASURE_FIELDS.find(f => f.key === VIEW.selectedMeasurementField) || MEASURE_FIELDS[0];
-  const list = [...STATE.measurements]
-    .filter(m => m.fields[field.key] !== undefined)
-    .sort((a,b) => a.date.localeCompare(b.date));
-  const chart = list.length >= 2
-    ? `<div class="chart-wrap"><canvas id="measurementChart" height="180"></canvas></div>`
-    : emptyState(`Log at least 2 entries with ${field.label} in the log below to see a trend here.`);
-  return fieldSelect + chart;
-}
-let measurementChartInstance = null;
-function drawMeasurementChart() {
-  const canvas = document.getElementById('measurementChart');
-  if (!canvas || typeof Chart === 'undefined') return;
-  const field = MEASURE_FIELDS.find(f => f.key === VIEW.selectedMeasurementField) || MEASURE_FIELDS[0];
-  const list = [...STATE.measurements]
-    .filter(m => m.fields[field.key] !== undefined)
-    .sort((a,b) => a.date.localeCompare(b.date));
-  if (measurementChartInstance) { measurementChartInstance.destroy(); }
-  const conv = field.unit === 'weight' ? lbToDisplay : field.unit === 'length' ? cmToDisplay : (x => x);
-  const unitLabel = field.unit === 'weight' ? weightUnitLabel() : field.unit === 'length' ? lengthUnitLabel() : '%';
-  const styles = getComputedStyle(document.documentElement);
-  measurementChartInstance = new Chart(canvas.getContext('2d'), {
-    type: 'line',
-    data: {
-      labels: list.map(m => m.date.slice(5)),
-      datasets: [{
-        label: field.label,
-        data: list.map(m => Number(fmt(conv(m.fields[field.key]), 1))),
-        borderColor: styles.getPropertyValue('--accent').trim(),
-        backgroundColor: 'transparent',
-        tension: 0.25,
-        pointRadius: 3,
-      }]
-    },
-    options: {
-      responsive: true,
-      plugins: { legend: { display: false }, phaseBoundaries: phaseBoundaryOpts(list) },
-      scales: {
-        x: { ticks: { color: styles.getPropertyValue('--text-faint').trim(), font: {size: 10} }, grid: { color: styles.getPropertyValue('--border-soft').trim() } },
-        y: { ticks: { color: styles.getPropertyValue('--text-faint').trim(), font: {size: 10}, callback: v => v + ' ' + unitLabel }, grid: { color: styles.getPropertyValue('--border-soft').trim() } },
-      }
-    },
-    plugins: [phaseBoundaryPlugin],
-  });
-}
 
 function emptyState(msg) {
   return `<div class="empty-state"><div class="big">${icon('clipboard')}</div>${msg}</div>`;
@@ -630,6 +572,23 @@ function compareMetricDescriptor(id) {
       points, bands: { key }, movementFor: (a, b) => labMovement(key, a, b),
     };
   }
+  // Tape measurements. Stored in cm and converted here, the same way a lift is stored in lb and
+  // converted here -- the draw code never sees a unit.
+  if (id.indexOf('measure:') === 0) {
+    const f = MEASURE_FIELDS.find(x => x.key === id.slice(8));
+    if (!f) return null;
+    return {
+      // Weight and body fat exist in BOTH the daily log and a measurement entry, and the two are
+      // different series that can honestly disagree. The label says which one this is.
+      id, label: f.unit === 'length' ? f.label : f.label + ' (measured)',
+      unit: ' ' + measurementUnitLabel(f.unit), decimals: 1, format: v => fmt(v, 1),
+      points: measurementSeries(f.key),
+      // No band and no verdict. A circumference going up is growth on an arm and something else on a
+      // waist, and which one it is depends on what you're in a phase FOR -- so the app states the
+      // number and the direction, and leaves the reading to you.
+      bands: null, movementFor: null,
+    };
+  }
   // The daily log and the scale -- everything WEIGHT_METRICS already describes. `bodyweight` keeps
   // its legacy id: it is COMPARE's default selection and has been since this screen shipped.
   const metricKey = id === 'bodyweight' ? 'weight' : (id.indexOf('body:') === 0 ? id.slice(5) : null);
@@ -722,7 +681,18 @@ function compareMetricGroups() {
       // here too, rather than only as a single-metric chart a tab away.
       { id: 'bodyweight', label: 'Body Weight' },
       ...WEIGHT_METRICS.filter(m => m.key !== 'weight').map(m => ({ id: 'body:' + m.key, label: m.label })),
+      // A measurement entry records weight and body fat too. That is a SECOND series for each --
+      // sparser, taken with a tape and a scale on the same occasion -- and the two can honestly
+      // disagree, so it belongs here as its own chip rather than being silently merged or dropped.
+      ...MEASURE_FIELDS.filter(f => f.unit !== 'length' && measurementHasTrend(f.key))
+        .map(f => ({ id: 'measure:' + f.key, label: f.label + ' (measured)' })),
     ] },
+    // MUSCLES sits between BODY and LIFTS because that is what it is between: a tape measurement is
+    // the body's answer to what the lifts did. Only parts you have actually measured twice are
+    // offered -- sixteen chips, most of them dead, would bury the three you track.
+    { key: 'measure', label: 'MUSCLES', items: MEASURE_FIELDS
+      .filter(f => f.unit === 'length' && measurementHasTrend(f.key))
+      .map(f => ({ id: 'measure:' + f.key, label: f.label })) },
     { key: 'lift', label: 'LIFTS', items: [
       ...liftSlots.map(s => ({ id: compareMetricId(s.categoryId, s.tierKey), label: s.label })),
       // Lifts, from the library. Anything you've logged appears here regardless of workout style, so
@@ -746,10 +716,10 @@ function renderCompareView() {
   const charts = VIEW.compareSelected.map(renderCompareMiniChart).join('');
   const liftCount = (groups.find(g => g.key === 'lift') || { items: [] }).items.length;
   return `
-    <div style="font-size:11px; color:var(--text-dim); margin-bottom:8px;">Pick up to ${COMPARE_MAX_METRICS} to compare side by side. A lift charts the heaviest completed set logged that session, not just the programmed target — a <b style="color:var(--text)">(T1)</b>/<b style="color:var(--text)">(T2)</b> entry is that tier's slot specifically. A lab marker charts every draw that included it, against the ranges you set.</div>
+    <div style="font-size:11px; color:var(--text-dim); margin-bottom:8px;">Pick up to ${COMPARE_MAX_METRICS} to compare side by side. A lift charts the heaviest completed set logged that session, not just the programmed target — a <b style="color:var(--text)">(T1)</b>/<b style="color:var(--text)">(T2)</b> entry is that tier's slot specifically. A muscle charts the tape measurements you've logged for it. A lab marker charts every draw that included it, against the ranges you set.</div>
     ${picker}
     <div style="font-size:10px; color:var(--text-faint); margin-top:6px;">${VIEW.compareSelected.length} of ${COMPARE_MAX_METRICS} selected</div>
-    ${liftCount === 0 ? `<div style="font-size:11px; color:var(--text-faint); margin:8px 0 0;">No lifts tracked yet — assign a category to a T1/T2 slot, or link an exercise to a lift under Builder &rarr; Workouts &rarr; Lifts, then log some sets.</div>` : ''}
+    ${liftCount === 0 ? `<div style="font-size:11px; color:var(--text-faint); margin:8px 0 0;">No lifts tracked yet — assign a category to a T1/T2 slot, or pick a lift for an exercise under Builder &rarr; Workouts &rarr; Workout, then log some sets.</div>` : ''}
     ${renderCompareRange()}
     ${renderCompareSummary()}
     <div style="margin-top:14px;">${charts || emptyState('Pick at least one metric above to see its chart.')}</div>`;
@@ -1002,7 +972,6 @@ function changeVolumeWeek(delta) {
 
 function attachBodyHandlers() {
   if (NAV.bodySubtab === 'weight') setTimeout(drawWeightChart, 0);
-  else if (NAV.bodySubtab === 'measurements') setTimeout(drawMeasurementChart, 0);
   else if (NAV.bodySubtab === 'compare') setTimeout(drawCompareCharts, 0);
 }
 function setUnits(u) {

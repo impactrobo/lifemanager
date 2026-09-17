@@ -185,6 +185,13 @@ were one late run away from it.
 `setFixedTime`, not `clock.install()` — this app renders through `requestAnimationFrame`, and
 faking timers stalls `render()` so `settle()` never resolves.
 
+**A pinned clock makes every Chart.js line look flat.** Chart.js drives its entry animation off
+the clock, so a frozen one parks the animation at t=0 forever — the line renders along the bottom
+of its axis no matter how long you wait, while the axis, ticks and the surrounding markup are all
+correct. It looks exactly like a chart being fed a constant series. A screenshot pass over any
+chart therefore has to run **without** `pinClock`, or read `chartInstance.data.datasets[0].data`
+instead of trusting the picture. This cost a real "the trend is broken" diagnosis.
+
 ### CSS: the "my rule silently lost" family
 CSS has no failure mode for a declaration that loses. Every other layer here fails loudly (a
 bad reference is a `pageerror`, a type error fails `tsc`); a losing CSS rule renders a page

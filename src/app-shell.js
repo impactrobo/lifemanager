@@ -152,8 +152,6 @@ let VIEW = {
   plannerDate: null,
   autofillProgram: null,
   autofillDays: [],
-  compareA: null,
-  compareB: null,
   compareSelected: ['bodyweight'],
   compareRange: null,                // {preset, from, to} for COMPARE; null until first read
   calCompare: null,                  // [dateStr, ...] while comparing days; null = not comparing
@@ -165,7 +163,6 @@ let VIEW = {
   labEditing: null,                  // id of the panel the lab form is editing; null = adding a new one
   labExpanded: {},                   // markerKey -> true: that marker's full dated history is open
   selectedWeightMetric: 'weight',
-  selectedMeasurementField: 'weight',
   notesSelectedTag: 'general',       // tag for a new note; saveNote() puts this back to 'general'
   notesSort: 'date',                 // 'date' | 'tag'
   notesFilterTag: null,              // null = all tags
