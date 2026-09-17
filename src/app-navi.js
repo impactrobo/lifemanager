@@ -144,25 +144,34 @@ const NAVI_VOICES = {
   },
 
   // Casually superior and effortlessly cutting. "oh my god", "literally", "I cannot", "that is
-  // actually insane", "absolutely not." Emoji as punctuation; italics whenever she'd roll her eyes.
+  // actually insane", "absolutely not." Italics whenever she'd roll her eyes.
+  //
+  // EMOJI PALETTE, tuned from field feedback ("less nail painting, more grimace, eye roll,
+  // extended ellipses"): 🙄 when she's unimpressed, 😬 when she's wincing on your behalf, 😐 for
+  // flat deadpan, and a long trailing "……" where the funniest thing she can do is not finish the
+  // sentence. 💅 is retired — it read as a bit she was doing rather than a reaction she was having,
+  // which is exactly the difference between the two halves of her brief.
   vitalya(f) {
     const nick = vitalyaNick(f);
     const out = [];
     if (f.off) return [naviLine('An off week. *On purpose.* Okay 😐'),
                        naviLine('Fine. Genuinely. Rest is a thing. Drink some water, ' + nick + '.')];
     if (f.allDone) {
-      out.push(naviLine('Oh my god. You did *all of them*, ' + nick + ' 💅'));
+      out.push(naviLine('Oh my god. You did *all of them*, ' + nick + '……'));
       out.push(naviLine(f.planned + ' out of ' + f.planned + '. I am choosing not to be surprised.'));
     } else if (f.someDone) {
       out.push(naviLine(f.done + ' of ' + f.planned + '. *Literally* so close, ' + nick + ' 🙄'));
       out.push(naviLine('I am not going to say anything. *I am not.*'));
     } else if (f.nothingDone) {
-      out.push(naviLine('Zero. Out of ' + f.planned + '. That is actually insane, ' + nick + ' 😐'));
+      out.push(naviLine('Zero. Out of ' + f.planned + '. That is actually insane, ' + nick + ' 😬'));
     } else {
-      out.push(naviLine('Nothing planned, nothing logged. *Cool.* Very intentional, I am sure.'));
+      out.push(naviLine('Nothing planned, nothing logged. *Cool.* Very intentional, I am sure……'));
     }
     if (f.missedTarget) out.push(naviLine(f.missedTarget + ' is not where it should be. I cannot 🙄'));
-    else if (f.targets && f.targetsHit === f.targets) out.push(naviLine('Every target on track though. *Look at you* 💅'));
+    else if (f.targets && f.targetsHit === f.targets) out.push(naviLine('Every target on track though. *Look at you*……'));
+    // Deliberately bare. This can land in the same box as the 😬 above, and the same face twice
+    // reads as a tic rather than a reaction — she'd know when to withhold, and "Absolutely not."
+    // is her most cutting register precisely because it isn't decorated.
     if (f.habitsBroken) out.push(naviLine(f.habitsBroken + ' habit' + (f.habitsBroken === 1 ? '' : 's') + ' broken. Absolutely not.'));
     return out.slice(0, 4);
   },
@@ -276,7 +285,7 @@ const NAVI_HABIT_BREAK = {
     naviLine('Tomorrow is a different day and I am still here. Let us GET IT.'),
   ],
   vitalya: (h, nick) => [
-    naviLine('Oh no. *Anyway* 💅'),
+    naviLine('Oh no. *Anyway* 🙄'),
     naviLine('It is marked, ' + nick + '. Genuinely — better than pretending you did it.'),
   ],
   digi: (h) => [
@@ -423,7 +432,7 @@ function renderNaviPicker() {
 // Monday to find out.
 const NAVI_GREETINGS = {
   strike: [naviLine('JACKED IN, BRO!!!', 'shout'), naviLine('You and me. Every session. Let us GET IT.')],
-  vitalya: [naviLine('Oh, *finally* 💅'), naviLine('Okay. What did you eat today, and when did you last stretch?')],
+  vitalya: [naviLine('Oh, *finally* 🙄'), naviLine('Okay. What did you eat today, and when did you last stretch?')],
   digi: [naviLine('DIGIMAN.EXE ONLINE. INPUT ACCEPTED.', 'mono'), naviLine('THE OPERATOR PROVIDES INPUT. DIGIMAN.EXE PROVIDES OUTPUT. PROCEED.', 'mono')],
   wenceslas: [naviLine('Come. Sit.'), naviLine('There is much a wise ruler must know — of coin, of faith, of the world.')],
   muze: [naviLine('omigosh im SO glad youre here!! :D'), naviLine('lets make something amazing together ok?? <3')],

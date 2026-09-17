@@ -1307,8 +1307,13 @@ function renderHomeAddPopup() {
       </div>
     </div>`;
 }
-// A section tile carries its own colour as a thick bar along its bottom edge. The tile itself
-// stays neutral, which is the point: the colour is a label, not a wash.
+// A section tile carries its own colour as a thick bar down its LEFT edge. The tile itself stays
+// neutral, which is the point: the colour is a label, not a wash.
+//
+// Left rather than bottom because that is already how every other colour-coded container in the
+// app is marked — note cards, ingredient rows, phase cards, the Navi quote, section notes all put
+// their colour on the left edge. One convention, applied everywhere, is worth more than whichever
+// edge reads marginally better in isolation.
 //
 // Fourth revision of the same idea, and the previous three are why this one is a flat bar. First
 // tinted the whole tile; second put a radial glow behind the icon; third spread that glow to the
@@ -1317,13 +1322,13 @@ function renderHomeAddPopup() {
 // had *some* colour without being able to say which, especially for the darker sections. A solid
 // bar answers "which section is this" at a glance, which was the whole job.
 //
-// An INSET box-shadow rather than a border-bottom: `.workout-cell` is `aspect-ratio: 1` with
+// An INSET box-shadow rather than a border-left: `.workout-cell` is `aspect-ratio: 1` with
 // `box-sizing: border-box`, so a 4px border would eat 4px out of the content box, and the icon +
 // label already fill that budget (see CLAUDE.md on tiles overrunning their grid track — it has
 // happened twice). A shadow paints inside the same box and costs the layout nothing. It also
 // follows the tile's border-radius, so the bar's ends curve with the corners.
 function homeTileAccentStyle(color) {
-  return `background: var(--surface); box-shadow: inset 0 -4px 0 ${color};`;
+  return `background: var(--surface); box-shadow: inset 4px 0 0 ${color};`;
 }
 function renderHomeSectionsGrid() {
   const L = homeLayout();
