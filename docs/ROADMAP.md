@@ -298,6 +298,18 @@ Newest first. Keep this reasonably current so a fresh session can see what alrea
 without re-reading the whole diff history. Roughly grouped: this project spent early Sept 2026
 on an architecture split + a large wave of Maximalist aesthetics.
 
+- **The actual weight rate needed DAILY weigh-ins, and was never meant to (2026-09-17).** Reported
+  from a device: "don't see anything in Actual, but I didn't log a weight every day." The lookback
+  in `actualPctPerWeekAt()` was `GOAL_RATE_MIN_DAYS` — the same 14 as the minimum SPAN — so the
+  only way to reach a 14-day span inside a 14-day window was to have weighed on both exact
+  endpoints. Miss either and the week fell back silently to its PLANNED rate, looking exactly like
+  not having weighed in enough. Now uses `GOAL_RATE_WINDOW_DAYS` (28), which is what the goal
+  screen's own rate has always used: look back 28 days, still require 14 days of span.
+  `trailingAverage()` was already smoothing the gaps. **A window and a floor are different
+  questions and one constant cannot answer both** — this is the second bug in this one line, both
+  from conflating them. The existing test could never have caught it: it logs a weight every day,
+  so the endpoints were always there. `test_weight_plan.js` now has a sparse fixture too.
+
 - **Notes Phase 5, "Meals" (2026-09-17) — the Notes rebuild is complete.** The bridge between a
   recipe's two halves: `fields.ingredientText` (what you write, or what Convert produced) and
   `fields.ingredients` (rows with exact macros that feed Meals). `src/app-recipe-match.js`.

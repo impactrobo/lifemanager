@@ -190,8 +190,20 @@ function updateWeightGoalRate(id, value) {
 // It mattered more than a dead section: weightPlanWeeks() falls back to a week's PLANNED rate when
 // the actual is null, so every elapsed week read as planned, and longCutState() -- whose whole
 // premise is "a real walk over what you actually did, rather than a guess" -- was walking the guess.
+//
+// SECOND FIX (2026-09-17), reported from a real device: "don't see anything in Actual, but I didn't
+// log a weight every day -- is daily weighing required?" It effectively was, and that was never the
+// intent. The lookback was GOAL_RATE_MIN_DAYS, the same 14 as the minimum SPAN, so the only way to
+// reach a 14-day span inside a 14-day window is to have weighed on both exact endpoints. Miss
+// either and the week fell back to planned -- silently, looking just like not enough data.
+//
+// The lookback is GOAL_RATE_WINDOW_DAYS now, which is what weightTrendRate() has always used for
+// the goal-screen rate: look back 28 days, still require 14 days of span between the first and last
+// weigh-in found. Sparse logging is fine -- two weigh-ins three weeks apart are enough, and
+// trailingAverage() was already smoothing the gaps. A window and a floor are different questions,
+// and one constant cannot answer both.
 function actualPctPerWeekAt(dateStr) {
-  const r = weightTrendRateBetween(shiftDate(dateStr, -GOAL_RATE_MIN_DAYS), dateStr);
+  const r = weightTrendRateBetween(shiftDate(dateStr, -GOAL_RATE_WINDOW_DAYS), dateStr);
   if (!r || !r.currentTrendLb) return null;
   return (r.lbPerWeek / r.currentTrendLb) * 100;
 }

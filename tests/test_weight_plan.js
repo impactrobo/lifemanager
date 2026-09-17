@@ -321,6 +321,43 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   }
   if (!actualRate.actualWeeks) throw new Error('With real weight data, elapsed weeks must read as actual, not planned');
 
+  // ---- 8. SPARSE weigh-ins are enough ----
+  // Reported from a real device: "don't see anything in Actual, but I didn't log a weight every
+  // day — is daily weighing required?" It effectively was. The lookback was GOAL_RATE_MIN_DAYS,
+  // the same 14 as the minimum SPAN, so the only way to reach a 14-day span inside a 14-day window
+  // was to have weighed on both exact endpoints. Miss either and the week fell back to planned.
+  //
+  // Note that the check above could never have caught this: it logs a weight EVERY day, so the
+  // endpoints are always present. That is the whole lesson — a dense fixture hid a bug that only
+  // shows up in the way people actually weigh themselves.
+  const sparse = await page.evaluate(() => {
+    const t = todayStr();
+    STATE.weightLog = [];
+    // Nine weigh-ins over five weeks, none on today and none on any exact window boundary.
+    [34, 30, 27, 21, 18, 13, 9, 5, 2].forEach((ago, n) => {
+      STATE.weightLog.push({ id: 's' + n, date: shiftDate(t, -ago), weightLb: 215 - (34 - ago) * 0.2, calories: null, cardioCalories: null });
+    });
+    return { pct: actualPctPerWeekAt(t), actualWeeks: weightPlanWeeks().filter(w => w.source === 'actual').length };
+  });
+  console.log('8. sparse log:', JSON.stringify(sparse));
+  if (sparse.pct == null) {
+    throw new Error('A sparse but perfectly adequate log must still produce an actual rate — daily weighing is not, and was never meant to be, required');
+  }
+  if (!(sparse.pct < -0.2 && sparse.pct > -1.2)) throw new Error(`Expected a plausible loss rate from the sparse log, got ${sparse.pct}`);
+  if (!sparse.actualWeeks) throw new Error('...and the week walk must read those weeks as actual rather than falling back to the plan');
+
+  // The floor still holds: two weigh-ins a few days apart is not a rate, however tempting.
+  const tooShort = await page.evaluate(() => {
+    const t = todayStr();
+    STATE.weightLog = [
+      { id: 'a', date: shiftDate(t, -4), weightLb: 215, calories: null, cardioCalories: null },
+      { id: 'b', date: shiftDate(t, -1), weightLb: 213, calories: null, cardioCalories: null },
+    ];
+    return actualPctPerWeekAt(t);
+  });
+  console.log('8. below the floor:', tooShort);
+  if (tooShort != null) throw new Error('Under 14 days of span there is no honest rate to report — widening the window must not have lowered the floor');
+
   if (errors.length) throw new Error(errors.join('\n'));
   console.log('test_weight_plan.js: PASS');
   await browser.close();
