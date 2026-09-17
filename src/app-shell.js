@@ -107,7 +107,11 @@ function defaultTransientUi() {
     macroCalcOpen: false,
     mealTargetSettingsOpen: false,     // the gear on MEAL PLAN's TARGETS panel: TDEE + averaging window
     measureFormOpen: false,
+    // Which entry the open form is EDITING; null means it is adding a new one. Transient, so
+    // navigating away abandons a half-made edit rather than resuming it somewhere unexpected.
+    measureEditId: null,
     weightLogFormOpen: false,
+    weightEditId: null,
     builderStylePickerOpen: false,
     autofillPickerOpen: false,
     noteTagPaletteOpen: null,

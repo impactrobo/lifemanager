@@ -37,7 +37,15 @@ function measurementHasTrend(key) { return measurementSeries(key).length >= 2; }
 // instead of only stating the endpoints.
 function renderMeasurements() {
   const list = [...STATE.measurements].sort((a,b) => b.date.localeCompare(a.date));
-  const addForm = UI.measureFormOpen ? renderMeasureForm() : `<button class="btn btn-primary btn-block" onclick="toggleMeasureForm()">+ ADD MEASUREMENT</button>`;
+  // Today's entry gets the button, because the correction you actually make is to the reading you
+  // just took. It reverts to ADD on its own tomorrow -- nothing resets it, the button simply asks
+  // whether TODAY has an entry, so the answer changes when the day does.
+  const today = measurementOn(todayStr());
+  const addForm = UI.measureFormOpen
+    ? renderMeasureForm()
+    : today
+      ? `<button class="btn btn-primary btn-block" onclick="openMeasureEditor('${today.id}')">&#916; EDIT TODAY'S MEASUREMENT</button>`
+      : `<button class="btn btn-primary btn-block" onclick="toggleMeasureForm()">+ ADD MEASUREMENT</button>`;
   // Pointing at where the trend went, only once there is a trend to see.
   const trendLink = list.length >= 2 ? `
     <div class="panel" style="margin-bottom:12px; font-size:11px; color:var(--text-dim);">
@@ -45,11 +53,15 @@ function renderMeasurements() {
       <button class="btn btn-ghost btn-sm" style="margin-top:8px;" onclick="setBodySubtab('compare')">OPEN COMPARE</button>
     </div>` : '';
 
+  // The whole card opens it. The X stops the click reaching the card, so delete stays a deliberate
+  // separate act rather than something you hit while aiming to look at an entry.
   const cards = list.map(m => `
-    <div class="entry-card">
+    <div class="entry-card entry-card-tap ${UI.measureEditId === m.id ? 'entry-card-editing' : ''}"
+         onclick="openMeasureEditor('${m.id}')" role="button" tabindex="0"
+         onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openMeasureEditor('${m.id}');}">
       <div class="ehead">
-        <div class="edate">${m.date}</div>
-        <button class="icon-btn" onclick="deleteMeasurement('${m.id}')">${icon('close')}</button>
+        <div class="edate">${m.date}${m.date === todayStr() ? ' <span class="entry-today">TODAY</span>' : ''}</div>
+        <button class="icon-btn" onclick="event.stopPropagation(); deleteMeasurement('${m.id}')">${icon('close')}</button>
       </div>
       <div class="estats">
         ${m.fields.weight ? `<span>Weight <b>${fmt(lbToDisplay(m.fields.weight),1)}</b> ${weightUnitLabel()}</span>` : ''}
@@ -64,28 +76,72 @@ function renderMeasurements() {
     ${trendLink}
     <div class="entry-list">${cards || emptyState('No measurements logged yet.')}</div>`;
 }
+// ---- Editing an entry ----
+// An entry is one day's reading, so the DATE is what identifies it and editing never moves it. That
+// is also why today's entry gets its own button: the common correction is "I typed 38 and meant 39",
+// minutes later, on the reading you just took -- and the alternative was deleting it and starting
+// again, which loses the photos with it.
+function measurementOn(dateStr) { return STATE.measurements.find(m => m.date === dateStr) || null; }
+function measurementById(id) { return STATE.measurements.find(m => m.id === id) || null; }
+function editingMeasurement() { return UI.measureEditId ? measurementById(UI.measureEditId) : null; }
+function openMeasureEditor(id) {
+  const m = measurementById(id);
+  if (!m) return;
+  UI.measureEditId = id;
+  UI.measureFormOpen = true;
+  // The draft starts as what the entry already holds, so saving without touching the photo row
+  // keeps them rather than silently clearing them.
+  VIEW.measureDraftPhotos = (m.photos || []).slice();
+  render();
+}
 function toggleMeasureForm() {
   UI.measureFormOpen = !UI.measureFormOpen;
+  UI.measureEditId = null;          // the + button always opens a NEW entry
   if (UI.measureFormOpen) VIEW.measureDraftPhotos = [];
   render();
 }
+function closeMeasureForm() {
+  UI.measureFormOpen = false;
+  UI.measureEditId = null;
+  VIEW.measureDraftPhotos = [];
+  render();
+}
 function renderMeasureForm() {
+  const editing = editingMeasurement();
+  const val = (key) => {
+    if (!editing) return '';
+    const raw = editing.fields[key];
+    if (raw === undefined || raw === null || raw === '') return '';
+    const f = MEASURE_FIELDS.find(x => x.key === key);
+    return fmt(measurementConv(f.unit)(Number(raw)), 1);
+  };
   return `
     <div class="panel">
-      <label class="field"><span class="lbl">Date</span><input type="date" id="mDate" value="${todayStr()}"></label>
+      ${editing
+        // Fixed, not just prefilled. A measurement IS its day; letting the date move would turn an
+        // edit into a silent re-dating of a reading you took at a particular moment.
+        ? `<div class="row" style="margin-bottom:12px;">
+             <span class="lbl" style="margin-bottom:0;">Editing</span>
+             <span class="mono" style="font-weight:700;">${escapeHtml(editing.date)}</span>
+           </div>`
+        : `<label class="field"><span class="lbl">Date</span><input type="date" id="mDate" value="${todayStr()}"></label>`}
       <div class="grid2">
         ${MEASURE_FIELDS.map(f => `
           <label class="field">
             <span class="lbl">${f.label} ${f.unit === 'weight' ? '('+weightUnitLabel()+')' : f.unit==='length' ? '('+lengthUnitLabel()+')' : f.unit==='pct' ? '(%)' : ''}</span>
-            <input type="number" step="0.1" id="mf_${f.key}">
+            <input type="number" step="0.1" id="mf_${f.key}" value="${val(f.key)}">
           </label>`).join('')}
       </div>
+      ${editing ? `<div style="font-size:10px; color:var(--text-faint); margin:-4px 0 10px;">Clearing a field removes it from this entry.</div>` : ''}
       <div class="subtle-label" style="margin:10px 0 8px;">PHOTO (optional)</div>
       <div class="photo-thumb-row" id="measurePhotoRow"></div>
       <button class="btn btn-ghost btn-sm" style="margin-bottom:12px;" onclick="document.getElementById('measurePhotoInput').click()">+ ADD PHOTO</button>
       <input type="file" id="measurePhotoInput" accept="image/*" multiple style="display:none" onchange="handleMeasurePhotoInput(event)">
-      <button class="btn btn-primary btn-block" onclick="saveMeasurement()">SAVE ENTRY</button>
-      <button class="btn btn-block" style="margin-top:8px;" onclick="toggleMeasureForm()">CANCEL ENTRY</button>
+      <button class="btn btn-primary btn-block" onclick="saveMeasurement()">${editing ? 'SAVE CHANGES' : 'SAVE ENTRY'}</button>
+      <div class="field-row" style="margin-top:8px;">
+        <button class="btn" style="flex:1;" onclick="closeMeasureForm()">CANCEL</button>
+        ${editing ? `<button class="btn btn-danger" style="flex:1;" onclick="deleteMeasurement('${editing.id}')">DELETE</button>` : ''}
+      </div>
     </div>`;
 }
 const MAX_MEASURE_PHOTOS = 4;
@@ -115,7 +171,10 @@ function renderMeasurePhotoRow() {
     </div>`).join('');
 }
 function saveMeasurement() {
-  const date = inputVal('mDate') || todayStr();
+  const editing = editingMeasurement();
+  // An edit keeps the entry's own date. Reading #mDate here would find nothing (the edit form shows
+  // the date as text, not an input) and silently re-date the entry to today.
+  const date = editing ? editing.date : (inputVal('mDate') || todayStr());
   const fields = {};
   MEASURE_FIELDS.forEach(f => {
     const el = document.getElementById('mf_' + f.key);
@@ -125,6 +184,16 @@ function saveMeasurement() {
     else if (f.unit === 'length') fields[f.key] = displayToCm(raw);
     else fields[f.key] = Number(raw);
   });
+  // Editing in place: same id, same date, new numbers. The photos come from the draft, which was
+  // seeded with the entry's own, so they survive unless you removed them.
+  if (editing) {
+    editing.fields = fields;
+    editing.photos = VIEW.measureDraftPhotos.slice();
+    closeMeasureForm();
+    saveState();
+    showToast('Measurement updated');
+    return;
+  }
   // Two entries on one date is almost always a correction, not a second measurement -- you don't
   // tape your arm twice in an afternoon and mean both. Left alone it also draws a "trend" from a
   // date to itself, which is a chart of nothing. So the second one ASKS, and replacing keeps the
@@ -152,7 +221,10 @@ function commitMeasurement(date, fields) {
 function deleteMeasurement(id) {
   showConfirm('Delete this measurement entry?', () => {
     STATE.measurements = STATE.measurements.filter(m => m.id !== id);
-    saveState(); render();
+    // Deleting the one being edited has to close the form, or it keeps rendering against an entry
+    // that no longer exists.
+    if (UI.measureEditId === id) closeMeasureForm(); else render();
+    saveState();
   });
 }
 
@@ -163,12 +235,21 @@ function deleteMeasurement(id) {
 // wrapper had nothing left to wrap and went away.
 function renderWeightLog() {
   const list = [...STATE.weightLog].sort((a,b) => b.date.localeCompare(a.date));
-  const addForm = UI.weightLogFormOpen ? renderWeightForm() : `<button class="btn btn-primary btn-block" onclick="toggleWeightForm()">+ ADD ENTRY</button>`;
+  // Same rule as measurements: today's entry is the one you correct, and the button reverts on its
+  // own tomorrow because it asks about today rather than remembering a state.
+  const today = weightEntryOn(todayStr());
+  const addForm = UI.weightLogFormOpen
+    ? renderWeightForm()
+    : today
+      ? `<button class="btn btn-primary btn-block" onclick="openWeightEditor('${today.id}')">&#916; EDIT TODAY'S ENTRY</button>`
+      : `<button class="btn btn-primary btn-block" onclick="toggleWeightForm()">+ ADD ENTRY</button>`;
   const cards = list.map(e => `
-    <div class="entry-card">
+    <div class="entry-card entry-card-tap ${UI.weightEditId === e.id ? 'entry-card-editing' : ''}"
+         onclick="openWeightEditor('${e.id}')" role="button" tabindex="0"
+         onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openWeightEditor('${e.id}');}">
       <div class="ehead">
-        <div class="edate">${e.date}</div>
-        <button class="icon-btn" onclick="deleteWeightEntry('${e.id}')">${icon('close')}</button>
+        <div class="edate">${e.date}${e.date === todayStr() ? ' <span class="entry-today">TODAY</span>' : ''}</div>
+        <button class="icon-btn" onclick="event.stopPropagation(); deleteWeightEntry('${e.id}')">${icon('close')}</button>
       </div>
       <div class="estats">
         <span>Weight <b>${fmt(lbToDisplay(e.weightLb),1)}</b> ${weightUnitLabel()}</span>
@@ -182,43 +263,80 @@ function renderWeightLog() {
     <div style="margin-bottom:12px;">${addForm}</div>
     <div class="entry-list">${cards || emptyState('No weight entries logged yet.')}</div>`;
 }
-function toggleWeightForm() { UI.weightLogFormOpen = !UI.weightLogFormOpen; render(); }
+function weightEntryOn(dateStr) { return STATE.weightLog.find(e => e.date === dateStr) || null; }
+function weightEntryById(id) { return STATE.weightLog.find(e => e.id === id) || null; }
+function editingWeightEntry() { return UI.weightEditId ? weightEntryById(UI.weightEditId) : null; }
+function openWeightEditor(id) {
+  if (!weightEntryById(id)) return;
+  UI.weightEditId = id;
+  UI.weightLogFormOpen = true;
+  render();
+}
+function toggleWeightForm() {
+  UI.weightLogFormOpen = !UI.weightLogFormOpen;
+  UI.weightEditId = null;          // the + button always opens a NEW entry
+  render();
+}
+function closeWeightForm() { UI.weightLogFormOpen = false; UI.weightEditId = null; render(); }
 function renderWeightForm() {
+  const ed = editingWeightEntry();
+  const num = (v, dec) => (v === undefined || v === null || v === '') ? '' : fmt(Number(v), dec == null ? 1 : dec);
   return `
     <div class="panel">
       <div class="field-row">
-        <label class="field"><span class="lbl">Date</span><input type="date" id="wDate" value="${todayStr()}"></label>
-        <label class="field"><span class="lbl">Weight (${weightUnitLabel()})</span><input type="number" step="0.1" id="wWeight"></label>
+        ${ed
+          // Fixed: an entry IS its day, and an edit that could move the date would turn a
+          // correction into a re-dating of a weigh-in you took on a particular morning.
+          ? `<label class="field"><span class="lbl">Editing</span>
+               <div class="mono" style="font-weight:700; padding:10px 0;">${escapeHtml(ed.date)}</div></label>`
+          : `<label class="field"><span class="lbl">Date</span><input type="date" id="wDate" value="${todayStr()}"></label>`}
+        <label class="field"><span class="lbl">Weight (${weightUnitLabel()})</span><input type="number" step="0.1" id="wWeight" value="${ed ? num(lbToDisplay(ed.weightLb)) : ''}"></label>
       </div>
       <div class="field-row">
-        <label class="field"><span class="lbl">Body Fat % (optional)</span><input type="number" step="0.1" id="wBodyFat"></label>
-        <label class="field"><span class="lbl">Body Water % (optional)</span><input type="number" step="0.1" id="wBodyWater"></label>
+        <label class="field"><span class="lbl">Body Fat % (optional)</span><input type="number" step="0.1" id="wBodyFat" value="${ed ? num(ed.bodyFatPct) : ''}"></label>
+        <label class="field"><span class="lbl">Body Water % (optional)</span><input type="number" step="0.1" id="wBodyWater" value="${ed ? num(ed.bodyWaterPct) : ''}"></label>
       </div>
       <div style="font-size:10px; color:var(--text-faint); margin-top:-4px; margin-bottom:10px;">From a smart scale reading, if you have one — separate from the occasional tape/caliper Body Fat % under Body Measurements.</div>
       <div class="field-row">
-        <label class="field"><span class="lbl">Calories (optional)</span><input type="number" id="wCal"></label>
-        <label class="field"><span class="lbl">Cardio Calories (optional)</span><input type="number" id="wCardioCal"></label>
+        <label class="field"><span class="lbl">Calories (optional)</span><input type="number" id="wCal" value="${ed && ed.calories != null ? ed.calories : ''}"></label>
+        <label class="field"><span class="lbl">Cardio Calories (optional)</span><input type="number" id="wCardioCal" value="${ed && ed.cardioCalories != null ? ed.cardioCalories : ''}"></label>
       </div>
       <div style="font-size:10px; color:var(--text-faint); margin-top:-4px; margin-bottom:10px;">Cardio Calories = calories burned through direct cardio work.</div>
-      <button class="btn btn-primary btn-block" onclick="saveWeightEntry()">SAVE ENTRY</button>
-      <button class="btn btn-block" style="margin-top:8px;" onclick="toggleWeightForm()">CANCEL ENTRY</button>
+      <button class="btn btn-primary btn-block" onclick="saveWeightEntry()">${ed ? 'SAVE CHANGES' : 'SAVE ENTRY'}</button>
+      <div class="field-row" style="margin-top:8px;">
+        <button class="btn" style="flex:1;" onclick="closeWeightForm()">CANCEL</button>
+        ${ed ? `<button class="btn btn-danger" style="flex:1;" onclick="deleteWeightEntry('${ed.id}')">DELETE</button>` : ''}
+      </div>
     </div>`;
 }
 function saveWeightEntry() {
-  const date = inputVal('wDate') || todayStr();
+  const ed = editingWeightEntry();
+  // An edit keeps its own date -- the edit form shows it as text, so reading #wDate would find
+  // nothing and silently re-date the entry to today.
+  const date = ed ? ed.date : (inputVal('wDate') || todayStr());
   const w = inputVal('wWeight');
   const bodyFat = inputVal('wBodyFat');
   const bodyWater = inputVal('wBodyWater');
   const cal = inputVal('wCal');
   const cardioCal = inputVal('wCardioCal');
   if (w === '') { showToast('Enter a weight'); return; }
-  STATE.weightLog.push({
-    id: uid(), date, weightLb: displayToLb(w),
+  const values = {
+    weightLb: displayToLb(w),
     bodyFatPct: bodyFat ? Number(bodyFat) : null,
     bodyWaterPct: bodyWater ? Number(bodyWater) : null,
     calories: cal ? Number(cal) : null, cardioCalories: cardioCal ? Number(cardioCal) : null,
-  });
+  };
+  if (ed) {
+    Object.assign(ed, values);
+    closeWeightForm();
+    saveState();
+    showToast('Entry updated');
+    drawWeightChart();
+    return;
+  }
+  STATE.weightLog.push(Object.assign({ id: uid(), date }, values));
   UI.weightLogFormOpen = false;
+  UI.weightEditId = null;
   saveState();
   showToast('Entry saved');
   render();
@@ -227,7 +345,10 @@ function saveWeightEntry() {
 function deleteWeightEntry(id) {
   showConfirm('Delete this entry?', () => {
     STATE.weightLog = STATE.weightLog.filter(e => e.id !== id);
-    saveState(); render();
+    // Deleting the one being edited closes the form; leaving it open would render against an entry
+    // that no longer exists.
+    if (UI.weightEditId === id) closeWeightForm(); else render();
+    saveState();
     drawWeightChart();
   });
 }

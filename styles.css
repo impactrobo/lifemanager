@@ -2759,3 +2759,17 @@ button.brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 4
   font-size: 10.5px; color: var(--text-faint); line-height: 1.4;
   margin-top: 5px; text-align: center;
 }
+
+/* ---- A log entry you can tap to open (weight, measurements) ----
+   The card is the control, so it needs to look like one — and the X inside it stops the click
+   reaching the card, so deleting stays a deliberate separate act. */
+.entry-card-tap { cursor: pointer; transition: border-color .15s, background .15s; }
+.entry-card-tap:hover { border-color: var(--accent-dim); }
+.entry-card-tap:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.entry-card-editing { border-color: var(--accent); }
+.entry-today {
+  font-family: var(--font-mono); font-size: 9px; font-weight: 700;
+  letter-spacing: 0.1em; color: var(--accent);
+  border: 1px solid var(--accent-dim); border-radius: 4px; padding: 1px 5px; margin-left: 6px;
+  vertical-align: middle;
+}
