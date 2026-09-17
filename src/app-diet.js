@@ -22,14 +22,22 @@ function renderHealthSetup() {
   // 'plan' rides in on saved nav snapshots from when MEAL PLAN lived here. It lands on the builder
   // rather than rendering nothing; PHASES is where that pane went.
   const sub = NAV.healthSetupSubtab === 'plan' ? 'builder' : NAV.healthSetupSubtab;
+  // SUPPLEMENTS is a fourth tab here rather than a strip inside DIET. What it holds is a regimen you
+  // BUILD once -- items, doses, stacks, the slot each is taken in -- which is the same act as
+  // building a meal, and nothing like the daily tick, which stays on Home. It came here when DIET
+  // stopped being the place things were defined.
   return `<div class="screen">
     <div class="section-title">Builder</div>
     ${subNav(`
       <button class="${sub==='builder'||!sub?'active':''}" onclick="setHealthSetupSubtab('builder')">MEAL</button>
       <button class="${sub==='meals'?'active':''}" onclick="setHealthSetupSubtab('meals')">ALL MEALS</button>
       <button class="${sub==='myfoods'?'active':''}" onclick="setHealthSetupSubtab('myfoods')">MY FOODS</button>
+      <button class="${sub==='supplements'?'active':''}" onclick="setHealthSetupSubtab('supplements')">SUPPLEMENTS</button>
     `)}
-    ${sub === 'meals' ? renderAllMeals() : sub === 'myfoods' ? renderMyFoodsTab() : renderMealBuilderTab()}
+    ${sub === 'meals' ? renderAllMeals()
+      : sub === 'myfoods' ? renderMyFoodsTab()
+      : sub === 'supplements' ? renderSupplements()
+      : renderMealBuilderTab()}
   </div>`;
 }
 function roundMacro(n) { return Math.round((n || 0) * 10) / 10; }
@@ -1000,10 +1008,8 @@ function updateTdeeWindowWeeks(val) {
 }
 
 function renderDietSetup() {
-  // Supplements share this tab rather than taking a bottom-bar button: the bar they would have
-  // joined is the one with a logged overflow bug, and "things you take on a schedule" is a fair
-  // neighbour for the meal planner. Two long screens, so they get an in-screen strip.
-  if (NAV.dietSubtab === 'supplements') return `${renderDietSubnav()}${renderSupplements()}`;
+  // Supplements used to share this tab behind an in-screen strip. They now have their own tab in
+  // BUILDER, next to the meal builder, so this screen is one thing again and needs no strip.
   const calc = STATE.diet.calc;
   const hasAllInputs = calc.weight && calc.height && calc.age && calc.sex && calc.heightUnit && calc.weightUnit && calc.activity;
   const result = hasAllInputs ? computeTDEE(calc) : null;
@@ -1059,7 +1065,6 @@ function renderDietSetup() {
     </div>` : '';
 
   return `
-    ${renderDietSubnav()}
     <div class="panel">
       <div class="subtle-label" style="margin-bottom:8px;">TDEE</div>
       <label class="field">

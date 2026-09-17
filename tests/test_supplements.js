@@ -186,36 +186,42 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (fresh.items !== 0) throw new Error('A save that never ticked anything starts empty, got ' + fresh.items);
   if (!fresh.offers) throw new Error('...with the preset offered, so the old screen is one tap away');
 
-  // ---- 5. It lives under DIET, without adding a bottom-bar button ----
+  // ---- 5. It lives in BUILDER, without adding a bottom-bar button ----
+  // Defining a regimen is the same act as building a meal, so it's a tab beside the meal builder.
+  // It used to be a strip inside DIET, which put "define this" on the same screen as "read today's
+  // targets."
   await page.evaluate(() => {
     STATE.supplements = []; STATE.supplementStacks = [];
     installSupplementPreset('baseLongevity');
-    switchTab('train'); setFitnessSubtab('diet'); setDietSubtab('supplements');
+    switchTab('train'); setFitnessSubtab('builder'); setSetupPanel('meals');
+    setHealthSetupSubtab('supplements');
   });
   await settle(page);
   const placement = await page.evaluate(() => ({
-    subtab: NAV.dietSubtab,
+    subtab: NAV.healthSetupSubtab,
     onScreen: /Morning stack/.test(document.getElementById('app').innerHTML),
-    // The strip is in-screen, not the bottom bar — .tabbar is the one with the logged overflow bug.
+    // The tab is in-screen, not the bottom bar — .tabbar is the one with the logged overflow bug.
     barButtons: document.querySelectorAll('#tabbar button').length,
     barHasSupplements: /SUPPLEMENT/.test(document.getElementById('tabbar').textContent.toUpperCase()),
+    inSubnav: Array.from(document.querySelectorAll('.subnav button')).map(b => b.textContent.trim()),
     medicineKind: (() => { addSupplement('medicine'); return STATE.supplements[STATE.supplements.length - 1].kind; })(),
   }));
   console.log('placement:', JSON.stringify(placement));
-  if (placement.subtab !== 'supplements' || !placement.onScreen) throw new Error('The regimen renders under DIET: ' + JSON.stringify(placement));
+  if (placement.subtab !== 'supplements' || !placement.onScreen) throw new Error('The regimen renders in BUILDER: ' + JSON.stringify(placement));
+  if (!placement.inSubnav.includes('SUPPLEMENTS')) throw new Error('...as its own tab in the builder subnav, got ' + placement.inSubnav.join('/'));
   if (placement.barHasSupplements) throw new Error('It must NOT add a bottom-bar button — that bar already overruns at seven');
   // Medicine and supplements are one model with a `kind`, not two parallel ones.
   if (placement.medicineKind !== 'medicine') throw new Error('Medicine is the same model with a different kind, got ' + placement.medicineKind);
 
-  // Switching back leaves the food screen intact.
-  await page.evaluate(() => setDietSubtab('food'));
+  // Switching back leaves the meal builder intact.
+  await page.evaluate(() => setHealthSetupSubtab('builder'));
   await settle(page);
-  const backToFood = await page.evaluate(() => /TDEE/.test(document.getElementById('app').innerHTML));
-  if (!backToFood) throw new Error('FOOD & TARGETS still renders what it always did');
+  const backToMeals = await page.evaluate(() => document.getElementById('app').innerText);
+  if (/Morning stack/.test(backToMeals)) throw new Error('Leaving SUPPLEMENTS should leave the regimen behind');
 
   await page.evaluate(() => {
     STATE.supplements = []; STATE.supplementStacks = []; STATE.life.supplementLog = {};
-    NAV.dietSubtab = 'food'; VIEW.supplementEditing = null;
+    NAV.healthSetupSubtab = 'builder'; VIEW.supplementEditing = null;
     saveState();
   });
   await browser.close();

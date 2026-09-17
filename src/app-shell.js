@@ -191,7 +191,7 @@ let VIEW = {
 const NAV_SNAPSHOT_KEYS = [
   'currentTab', 'fitnessSubtab', 'skillId', 'skillSubtab', 'setupPanel', 'setupSubtab', 'setupContext',
   'notesSubtab', 'scheduleSubtab', 'budgetSubtab', 'scheduleSetupSubtab', 'healthSetupSubtab',
-  'dietSubtab', 'phasesSubtab',
+  'phasesSubtab',
 ];
 // Which tab to boot into. Validated rather than read straight out of settings, because this runs
 // at NAV's declaration -- top-level, in source order -- which is BEFORE loadState()'s migrations
@@ -254,7 +254,6 @@ let NAV = {
   // that isn't 'setup' as the calendar, so a stale value from a nav snapshot lands somewhere real.
   scheduleSubtab: 'calendar',
   budgetSubtab: 'overview',
-  dietSubtab: 'food',                // 'food' | 'supplements' -- an in-screen strip, not a bar button
   scheduleSetupSubtab: 'anchors',
   healthSetupSubtab: 'builder',
   calZoom: 'month',
@@ -676,13 +675,14 @@ function _doRender() {
     } else if (NAV.fitnessSubtab === 'diet') {
       app.innerHTML = renderFitnessScreen(renderDietSetup());
     } else if (NAV.fitnessSubtab === 'longevity') {
-      // Longevity retired: its supplements became an editable regimen under DIET, and its skin
-      // cycling and circadian guidance became anchor presets. A stale subtab value rides in nav
-      // snapshots, so it lands on the screen that inherited the thing you were most likely after
-      // rather than rendering nothing.
-      NAV.fitnessSubtab = 'diet';
-      NAV.dietSubtab = 'supplements';
-      app.innerHTML = renderFitnessScreen(renderDietSetup());
+      // Longevity retired: its supplements became an editable regimen, and its skin cycling and
+      // circadian guidance became anchor presets. A stale subtab value rides in nav snapshots, so
+      // it lands on the screen that inherited the thing you were most likely after rather than
+      // rendering nothing. That regimen now lives in BUILDER, not DIET.
+      NAV.fitnessSubtab = 'builder';
+      NAV.setupPanel = 'meals';
+      NAV.healthSetupSubtab = 'supplements';
+      app.innerHTML = renderFitnessSetup();
     } else if (NAV.trainView.mode === 'grid') app.innerHTML = renderTrainGrid();
     else if (NAV.trainView.mode === 'cardioLog') app.innerHTML = renderCardioLog(NAV.trainView.cardioId);
     else if (NAV.trainView.mode === 'rpLog') app.innerHTML = renderRpWorkoutLog(NAV.trainView.workoutId);

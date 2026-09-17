@@ -155,13 +155,13 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   const retired = await page.evaluate(() => ({
     fn: typeof renderLifeLongevity,
     // A stale subtab lands on what inherited the thing you were most likely after.
-    landedOn: NAV.fitnessSubtab, dietSub: NAV.dietSubtab,
+    landedOn: NAV.fitnessSubtab, panel: NAV.setupPanel, sub: NAV.healthSetupSubtab,
     bar: [...document.querySelectorAll('#tabbar button')].map(b => b.textContent.trim()),
     rendered: document.getElementById('app').innerHTML.length > 0,
   }));
   console.log('longevity retired:', JSON.stringify(retired));
   if (retired.fn !== 'undefined') throw new Error('renderLifeLongevity should no longer exist, got ' + retired.fn);
-  if (retired.landedOn !== 'diet' || retired.dietSub !== 'supplements') {
+  if (retired.landedOn !== 'builder' || retired.panel !== 'meals' || retired.sub !== 'supplements') {
     throw new Error('A stale `longevity` subtab lands on the supplements it became: ' + JSON.stringify(retired));
   }
   if (!retired.rendered) throw new Error('...rendering a real screen, not a blank one');
@@ -175,7 +175,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   await page.evaluate((snap) => {
     const s = JSON.parse(snap);
     STATE.life.anchors = s.anchors; STATE.life.skinCycleStart = s.skinCycleStart;
-    NAV.fitnessSubtab = 'workouts'; NAV.dietSubtab = 'food';
+    NAV.fitnessSubtab = 'workouts'; NAV.healthSetupSubtab = 'builder';
     saveState();
   }, snapshot);
   await browser.close();

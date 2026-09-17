@@ -239,17 +239,10 @@ function migrateSupplements() {
 }
 
 // ---- The screen ----
-// Lives under DIET rather than taking a bottom-bar button of its own: the bar it would have joined
-// is the one with a logged overflow bug, and "things you take on a schedule" is a fair neighbour
-// for the meal planner. DIET is already a long screen, so the two get an in-screen subnav -- the
-// strip that HAS scroll affordances, unlike .tabbar.
-function setDietSubtab(t) { NAV.dietSubtab = t; render(); }
-function renderDietSubnav() {
-  const b = (key, label) =>
-    `<button class="${NAV.dietSubtab === key ? 'active' : ''}" onclick="setDietSubtab('${key}')">${label}</button>`;
-  return `<div class="unit-toggle" style="margin-bottom:14px;">${b('food', 'FOOD &amp; TARGETS')}${b('supplements', 'SUPPLEMENTS')}</div>`;
-}
-
+// A tab in BUILDER, beside the meal builder. It first lived under DIET behind a two-button strip,
+// which put "define the regimen" on the same screen as "read today's targets" -- two different
+// occasions. Defining it is the same act as building a meal, so it sits with the other builders,
+// and the daily tick stays on Home where the day is.
 function renderSupplements() {
   const count = supplementDayCount();
   const items = allSupplements();
