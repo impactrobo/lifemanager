@@ -298,6 +298,39 @@ Newest first. Keep this reasonably current so a fresh session can see what alrea
 without re-reading the whole diff history. Roughly grouped: this project spent early Sept 2026
 on an architecture split + a large wave of Maximalist aesthetics.
 
+- **Notes rebuilt on one entry model — Phase 1, "Capture" (2026-09-17).** The spec is
+  `docs/NOTES_SPEC.md`, which replaces the Notes section in five phases; this is the first.
+  - **One record shape for six types.** `STATE.entries` — `{id, type, title, body, fields, tags,
+    favorite, links, photos, createdAt, updatedAt, deleted}` — where `type` is one of quick /
+    journal / writing / travel / recipe / hub. Everything starts as a **Quick note**, so nothing
+    has to be filed before it can be written, and search, sort, tagging, linking and checklists
+    are each written once rather than six times. See `src/app-entries.js`.
+  - **Bodies are Markdown, stored as plain text.** Headings, bold, italic, bullets, numbered
+    items, `- [ ]` checklists, URLs and `[[id]]` links. Plain text survives export, diffing and
+    sync as exactly what was typed. The renderer escapes first and only ever inserts its own
+    markup, which is what lets a body render with no sanitizer on the way out.
+  - **Migration ran against real data, and kept its source.** Every old note became an entry with
+    its date, title, photos and tag; the contenteditable HTML became Markdown. `STATE.notes` is
+    left **exactly as it was** — a migration that deletes its own source has no way back. The old
+    single-tag model's `general` meant "unfiled", so it migrates to no tag at all.
+  - **Tags are freeform now.** Lowercase, no `#`, no duplicates, suggested by use count. This
+    retires the twelve-colour tag palette and Notes' own Setup screen; colour is carried by the
+    entry TYPE instead (six `--note-*` tokens), which lifts the old twelve-tag cap. Skills had
+    borrowed that palette and now owns its own copy (`SKILL_COLOR_SOURCE`).
+  - **Deletion is a tombstone**, with an undo on the toast — `showToast()` grew an optional
+    `{label, onClick}` action for exactly this. A spliced array element can't tell another device
+    anything; the next sync would silently undo the delete.
+  - **NOT a second link system.** The spec models entry links as a bare id array; they are stored
+    in `app-links.js`'s existing cross-entity `[{type, id}]` shape instead, so one array serves
+    both note-to-note and note-to-meal/workout/reminder. `LINKABLE_TYPES.note` now addresses
+    entries (the key stays `note` — it is written into every link already on disk).
+  - **Deliberately deferred**, so what shipped is finished rather than half-present: the type chip
+    is a readout (Convert is Phase 4), `[[id]]` renders but has no autocomplete or picker yet
+    (Phase 2), and hubs are a type the model knows without a hub view (Phase 3).
+  - **One promise in the spec the app can't keep yet:** it describes entries syncing as individual
+    records merged by `updatedAt`. Cloud Sync writes the whole STATE as one blob, last-write-wins,
+    so today the newer *device* wins. Per-record merge is a sync rewrite, not a Notes feature.
+
 - **NetNavis, first slice (2026-09-17).** Shipped after the five open decisions were answered; the
   scoping entry under "Ideas worth considering" has the background.
   - **One at a time, chosen in Settings.** Not per-domain — the relationships between the six were a

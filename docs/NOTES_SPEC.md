@@ -2,6 +2,15 @@
 
 As of 2026-09-17. Source of truth: the shared Claude Doc "LIFEMan Notes — Feature Spec". Re-export this file if the doc changes.
 
+**Build status: Phase 1 (Capture) shipped 2026-09-17.** Where the code and this document disagree,
+the code wins and the divergence is recorded in `docs/ROADMAP.md`. Four deliberate departures so
+far: tags kept no colour but the six entry TYPES carry it; `links` is stored in app-links.js's
+cross-entity `[{type, id}]` shape rather than a bare id array, so one link system serves the whole
+app; recipes keep their structured food-database ingredients (Phase 5 adds free text plus a Match
+button on top, rather than replacing them); and entries do NOT sync as individual records — Cloud
+Sync writes the whole state as one blob, last-write-wins, so the newer device wins, not the newer
+entry.
+
 ## Overview
 
 Notes gives LIFEMan one linked system for quick notes, journaling, writing, travel and recipes. Every entry can link to any other, and manual hubs gather related entries in your own order. It replaces the current Notes section.

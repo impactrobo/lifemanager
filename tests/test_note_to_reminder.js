@@ -23,8 +23,8 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // 1. A note with both a title and a body -> the reminder uses the title, body becomes notes
   const noteWithTitle = await page.evaluate(() => {
-    const n = { id: uid(), date: '2026-10-10', createdAt: Date.now(), title: 'Great idea', bodyHtml: '<p>Buy a <b>new</b> guitar string set.</p>', tag: 'general' };
-    STATE.notes.push(n);
+    const n = Object.assign(blankEntry('quick'), { createdAt: new Date('2026-10-10T12:00:00').getTime(), title: 'Great idea', body: 'Buy a **new** guitar string set.' });
+    allEntries().push(n);
     saveState();
     return n.id;
   });
@@ -41,7 +41,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (created.type !== 'reminder' || created.items) throw new Error('Expected a plain reminder type, not a todo checklist');
 
   // 2. The original note is untouched — this copies, not moves
-  const noteStillExists = await page.evaluate((id) => !!STATE.notes.find(n => n.id === id), noteWithTitle);
+  const noteStillExists = await page.evaluate((id) => !!liveEntryById(id), noteWithTitle);
   if (!noteStillExists) throw new Error('Expected the original note to still exist after converting');
 
   // 3. It navigated to that date's Calendar Day view
@@ -53,8 +53,8 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // 4. A note with no title falls back to a body snippet
   const noteNoTitle = await page.evaluate(() => {
-    const n = { id: uid(), date: '2026-10-11', createdAt: Date.now(), bodyHtml: '<p>Remember to email the landlord about the leaky faucet situation.</p>', tag: 'general' };
-    STATE.notes.push(n);
+    const n = Object.assign(blankEntry('quick'), { createdAt: new Date('2026-10-11T12:00:00').getTime(), body: 'Remember to email the landlord about the leaky faucet situation.' });
+    allEntries().push(n);
     saveState();
     return n.id;
   });
@@ -66,15 +66,15 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // 5. A note with no title AND no body falls back to "Note"
   const noteEmpty = await page.evaluate(() => {
-    const n = { id: uid(), date: '2026-10-12', createdAt: Date.now(), bodyHtml: '', tag: 'general' };
-    STATE.notes.push(n);
+    const n = Object.assign(blankEntry('quick'), { createdAt: new Date('2026-10-12T12:00:00').getTime(), body: '' });
+    allEntries().push(n);
     saveState();
     return n.id;
   });
   await page.evaluate((id) => convertNoteToReminder(id), noteEmpty);
   await settle(page);
   const emptyResult = await page.evaluate(() => STATE.reminders[STATE.reminders.length - 1]);
-  if (emptyResult.title !== 'Note') throw new Error(`Expected "Note" as the ultimate title fallback, got "${emptyResult.title}"`);
+  if (emptyResult.title !== 'Untitled') throw new Error(`Expected "Untitled" as the ultimate title fallback, got "${emptyResult.title}"`);
 
   // 6. Persistence across reload
   await page.reload();
@@ -84,10 +84,10 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // cleanup
   await page.evaluate((args) => {
-    STATE.notes = STATE.notes.filter(n => !args.noteIds.includes(n.id));
+    STATE.entries = allEntries().filter(n => !args.noteIds.includes(n.id));
     STATE.reminders = STATE.reminders.filter(r => !args.titles.includes(r.title));
     saveState();
-  }, { noteIds: [noteWithTitle, noteNoTitle, noteEmpty], titles: ['Great idea', untitledResult.title, 'Note'] });
+  }, { noteIds: [noteWithTitle, noteNoTitle, noteEmpty], titles: ['Great idea', untitledResult.title, 'Untitled'] });
 
   await browser.close();
 

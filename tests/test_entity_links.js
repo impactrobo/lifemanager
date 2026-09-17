@@ -26,13 +26,13 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   await settle(page);
 
   const snapshot = await page.evaluate(() => JSON.stringify({
-    notes: STATE.notes, reminders: STATE.reminders, workouts: STATE.workouts,
+    notes: STATE.entries, reminders: STATE.reminders, workouts: STATE.workouts,
     meals: STATE.diet.meals, habits: STATE.life.habits, budget: STATE.budget, schedules: STATE.life.schedules,
   }));
 
   // One entity of every linkable kind, so the registry is exercised end to end.
   await page.evaluate(() => {
-    STATE.notes = [{ id: 'n1', date: todayStr(), createdAt: 1, title: 'Knee felt off', bodyHtml: '<p>twinge</p>', tag: 'issue' }];
+    STATE.entries = [{ id: 'n1', type: 'quick', title: 'Knee felt off', body: 'twinge', fields: {}, tags: ['issue'], favorite: false, links: [], photos: [], createdAt: 1, updatedAt: 1, deleted: false }];
     STATE.reminders = [{ id: 'r1', date: todayStr(), time: '14:00', endTime: '15:00', title: 'Physio', notes: '', createdAt: 1, type: 'reminder' }];
     STATE.workouts = STATE.workouts.filter(w => w.id !== 'w1');
     STATE.workouts.push({ id: 'w1', name: 'Lower Body', type: 'weights', style: 'P-Zero (GZCL)', exercises: [] });
@@ -65,7 +65,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // ---- 2. THE core claim: stored once, visible from both ends ----
   const both = await page.evaluate(() => {
     addEntityLink('note', 'n1', 'workout', 'w1');
-    const noteRow = STATE.notes[0];
+    const noteRow = STATE.entries[0];
     const workoutRow = STATE.workouts.find(w => w.id === 'w1');
     return {
       storedOnNote: (noteRow.links || []).length,
@@ -97,7 +97,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     addEntityLink('note', 'n1', 'workout', 'w1');       // same direction again
     addEntityLink('workout', 'w1', 'note', 'n1');       // and from the other side
     return {
-      onNote: (STATE.notes[0].links || []).filter(l => l.type === 'workout').length,
+      onNote: (STATE.entries[0].links || []).filter(l => l.type === 'workout').length,
       onWorkout: ((STATE.workouts.find(w => w.id === 'w1').links) || []).length,
       seen: linkedEntities('note', 'n1').filter(r => r.type === 'workout').length,
     };
@@ -110,7 +110,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // ---- 5. Self-links are refused ----
   const selfLink = await page.evaluate(() => {
     addEntityLink('note', 'n1', 'note', 'n1');
-    return (STATE.notes[0].links || []).filter(l => l.type === 'note' && l.id === 'n1').length;
+    return (STATE.entries[0].links || []).filter(l => l.type === 'note' && l.id === 'n1').length;
   });
   if (selfLink !== 0) throw new Error('An entity must not be linkable to itself');
 
@@ -141,7 +141,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // ---- 8. The picker searches across every type and excludes the invalid choices ----
   const picker = await page.evaluate(() => {
-    STATE.notes[0].links = [];                          // clear so everything is offerable again
+    STATE.entries[0].links = [];                          // clear so everything is offerable again
     saveState();
     openLinkPicker('note', 'n1');
     const all = linkPickerResultsHtml();
@@ -164,7 +164,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   const surfaces = await page.evaluate(() => {
     addEntityLink('note', 'n1', 'reminder', 'r1');
     const html = {
-      note: renderNoteCard(STATE.notes[0]),
+      note: renderEntryCard(STATE.entries[0]),
       reminder: renderReminderCard(STATE.reminders[0]),
       workout: renderWorkoutCard(STATE.workouts.find(w => w.id === 'w1')),
       meal: renderMealCard({ id: 'm2', name: 'Test', items: [], createdAt: 1, updatedAt: 1 }),
@@ -195,7 +195,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   await page.evaluate((snap) => {
     const s = JSON.parse(snap);
-    STATE.notes = s.notes; STATE.reminders = s.reminders; STATE.workouts = s.workouts;
+    STATE.entries = s.notes; STATE.reminders = s.reminders; STATE.workouts = s.workouts;
     STATE.diet.meals = s.meals; STATE.life.habits = s.habits; STATE.budget = s.budget;
     STATE.life.schedules = s.schedules;
     saveState();

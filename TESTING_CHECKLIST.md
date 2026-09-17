@@ -258,4 +258,33 @@ shelf, so no date-chaining or projection code changed.
 - [ ] **Vitalya's register.** Field feedback: she works, but wants less 💅 and more grimace, eye-roll
       and trailing ellipses. A pass over her lines in `src/app-navi.js`. Queued.
 
+## Notes rebuilt on the entry model — Phase 1 (2026-09-17)
+`docs/NOTES_SPEC.md` Phase 1. `tests/test_notes.js` covers the migration, the Markdown renderer
+(including six hostile-input cases), all four sorts, checkboxes, search and tag suggestions against
+a synthetic old-shape save — **your real Notes data is the one fixture the sandbox never had**, and
+this is the only migration in the app that can destroy something you personally wrote.
+- [ ] **Every note you had is there**, with its own date, title, text and photos. Count them
+      against what you remember before writing anything new.
+- [ ] **Formatting survived the move from rich text to Markdown.** Bold, italic and both list
+      kinds convert; **underline does not** — the spec's format set has no syntax for it, so those
+      words are now plain. Check any note where underline carried meaning.
+- [ ] **Your tags came across as their names**, lowercased. Notes that were on *General* now have
+      no tag, because General meant "unfiled" rather than a label.
+- [ ] **Your recipes are still recipes** — ingredients, servings and ADD TO MEALS all intact. They
+      deliberately did NOT flatten into quick notes; that would have broken a working feature.
+- [ ] The tag palette and Notes' own SETUP screen are **gone on purpose**. Colour is carried by the
+      entry type now (six colours, one per type), which is what lifts the old twelve-tag cap.
+- [ ] Delete a note: it goes, and the toast offers **UNDO** for a few seconds. Take it, and the
+      note comes back whole.
+- [ ] Type a checklist (`- [ ]`, or the ☐ Todo toolbar button), save, then tick items from the
+      rendered view. Each tick saves immediately — force-close the app to prove it.
+- [ ] Enter on a list line continues the list; Enter on an empty item ends it. This is the one
+      editor behaviour that needs a real iOS keyboard to judge.
+- [ ] The sort you pick is still there after a relaunch; the filter and search are deliberately not.
+- [ ] Photos still attach, up to four, and open full-size.
+
+**Known gaps, not bugs — later phases:** the type chip is a readout (Convert is Phase 4), `[[ ]]`
+links render and resolve but have no autocomplete or picker yet and show the raw id while editing
+(Phase 2), and hubs exist as a type with no hub view (Phase 3).
+
 ## Add future items below as new features ship

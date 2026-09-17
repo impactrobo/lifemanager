@@ -637,6 +637,30 @@ interface WeightLogEntry {
   bodyFatPct?: number | null;
   bodyWaterPct?: number | null;
 }
+/** One record for all six Notes kinds — see src/app-entries.js and docs/NOTES_SPEC.md. */
+interface Entry {
+  id: string;
+  type: 'quick' | 'journal' | 'writing' | 'travel' | 'recipe' | 'hub';
+  title: string;
+  /** Light Markdown, stored as plain text. Inline `[[id]]` tokens link to other entries. */
+  body: string;
+  /** Template values keyed by field name, plus `unsorted` for text Convert could not place. */
+  fields: Record<string, any>;
+  /** Lowercase, no '#', no duplicates. */
+  tags: string[];
+  favorite: boolean;
+  /** app-links.js's cross-entity shape; an entry-to-entry link is {type:'note', id}. Tokens in
+   *  `body` count as links too but are not stored here. */
+  links: Array<{ type: string; id: string }>;
+  photos?: string[];
+  /** Hubs only: ordered members, each with an optional line of context. */
+  hubItems?: Array<{ id: string; note?: string }>;
+  createdAt: number;
+  updatedAt: number;
+  /** Tombstone, so a deletion survives a sync. */
+  deleted?: boolean;
+}
+
 interface Note {
   id: string;
   date: string;
@@ -760,7 +784,9 @@ interface AppState {
   weightLog: WeightLogEntry[];
   cardioWorkouts: Array<Record<string, any>>;
   cardioLogs: Record<string, any>;
+  /** Pre-migration copy of the old Notes section. Read-only now — see STATE.entries. */
   notes: Note[];
+  entries: Entry[];
   reminders: Reminder[];
   diet: DietState;
   budget: BudgetState;

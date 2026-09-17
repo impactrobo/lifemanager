@@ -28,12 +28,15 @@
 // `section` is a HOME_SECTION_META key, so a link chip carries its home section's own colour and
 // you can tell at a glance which part of your life it comes from.
 const LINKABLE_TYPES = {
+  // 'note' addresses STATE.entries — the Notes section's record (src/app-entries.js), of which a
+  // quick note is one type. The key stays 'note' rather than becoming 'entry' because it is
+  // written into every link already stored on disk; renaming it would orphan them all.
   note: {
     label: 'Note', section: 'notes',
-    all: () => STATE.notes,
-    title: n => (n.title && n.title.trim()) || notePlainTextBody(n).slice(0, 60) || 'Untitled note',
-    subtitle: n => n.date || '',
-    open: n => editNote(n.id),
+    all: () => liveEntries(),
+    title: e => entryTitleOf(e),
+    subtitle: e => entryTypeMeta(e.type).label + ' · ' + fmtEntryDate(e),
+    open: e => openEntry(e.id),
   },
   reminder: {
     label: 'Reminder', section: 'schedule',

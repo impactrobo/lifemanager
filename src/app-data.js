@@ -851,7 +851,15 @@ function defaultState() {
     // migrateWeekPlanEntries() in app-phases.js for why it isn't a second nullable id beside the
     // first. `minutes` is meaningful only on a skill: a workout carries its own content, but the
     // practice block builder needs a budget before it can pick anything.
+    // RETIRED, kept on purpose. The Notes section now reads STATE.entries (see below); this array
+    // is the pre-migration copy and is never written to again. migrateNotesToEntries() leaves it
+    // exactly as it was rather than deleting its own source, so a migration that mangled something
+    // still has the original to go back to — see docs/NOTES_SPEC.md.
     notes: [],          // [{id, date, createdAt, title, bodyHtml, tag, photos}] — bodyHtml is sanitized rich text, photos is an array of resized data-URI JPEGs; older entries may only have a plain `text` field and/or no `photos`
+    // Notes, journals, writing, travel, recipes and hubs — one record shape for all six, see
+    // src/app-entries.js. `fields` carries whatever a type needs; `deleted` is a tombstone so a
+    // deletion survives a sync instead of being undone by the next pull.
+    entries: [],        // [{id, type, title, body, fields, tags, favorite, links, photos, createdAt, updatedAt, deleted}]
     reminders: [],      // [{id, date, time, title, notes, createdAt}]
     diet: {
       tdee: null, // user's chosen/current TDEE estimate (calories)

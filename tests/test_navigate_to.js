@@ -43,13 +43,13 @@ const SUBTAB_DESTINATIONS = {
   await settle(page);
 
   const snapshot = await page.evaluate(() => JSON.stringify({
-    notes: STATE.notes, reminders: STATE.reminders, workouts: STATE.workouts,
+    notes: STATE.entries, reminders: STATE.reminders, workouts: STATE.workouts,
     meals: STATE.diet.meals, habits: STATE.life.habits, budget: STATE.budget, schedules: STATE.life.schedules,
   }));
 
   // One entity of every linkable kind, same fixture shape as test_entity_links.js.
   await page.evaluate(() => {
-    STATE.notes = [{ id: 'n1', date: todayStr(), createdAt: 1, title: 'Knee felt off', bodyHtml: '<p>twinge</p>', tag: 'issue' }];
+    STATE.entries = [{ id: 'n1', type: 'quick', title: 'Knee felt off', body: 'twinge', fields: {}, tags: ['issue'], favorite: false, links: [], photos: [], createdAt: 1, updatedAt: 1, deleted: false }];
     STATE.reminders = [{ id: 'r1', date: todayStr(), time: '14:00', endTime: '15:00', title: 'Physio', notes: '', createdAt: 1, type: 'reminder' }];
     STATE.workouts = STATE.workouts.filter(w => w.id !== 'w1');
     STATE.workouts.push({ id: 'w1', name: 'Lower Body', type: 'weights', style: 'P-Zero (GZCL)', exercises: [] });
@@ -91,14 +91,14 @@ const SUBTAB_DESTINATIONS = {
   // the registry wrapper -- otherwise the same bug returns through the next direct caller.
   const editors = await page.evaluate(() => {
     const out = {};
-    switchTab('budget'); editNote('n1');    out.editNote = { tab: NAV.currentTab, editing: VIEW.noteEditId };
+    switchTab('budget'); openEntry('n1');    out.editNote = { tab: NAV.currentTab, editing: VIEW.entryOpenId };
     // Both land in the same tab AND the same subtab now — the BUILDER panel is what separates them.
     switchTab('budget'); editMeal('m1');    out.editMeal = { tab: NAV.currentTab, sub: NAV.fitnessSubtab, panel: NAV.setupPanel };
     switchTab('budget'); editWorkout('w1'); out.editWorkout = { tab: NAV.currentTab, sub: NAV.fitnessSubtab, panel: NAV.setupPanel };
     return out;
   });
   console.log('editors called from budget:', editors);
-  if (editors.editNote.tab !== 'notes' || editors.editNote.editing !== 'n1') throw new Error('editNote() must navigate to Notes AND still load the note');
+  if (editors.editNote.tab !== 'notes' || editors.editNote.editing !== 'n1') throw new Error('openEntry() must navigate to Notes AND still load the entry');
   if (editors.editMeal.tab !== 'train' || editors.editMeal.sub !== 'builder' || editors.editMeal.panel !== 'meals') {
     throw new Error(`editMeal() must land on Builder's MEALS panel, got ${editors.editMeal.sub}/${editors.editMeal.panel}`);
   }
@@ -138,7 +138,7 @@ const SUBTAB_DESTINATIONS = {
   const stamps = await page.evaluate(() => {
     const ids = { note: 'n1', reminder: 'r1', workout: 'w1', meal: 'm1', habit: 'h1', charge: 'c1', goal: 'g1', activity: 'a1' };
     const html = {
-      note: renderNoteCard(STATE.notes[0]),
+      note: renderEntryCard(STATE.entries[0]),
       reminder: renderReminderCard(STATE.reminders[0]),
       workout: renderWorkoutCard(STATE.workouts.find(w => w.id === 'w1')),
       meal: renderMealCard(STATE.diet.meals[0]),
@@ -170,7 +170,7 @@ const SUBTAB_DESTINATIONS = {
     const ids = { note: 'n1', reminder: 'r1', workout: 'w1', meal: 'm1', habit: 'h1', charge: 'c1', goal: 'g1', activity: 'a1' };
     // How each editor screen says "I am showing this exact entity".
     const editorHas = {
-      note: id => VIEW.noteEditId === id,
+      note: id => VIEW.entryOpenId === id,
       workout: id => !!(NAV.trainView && NAV.trainView.workoutId === id),
       meal: id => !!(VIEW.mealBuilderDraft && VIEW.mealBuilderDraft.id === id),
     };
@@ -212,7 +212,7 @@ const SUBTAB_DESTINATIONS = {
 
   await page.evaluate((snap) => {
     const s = JSON.parse(snap);
-    STATE.notes = s.notes; STATE.reminders = s.reminders; STATE.workouts = s.workouts;
+    STATE.entries = s.notes; STATE.reminders = s.reminders; STATE.workouts = s.workouts;
     STATE.diet.meals = s.meals; STATE.life.habits = s.habits; STATE.budget = s.budget;
     STATE.life.schedules = s.schedules;
     saveState();

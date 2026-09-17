@@ -1,22 +1,34 @@
-// test_recipe_notes.js — recipes as a distinct KIND of note (Note.type === 'recipe'), with
-// structured ingredients, servings/prep/cook, and a one-tap conversion into a Meal.
+// test_recipe_notes.js — recipes, on the entry model.
 //
-// A type rather than a tag on purpose: tags here are fully user-editable (renameable, deletable)
-// and carry no behaviour, whereas a recipe has its own fields and its own action. Same precedent
-// as a to-do being Reminder.type rather than a tag.
+// A recipe is the one entry type that arrived already STRUCTURED: its ingredients are real
+// {id, foodId, qty, unit} rows chosen from the food database, which is the identical shape
+// Meal.items uses. That is why "add to Meals" is a copy rather than a translation, and why its
+// macros are exact rather than parsed. docs/NOTES_SPEC.md Phase 5 adds free-text ingredient lines
+// with a Match button on top of this; the structured path below is what it builds on, and what
+// keeps working while Phase 5 doesn't exist yet.
 //
-// The structural choice worth protecting: a recipe's ingredients use the IDENTICAL
-// {id, foodId, qty, unit} shape as Meal.items, so converting is a copy rather than a translation
-// and computeMealTotals() works on both unchanged.
+// Note what is NOT here any more: composing a recipe from scratch through a NOTE/RECIPE toggle.
+// Every new entry is a Quick note now, and Convert (the flow that would turn one into a recipe) is
+// Phase 4. Recipes in the app today arrived by migration, so that is how this fixture makes one.
+//
+// What's pinned:
+//   1. Word-based ingredient matching still works ("breast chicken" finds "Chicken breast").
+//   2. A migrated recipe renders its meta, its ingredients and its action.
+//   3. Ingredients are editable in place — add, re-quantify, remove — and commit immediately.
+//   4. ADD 1 SERVING vs ADD WHOLE BATCH scale correctly, and the choice is only offered when
+//      there IS one.
+//   5. Converting links the recipe to the meal it created, visible from both ends.
+//   6. A non-recipe entry shows none of this.
+//   7. It all survives a reload.
 const { chromium } = require('playwright');
-const { settle } = require('./helpers');
+const { settle, pinClock } = require('./helpers');
 const path = require('path');
 
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
 (async () => {
   const browser = await chromium.launch({ executablePath: process.env.PW_CHROMIUM_PATH || undefined });
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  const page = await browser.newPage({ viewport: { width: 390, height: 900 } });
   const errors = [];
   page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
   await page.route('**/*', route => {
@@ -24,10 +36,11 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     if (url.startsWith('file://')) return route.continue();
     return route.abort();
   });
+  await pinClock(page);
   await page.goto(APP_PATH);
   await settle(page);
 
-  const snapshot = await page.evaluate(() => JSON.stringify({ notes: STATE.notes, meals: STATE.diet.meals, customFoods: STATE.diet.customFoods }));
+  const snapshot = await page.evaluate(() => JSON.stringify({ entries: STATE.entries, meals: STATE.diet.meals }));
 
   // ---- 1. Word-based ingredient matching ----
   // The real gain over a strict substring is word ORDER: "breast chicken" has to find
@@ -39,174 +52,146 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     emptyMatchesAll: allFoods().filter(f => foodMatchesQuery(f, '')).length === allFoods().length,
     nonsenseMatchesNothing: allFoods().filter(f => foodMatchesQuery(f, 'zzzz qqqq')).length,
   }));
-  console.log('matching:', matching);
+  console.log('1. matching:', matching);
   if (!matching.reversedWords.length) throw new Error('Word-based matching must find "breast chicken" -> "Chicken breast"');
   if (matching.substringWouldMiss !== 0) throw new Error('Fixture assumption wrong: substring already matched, so this proves nothing');
   if (!matching.partialWords) throw new Error('All typed words should be matchable across the name');
   if (!matching.emptyMatchesAll) throw new Error('An empty query must match everything, not nothing');
   if (matching.nonsenseMatchesNothing !== 0) throw new Error('Every word must be required -- nonsense should match nothing');
 
-  // ---- 2. Composing a recipe through the real form ----
-  await page.evaluate(() => { STATE.notes = []; STATE.diet.meals = []; saveState(); switchTab('notes'); setNotesSubtab('write'); });
-  await settle(page);
-  await page.evaluate(() => setNoteDraftType('recipe'));
-  await settle(page);
-  const formShape = await page.evaluate(() => ({
-    hasServings: !!document.getElementById('noteServings'),
-    hasIngredientSearch: !!document.getElementById('noteIngredientSearch'),
-    hasNewIngredient: /NEW INGREDIENT/.test(document.querySelector('#app').innerHTML),
-  }));
-  if (!formShape.hasServings || !formShape.hasIngredientSearch || !formShape.hasNewIngredient) {
-    throw new Error(`Recipe mode must show its own fields, got ${JSON.stringify(formShape)}`);
-  }
-  await page.fill('#noteTitle', 'Overnight oats');
-  await page.fill('#noteServings', '4');
-  await page.fill('#notePrep', '10');
-  const ids = await page.evaluate(() => {
-    const oats = allFoods().find(f => /oats/i.test(f.name));
-    const milk = allFoods().find(f => /milk/i.test(f.name));
-    addNoteIngredient(oats.id); addNoteIngredient(milk.id);
-    document.getElementById('noteBody').innerHTML = '<p>Mix, refrigerate overnight.</p>';
-    return { oats: oats.id, milk: milk.id };
+  // ---- 2. A recipe entry renders ----
+  // Built the way a real one arrives: through the legacy migration, from the old note shape.
+  const seeded = await page.evaluate(() => {
+    const food = allFoods()[0];
+    STATE.entries = []; STATE.diet.meals = [];
+    const legacy = {
+      id: 'rec1', date: '2026-03-06', createdAt: new Date('2026-03-06T09:00:00').getTime(),
+      title: 'Overnight oats', bodyHtml: '<p>Soak overnight.</p>', tag: 'general', type: 'recipe',
+      servings: 4, prepMinutes: 5, cookMinutes: 0,
+      ingredients: [{ id: 'i1', foodId: food.id, qty: 400, unit: food.base }],
+    };
+    STATE.entries.push(entryFromLegacyNote(legacy));
+    saveState();
+    switchTab('notes');
+    const e = liveEntryById('rec1');
+    return { type: e.type, servings: recipeServings(e), ings: recipeIngredients(e).length,
+             card: renderRecipeCardBody(e), foodName: food.name, foodId: food.id, base: food.base };
   });
-
-  // Adding an ingredient must NOT re-render: the body is contenteditable and lives only in the
-  // DOM, so a full render() mid-compose would silently wipe what's been written.
-  const bodySurvived = await page.evaluate(() => document.getElementById('noteBody').innerHTML.includes('refrigerate'));
-  if (!bodySurvived) throw new Error('Adding an ingredient must not re-render and destroy the in-progress body');
-
-  await page.evaluate(() => saveNote());
-  await settle(page);
-  const saved = await page.evaluate(() => {
-    const n = STATE.notes[0];
-    return { type: n.type, servings: n.servings, prep: n.prepMinutes, cook: n.cookMinutes,
-             count: n.ingredients.length, cal: Math.round(recipeTotals(n).totals.cal),
-             perServing: Math.round(recipeTotals(n).perServingCal), isRecipe: isRecipeNote(n) };
-  });
-  console.log('saved recipe:', saved);
-  if (saved.type !== 'recipe' || !saved.isRecipe) throw new Error('Saved note must carry type "recipe"');
-  if (saved.servings !== 4 || saved.prep !== 10) throw new Error(`Servings/prep must persist, got ${JSON.stringify(saved)}`);
-  if (saved.cook !== null) throw new Error('An unfilled time field should store null, not 0 or ""');
-  if (saved.count !== 2) throw new Error('Both ingredients must persist');
-  if (Math.round(saved.cal / 4) !== saved.perServing) throw new Error('Per-serving calories must be the total divided by servings');
-
-  // ---- 3. The draft resets, so the next note isn't another recipe ----
-  const afterSave = await page.evaluate(() => ({ type: VIEW.noteDraftType, ings: VIEW.noteDraftIngredients.length, servings: VIEW.noteDraft_noteServings }));
-  console.log('draft after saving:', afterSave);
-  if (afterSave.type !== 'note' || afterSave.ings !== 0 || afterSave.servings) {
-    throw new Error(`The next note must start clean and as a plain note, got ${JSON.stringify(afterSave)}`);
+  console.log('2. seeded:', JSON.stringify({ type: seeded.type, servings: seeded.servings, ings: seeded.ings }));
+  if (seeded.type !== 'recipe' || seeded.servings !== 4 || seeded.ings !== 1) {
+    throw new Error(`A migrated recipe must keep its type, servings and ingredients, got ${JSON.stringify(seeded)}`);
   }
+  if (!/4 servings/.test(seeded.card)) throw new Error('The card should say how many servings it makes');
+  if (!seeded.card.includes(seeded.foodName)) throw new Error('The card lists its ingredients');
+  if (!/ADD 1 SERVING/.test(seeded.card)) throw new Error('The card carries the add-to-Meals action');
 
-  // ---- 4. Conversion: one serving vs whole batch, and the link ----
+  // ---- 3. Ingredients are editable in place ----
+  // They live on a SAVED entry now, not a draft, so each change commits as it is made. The rows
+  // are patched rather than re-rendered — a render() would replace #app and take the half-typed
+  // title and body with it.
+  await page.evaluate(() => openEntry('rec1'));
+  await settle(page);
+  const editing = await page.evaluate((foodId) => {
+    const shape = {
+      hasSearch: !!document.getElementById('entryIngredientSearch'),
+      hasRows: !!document.getElementById('entryIngredientRows'),
+      hasNewIngredient: /NEW INGREDIENT/.test(document.querySelector('#app').innerHTML),
+      rowsRendered: document.querySelectorAll('#entryIngredientRows .recipe-ing-row').length,
+    };
+    addEntryIngredient(foodId);                     // a second row
+    const afterAdd = recipeIngredients(liveEntryById('rec1')).length;
+    const second = recipeIngredients(liveEntryById('rec1'))[1];
+    updateEntryIngredientQty(second.id, 250);
+    const qty = recipeIngredients(liveEntryById('rec1'))[1].qty;
+    removeEntryIngredient(second.id);
+    return { shape, afterAdd, qty, afterRemove: recipeIngredients(liveEntryById('rec1')).length,
+             persisted: JSON.parse(localStorage.getItem(STORAGE_KEY)).entries.find(e => e.id === 'rec1').fields.ingredients.length };
+  }, seeded.foodId);
+  console.log('3. editing:', JSON.stringify(editing));
+  if (!editing.shape.hasSearch || !editing.shape.hasRows || !editing.shape.hasNewIngredient) {
+    throw new Error(`The recipe editor must offer its own ingredient controls, got ${JSON.stringify(editing.shape)}`);
+  }
+  if (editing.shape.rowsRendered !== 1) throw new Error(`Existing ingredient rows must be patched in, got ${editing.shape.rowsRendered}`);
+  if (editing.afterAdd !== 2) throw new Error('Adding an ingredient must stick');
+  if (editing.qty !== 250) throw new Error(`Re-quantifying must stick, got ${editing.qty}`);
+  if (editing.afterRemove !== 1) throw new Error('Removing an ingredient must stick');
+  if (editing.persisted !== 1) throw new Error('Every ingredient edit commits immediately — it is not a pending draft');
+
+  // ---- 4 & 5. One serving vs whole batch, and the link ----
   const oneServing = await page.evaluate(() => {
-    const n = STATE.notes[0];
-    addRecipeToMeals(n.id, true);
+    const e = liveEntryById('rec1');
+    addRecipeToMeals('rec1', true);
     const meal = STATE.diet.meals[0];
     return { name: meal.name, cal: Math.round(computeMealTotals(meal.items).cal),
-             recipeCal: Math.round(recipeTotals(n).totals.cal),
+             recipeCal: Math.round(recipeTotals(e).totals.cal),
              sameShape: meal.items.every(i => 'foodId' in i && 'qty' in i && 'unit' in i),
-             linked: linkedEntities('note', n.id).map(r => r.type) };
+             linked: linkedEntities('note', 'rec1').map(r => r.type),
+             fromMeal: linkedEntities('meal', meal.id).map(r => r.type) };
   });
-  console.log('ADD 1 SERVING:', oneServing);
+  console.log('4. ADD 1 SERVING:', oneServing);
   if (!/1 serving/.test(oneServing.name)) throw new Error('A single-serving meal should say so in its name');
   if (Math.abs(oneServing.cal - oneServing.recipeCal / 4) > 2) {
     throw new Error(`One serving should be a quarter of the batch, got ${oneServing.cal} vs ${oneServing.recipeCal}/4`);
   }
   if (!oneServing.sameShape) throw new Error('Meal items must share the recipe ingredient shape');
   if (!oneServing.linked.includes('meal')) throw new Error('Converting must link the recipe to the meal it created');
+  // The link is one fact stored once, so it has to be visible from the meal's side too.
+  if (!oneServing.fromMeal.includes('note')) throw new Error('The meal must see the recipe it came from');
 
   const wholeBatch = await page.evaluate(() => {
-    addRecipeToMeals(STATE.notes[0].id, false);
+    addRecipeToMeals('rec1', false);
     const meal = STATE.diet.meals[STATE.diet.meals.length - 1];
     return { name: meal.name, cal: Math.round(computeMealTotals(meal.items).cal) };
   });
-  console.log('ADD WHOLE BATCH:', wholeBatch);
+  console.log('4. ADD WHOLE BATCH:', wholeBatch);
   if (/serving/.test(wholeBatch.name)) throw new Error('A whole-batch meal should not be labelled a single serving');
   if (Math.abs(wholeBatch.cal - oneServing.recipeCal) > 2) throw new Error('The whole batch should match the recipe total');
 
-  // A 1-serving (or unset) recipe offers no choice, because there isn't one to make.
+  // A 1-serving recipe offers no choice, because there isn't one to make.
   const singleServingUi = await page.evaluate(() => {
-    const n = STATE.notes[0];
-    const four = recipeAddToMealsHtml(n);
-    n.servings = 1;
-    const one = recipeAddToMealsHtml(n);
-    n.servings = 4;
+    const e = liveEntryById('rec1');
+    const four = recipeAddToMealsHtml(e);
+    e.fields.servings = '1';
+    const one = recipeAddToMealsHtml(e);
+    e.fields.servings = '4';
     return { fourOffersBoth: /ADD 1 SERVING/.test(four) && /WHOLE BATCH/.test(four),
              oneOffersSingle: /ADD TO MEALS/.test(one) && !/WHOLE BATCH/.test(one) };
   });
-  console.log('conversion buttons:', singleServingUi);
-  if (!singleServingUi.fourOffersBoth) throw new Error('A multi-serving recipe must offer both options');
-  if (!singleServingUi.oneOffersSingle) throw new Error('A single-serving recipe must not offer a meaningless choice');
+  console.log('4. serving choice:', singleServingUi);
+  if (!singleServingUi.fourOffersBoth) throw new Error('A multi-serving recipe must offer both');
+  if (!singleServingUi.oneOffersSingle) throw new Error('A single-serving recipe must not offer a choice that does not exist');
 
-  // ---- 5. Editing a recipe loads its fields back ----
-  await page.evaluate(() => editNote(STATE.notes[0].id));
-  await settle(page);
-  const loaded = await page.evaluate(() => ({
-    type: VIEW.noteDraftType, ings: VIEW.noteDraftIngredients.length,
-    servings: document.getElementById('noteServings').value,
-    title: document.getElementById('noteTitle').value,
-  }));
-  console.log('reopened for edit:', loaded);
-  if (loaded.type !== 'recipe' || loaded.ings !== 2 || loaded.servings !== '4' || loaded.title !== 'Overnight oats') {
-    throw new Error(`Editing must restore the whole recipe, got ${JSON.stringify(loaded)}`);
-  }
-
-  // ---- 6. Switching NOTE <-> RECIPE keeps what's already typed ----
-  // This is the one place a real re-render is unavoidable, so the typed text has to be parked.
-  await page.evaluate(() => { document.getElementById('noteTitle').value = 'Renamed mid-edit'; });
-  await page.evaluate(() => setNoteDraftType('note'));
-  await settle(page);
-  const kept = await page.evaluate(() => document.getElementById('noteTitle').value);
-  console.log('title after switching type:', kept);
-  if (kept !== 'Renamed mid-edit') throw new Error(`Switching type must not discard typed text, got "${kept}"`);
-
-  // ---- 7. A plain note is untouched by any of this ----
-  await page.evaluate(() => {
-    cancelNoteEdit(); setNotesSubtab('write'); setNoteDraftType('note');
+  // ---- 6. A quick note shows none of this ----
+  const quick = await page.evaluate(() => {
+    const e = Object.assign(blankEntry('quick'), { title: 'Just a journal entry', body: 'Nothing to do with food.' });
+    allEntries().push(e);
+    saveState();
+    return { isRecipe: isRecipeEntry(e), card: renderEntryCard(e) };
   });
-  await settle(page);
-  await page.fill('#noteTitle', 'Just a journal entry');
-  await page.evaluate(() => { document.getElementById('noteBody').innerHTML = '<p>Nothing to do with food.</p>'; saveNote(); });
-  await settle(page);
-  const plain = await page.evaluate(() => {
-    const n = STATE.notes.find(x => x.title === 'Just a journal entry');
-    return { type: n.type, ingredients: (n.ingredients || []).length, servings: n.servings,
-             cardHasRecipeBits: /recipe-meta|ADD TO MEALS/.test(renderNoteCard(n)) };
-  });
-  console.log('plain note:', plain);
-  if (plain.type !== 'note' || plain.ingredients !== 0 || plain.servings !== null) {
-    throw new Error(`A plain note must stay plain, got ${JSON.stringify(plain)}`);
-  }
-  if (plain.cardHasRecipeBits) throw new Error('A plain note card must show no recipe UI at all');
+  if (quick.isRecipe) throw new Error('A quick note is not a recipe');
+  if (/ADD TO MEALS|INGREDIENTS/.test(quick.card)) throw new Error('A quick note must not carry recipe UI');
 
-  // ---- 8. Pre-existing notes (no type field) still render as plain notes ----
-  const legacy = await page.evaluate(() => {
-    const old = { id: 'legacy1', date: todayStr(), createdAt: 1, title: 'From before recipes existed', bodyHtml: '<p>x</p>', tag: 'general' };
-    STATE.notes.push(old);
-    return { isRecipe: isRecipeNote(old), ings: recipeIngredients(old).length, renders: /From before/.test(renderNoteCard(old)) };
-  });
-  console.log('legacy note:', legacy);
-  if (legacy.isRecipe || legacy.ings !== 0 || !legacy.renders) throw new Error('A note predating this feature must render as a plain note');
-
-  // ---- 9. Survives a reload ----
-  await page.evaluate(() => saveState());
+  // ---- 7. Survives a reload ----
   await page.reload();
   await settle(page);
-  const reloaded = await page.evaluate(() => {
-    const n = STATE.notes.find(x => x.title === 'Overnight oats');
-    return { type: n.type, ings: n.ingredients.length, servings: n.servings, linked: linkedEntities('note', n.id).length };
+  const after = await page.evaluate(() => {
+    const e = liveEntryById('rec1');
+    return { type: e.type, ings: recipeIngredients(e).length, servings: recipeServings(e),
+             meals: STATE.diet.meals.length, linked: linkedEntities('note', 'rec1').map(r => r.type) };
   });
-  console.log('after reload:', reloaded);
-  if (reloaded.type !== 'recipe' || reloaded.ings !== 2 || reloaded.servings !== 4) throw new Error('A recipe must survive a reload intact');
-  if (!reloaded.linked) throw new Error('The recipe-to-meal link must survive a reload');
+  console.log('7. after reload:', JSON.stringify(after));
+  if (after.type !== 'recipe' || after.ings !== 1 || after.servings !== 4) {
+    throw new Error(`A recipe must survive a reload intact, got ${JSON.stringify(after)}`);
+  }
+  if (after.meals !== 2 || !after.linked.includes('meal')) throw new Error('The meals it created, and the link, must persist');
 
   await page.evaluate((snap) => {
     const s = JSON.parse(snap);
-    STATE.notes = s.notes; STATE.diet.meals = s.meals; STATE.diet.customFoods = s.customFoods;
+    STATE.entries = s.entries; STATE.diet.meals = s.meals;
     saveState();
   }, snapshot);
-  await browser.close();
-  if (errors.length > 0) { console.log('ERRORS:', errors); process.exit(1); }
+
+  if (errors.length) throw new Error(errors.join('\n'));
   console.log('test_recipe_notes.js: PASS');
-  process.exit(0);
-})();
+  await browser.close();
+})().catch(e => { console.error('test_recipe_notes.js: FAIL\n' + e.message); process.exit(1); });

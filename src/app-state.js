@@ -50,6 +50,7 @@ function loadState() {
       cardioWorkouts: parsed.cardioWorkouts || [],
       cardioLogs: parsed.cardioLogs || {},
       notes: parsed.notes || [],
+      entries: parsed.entries || [],
       reminders: parsed.reminders || [],
       diet: parsed.diet || base.diet,
       settings: Object.assign({}, base.settings, parsed.settings || {}),
@@ -706,6 +707,11 @@ function migrateState() {
     STATE.settings.noteTagsMigrated = true;
   }
 
+  // ---- Notes -> entries (one-time) ----
+  // Every old note becomes an entry; STATE.notes is deliberately left intact as the pre-migration
+  // copy. See migrateNotesToEntries() in src/app-entries.js for why it doesn't delete its source.
+  migrateNotesToEntries();
+
   // Categories dissolve into lifts LAST: the testType/conv snapping above is what it carries over,
   // and it deletes STATE.categories once every tier's numbers have found a lift to live on.
   migrateCategoriesToLiftMaxes();
@@ -1163,12 +1169,28 @@ function closeConfirm() {
   _confirmCallback = null;
 }
 
-function showToast(msg) {
+// `action` is optional: {label, onClick}. It turns the toast into the app's only undo affordance,
+// for writes that are recoverable but would be tedious to redo by hand (deleting a note). It gets
+// a longer dwell than a plain toast, because a message you only have to read and one you have to
+// react to need different amounts of time. Deliberately NOT offered for irreversible writes —
+// breaking a habit still goes through showConfirm, since "undo" there would be a lie.
+function showToast(msg, action) {
   const t = document.getElementById('toast');
   t.textContent = msg;
+  if (action && action.label && typeof action.onClick === 'function') {
+    const btn = document.createElement('button');
+    btn.className = 'toast-action';
+    btn.textContent = action.label;
+    btn.onclick = () => {
+      t.classList.remove('show');
+      clearTimeout(window._toastTimer);
+      action.onClick();
+    };
+    t.appendChild(btn);
+  }
   t.classList.add('show');
   clearTimeout(window._toastTimer);
-  window._toastTimer = setTimeout(() => t.classList.remove('show'), 1800);
+  window._toastTimer = setTimeout(() => t.classList.remove('show'), action ? 5000 : 1800);
 }
 
 function uid() { return Math.random().toString(36).slice(2, 10); }

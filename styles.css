@@ -1,4 +1,14 @@
 :root {
+  /* Notes entry types. Six tokens, one per type, so an aesthetic can repaint the whole Notes
+     colour language by redefining these six and nothing else — see src/app-entries.js's
+     ENTRY_TYPES, which is the only place that maps a type to its token. Defined here rather than
+     per-theme so every aesthetic, including ones added later, has a working set by default. */
+  --note-quick:   #94a3b8;
+  --note-journal: #a78bfa;
+  --note-writing: #60a5fa;
+  --note-travel:  #34d399;
+  --note-recipe:  #fb923c;
+  --note-hub:     #facc15;
   --bg: #15171a;
   --surface: #1d2024;
   --surface2: #24282d;
@@ -2810,3 +2820,87 @@ button.brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 4
    COLOUR, so the width has to come from somewhere) -- but it is deliberately NOT a .phase-card:
    that class means "a row in the list", and test_exercise_goals counts those. */
 .phase-modal-box { border-left: 3px solid var(--border); }
+
+/* ---- Notes entries ----
+   The card list, the Markdown view and the editor. Type colour arrives as an inline
+   `background`/`color` from entryTypeColor(), or via --tc on the chips, so nothing here
+   hardcodes a type's hex — see the --note-* tokens at the top of this file. */
+.entry-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+/* A hub is the one type signalled by SHAPE as well as colour: it behaves differently from every
+   other entry, and colour alone fails anyone who can't separate these six hues. */
+.entry-dot.is-square { border-radius: 2px; }
+.entry-star {
+  background: none; border: 0; padding: 0 2px; cursor: pointer; line-height: 1;
+  font-size: 15px; color: var(--text-faint); flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+.entry-star.is-on { color: var(--accent); }
+.entry-star:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+.entry-card-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.entry-chip-count {
+  font-family: var(--font-mono); font-size: 10px; font-weight: 700;
+  color: var(--text-faint); white-space: nowrap;
+}
+.entry-tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-family: var(--font-mono); font-size: 10px; font-weight: 700;
+  color: var(--text-dim); background: var(--surface2);
+  border: 1px solid var(--border-soft); border-radius: 20px; padding: 2px 8px;
+}
+.entry-tag.is-editable button {
+  background: none; border: 0; padding: 0; margin: 0; cursor: pointer;
+  color: var(--text-faint); font-size: 12px; line-height: 1;
+}
+.entry-tag.is-suggestion { cursor: pointer; }
+.entry-tag.is-suggestion b { color: var(--text-faint); font-weight: 700; }
+.entry-tag-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.entry-empty-line { font-size: 12px; color: var(--text-faint); }
+
+.entry-editor {
+  width: 100%; resize: vertical; min-height: 220px;
+  font-family: var(--font-mono); font-size: 13px; line-height: 1.6;
+}
+.entry-view { min-height: 120px; cursor: text; font-size: 14px; line-height: 1.6; }
+.entry-view .entry-h { margin: 12px 0 6px; font-size: 15px; font-weight: 800; }
+.entry-view h4.entry-h { font-size: 13px; color: var(--text-dim); }
+.entry-view p { margin: 0 0 8px; }
+.entry-view ul, .entry-view ol { margin: 0 0 8px; padding-left: 22px; }
+.entry-view li { margin-bottom: 3px; }
+/* Checklist items drop the marker — the box IS the marker — and keep their position when ticked,
+   because a list that reorders itself under your finger loses your place. */
+.entry-view li.entry-check { list-style: none; display: flex; align-items: flex-start; gap: 8px; margin-left: -22px; }
+.entry-check-box {
+  flex: none; width: 18px; height: 18px; margin-top: 2px; cursor: pointer;
+  background: transparent; color: var(--bg); font-size: 12px; line-height: 1;
+  border: 2px solid var(--border); border-radius: 4px;
+  display: flex; align-items: center; justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+}
+.entry-check.is-done .entry-check-box { background: var(--good); border-color: var(--good); }
+.entry-check.is-done .entry-check-text { text-decoration: line-through; color: var(--text-faint); }
+.entry-check-box:disabled { cursor: default; }
+.entry-check-box:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.entry-link { font-weight: 600; text-decoration: none; border-bottom: 1px solid currentColor; }
+.entry-link-dead { color: var(--text-faint); text-decoration: line-through; border: 0; }
+.entry-link-missing { color: var(--text-faint); font-style: italic; border: 0; }
+.entry-url { color: var(--accent); word-break: break-word; }
+
+/* The floating "new note" button. Sits clear of the tab bar rather than over it — the bar is
+   fixed, so anything bottom-anchored has to budget for it plus the home indicator. */
+.fab {
+  position: fixed; right: 18px; bottom: calc(86px + env(safe-area-inset-bottom, 0px));
+  width: 52px; height: 52px; border-radius: 50%; z-index: 40;
+  background: var(--accent); color: var(--bg); border: 0;
+  font-size: 28px; font-weight: 400; line-height: 1; cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  -webkit-tap-highlight-color: transparent;
+}
+.fab:focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
+
+/* The toast's optional undo button. The toast itself is pointer-events:none so it never blocks
+   what's underneath; the button re-enables them for itself only. */
+.toast-action {
+  margin-left: 12px; padding: 0; border: 0; background: none; cursor: pointer;
+  pointer-events: auto; font: inherit; font-weight: 800;
+  color: var(--accent); text-transform: uppercase; letter-spacing: 0.06em;
+}

@@ -250,6 +250,10 @@ STATE = {
   },
 
   // ---------------- NOTES ----------------
+  // RETIRED as of 2026-09-17 and never written to again — the pre-migration copy, kept on purpose.
+  // migrateNotesToEntries() (src/app-entries.js) reads it once and leaves it exactly as it was; a
+  // migration that deletes its own source has no way back if it turns out to have mangled
+  // something. Safe to drop only once the move has been confirmed against real data.
   notes: [
     { id, date, createdAt, title, bodyHtml,   // bodyHtml is sanitized rich text
       tag,                                     // one of NOTE_TAGS keys: idea | todo | win | issue | reflect | general
@@ -257,6 +261,27 @@ STATE = {
                                                 //   overridable per-user via settings.noteTagNames)
       photos: [ 'data:image/jpeg;base64,...' ] },
     ...  // older entries may only have a plain `text` field and/or no `photos`
+  ],
+
+  // The live Notes section. ONE record shape for all six kinds of entry, which is what lets
+  // search, sort, tagging, linking and checklists each be written once — see src/app-entries.js
+  // and docs/NOTES_SPEC.md. Everything starts as a Quick note and earns a type later.
+  entries: [
+    { id,
+      type,                 // 'quick' | 'journal' | 'writing' | 'travel' | 'recipe' | 'hub'
+      title,                // optional — the UI falls back to the body's first line
+      body,                 // light Markdown as PLAIN TEXT; `[[id]]` tokens link to other entries
+      fields: {},           // per-type template values (recipe: ingredients/servings/time/steps),
+                            //   plus `unsorted` for text Convert couldn't place
+      tags: [],             // freeform, lowercase, no '#', no duplicates
+      favorite,
+      links: [],            // app-links.js's cross-entity [{type, id}] — an entry-to-entry link is
+                            //   {type:'note', id}. NOT a second link array; see NOTES_SPEC's header
+      photos: [],
+      hubItems: [],         // hubs only: ordered [{id, note}]  (Phase 3, not yet written)
+      createdAt, updatedAt, // updatedAt drives the "Edited" sort; touchEntry() is the only writer
+      deleted },            // tombstone, so a deletion survives a sync instead of being re-pulled
+    ...
   ],
   reminders: [ { id, date, time, title, notes, createdAt } ],
 

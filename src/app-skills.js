@@ -56,16 +56,38 @@ function defaultSkillItem(name, detail, detail2, tier) {
 function defaultSkillList(name, tiered) {
   return { id: uid(), name: (name || 'Items').trim(), tiered: tiered !== false, items: [] };
 }
-// Reuses the Notes palette rather than inventing a thirteenth set of hues -- the same reasoning the
-// section colours already follow. Safe as a `const` initializer because app-notes.js loads at 14 and
-// this file at 21; see CLAUDE.md on what load order does and doesn't constrain.
+// Reuses the muscle-group palette rather than inventing a thirteenth set of hues -- the same
+// reasoning the section colours already follow. Both constants below live in THIS file, so the
+// `const` initializer reaches them regardless of load order; HOME_SECTION_META comes from
+// app-data.js, which loads well before this. See CLAUDE.md on what load order does and doesn't
+// constrain.
 //
 // Ordered so the first six are the ones NOT already spent on a Home section. A skill's colour and a
 // section's colour end up side by side in the same week rollup, so starting where the sections
 // stopped means the first handful of skills can't turn up wearing WELLNESS's red.
+// Twelve colours drawn from MUSCLE_COLORS, the same palette that colour-codes muscle groups on
+// Exercise, so a skill's colour reads as part of one language rather than a new one. It used to
+// live in app-notes.js as the note-tag palette; Notes retired that (tags are freeform text now and
+// colour is carried by the entry type — see src/app-entries.js), and this is its only consumer, so
+// it moved here rather than staying behind as a constant nothing owned. Grays are deliberately
+// excluded: they read as "no colour assigned" rather than as a choice.
+const SKILL_COLOR_SOURCE = [
+  '#FFD961', // F Delts — yellow
+  '#819FFF', // Back — blue
+  '#B2FF5D', // Glutes — green
+  '#FF9191', // Chest — red
+  '#CAAFFF', // Traps — purple
+  '#FFA273', // Triceps — orange
+  '#FFFF7D', // S Delts — gold
+  '#A5A1FF', // Biceps — indigo
+  '#F8C5FF', // R Delts — pink
+  '#92FECD', // Quads — teal
+  '#7DFF89', // Hams — lime
+  '#E7FF81', // Calves — chartreuse
+];
 const SKILL_COLOR_PALETTE = (() => {
   const taken = Object.keys(HOME_SECTION_META).map(k => HOME_SECTION_META[k].color);
-  const all = NOTE_TAG_COLOR_PALETTE.map(c => c.dark);
+  const all = SKILL_COLOR_SOURCE.slice();
   return all.filter(c => taken.indexOf(c) < 0).concat(all.filter(c => taken.indexOf(c) >= 0));
 })();
 // Least-used wins, so colours only repeat once the palette is exhausted.

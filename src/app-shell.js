@@ -112,7 +112,6 @@ function defaultTransientUi() {
     bodyDetailOpen: false,       // the circumferences disclosure
     builderStylePickerOpen: false,
     autofillPickerOpen: false,
-    noteTagPaletteOpen: null,
     cloudSyncModalOpen: false,
   };
 }
@@ -165,15 +164,18 @@ let VIEW = {
   labEditing: null,                  // id of the panel the lab form is editing; null = adding a new one
   labExpanded: {},                   // markerKey -> true: that marker's full dated history is open
   selectedWeightMetric: 'weight',
-  notesSelectedTag: 'general',       // tag for a new note; saveNote() puts this back to 'general'
-  notesSort: 'date',                 // 'date' | 'tag'
-  notesFilterTag: null,              // null = all tags
-  notesSearchQuery: '',
-  noteDraftPhotos: [],
-  noteDraftType: 'note',             // 'note' | 'recipe' -- which kind the compose form is building
-  noteDraftIngredients: [],          // recipe only; same {id, foodId, qty, unit} shape as Meal.items
-  noteDraftIngredientQuery: '',      // the ingredient search box's current text
-  noteEditId: null,
+  // Notes. The SORT is not here — the spec asks for it to be remembered across launches, so it
+  // lives in STATE.settings.notesSort. Filter and search deliberately are transient: returning to
+  // a section still filtered by something you set last week is how notes go missing.
+  entryOpenId: null,                 // the entry the editor is showing, or null for the list
+  entryMode: 'view',                 // 'view' renders the Markdown; 'edit' shows the raw text
+  entryDraftTitle: null,             // typed-but-uncommitted text, parked before any re-render
+  entryDraftBody: null,
+  entryFilter: 'all',                // 'all' | 'fav' | an ENTRY_TYPES key
+  entrySearch: '',
+  entryTagQuery: '',                 // what's in the tag input, which also narrows suggestions
+  entryIngredientQuery: '',          // recipe only: the ingredient search box's current text
+  recipeCustomFoodOpen: false,       // the '+ NEW INGREDIENT' overlay, over the Notes screen
   goalExpanded: null,                // which goal's ledger is open, one at a time
   // Which halves of the collapsed day timeline are expanded. Lives in VIEW rather than UI because
   // opening "what's coming" and then tapping into one of those blocks shouldn't close it again.
@@ -331,10 +333,13 @@ function switchTab(tab) {
   NAV.currentTab = tab;
   if (tab === 'train') { NAV.trainView = GRID_VIEW(); NAV.fitnessSubtab = 'workouts'; }
   if (tab === 'notes') {
-    // Same stale-edit guard as setNotesSubtab() — a fresh visit to Notes (e.g. via the bottom tab
-    // bar) shouldn't resume an edit left in progress from before you navigated away.
-    if (VIEW.noteEditId) { VIEW.noteEditId = null; VIEW.noteDraftPhotos = []; VIEW.notesSelectedTag = 'general'; }
-    NAV.notesSubtab = 'write'; // Write is the default landing page for Notes
+    // A fresh visit to Notes (e.g. via the bottom tab bar) lands on the list, not on whatever
+    // entry was open before you navigated away. openEntry() sets this again on its way in, so
+    // arriving BY opening an entry still works.
+    VIEW.entryOpenId = null;
+    VIEW.entryMode = 'view';
+    VIEW.entryDraftTitle = null; VIEW.entryDraftBody = null; VIEW.entryTagQuery = '';
+    NAV.notesSubtab = 'view';
   }
   if (tab === 'schedule') {
     NAV.scheduleSubtab = 'calendar';
@@ -652,10 +657,11 @@ function renderTabbar() {
     const closeBtn = `<button class="tabbar-close" onclick="goBack()"><span class="ic">${icon('close')}</span>CLOSE</button>`;
     return homeBtn + closeBtn;
   } else if (NAV.currentTab === 'notes') {
+    // Two buttons, not three: WRITE is gone because every entry now starts by tapping +, and
+    // SETUP is gone with the tag palette it used to configure (tags are freeform text now).
     sectionBtns = `
-      <button class="${NAV.notesSubtab==='write'?'active':''}" onclick="setNotesSubtab('write')"><span class="ic">${icon('pencil')}</span>WRITE</button>
-      <button class="${NAV.notesSubtab==='view'?'active':''}" onclick="setNotesSubtab('view')"><span class="ic">${icon('magnify')}</span>VIEW ALL</button>
-      <button class="${NAV.notesSubtab==='setup'?'active':''}" onclick="setNotesSubtab('setup')"><span class="ic">${icon('setup')}</span>SETUP</button>`;
+      <button class="${!VIEW.entryOpenId?'active':''}" onclick="setNotesSubtab('view')"><span class="ic">${icon('magnify')}</span>VIEW ALL</button>
+      <button onclick="setNotesSubtab('new')"><span class="ic">${icon('pencil')}</span>NEW</button>`;
   } else if (NAV.currentTab === 'schedule') {
     // TODAY used to be its own subtab here — folded into Calendar's Day zoom (defaults to today
     // on every fresh visit, see switchTab()) so the bottom bar has one less button.
@@ -724,7 +730,7 @@ function _doRender() {
     renderAestheticOptions(); renderAccentSwatches();
   } else if (NAV.currentTab === 'notes') {
     app.innerHTML = renderNotes();
-    if (NAV.notesSubtab === 'write') { renderNoteTagSwatches(); renderNotePhotoRow(); }
+    if (VIEW.entryOpenId) { renderEntryPhotoRow(); renderEntryIngredientRows(); }  // both are patched in, not returned as markup
   } else if (NAV.currentTab === 'budget') {
     if (NAV.budgetSubtab === 'recurring') app.innerHTML = renderBudgetRecurring();
     else if (NAV.budgetSubtab === 'goals') app.innerHTML = renderBudgetGoals();

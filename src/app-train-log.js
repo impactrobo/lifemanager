@@ -1599,45 +1599,7 @@ function updateDefaultReminderTime(val) {
   STATE.settings.defaultReminderTime = val || '09:00';
   saveState();
 }
-// Notes' own Setup: the tag list (General plus any created ones) and nothing else -- nothing
-// else in Notes is configurable. Every row but General gets a delete (X) button and its own
-// palette color picker; General stays rename-only, matching its role as the fixed, undeletable
-// fallback for orphaned notes.
-function renderNotesSetup() {
-  const tags = allNoteTags();
-  const atCap = customNoteTags().length >= NOTE_TAG_MAX;
-  return `<div class="screen">
-    <div class="section-title">Setup</div>
-    <div class="subtle-label" style="margin:18px 0 8px;">NOTE TAGS</div>
-    <div class="stack" style="margin-bottom:10px;">
-      ${Object.keys(tags).map(key => renderNoteTagSetupRow(key, tags[key])).join('')}
-    </div>
-    <button class="btn btn-sm btn-primary btn-block" onclick="addNoteTag()" ${atCap ? 'disabled style="opacity:.4;"' : ''} style="margin-bottom:10px;">+ ADD TAG</button>
-    <div style="font-size:11px; color:var(--text-faint);">${atCap ? `Tag limit reached (${NOTE_TAG_MAX}) — delete one to add another. ` : ''}Rename any tag — leave General blank to reset it to its default name. Every tag but General can be deleted (its notes move to General); tap the color dot next to a tag's name to recolor it from the palette.</div>
-  </div>`;
-}
-function renderNoteTagSetupRow(key, def) {
-  const isGeneral = key === 'general';
-  const paletteOpen = !isGeneral && UI.noteTagPaletteOpen === key;
-  return `<div class="panel">
-    <div class="field-row">
-      <label class="field" style="flex:2;">
-        <span class="lbl" style="display:flex; align-items:center; gap:6px;">
-          ${isGeneral
-            ? `<span style="width:10px; height:10px; border-radius:50%; background:${tagColor(key)}; border:1px solid rgba(0,0,0,0.2); flex-shrink:0;"></span>`
-            : `<button type="button" onclick="toggleNoteTagPalette('${key}')" title="Change color" aria-label="Change color" aria-expanded="${paletteOpen}" style="width:14px; height:14px; padding:0; border-radius:50%; background:${tagColor(key)}; border:1px solid rgba(0,0,0,0.2); flex-shrink:0; cursor:pointer;"></button>`}
-          ${escapeHtml(def.label)}
-        </span>
-        <input type="text" placeholder="${escapeHtml(def.label)}" value="${escapeHtml(noteTagLabel(key))}" onchange="updateNoteTagName('${key}', this.value)">
-      </label>
-      ${isGeneral ? '' : `<button class="icon-btn" style="align-self:flex-end; margin-bottom:10px; color:var(--bad);" onclick="removeNoteTagByKey('${key}')" title="Delete tag">${icon('close')}</button>`}
-    </div>
-    ${paletteOpen ? `<div style="margin-top:10px;">
-      <div class="accent-swatch-grid">${NOTE_TAG_COLOR_PALETTE.map(p => `
-        <button class="accent-swatch ${p.dark===def.dark?'active':''}" style="--sw:${paletteSwatchColor(p)}" onclick="setNoteTagColor('${key}','${p.key}')" title="${p.label}" aria-label="${p.label}"></button>`).join('')}
-      </div>
-      <button class="btn btn-sm" style="margin-top:8px;" onclick="closeNoteTagPalette()">CANCEL</button>
-    </div>` : ''}
-  </div>`;
-}
+// Notes has no Setup screen any more. It configured the twelve-colour tag palette, which the
+// entry model retired: tags are freeform text now and colour is carried by the entry TYPE
+// instead (see src/app-entries.js and docs/NOTES_SPEC.md).
 function setSetupSubtab(t) { NAV.setupSubtab = t; render(); }
