@@ -254,9 +254,13 @@ shelf, so no date-chaining or projection code changed.
       CSS rule renders a plausible-looking page and says nothing — `test_css_contract.js` now asserts
       CLOSE's computed colour across all 23 aesthetics so a new theme can't quietly repaint it.
 
-## NetNavi voice — open note (2026-09-17)
-- [ ] **Vitalya's register.** Field feedback: she works, but wants less 💅 and more grimace, eye-roll
-      and trailing ellipses. A pass over her lines in `src/app-navi.js`. Queued.
+## NetNavi voice (2026-09-17)
+- [ ] **Vitalya's register, take two.** 💅 is retired — it read as a bit she was doing rather than a
+      reaction she was having, which is the difference between the two halves of her brief. Her
+      palette is now 🙄 unimpressed, 😬 wincing on your behalf, 😐 flat deadpan, and a long trailing
+      "……" in the places where the funniest thing she can do is not finish the sentence. One line
+      stays deliberately bare — "N habits broken. Absolutely not." — because it can share a box
+      with the 😬 above it, and the same face twice reads as a tic. Read her on a real week.
 
 ## Notes rebuilt on the entry model — Phase 1 (2026-09-17)
 `docs/NOTES_SPEC.md` Phase 1. `tests/test_notes.js` covers the migration, the Markdown renderer
