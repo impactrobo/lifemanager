@@ -818,6 +818,9 @@ function defaultState() {
     // is gone -- see migratePhasesToOneTimeline(). phaseOrigin anchors the sequence, which runs back
     // to back from it, so start dates stay derived rather than stored.
     phases: [],
+    // Phases built but not placed in the sequence. phaseTimeline() never sees these -- see the
+    // SHELF block in app-phases.js for why adding a phase no longer starts it.
+    phaseShelf: [],
     phaseOrigin: null,
     // Lifts you ADDED. The shipped LIFT_LIBRARY is never copied in here -- allLifts()
     // concatenates them, so the shipped list can grow between releases with no migration.

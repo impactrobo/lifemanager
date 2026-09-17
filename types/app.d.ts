@@ -744,6 +744,8 @@ interface AppState {
    *  than the thing that owns it. Start dates stay derived -- phases run back to back from
    *  phaseOrigin, so extending one pushes every later one out without rewriting any record. */
   phases: GoalPhase[];
+  /** Phases built but not yet placed in the sequence. phaseTimeline() never reads these. */
+  phaseShelf: GoalPhase[];
   phaseOrigin: string | null;
   /** Lifts ADDED by hand. The shipped library is concatenated at read time, never copied here. */
   lifts: Lift[];

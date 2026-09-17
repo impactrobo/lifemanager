@@ -103,7 +103,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     STATE.phases = [newPhase({ id: 'p1', label: 'P1', weeks: 2, workoutRotationDays: 5, exercisePlan: emptyRotationPlan(5) })];
     STATE.phases[0].exercisePlan[0] = [planEntry('workout', a.id)];
     saveState();
-    addPhase();                                  // starts today, at the boundary
+    addPhase(); queuePhaseNext(phaseShelf()[0].id);  // addPhase() shelves now; queue it to schedule                                  // starts today, at the boundary
     const p2 = STATE.phases[1];
     return {
       rotationInherited: p2.workoutRotationDays,

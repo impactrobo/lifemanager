@@ -81,7 +81,8 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   const copied = await page.evaluate(() => {
     const before = JSON.stringify(STATE.phases[1].exercisePlan);
     const globalBefore = JSON.stringify(currentPhase().phase.exercisePlan);
-    addPhase('e1');                                  // seeded from block 2, which is in effect today
+    addPhase('e1'); queuePhaseNext(phaseShelf()[0].id);  // seeded from block 2, in effect today;
+                                                     // addPhase() shelves now, so queue it to schedule
     const fresh = STATE.phases[2];
     const seededFrom = weekPlanCount(STATE.phases[1].exercisePlan);
     const seededTo = weekPlanCount(fresh.exercisePlan);

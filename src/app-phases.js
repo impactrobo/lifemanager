@@ -957,22 +957,141 @@ function phaseCalorieDrift(entry) {
 // rebuilding six days of assignments to change two of them, and a shared reference would make
 // editing the new phase silently rewrite the old one -- the exact failure the copy exists to prevent.
 // Copying changes nothing about what you actually do: same workouts, same meals, same days.
+// ---- THE SHELF: phases that exist but aren't on the timeline yet ----
+//
+// Adding a phase used to put it straight into the sequence, which meant the first one you made
+// became the phase you were IN before you had finished describing it. Worse, it made planning two
+// blocks in a row impossible to do calmly: the first was already running while you set up the
+// second.
+//
+// So a new phase starts SHELVED. It is a real phase with a real editor; it just has no place in
+// time until you give it one, with SAVE AND BEGIN / QUEUE NEXT. phaseTimeline() never sees the
+// shelf, which is why none of the date-chaining, plan-resolution or projection code below needed to
+// learn that unscheduled phases exist.
+function phaseShelf() {
+  if (!Array.isArray(STATE.phaseShelf)) STATE.phaseShelf = [];
+  return STATE.phaseShelf;
+}
+function shelvedPhase(id) { return phaseShelf().find(p => p.id === id) || null; }
+// Any phase, wherever it lives. Every editor reads through this so a shelved phase is as editable
+// as a scheduled one -- setting it up before it starts is the entire point.
+function anyPhaseById(id) {
+  return (STATE.phases || []).find(x => x.id === id) || shelvedPhase(id);
+}
+// Is a DELIBERATE phase running? The app always has a phase covering today (see
+// ensurePerpetualPhase), but a perpetual one is the "nothing set up yet" state rather than a block
+// you chose. That distinction is what decides BEGIN vs QUEUE: with only the default running there
+// is nothing to queue behind.
+function hasRunningPhase() {
+  const cur = currentPhase();
+  return !!(cur && !cur.perpetual);
+}
+
+// "Phase N" where N is genuinely free. Counting the lists isn't enough: BEGIN can REPLACE the
+// placeholder, so the count goes down and the next phase reuses a name that's already on screen --
+// which it did, producing two cards both called "Phase 2".
+function nextPhaseLabel() {
+  const taken = new Set((STATE.phases || []).concat(phaseShelf()).map(p => p.label));
+  let n = taken.size + 1;
+  while (taken.has('Phase ' + n)) n++;
+  return 'Phase ' + n;
+}
 function addPhase() {
-  const existing = phaseTimeline();
-  const last = existing[existing.length - 1];
-  // A perpetual phase has no end, so adding after it would have nowhere to start. Adding a phase is
-  // therefore what ENDS a perpetual one -- it stops where the new one begins, having run exactly as
-  // long as it actually ran.
-  if (last && last.perpetual) endPerpetualPhaseAt(last, todayStr());
+  // Seeded from what's in effect TODAY -- its rotation and meal plan have to start from something,
+  // and today is the only date a shelved phase can be said to relate to. Whatever you then edit is
+  // kept as-is when it's scheduled; re-seeding at that point would throw your setup away.
   const tl = phaseTimeline();
   const prev = tl[tl.length - 1];
-  const startDate = prev ? shiftDate(prev.endDate, 1) : (STATE.phaseOrigin || todayStr());
-  const added = appendSeededPhase(prev, startDate, { label: 'Phase ' + (STATE.phases.length + 1), weeks: PHASE_DEFAULT_WEEKS });
+  const phase = makeSeededPhase(prev, todayStr(), {
+    label: nextPhaseLabel(),
+    weeks: PHASE_DEFAULT_WEEKS,
+  });
+  phaseShelf().push(phase);
   // Opens the one you just made: you added a phase in order to set it up, and leaving it folded
   // would make the first act after ADD PHASE be finding and tapping it.
-  VIEW.phaseOpen = added.id;
+  VIEW.phaseOpen = phase.id;
   saveState();
   render();
+}
+
+// Put a shelved phase into the sequence, starting TODAY. Ending a running perpetual phase is what
+// makes room: it has no end date, so nothing could otherwise start after it -- it stops where this
+// one begins, having run exactly as long as it actually ran.
+function beginPhaseNow(id) {
+  const phase = shelvedPhase(id);
+  if (!phase) return;
+  const tl = phaseTimeline();
+  const last = tl[tl.length - 1];
+  if (last && last.perpetual) {
+    // PHASES ARE WHOLE WEEKS, so a phase cannot generally be truncated to end YESTERDAY -- which is
+    // what "the next one starts today" would require. endPerpetualPhaseAt() rounds up to a whole
+    // week, so using it here would start the new phase up to six days late while the button said
+    // "begin".
+    //
+    // The case that matters is the one this feature exists for: a fresh install whose only phase is
+    // the auto-created placeholder, with nothing logged in it. That isn't a block you ran, it's the
+    // absence of one -- so it is REPLACED, and the new phase becomes the first, starting today.
+    const placeholder = STATE.phases.length === 1 && !phaseHasLoggedSessions(last);
+    if (placeholder) {
+      STATE.phases = [];
+      STATE.phaseOrigin = todayStr();
+    } else {
+      // A perpetual block you have actually trained in is a real phase and keeps what it ran. The
+      // new one then starts when that week closes, and the toast says so rather than claiming today.
+      endPerpetualPhaseAt(last, todayStr());
+    }
+  }
+  STATE.phaseShelf = phaseShelf().filter(p => p.id !== id);
+  STATE.phases.push(phase);
+  VIEW.phaseOpen = PHASE_NONE_OPEN;
+  saveState();
+  const entry = phaseTimeline().find(s => s.phase.id === id);
+  const start = entry ? entry.startDate : todayStr();
+  showToast(start === todayStr()
+    ? `“${phase.label}” started today`
+    : `“${phase.label}” starts ${fmtGoalDate(start)}`);
+  render();
+}
+// Append after everything already planned. The timeline chains start dates from lengths, so there
+// is no date to set -- it begins the day the last one ends.
+function queuePhaseNext(id) {
+  const phase = shelvedPhase(id);
+  if (!phase) return;
+  const tl = phaseTimeline();
+  const last = tl[tl.length - 1];
+  // Nothing can follow a phase that never ends, so queueing behind one closes it at today. This is
+  // the same trade BEGIN makes, and it only ever applies to the default perpetual block.
+  if (last && last.perpetual) endPerpetualPhaseAt(last, todayStr());
+  STATE.phaseShelf = phaseShelf().filter(p => p.id !== id);
+  STATE.phases.push(phase);
+  VIEW.phaseOpen = PHASE_NONE_OPEN;
+  saveState();
+  const entry = phaseTimeline().find(s => s.phase.id === id);
+  showToast(entry ? `“${phase.label}” queued for ${fmtGoalDate(entry.startDate)}` : `“${phase.label}” queued`);
+  render();
+}
+// Leaves it exactly where it is. There is nothing to write -- every control already committed on
+// change -- so this is closure, not committing: the same job DONE does for a scheduled phase.
+function savePhaseForLater(id) {
+  if (!shelvedPhase(id)) return;
+  VIEW.phaseOpen = PHASE_NONE_OPEN;
+  render();
+}
+// A shelved phase rendered through the same editor as a scheduled one, by handing renderPhaseCard()
+// the entry shape it expects. The dates are PROVISIONAL -- what it would be if it began today --
+// which is the only honest thing to show for something with no place in time yet.
+function shelfEntry(phase) {
+  const perpetual = phaseIsPerpetual(phase);
+  const weeks = perpetual ? null : Math.max(1, Number(phase.weeks) || 1);
+  const startDate = todayStr();
+  return {
+    phase, index: -1, weeks, startDate,
+    endDate: perpetual ? null : shiftDate(startDate, weeks * 7 - 1),
+    perpetual, startWeightLb: null, endWeightLb: null, plannedLbPerWeek: null,
+    state: 'shelf',
+    band: phaseHasWeightGoal(phase)
+      ? rateBand(phaseWeightGoal(phase).direction, phaseSignedPct(phase)) : null,
+  };
 }
 
 // Appends a phase seeded from whatever is in effect where it starts. Shared by addPhase() and
@@ -981,19 +1100,24 @@ function addPhase() {
 // The new phase inherits the previous one's rotation, and its plans are copied ROTATED to the slot
 // the calendar has reached at the boundary -- so a rotation in progress continues rather than
 // restarting from slot 0 the day the phase changes. See copyRotationPlan().
-function appendSeededPhase(prev, startDate, over) {
+// Builds a phase seeded from whatever is in effect where it starts, WITHOUT placing it. Split out
+// from appendSeededPhase() so the shelf can make one that isn't on the timeline yet.
+function makeSeededPhase(prev, startDate, over) {
   const ex = exercisePlanInEffect(startDate);
   const ml = mealPlanInEffect(startDate);
   const n = rotationDaysOf(prev && prev.phase);
   const mealMode = mealRotationOf(prev && prev.phase);
   const exOffset = ex.slotEntry ? workoutSlotFor(ex.slotEntry, startDate) : 0;
   const mlOffset = (mealMode === 'workout' && ml.slotEntry) ? workoutSlotFor(ml.slotEntry, startDate) : 0;
-  const phase = newPhase(Object.assign({
+  return newPhase(Object.assign({
     workoutRotationDays: n,
     mealRotation: mealMode,
     exercisePlan: copyRotationPlan(ex.plan, n, exOffset),
     mealPlan: copyMealPlan(ml.plan, mealMode === 'workout' ? n : 7, mlOffset),
   }, over || {}));
+}
+function appendSeededPhase(prev, startDate, over) {
+  const phase = makeSeededPhase(prev, startDate, over);
   STATE.phases.push(phase);
   return phase;
 }
@@ -1148,7 +1272,7 @@ function dismissPhaseCalorieDrift(id) {
 }
 
 function updatePhaseField(id, field, value) {
-  const p = (STATE.phases || []).find(x => x.id === id);
+  const p = anyPhaseById(id);
   if (!p) return;
   if (field === 'label') { const t = (value || '').trim(); if (t) p.label = t; }
   else if (field === 'weeks') {
@@ -1195,7 +1319,7 @@ function renderPhaseSavedChip(id) {
 // later and the pace indicator reads behind, which is the truth. Re-pacing you without being asked
 // is how an app quietly turns a good week into a harder target.
 function extendPhase(id, deltaWeeks) {
-  const p = (STATE.phases || []).find(x => x.id === id);
+  const p = anyPhaseById(id);
   if (!p) return;
   // Extending a PERPETUAL phase is how you give it a length. It starts from however long it has
   // actually run rather than from 1 -- "+1 week" on a block you've been in for six should mean
@@ -1232,6 +1356,17 @@ function movePhase(id, delta) {
 }
 
 function deletePhase(id) {
+  // A shelved phase isn't in the sequence, so nothing moves when it goes and the warning would be
+  // a lie. It also can't have been trained in, which is why it deletes without the same weight.
+  const shelved = shelvedPhase(id);
+  if (shelved) {
+    showConfirm(`Delete “${shelved.label}”? It was never scheduled, so nothing else changes.`, () => {
+      STATE.phaseShelf = phaseShelf().filter(x => x.id !== id);
+      VIEW.phaseOpen = PHASE_NONE_OPEN;
+      saveState(); render();
+    });
+    return;
+  }
   const p = (STATE.phases || []).find(x => x.id === id);
   if (!p) return;
   showConfirm(`Delete “${p.label}”? Later phases move earlier to close the gap.`, () => {
@@ -1259,7 +1394,22 @@ function renderPhases() {
       ? `<div class="phase-list">${live.map(renderPhaseCard).join('')}</div>
          ${renderPhaseSummary(summary)}`
       : emptyState('No phases yet. One long push is a plan too — add phases when you want to change pace partway, or take a planned break.')}
+    ${renderPhaseShelfSection()}
     ${done.length ? `<div class="phase-cal-note" style="margin-top:12px;">${done.length} finished phase${done.length === 1 ? '' : 's'} moved to ARCHIVED.</div>` : ''}`;
+}
+
+// Phases you've built but not placed. Below the sequence rather than mixed into it, because the
+// thing that makes them different is precisely that they have no position in it -- listing them
+// among dated cards would invite reading an order into something that has none.
+function renderPhaseShelfSection() {
+  const shelf = phaseShelf();
+  if (!shelf.length) return '';
+  return `
+    <div class="subtle-label" style="margin:24px 0 6px;">NOT SCHEDULED</div>
+    <div style="font-size:11px; color:var(--text-dim); margin-bottom:10px;">
+      Built and saved, waiting for a slot. ${hasRunningPhase() ? 'Queue one to run after what\'s planned.' : 'Begin one to make it the phase you\'re in.'}
+    </div>
+    <div class="phase-list">${shelf.map(p => renderPhaseCard(shelfEntry(p))).join('')}</div>`;
 }
 
 // Finished phases, newest first. A past phase is a RECORD -- you come here to check what a block
@@ -1322,9 +1472,11 @@ function renderLongCutNotice() {
 // a stretch of time has both a way you're training and a way you're eating.
 function renderPhaseCard(entry) {
   const p = entry.phase;
-  const stateLabel = { past: 'DONE', current: 'NOW', future: 'UPCOMING' }[entry.state];
+  const stateLabel = { past: 'DONE', current: 'NOW', future: 'UPCOMING', shelf: 'NOT SCHEDULED' }[entry.state];
   // A perpetual phase names itself rather than showing an end date it doesn't have.
-  const when = entry.perpetual
+  const when = entry.state === 'shelf'
+    ? (entry.perpetual ? 'No end &middot; not scheduled' : `${entry.weeks} weeks &middot; not scheduled`)
+    : entry.perpetual
     ? `${fmtGoalDate(entry.startDate)} &ndash; <b style="color:var(--text)">until you change it</b>`
     : `${fmtGoalDate(entry.startDate)} &ndash; ${fmtGoalDate(entry.endDate)} · ${entry.weeks} weeks`;
   const projection = (entry.startWeightLb == null || entry.endWeightLb == null) ? ''
@@ -1373,8 +1525,11 @@ function renderPhaseCard(entry) {
       <div class="phase-actions">
         <button class="btn btn-sm" onclick="extendPhase('${p.id}',1)" title="Everything after this moves out a week; your pace is left alone">+1 WK</button>
         <button class="btn btn-sm" onclick="extendPhase('${p.id}',-1)">&minus;1 WK</button>
-        <button class="btn btn-sm" onclick="movePhase('${p.id}',-1)">&uarr;</button>
-        <button class="btn btn-sm" onclick="movePhase('${p.id}',1)">&darr;</button>
+        ${entry.state === 'shelf'
+          // Nothing to reorder: the shelf has no sequence, which is the whole point of it.
+          ? ''
+          : `<button class="btn btn-sm" onclick="movePhase('${p.id}',-1)">&uarr;</button>
+             <button class="btn btn-sm" onclick="movePhase('${p.id}',1)">&darr;</button>`}
         ${entry.state === 'current'
           // Only on the phase you're in. A future one hasn't run -- delete it; a past one is
           // history. END keeps what you logged and stops the plan here; DELETE removes the phase.
@@ -1382,7 +1537,32 @@ function renderPhaseCard(entry) {
           : ''}
         <button class="btn btn-sm btn-danger" onclick="deletePhase('${p.id}')">DELETE</button>
       </div>
-      <button class="btn btn-primary btn-block phase-done" onclick="closePhaseCard()">DONE &mdash; EVERYTHING'S SAVED</button>
+      ${entry.state === 'shelf' ? renderShelfActions(p) :
+        `<button class="btn btn-primary btn-block phase-done" onclick="closePhaseCard()">DONE &mdash; EVERYTHING'S SAVED</button>`}
+    </div>`;
+}
+
+// The two ways out of a shelved phase. Both save -- everything already committed on change -- so
+// what they really choose is WHEN it runs, and saying so is the job of the labels.
+//
+// BEGIN becomes QUEUE once a deliberate phase is running, because there is then something to queue
+// behind: the sequence is one after another and starting a second one now would mean abandoning the
+// first. With only the default perpetual block running there is nothing to wait for, so it begins.
+function renderShelfActions(p) {
+  const running = hasRunningPhase();
+  const cur = running ? currentPhase() : null;
+  const tl = phaseTimeline();
+  const last = tl[tl.length - 1];
+  const after = running && last && last.endDate ? fmtGoalDate(shiftDate(last.endDate, 1)) : null;
+  return `
+    <div class="phase-shelf-actions">
+      ${running
+        ? `<button class="btn btn-primary btn-block" onclick="queuePhaseNext('${p.id}')">QUEUE NEXT</button>
+           <div class="phase-shelf-note">Starts when the plan reaches it${after ? ` — ${after}` : ''}${cur ? `, after “${escapeHtml(cur.phase.label)}”` : ''}.</div>`
+        : `<button class="btn btn-primary btn-block" onclick="beginPhaseNow('${p.id}')">SAVE AND BEGIN</button>
+           <div class="phase-shelf-note">Starts today and becomes the phase you're in.</div>`}
+      <button class="btn btn-block btn-sm" style="margin-top:8px;" onclick="savePhaseForLater('${p.id}')">SAVE FOR LATER</button>
+      <div class="phase-shelf-note">Keeps it here, unscheduled, until you choose.</div>
     </div>`;
 }
 
@@ -1395,11 +1575,12 @@ function phaseCardIsOpen(id, entry) {
   if (VIEW.phaseOpen) return VIEW.phaseOpen === id;
   return entry.state === 'current';
 }
+// A sentinel rather than null: null means "no choice made", which falls back to the current phase --
+// so DONE on the phase you're in would reopen it instantly.
+const PHASE_NONE_OPEN = '__none__';
 function openPhaseCard(id) { VIEW.phaseOpen = id; render(); }
 function closePhaseCard() {
-  // A sentinel rather than null: null means "no choice made", which falls back to the current
-  // phase -- so DONE on the phase you're in would reopen it instantly.
-  VIEW.phaseOpen = '__none__';
+  VIEW.phaseOpen = PHASE_NONE_OPEN;
   showToast('Saved');
   render();
 }

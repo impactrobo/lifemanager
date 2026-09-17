@@ -145,7 +145,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // want to change.
   const added = await page.evaluate(() => {
     const keep = STATE.phases.slice();
-    addPhase();
+    addPhase(); queuePhaseNext(phaseShelf()[0].id);  // addPhase() shelves now; queue it to schedule
     const fourth = STATE.phases[STATE.phases.length - 1];
     const tl = phaseTimeline();
     const last = tl[tl.length - 1];

@@ -2748,3 +2748,14 @@ button.brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 4
   letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-dim);
 }
 .disclose-value { margin-left: auto; font-size: 13px; font-weight: 700; color: var(--text); }
+
+/* ---- A phase on the shelf: built, not placed (see phaseShelf() in app-phases.js) ----
+   Dashed rather than a colour of its own: the other three states are positions in time, and this
+   one is the absence of a position. A dashed edge reads as provisional in a way no hue does. */
+.phase-state-shelf { border-left-color: transparent; border-left-style: dashed; }
+.phase-chip-shelf { color: var(--text-faint); background: var(--surface2); border: 1px dashed var(--border); }
+.phase-shelf-actions { margin-top: 10px; }
+.phase-shelf-note {
+  font-size: 10.5px; color: var(--text-faint); line-height: 1.4;
+  margin-top: 5px; text-align: center;
+}

@@ -39,6 +39,7 @@ function loadState() {
       program: parsed.program || parsed.meso || base.program,
       goals: parsed.goals || [],
       phases: parsed.phases || [],
+      phaseShelf: parsed.phaseShelf || [],
       lifts: parsed.lifts || [],
       exTargets: parsed.exTargets || [],
       skills: parsed.skills || [],

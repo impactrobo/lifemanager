@@ -73,7 +73,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     // Give the perpetual phase a length so something can follow it, then add a second.
     STATE.phases[0].weeks = 8;
     STATE.phaseOrigin = shiftDate(todayStr(), -28);   // today sits inside phase 1
-    addPhase();
+    addPhase(); queuePhaseNext(phaseShelf()[0].id);  // addPhase() shelves now; queue it to schedule
     STATE.phases[1].weeks = 8;
     saveState();
     const tl = phaseTimeline();
