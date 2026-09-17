@@ -298,6 +298,24 @@ Newest first. Keep this reasonably current so a fresh session can see what alrea
 without re-reading the whole diff history. Roughly grouped: this project spent early Sept 2026
 on an architecture split + a large wave of Maximalist aesthetics.
 
+- **Navigation restructure, part 1 of 2 (2026-09-16).** Four of seven moves, all of them the same
+  correction: a thing had been filed where it was *built*, not where it is *used*.
+  - **Set Volume moved into WORKOUTS.** It was in the planner, which is where you set landmarks
+    once; it belongs where you're mid-phase and want to know whether this week's chest volume is
+    near MRV. The section reads first — the landmark editor is folded behind `UI.landmarksOpen`,
+    because on all but a handful of days the numbers *are* the feature.
+  - **LINK NAMES is retired; a lift can have a nickname instead.** That screen existed to reconcile
+    free-text exercise names against the library after the fact. Nothing types free text any more —
+    every slot picks a real lift — so what it was actually serving was "I call this something
+    shorter." That's now a **Nickname** field under the name when you add a lift to training maxes:
+    a sparse `STATE.liftNicknames` map beside the library, read through `liftShort()`, cleared by
+    emptying it. No retroactive linking, because there is nothing left to link. The picker itself
+    was never the dead part — it still opens inline on every builder row, which is where linking
+    always really happened.
+  - **PHASES gained ARCHIVED.** Completed phases were stacked under the live ones, so the screen got
+    longer the longer you used the app. They move to their own tab, newest first. A summary screen
+    for them is still open.
+  - **PHASES/GOAL is now PHASES/NEW**, which is what the tab does.
 - **Phase cards fold; the planners name their target (2026-09-16).** Two asks that both came from
   the same feeling — not being sure what you were editing or whether it stuck.
   - **The ask was a SAVE button; what shipped is a DONE that folds the card.** Everything on a phase

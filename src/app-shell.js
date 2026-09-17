@@ -83,6 +83,7 @@ function defaultTransientUi() {
     // is built. See renderPhaseSavedChip() -- there is no SAVE button because everything already
     // commits on change; what was missing is the confirmation.
     phaseSaved: null,
+    landmarksOpen: false,   // the MEV/MAV/MRV editor under Set Volume on WORKOUTS
     homeEditMode: false,
     homeAddPopup: null,                // 'sections' | 'boxes' | null
     goalFormOpen: false,

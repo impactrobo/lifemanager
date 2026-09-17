@@ -787,6 +787,9 @@ function defaultState() {
     // you have never tested has no entry. Same pattern as liftNotes -- LIFT_LIBRARY is a source
     // constant with nowhere to put per-user data. See app-lifts.js "LIFT MAXES".
     liftMaxes: {},
+    // Your own shorthand for a library lift, sparse and keyed by liftId. Overrides `short`, never
+    // `name` -- the full name stays the lift's identity. Replaced the LINK NAMES review screen.
+    liftNicknames: {},
     // Free-form pool: every saved workout (any type) lives here now — no more fixed slot count.
     // Each entry carries its own `type` ('weights'|'cardio'|'mobility'|'warmup') and, for
     // weights/cardio, its own `style` — Workout Style is a per-workout choice made in Workout

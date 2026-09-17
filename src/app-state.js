@@ -25,6 +25,7 @@ function loadState() {
       // `categories` is deliberately absent from defaultState now, but a SAVED one still rides in
       // through `parsed` so migrateCategoriesToLiftMaxes() can read it once and delete it.
       liftMaxes: parsed.liftMaxes || base.liftMaxes,
+      liftNicknames: parsed.liftNicknames || base.liftNicknames,
       workouts: parsed.workouts || base.workouts,
       mesoWorkouts: parsed.mesoWorkouts || [],
       mesoLogs: parsed.mesoLogs || {},

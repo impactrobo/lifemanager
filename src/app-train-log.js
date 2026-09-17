@@ -171,6 +171,11 @@ function renderTrainGrid() {
       ${section('cardio', cardio, 'openCardioLog')}
       ${section('mobility', mobility, 'openWorkoutLog')}
       ${section('warmup', warmup, 'openWorkoutLog')}
+      ${/* Set Volume lives HERE, not in the builder. It is a reading you take DURING a phase --
+            "am I under MEV on back this week" -- so it belongs beside the sessions that answer it,
+            not on the screen where you configure landmarks once and leave. */''}
+      <div class="divider"></div>
+      ${renderSetVolumeSection()}
     </div>`;
 }
 // One day of the week: what the rotation puts there, each tile opening THAT day's session.
@@ -1421,25 +1426,24 @@ function renderExerciseSetup() {
   // renderTMSetup() brings its own ROUNDING panel and heading -- it is the exercise library now,
   // not six fixed category buckets, so "TRAINING MAXES BY CATEGORY" described a shape that no
   // longer exists.
-  if (NAV.setupSubtab === 'tm') body = `${renderTMSetup()}<div class="divider"></div>${renderVolumeLandmarksSetup()}`;
+  if (NAV.setupSubtab === 'tm') body = renderTMSetup();
   else if (NAV.setupSubtab === 'builder') body = renderWorkoutBuilder();
   else if (NAV.setupSubtab === 'viewWorkouts') body = renderViewWorkouts();
-  else if (NAV.setupSubtab === 'lifts') body = renderLiftReview();
-  // Anything else -- 'general', 'plan', 'planner' -- is a retired subtab riding in on a saved nav
+  // Anything else -- 'general', 'plan', 'planner', 'lifts' -- is a retired subtab riding in on a saved nav
   // snapshot, and lands on EXERCISES. GENERAL held the program cycle length, which rotations made
   // meaningless; its other tenants (units, rounding, rest behaviour) had already moved to where
   // each is used. A settings pane whose last setting governs nothing is not a settings pane.
-  else body = `${renderTMSetup()}<div class="divider"></div>${renderVolumeLandmarksSetup()}`;
+  else body = renderTMSetup();
 
-  // Four buttons. EXERCISES is the former MAXES: it's the library of movements now -- what each
-  // trains, what you've tested it at, and its setup notes -- rather than six fixed buckets.
+  // Three buttons. LINK NAMES is gone: it existed to reconcile free-text exercise names against the
+  // library, and nothing types free text any more -- every slot names a real lift. A nickname on
+  // the EXERCISES card covers the case it was really serving.
   return `<div class="screen">
     <div class="section-title">Builder</div>
     ${subNav(`
       <button class="${NAV.setupSubtab==='builder'?'active':''}" onclick="setSetupSubtab('builder')">WORKOUT</button>
       <button class="${NAV.setupSubtab==='viewWorkouts'?'active':''}" onclick="setSetupSubtab('viewWorkouts')">ALL WORKOUTS</button>
       <button class="${NAV.setupSubtab==='tm'?'active':''}" onclick="setSetupSubtab('tm')">EXERCISES</button>
-      <button class="${NAV.setupSubtab==='lifts'?'active':''}" onclick="setSetupSubtab('lifts')">LINK NAMES</button>
     `)}
     ${body}
   </div>`;

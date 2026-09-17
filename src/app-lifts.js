@@ -170,8 +170,36 @@ function liftById(id) { return id ? (allLifts().find(l => l.id === id) || null) 
 function liftsByMuscle(muscle) { return allLifts().filter(l => l.muscle === muscle); }
 // Falls back to whatever the thing already called itself, so a workout with no liftId yet still
 // renders its own name rather than a blank or an id.
+// ---- Nicknames ----
+//
+// Your own shorthand for a library lift, and the thing that replaced LINK NAMES entirely.
+//
+// That screen existed because a slot could hold free text -- you typed "Leg Press", and later had
+// to go and tell the app which library lift you meant. A whole review queue to repair a mismatch
+// the app had invited. Now every slot names a real lift outright, so there is nothing to reconcile
+// and nothing to review; if what you want to SEE is "Leg Press" rather than "Barbell Leg Press",
+// that is a display preference, not an identity problem. Set it where you set the max.
+//
+// Sparse and keyed by liftId, the same pattern as liftNotes and liftMaxes -- LIFT_LIBRARY is a
+// source constant with nowhere to put per-user data. It overrides `short`, never `name`: the full
+// name stays the lift's identity, so two people's nicknames can never make one lift read as two.
+function liftNicknames() {
+  if (!STATE.liftNicknames || typeof STATE.liftNicknames !== 'object') STATE.liftNicknames = {};
+  return STATE.liftNicknames;
+}
+function liftNickname(id) { return (liftNicknames()[id] || '').trim(); }
+function setLiftNickname(id, value) {
+  const v = (value || '').trim();
+  if (v) liftNicknames()[id] = v; else delete liftNicknames()[id];
+  saveState(); render();
+}
 function liftName(id, fallback) { const l = liftById(id); return l ? l.name : (fallback || ''); }
-function liftShort(id, fallback) { const l = liftById(id); return l ? (l.short || l.name) : (fallback || ''); }
+// The short form, with your own nickname winning over the library's.
+function liftShort(id, fallback) {
+  const l = liftById(id);
+  if (!l) return fallback || '';
+  return liftNickname(id) || l.short || l.name;
+}
 function liftIsCustom(id) { return !!(Array.isArray(STATE.lifts) && STATE.lifts.some(l => l.id === id)); }
 
 function addCustomLift(name, muscle, short) {

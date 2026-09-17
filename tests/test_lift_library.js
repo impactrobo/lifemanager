@@ -110,10 +110,10 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // ---- 4. Assigning: the name follows the lift ----
   const assigned = await page.evaluate((ids) => {
-    onPickLift(`review:exercise:x1:${ids.workoutId}`, 'bb-bench');
+    onPickLift(`ex:${ids.workoutId}:x1`, 'bb-bench');
     const w = STATE.workouts.find(x => x.id === ids.workoutId);
     const ex = w.exercises.find(e => e.id === 'x1');
-    onPickLift(`review:t3:0:${ids.gzclId}`, 'lying-leg-curl');
+    onPickLift(`t3:${ids.gzclId}:0`, 'lying-leg-curl');
     const g = STATE.workouts.find(x => x.id === ids.gzclId);
     return {
       ex: { liftId: ex.liftId, name: ex.name, muscle: ex.muscle },
@@ -156,20 +156,25 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   //
   // It also has to be a row that SHOWS a picker. "Cable Flye" matches the library exactly, so its
   // row renders the one-tap link and no picker — correct behaviour, wrong row for this test.
+  //
+  // The picker's home is the WORKOUT BUILDER: the old LINK NAMES review screen that used to host it
+  // is gone, since exercises are now named by picking a real lift rather than reconciled after the
+  // fact. Every builder row still offers it, which is where linking actually happens.
   await page.evaluate((wid) => {
     const w = STATE.workouts.find(x => x.id === wid);
     w.exercises.push({ id: 'x9', name: 'Some Unmatched Thing', sets: 3, repMin: 8, repMax: 12,
       targetRIR: 2, resType: 'weight', setType: 'straight', muscle: 'Chest', adjustments: [] });
-    switchTab('train'); NAV.fitnessSubtab = 'setup'; NAV.setupSubtab = 'lifts'; render();
+    switchTab('train'); NAV.fitnessSubtab = 'builder'; NAV.setupSubtab = 'builder';
+    VIEW.builderType = 'weights'; VIEW.builderSelected.weights = wid; render();
   }, refs.workoutId);
   await settle(page);
   // Opening and typing have to straddle a settle(): render() defers to rAF, so the picker's input
   // does not exist yet inside the same evaluate() that opened it.
-  await page.evaluate((wid) => openLiftPicker('review:exercise:x9:' + wid, ''), refs.workoutId);
+  await page.evaluate((wid) => openLiftPicker('ex:' + wid + ':x9', ''), refs.workoutId);
   await settle(page);
   const dupe = await page.evaluate((wid) => {
     const before = STATE.lifts.length;
-    const token = 'review:exercise:x9:' + wid;
+    const token = 'ex:' + wid + ':x9';
     const el = document.getElementById('newLiftName_' + token);
     if (!el) throw new Error('the picker did not render — this test would prove nothing');
     el.value = 'cable flye';
@@ -190,12 +195,13 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     const w = createWorkout('weights', 'Hypertrophy (RP Strength)');
     w.exercises = [{ id: 'xp', name: 'Some Press', liftId: null, sets: 3, repMin: 8, repMax: 12,
                      targetRIR: 2, resType: 'weight', setType: 'straight', muscle: null, adjustments: [] }];
-    switchTab('train'); NAV.fitnessSubtab = 'builder'; NAV.setupSubtab = 'lifts'; render();
+    switchTab('train'); NAV.fitnessSubtab = 'builder'; NAV.setupSubtab = 'builder';
+    VIEW.builderType = 'weights'; VIEW.builderSelected.weights = w.id; render();
     return w.id;
   });
   await settle(page);
   // Each step needs its own settle() for the same rAF reason.
-  const TOKEN = 'review:exercise:xp:' + pickerWorkoutId;
+  const TOKEN = 'ex:' + pickerWorkoutId + ':xp';
   await page.evaluate((t) => openLiftPicker(t, ''), TOKEN);
   await settle(page);
   const beforeMuscle = await page.evaluate(() => ({
@@ -219,13 +225,32 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (!picker.searched.length || !picker.searched.every(n => /row/i.test(n))) throw new Error('Search should span muscles and narrow to matches');
   if (picker.closed !== null) throw new Error('Closing the picker clears it');
 
-  // ---- 7. It renders, and persists ----
+  // ---- 7. The builder row asks for the link, and a nickname is the shorthand ----
+  // The LINK NAMES review screen is retired. Nothing reconciles free text after the fact any more:
+  // an unlinked exercise says so on its own row, in the one place someone is already editing it.
   const ui = await page.evaluate(() => ({
-    review: document.getElementById('app').innerText,
-    exactLinkOffered: /Exact name match/.test(document.getElementById('app').innerText),
+    app: document.getElementById('app').innerText,
+    subnav: Array.from(document.querySelectorAll('.subnav button')).map(b => b.textContent.trim()),
   }));
-  if (!/STILL NAMED BY FREE TEXT/.test(ui.review)) throw new Error('The review screen should list what needs linking');
-  if (!/Nothing here is linked automatically/.test(ui.review)) throw new Error('The screen must say that it never merges on its own');
+  if (!/not linked/i.test(ui.app)) throw new Error('An unlinked exercise should say so on its own builder row');
+  if (ui.subnav.some(t => /LINK NAMES/i.test(t))) throw new Error('LINK NAMES is retired — the builder row is the only linking surface');
+
+  // A nickname is a shorthand for an existing lift, kept in a sparse map beside the library rather
+  // than written into it — so it can be set, changed and cleared without ever touching the lift.
+  const nick = await page.evaluate(() => {
+    const before = liftShort('bb-bench', '');
+    setLiftNickname('bb-bench', '  Benchy  ');
+    const after = liftShort('bb-bench', '');
+    setLiftNickname('bb-bench', '');
+    return { before, after, cleared: liftShort('bb-bench', ''),
+             stored: Object.keys(STATE.liftNicknames || {}).length,
+             nameUntouched: liftById('bb-bench').name };
+  });
+  console.log('nickname:', nick);
+  if (nick.after !== 'Benchy') throw new Error('A nickname should win over the shipped short form, trimmed');
+  if (nick.cleared !== nick.before) throw new Error('Clearing a nickname should fall back, not leave a blank');
+  if (nick.stored !== 0) throw new Error('A cleared nickname should be deleted, not stored empty');
+  if (nick.nameUntouched !== 'Barbell Bench Press') throw new Error('A nickname must never rewrite the lift itself');
 
   await page.evaluate(() => { addCustomLift('Landmine Press', 'F Delts', 'Landmine'); saveState(); });
   await page.reload();

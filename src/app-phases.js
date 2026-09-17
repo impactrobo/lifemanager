@@ -1244,6 +1244,10 @@ function deletePhase(id) {
 
 function renderPhases() {
   const sched = phaseTimeline();
+  // NEW plans what's coming, so it lists what's still live. Finished blocks are records and move to
+  // ARCHIVED — otherwise the list you plan from grows by one every block you complete.
+  const live = sched.filter(e => e.state !== 'past');
+  const done = sched.filter(e => e.state === 'past');
   const summary = phasePlanSummary();
   return `
     ${renderLongCutNotice()}
@@ -1251,10 +1255,29 @@ function renderPhases() {
       <div class="subtle-label" style="margin-bottom:0;">PHASES</div>
       <button class="btn btn-sm" onclick="addPhase()">+ ADD PHASE</button>
     </div>
-    ${sched.length
-      ? `<div class="phase-list">${sched.map(renderPhaseCard).join('')}</div>
+    ${live.length
+      ? `<div class="phase-list">${live.map(renderPhaseCard).join('')}</div>
          ${renderPhaseSummary(summary)}`
-      : emptyState('No phases yet. One long push is a plan too — add phases when you want to change pace partway, or take a planned break.')}`;
+      : emptyState('No phases yet. One long push is a plan too — add phases when you want to change pace partway, or take a planned break.')}
+    ${done.length ? `<div class="phase-cal-note" style="margin-top:12px;">${done.length} finished phase${done.length === 1 ? '' : 's'} moved to ARCHIVED.</div>` : ''}`;
+}
+
+// Finished phases, newest first. A past phase is a RECORD -- you come here to check what a block
+// actually was, not to change it -- so the cards render folded and stay that way; every control on
+// them is already refused for a past phase anyway (see rotationIsLocked, and endPhaseNow's note on
+// why only the phase you're in can be ended).
+//
+// Deliberately not a summary screen. What a finished block is worth saying -- what you lifted, what
+// you weighed, what you actually did against what you planned -- is a real piece of work and the
+// weekly review is the shape it should take. This is the list; that comes later.
+function renderArchivedPhasesTab() {
+  const done = phaseTimeline().filter(e => e.state === 'past').reverse();
+  if (!done.length) {
+    return `<div style="margin-top:18px;">${emptyState('Nothing archived yet — a phase lands here once it has finished.')}</div>`;
+  }
+  return `
+    <div style="font-size:11px; color:var(--text-dim); margin:18px 0 10px;">Blocks you've finished, newest first. Tap one to look inside; a finished phase keeps what it ran.</div>
+    <div class="phase-list">${done.map(renderPhaseCard).join('')}</div>`;
 }
 
 // The long-cut flag, at the top of the screen rather than on a card -- it's a property of the
@@ -1685,16 +1708,25 @@ function renderPhaseSummary(s) {
 // MEAL PLAN). Both of those were already phase-owned in the data -- exercisePlan since the phases
 // work, mealPlan as of this change -- so they were sitting under a heading that no longer described
 // them. Nothing inside any of the three panes changed; only where you reach them from.
+// GOAL became NEW. The tab holds the phase CARDS -- what you use to set up what's coming -- while
+// "goal" named one field on one of them, and a phase carries a way you train as much as a weight
+// target. ARCHIVED takes the finished ones off it: a past phase is a record, and leaving records in
+// the list you plan from makes that list longer every block you complete.
+//
+// The key stays 'goal' on purpose. It's in saved nav snapshots and in tests, and renaming a stored
+// value to match a label is churn with a migration attached — the label is what people read.
 const PHASES_SUBTABS = [
-  ['goal', 'GOAL'],
+  ['goal', 'NEW'],
   ['workouts', 'WORKOUT PLAN'],
   ['meals', 'MEAL PLAN'],
+  ['archived', 'ARCHIVED'],
 ];
 function setPhasesSubtab(t) { NAV.phasesSubtab = t; render(); }
 function renderPhasesScreen() {
   const sub = PHASES_SUBTABS.some(([k]) => k === NAV.phasesSubtab) ? NAV.phasesSubtab : 'goal';
   const body = sub === 'workouts' ? renderExercisePlanTab()
              : sub === 'meals' ? renderMealPlanTab()
+             : sub === 'archived' ? renderArchivedPhasesTab()
              : renderGoalTab();
   return `<div class="screen">
     <div class="section-title">Phases</div>

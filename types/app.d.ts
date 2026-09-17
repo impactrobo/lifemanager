@@ -725,6 +725,9 @@ interface AppState {
    *  SCHEME, not per tier: T2a/T2b/T2c all read `t2` and differ by their own TIER_SCHEMES intensity
    *  and rep ladder. See app-lifts.js "LIFT MAXES". */
   liftMaxes: Record<string, { t1?: LiftMax; t2?: LiftMax }>;
+  /** Per-user shorthand for a lift, keyed by liftId and sparse. Overrides the library `short`,
+   *  never `name`, so two nicknames can never make one lift read as two. */
+  liftNicknames: Record<string, string>;
   workouts: Array<Record<string, any> & { id: string; name: string; type?: WorkoutType }>;
   mesoWorkouts: Array<Record<string, any>>;
   mesoLogs: Record<string, any>;

@@ -9,6 +9,55 @@
 // and must stay last.
 // ---------------- TRAINING MAX ----------------
 // ---------------- RP-STYLE: VOLUME LANDMARKS ----------------
+// ---- Set Volume, on the WORKOUTS screen ----
+//
+// It used to be the LANDMARKS EDITOR, sitting in the builder: fifteen muscles x four number inputs,
+// which is a thing you set once and then never open again. What you actually want during a block is
+// the READING -- am I under MEV on back this week -- and that belongs beside the sessions that
+// answer it, not on a configuration screen you have to go and find.
+//
+// So this leads with the week's counts against your landmarks, and keeps the editor behind a
+// toggle. Same numbers, opposite emphasis: the answer first, the settings when you want them.
+//
+// Muscles you haven't trained this week are listed too, quietly. "Nothing on back" is the single
+// most useful thing this screen can tell you, and a list of only what you DID train cannot say it.
+function renderSetVolumeSection() {
+  const monday = mondayOf(todayStr());
+  const vol = computeVolumeForWeek(monday);
+  const byMuscle = {};
+  vol.forEach(v => { byMuscle[v.muscle] = v.sets; });
+  const rows = MUSCLE_GROUPS.map(m => {
+    const sets = byMuscle[m] || 0;
+    const lm = STATE.muscleLandmarks[m];
+    // Zones are the landmarks' own thresholds -- stated, never scored. "Below MEV" is a fact about
+    // a number, not a mark against you, and a week still has days left in it.
+    const zone = !lm ? ''
+      : sets === 0 ? 'nothing yet'
+      : sets < lm.mev ? 'below MEV'
+      : sets > lm.mrv ? 'over MRV'
+      : (sets >= lm.mavLo && sets <= lm.mavHi) ? 'in MAV'
+      : 'above MEV';
+    const tone = zone === 'over MRV' ? 'var(--bad)' : zone === 'in MAV' ? 'var(--good)' : 'var(--text-faint)';
+    return `
+      <div class="row" style="font-size:12px; padding:4px 0; ${sets ? '' : 'opacity:.55;'}">
+        <span style="display:flex; align-items:center; gap:7px; min-width:0;">
+          <i style="width:9px; height:9px; border-radius:50%; background:${muscleColor(m)}; flex:none;"></i>
+          ${escapeHtml(m)}
+        </span>
+        <span class="mono" style="color:${tone};">${sets}${lm ? ` <span style="font-size:10px; color:var(--text-faint);">${zone}</span>` : ''}</span>
+      </div>`;
+  }).join('');
+  return `
+    <div class="row" style="margin-bottom:6px;">
+      <div class="subtle-label" style="margin-bottom:0;">SET VOLUME &middot; THIS WEEK</div>
+      <button class="btn btn-ghost btn-sm" onclick="UI.landmarksOpen=${UI.landmarksOpen ? 'false' : 'true'}; render();">
+        ${UI.landmarksOpen ? 'HIDE LANDMARKS' : 'LANDMARKS'}</button>
+    </div>
+    <div style="font-size:11px; color:var(--text-dim); margin-bottom:8px;">Sets logged since ${fmtGoalDate(monday)}, per muscle.</div>
+    <div class="panel">${rows}</div>
+    ${UI.landmarksOpen ? `<div class="divider"></div>${renderVolumeLandmarksSetup()}` : ''}`;
+}
+
 function renderVolumeLandmarksSetup() {
   const rows = MUSCLE_GROUPS.map(m => {
     const lm = STATE.muscleLandmarks[m];
@@ -138,6 +187,11 @@ function renderLiftMaxCard(lift) {
         // when both were stored, and only one of them is a fact about the movement.
         ? `<span class="pill pill-${lu === 'lower' ? 'lower' : 'upper'}">${lu.toUpperCase()}${lu === 'core' ? '' : ' BODY'}</span>`
         : ''}
+    </div>
+    <div class="log-sheet-row" style="margin-bottom:8px;">
+      <span class="log-sheet-label">Nickname</span>
+      <input type="text" placeholder="${escapeHtml(lift.short || lift.name)}" value="${escapeHtml(liftNickname(lift.id))}"
+             onchange="setLiftNickname('${lift.id}', this.value)">
     </div>
     ${entry.t1 ? renderLiftMaxRow(lift, 't1') : ''}
     ${entry.t2 ? renderLiftMaxRow(lift, 't2') : ''}

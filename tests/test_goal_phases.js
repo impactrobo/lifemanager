@@ -281,7 +281,23 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     labelBorder: getComputedStyle(document.querySelector('.phase-label')).borderTopWidth,
   }));
   console.log('screen:', ui);
-  if (ui.cards !== 3) throw new Error(`Expected 3 phase cards, got ${ui.cards}`);
+  // NEW lists what's still live; finished blocks moved to ARCHIVED, so the list you plan from
+  // doesn't grow by one every block you complete. The fixture's first phase has ended.
+  const archived = await page.evaluate(async () => {
+    const past = phaseTimeline().filter(e => e.state === 'past').length;
+    setPhasesSubtab('archived');
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const onArchived = document.querySelectorAll('.phase-card').length;
+    setPhasesSubtab('goal');
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    return { past, onArchived };
+  });
+  console.log('archived split:', archived);
+  if (ui.cards + archived.onArchived !== 3) {
+    throw new Error(`Every phase renders on one tab or the other: ${ui.cards} live + ${archived.onArchived} archived`);
+  }
+  if (archived.onArchived !== archived.past) throw new Error('ARCHIVED holds exactly the finished phases');
+  if (ui.cards !== 3 - archived.past) throw new Error(`NEW holds the rest, got ${ui.cards}`);
   if (ui.now !== 1) throw new Error('Exactly one phase should be marked current');
   if (!ui.summary) throw new Error('The plan summary should render');
   if (ui.labelBorder !== '0px') throw new Error(`The phase label should be borderless, got ${ui.labelBorder}`);

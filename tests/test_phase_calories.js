@@ -246,8 +246,11 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // editor stacked at once. Counting across the whole screen would only ever see the open card, so
   // this opens each phase in turn and sums what its own card renders.
   const ui = await page.evaluate(async () => {
+    const stateOf = id => (phaseTimeline().find(e => e.phase.id === id) || {}).state;
     let calRows = 0, driftBoxes = 0, driftButtons = 0;
     for (const ph of STATE.phases) {
+      setPhasesSubtab(stateOf(ph.id) === 'past' ? 'archived' : 'goal');
+      await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
       openPhaseCard(ph.id);
       await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
       calRows += document.querySelectorAll('.phase-cal').length;
