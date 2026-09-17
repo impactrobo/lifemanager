@@ -52,11 +52,10 @@ const TEST_PHOTO_B64 = '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAA0JCgsKCA0LCgsODg0PEyAV
   if (resizeResult.width !== 1024) throw new Error(`Expected the long edge (width, since source is wider than tall) to be exactly 1024, got ${resizeResult.width}`);
 
   // 2. Real measurement-form flow: open the form, attach that photo via the actual file input.
-  // MEASUREMENTS, not WEIGHT: Health's old SPECS screen stacked both logs on one page, so either
-  // landing would do. BODY split them so each log sits under its own chart, and the measurement
-  // form only exists on the measurement half.
-  await page.evaluate(() => { switchTab('train'); setFitnessSubtab('body'); setBodySubtab('measurements'); });
-  await page.evaluate(() => toggleMeasureForm());
+  // WEIGHT and MEASUREMENTS are one BODY form now, and the photo row sits inside the DETAILED
+  // MEASUREMENTS disclosure — so it has to be opened before #measurePhotoInput exists at all.
+  await page.evaluate(() => { switchTab('train'); setFitnessSubtab('body'); setBodySubtab('body'); });
+  await page.evaluate(() => { openBodyAdd(); toggleBodyDetail(); });
   await settle(page);
   await page.setInputFiles('#measurePhotoInput', tmpPhoto);
   await settle(page); // resizeImageFile is async (FileReader + Image decode)
@@ -83,13 +82,13 @@ const TEST_PHOTO_B64 = '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAA0JCgsKCA0LCgsODg0PEyAV
 
   // 5. Save the measurement, confirm the photos landed in STATE.measurements
   const measurementsBefore = await page.evaluate(() => STATE.measurements.length);
-  await page.fill('#mDate', '2026-01-15');
-  await page.evaluate(() => saveMeasurement());
+  await page.fill('#bDate', '2026-01-15');
+  await page.evaluate(() => saveBodyEntry());
   await settle(page);
   const measurementsAfter = await page.evaluate(() => STATE.measurements.length);
   const saved = await page.evaluate(() => STATE.measurements[STATE.measurements.length - 1]);
   console.log('measurements before/after save:', measurementsBefore, '/', measurementsAfter, '| saved photos count:', saved.photos.length);
-  if (measurementsAfter !== measurementsBefore + 1) throw new Error('Expected saveMeasurement() to add one entry');
+  if (measurementsAfter !== measurementsBefore + 1) throw new Error('Expected saveBodyEntry() to add one measurement entry');
   if (saved.photos.length !== 3) throw new Error(`Expected the saved measurement to carry 3 photos, got ${saved.photos.length}`);
   if (!saved.photos[0].startsWith('data:image/jpeg')) throw new Error('Expected saved photos to be JPEG data URIs');
 

@@ -1,9 +1,9 @@
-// Editing a logged body entry — weight and measurements, which are the same problem twice.
+// The merged BODY log: one form over two stores, joined by date.
 //
-// Both were add-only: the sole way to fix a typo was to delete the entry and retype it, which on a
-// measurement also threw away the photos attached to it. An entry IS its day, so editing never
-// moves the date — and today's entry gets the button, because the correction you actually make is
-// to the reading you just took.
+// WEIGHT and MEASUREMENTS were two subtabs, two buttons and two forms for one act — you step on the
+// scale and pick up the tape in the same two minutes. They are one BODY tab now. The STORES stay
+// separate (weightLog is read by TDEE, the weight plan, the rate and the long-cut flag;
+// measurements by COMPARE), so §3 is where the two-writes-one-form contract is pinned down.
 const { chromium } = require('playwright');
 const path = require('path');
 const { settle, pinClock } = require('./helpers.js');
@@ -19,166 +19,179 @@ const { settle, pinClock } = require('./helpers.js');
   const snapshot = await page.evaluate(() => JSON.stringify({
     measurements: STATE.measurements, weightLog: STATE.weightLog, units: STATE.units,
   }));
-
-  const goMeasure = () => page.evaluate(() => {
-    switchTab('train'); setFitnessSubtab('body'); setBodySubtab('measurements'); render();
+  const go = () => page.evaluate(() => {
+    switchTab('train'); setFitnessSubtab('body'); setBodySubtab('body'); render();
   });
 
-  // ---- 1. The button follows whether TODAY has an entry ----
+  // ---- 1. One tab, and the retired subtabs land on it ----
   await page.evaluate(() => { STATE.units = 'kg'; STATE.measurements = []; STATE.weightLog = []; });
-  await goMeasure();
+  await go();
   await settle(page);
-  const noEntry = await page.evaluate(() => document.querySelector('.entry-list, .btn-primary').parentElement.textContent);
-  const addLabel = await page.evaluate(() => [...document.querySelectorAll('.btn-primary')].map(b => b.textContent.trim())[0]);
-  console.log('no entry today:', addLabel);
-  if (!/ADD MEASUREMENT/.test(addLabel)) throw new Error('With nothing today it offers ADD, got ' + addLabel);
+  const tabs = await page.evaluate(() => [...document.querySelectorAll('.subnav button')].map(b => b.textContent.trim()));
+  console.log('subnav:', tabs);
+  if (tabs.indexOf('BODY') !== 0) throw new Error('BODY leads the subnav: ' + tabs.join('/'));
+  if (tabs.includes('WEIGHT') || tabs.includes('MEASUREMENTS')) throw new Error('...and the two it absorbed are gone: ' + tabs.join('/'));
+  // A saved nav snapshot still naming one of them has to render something real.
+  for (const stale of ['weight', 'measurements']) {
+    await page.evaluate((s) => { NAV.bodySubtab = s; render(); }, stale);
+    await settle(page);
+    const landed = await page.evaluate(() => ({
+      hasForm: /ADD ENTRY|EDIT TODAY/.test(document.getElementById('app').innerText),
+      len: document.getElementById('app').innerHTML.length,
+    }));
+    if (!landed.hasForm || !landed.len) throw new Error(`A stale '${stale}' subtab must land on BODY: ` + JSON.stringify(landed));
+  }
+  await go();
 
+  // The bottom bar names the TAB, which holds far more than a body measurement.
+  const bar = await page.evaluate(() => [...document.querySelectorAll('#tabbar button')].map(b => b.textContent.trim()));
+  console.log('bar:', bar);
+  if (!bar.includes('PROGRESS')) throw new Error('The tab is PROGRESS now: ' + bar.join('/'));
+
+  // ---- 2. OTHER 1 / OTHER 2, after the calves ----
+  const fields = await page.evaluate(() => MEASURE_FIELDS.filter(f => f.unit === 'length').map(f => f.key));
+  console.log('length fields:', fields.join(','));
+  if (fields[fields.length - 2] !== 'other1' || fields[fields.length - 1] !== 'other2') {
+    throw new Error('Two spare slots go last, after the calves: ' + fields.join(','));
+  }
+  if (fields.indexOf('lCalf') !== fields.length - 3) throw new Error('...immediately after L Calf: ' + fields.join(','));
+
+  // ---- 3. ONE form, TWO stores ----
+  // The weight half leads; the circumferences fold away because the tape comes out every few weeks
+  // and the scale every morning.
+  await page.evaluate(() => openBodyAdd());
+  await settle(page);
+  const shape = await page.evaluate(() => ({
+    weightVisible: !!document.getElementById('wWeight'),
+    // Folded by default — and the detail inputs genuinely are not in the DOM while it is shut.
+    detailOpen: UI.bodyDetailOpen,
+    detailInputs: !!document.getElementById('mf_rArm'),
+    header: (document.querySelector('.lift-note-label') || {}).textContent,
+  }));
+  console.log('form shape:', shape);
+  if (!shape.weightVisible) throw new Error('The weight inputs lead the form');
+  if (shape.detailOpen || shape.detailInputs) throw new Error('The circumferences start folded: ' + JSON.stringify(shape));
+  if (!/Detailed measurements/i.test(shape.header || '')) throw new Error('...behind a labelled disclosure: ' + shape.header);
+
+  await page.evaluate(() => toggleBodyDetail());
+  await settle(page);
   await page.evaluate(() => {
-    STATE.measurements = [
-      { id: 'm-old', date: '2026-06-01', fields: { rArm: 38 }, photos: [] },
-      { id: 'm-today', date: todayStr(), fields: { rArm: 39, waist: 90 }, photos: ['data:image/gif;base64,R0lGODlhAQABAAAAACw='] },
-    ];
-    render();
+    document.getElementById('wWeight').value = '80';
+    document.getElementById('wBodyFat').value = '18';
+    document.getElementById('mf_rArm').value = '39';
+    document.getElementById('mf_other1').value = '25';
+    saveBodyEntry();
   });
   await settle(page);
-  const withEntry = await page.evaluate(() => [...document.querySelectorAll('.btn-primary')].map(b => b.textContent.trim())[0]);
-  console.log('entry today:', withEntry);
-  if (!/EDIT TODAY/.test(withEntry)) throw new Error("Today's entry turns the button into an edit, got " + withEntry);
+  const both = await page.evaluate(() => {
+    const w = weightEntryOn(todayStr()), m = measurementOn(todayStr());
+    return {
+      weightRows: STATE.weightLog.length, measureRows: STATE.measurements.length,
+      kg: w ? lbToDisplay(w.weightLb) : null, bf: w ? w.bodyFatPct : null,
+      rArm: m ? cmToDisplay(m.fields.rArm) : null,
+      other1: m ? cmToDisplay(m.fields.other1) : null,
+      // The overlap is NOT written twice: MEASURE_FIELDS' own weight/bf are not collected here,
+      // because the top section owns those numbers and a form asking twice invites disagreement.
+      measureWeight: m ? m.fields.weight : undefined,
+      measureBf: m ? m.fields.bf : undefined,
+      sameDate: w && m && w.date === m.date,
+    };
+  });
+  console.log('one save, two stores:', both);
+  if (both.weightRows !== 1 || both.measureRows !== 1) throw new Error('One save writes both halves: ' + JSON.stringify(both));
+  if (Math.abs(both.kg - 80) > 0.05 || both.bf !== 18) throw new Error('The weight half is stored: ' + JSON.stringify(both));
+  if (Math.abs(both.rArm - 39) > 0.05 || Math.abs(both.other1 - 25) > 0.05) throw new Error('The measurement half is stored: ' + JSON.stringify(both));
+  if (both.measureWeight !== undefined || both.measureBf !== undefined) {
+    throw new Error('Weight must live in ONE store, not both: ' + JSON.stringify(both));
+  }
+  if (!both.sameDate) throw new Error('Both halves carry the same date — that is what joins them');
 
-  // It reverts on its own when the day turns — nothing resets it, the button asks about TODAY, so
-  // the answer changes when the date does. The debug clock is the only way to prove that.
-  await page.evaluate(() => { setDebugDayOffset(1); });
+  // ---- 4. Today's entry takes the button, and reverts when the day turns ----
+  await settle(page);
+  const btn = await page.evaluate(() => [...document.querySelectorAll('.btn-primary')].map(b => b.textContent.trim())[0]);
+  console.log('button with an entry today:', btn);
+  if (!/EDIT TODAY/.test(btn)) throw new Error("Today's entry turns the button into an edit: " + btn);
+  await page.evaluate(() => setDebugDayOffset(1));
   await settle(page);
   const tomorrow = await page.evaluate(() => [...document.querySelectorAll('.btn-primary')].map(b => b.textContent.trim())[0]);
-  console.log('next day:', tomorrow);
-  if (!/ADD MEASUREMENT/.test(tomorrow)) throw new Error('Tomorrow it is an ADD again, got ' + tomorrow);
+  console.log('button tomorrow:', tomorrow);
+  if (!/ADD ENTRY/.test(tomorrow)) throw new Error('Nothing resets it — it asks about TODAY, so tomorrow it adds: ' + tomorrow);
   await page.evaluate(() => setDebugDayOffset(0));
   await settle(page);
 
-  // ---- 2. Editing prefills, keeps the date, and saves in place ----
-  await page.evaluate(() => openMeasureEditor('m-today'));
+  // ---- 5. Editing prefills both halves, keeps the date, and updates in place ----
+  await page.evaluate(() => openBodyEditor(todayStr()));
   await settle(page);
   const form = await page.evaluate(() => ({
-    editId: UI.measureEditId,
-    rArm: document.getElementById('mf_rArm').value,
-    waist: document.getElementById('mf_waist').value,
-    // The date is TEXT, not an input: an entry is its day and an edit must not be able to move it.
-    hasDateInput: !!document.getElementById('mDate'),
-    saveLabel: [...document.querySelectorAll('.btn-primary')].map(b => b.textContent.trim())[0],
-    photosInDraft: VIEW.measureDraftPhotos.length,
+    weight: document.getElementById('wWeight').value,
+    bf: document.getElementById('wBodyFat').value,
+    // The detail section opens by itself when the day HAS detail — otherwise editing a taped day
+    // would hide the very numbers you came to fix.
+    detailOpen: UI.bodyDetailOpen,
+    rArm: (document.getElementById('mf_rArm') || {}).value,
+    hasDateInput: !!document.getElementById('bDate'),
   }));
   console.log('edit form:', form);
-  if (form.rArm !== '39' || form.waist !== '90') throw new Error('The form prefills from the entry: ' + JSON.stringify(form));
-  if (form.hasDateInput) throw new Error('An edit must not offer a date field — that would re-date the reading');
-  if (!/SAVE CHANGES/.test(form.saveLabel)) throw new Error('...and says it is changing one: ' + form.saveLabel);
-  if (form.photosInDraft !== 1) throw new Error("The entry's photos seed the draft, or saving would silently drop them");
+  if (Math.abs(Number(form.weight) - 80) > 0.05 || form.bf !== '18') throw new Error('Prefilled from the weight half: ' + JSON.stringify(form));
+  if (!form.detailOpen) throw new Error('A day with measurements opens its detail section');
+  if (form.rArm !== '39') throw new Error('...prefilled from the measurement half: ' + form.rArm);
+  if (form.hasDateInput) throw new Error('An entry IS its day — an edit must not offer a date field');
 
   await page.evaluate(() => {
-    document.getElementById('mf_rArm').value = '41';
-    document.getElementById('mf_waist').value = '';   // clearing removes the field
-    saveMeasurement();
+    document.getElementById('wWeight').value = '79';
+    document.getElementById('mf_rArm').value = '';     // clearing removes it
+    saveBodyEntry();
   });
   await settle(page);
-  const saved = await page.evaluate(() => {
-    const m = STATE.measurements.find(x => x.id === 'm-today');
+  const edited = await page.evaluate(() => {
+    const w = weightEntryOn(todayStr()), m = measurementOn(todayStr());
     return {
-      count: STATE.measurements.length,
-      rArm: cmToDisplay(m.fields.rArm),
-      waistGone: !('waist' in m.fields),
-      date: m.date, today: todayStr(),
-      photos: (m.photos || []).length,
-      formClosed: !UI.measureFormOpen && UI.measureEditId === null,
+      weightRows: STATE.weightLog.length, measureRows: STATE.measurements.length,
+      kg: lbToDisplay(w.weightLb), rArmGone: !(m && 'rArm' in m.fields),
+      other1: m ? cmToDisplay(m.fields.other1) : null,
+      closed: !UI.bodyFormOpen,
     };
   });
-  console.log('after save:', saved);
-  if (saved.count !== 2) throw new Error('Editing updates in place — it must not add a second entry: ' + saved.count);
-  if (Math.abs(saved.rArm - 41) > 0.01) throw new Error('The new value is stored: ' + saved.rArm);
-  if (!saved.waistGone) throw new Error('Clearing a field removes it from the entry');
-  if (saved.date !== saved.today) throw new Error('The date is untouched: ' + saved.date);
-  if (saved.photos !== 1) throw new Error('Photos survive an edit — losing them is why delete-and-retype was not good enough');
-  if (!saved.formClosed) throw new Error('Saving closes the form');
+  console.log('after edit:', edited);
+  if (edited.weightRows !== 1 || edited.measureRows !== 1) throw new Error('Editing updates in place: ' + JSON.stringify(edited));
+  if (Math.abs(edited.kg - 79) > 0.05) throw new Error('The new weight is stored: ' + edited.kg);
+  if (!edited.rArmGone) throw new Error('Clearing a field removes it from the entry');
+  if (Math.abs(edited.other1 - 25) > 0.05) throw new Error('...while untouched fields survive: ' + edited.other1);
+  if (!edited.closed) throw new Error('Saving closes the form');
 
-  // ---- 3. Any entry in the list opens, not just today's ----
-  const oldOpen = await page.evaluate(() => {
-    openMeasureEditor('m-old');
-    return { editId: UI.measureEditId, value: document.getElementById('mf_rArm') ? null : 'not rendered yet' };
-  });
-  await settle(page);
-  const oldForm = await page.evaluate(() => ({
-    editId: UI.measureEditId,
-    rArm: document.getElementById('mf_rArm').value,
-    shownDate: document.querySelector('.panel .mono') ? document.querySelector('.panel .mono').textContent.trim() : null,
-  }));
-  console.log('older entry:', oldForm);
-  if (oldForm.editId !== 'm-old') throw new Error('Tapping an older entry opens it: ' + oldForm.editId);
-  if (oldForm.rArm !== '38') throw new Error('...prefilled with ITS values: ' + oldForm.rArm);
-  if (oldForm.shownDate !== '2026-06-01') throw new Error("...and shows its own date, not today's: " + oldForm.shownDate);
-  await page.evaluate(() => closeMeasureForm());
-
-  // The card is the control, and the X inside it must not also open the editor.
-  await settle(page);
-  const tappable = await page.evaluate(() => {
-    const card = document.querySelector('.entry-card-tap');
-    const x = card.querySelector('.icon-btn');
-    return { cards: document.querySelectorAll('.entry-card-tap').length, xStops: /stopPropagation/.test(x.getAttribute('onclick') || '') };
-  });
-  console.log('cards:', tappable);
-  if (!tappable.cards) throw new Error('Entries render as tappable cards');
-  if (!tappable.xStops) throw new Error('The delete X must not also open the editor');
-
-  // ---- 4. The same, for weight ----
+  // ---- 6. An emptied half is REMOVED, not left hollow ----
+  // A weightLog row with no weight would poison the trend; a measurement with no fields would put
+  // a point on a chart of nothing.
   await page.evaluate(() => {
-    STATE.weightLog = [
-      { id: 'w-old', date: '2026-06-01', weightLb: 180, bodyFatPct: 20, bodyWaterPct: null, calories: null, cardioCalories: null },
-      { id: 'w-today', date: todayStr(), weightLb: 178, bodyFatPct: null, bodyWaterPct: null, calories: 2200, cardioCalories: null },
-    ];
-    switchTab('train'); setFitnessSubtab('body'); setBodySubtab('weight'); render();
+    openBodyEditor(todayStr());
   });
   await settle(page);
-  const wBtn = await page.evaluate(() => [...document.querySelectorAll('.btn-primary')].map(b => b.textContent.trim()).find(t => /ENTRY/.test(t)));
-  console.log('weight button:', wBtn);
-  if (!/EDIT TODAY/.test(wBtn || '')) throw new Error("Weight gets the same treatment, got " + wBtn);
-
-  await page.evaluate(() => openWeightEditor('w-today'));
+  await page.evaluate(() => { document.getElementById('wWeight').value = ''; saveBodyEntry(); });
   await settle(page);
-  const wForm = await page.evaluate(() => ({
-    weight: document.getElementById('wWeight').value,
-    cal: document.getElementById('wCal').value,
-    hasDateInput: !!document.getElementById('wDate'),
+  const hollow = await page.evaluate(() => ({
+    weightRows: STATE.weightLog.length,
+    measureRows: STATE.measurements.length,
+    stillListed: /2026-06-15/.test(document.getElementById('app').innerText),
   }));
-  console.log('weight form:', wForm);
-  // Stored in lb, shown in the display unit — 178 lb is 80.7 kg.
-  if (Math.abs(Number(wForm.weight) - 80.7) > 0.2) throw new Error('Prefilled in display units: ' + wForm.weight);
-  if (wForm.cal !== '2200') throw new Error('...including the optional fields: ' + wForm.cal);
-  if (wForm.hasDateInput) throw new Error('An edit must not offer a date field');
+  console.log('weight cleared:', hollow);
+  if (hollow.weightRows !== 0) throw new Error('An emptied weight half is removed, not stored blank: ' + JSON.stringify(hollow));
+  if (hollow.measureRows !== 1) throw new Error('...and the measurement half is untouched');
+  if (!hollow.stillListed) throw new Error('...and the day is still in the list, because it still holds something');
 
-  await page.evaluate(() => { document.getElementById('wWeight').value = '79'; saveWeightEntry(); });
-  await settle(page);
-  const wSaved = await page.evaluate(() => {
-    const e = STATE.weightLog.find(x => x.id === 'w-today');
-    return { count: STATE.weightLog.length, kg: lbToDisplay(e.weightLb), date: e.date, cal: e.calories, open: UI.weightLogFormOpen };
+  // ---- 7. Deleting a day removes BOTH halves ----
+  await page.evaluate(() => {
+    STATE.weightLog = [{ id: 'w1', date: todayStr(), weightLb: 180, bodyFatPct: null, bodyWaterPct: null, calories: null, cardioCalories: null }];
+    render();
   });
-  console.log('weight after save:', wSaved);
-  if (wSaved.count !== 2) throw new Error('Editing a weight updates in place: ' + wSaved.count);
-  if (Math.abs(wSaved.kg - 79) > 0.05) throw new Error('The new weight is stored: ' + wSaved.kg);
-  if (wSaved.cal !== 2200) throw new Error('...and untouched fields survive: ' + wSaved.cal);
-  if (wSaved.open) throw new Error('Saving closes the form');
-
-  // ---- 5. The + button always adds, even while an edit is open ----
-  await page.evaluate(() => { openWeightEditor('w-old'); toggleWeightForm(); });
-  const cleared = await page.evaluate(() => ({ editId: UI.weightEditId, open: UI.weightLogFormOpen }));
-  if (cleared.editId !== null) throw new Error('Opening the add form must drop the edit target: ' + JSON.stringify(cleared));
-
-  // ---- 6. Deleting the entry being edited closes the form ----
-  await page.evaluate(() => { openWeightEditor('w-today'); deleteWeightEntry('w-today'); confirmYes(); });
   await settle(page);
-  const afterDelete = await page.evaluate(() => ({
-    open: UI.weightLogFormOpen, editId: UI.weightEditId,
-    gone: !STATE.weightLog.some(e => e.id === 'w-today'),
+  await page.evaluate(() => { deleteBodyEntry(todayStr()); confirmYes(); });
+  await settle(page);
+  const gone = await page.evaluate(() => ({
+    weightRows: STATE.weightLog.length, measureRows: STATE.measurements.length, open: UI.bodyFormOpen,
   }));
-  console.log('after deleting the edited entry:', afterDelete);
-  if (!afterDelete.gone) throw new Error('It should be deleted');
-  if (afterDelete.open || afterDelete.editId !== null) throw new Error('...and the form must close, or it renders against nothing: ' + JSON.stringify(afterDelete));
+  console.log('after delete:', gone);
+  if (gone.weightRows !== 0 || gone.measureRows !== 0) throw new Error('One card is one day — deleting it takes both halves: ' + JSON.stringify(gone));
+  if (gone.open) throw new Error('...and closes the form if it was editing that day');
 
   await page.evaluate((snap) => {
     const s = JSON.parse(snap);

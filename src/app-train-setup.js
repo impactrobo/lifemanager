@@ -1354,6 +1354,12 @@ const MEASURE_FIELDS = [
   { key: 'lThigh', label: 'L Thigh', unit: 'length' },
   { key: 'rCalf', label: 'R Calf', unit: 'length' },
   { key: 'lCalf', label: 'L Calf', unit: 'length' },
+  // Two unnamed slots at the end for whatever this list doesn't cover -- a forearm taken somewhere
+  // specific, a cuff site your physio asked for. Deliberately generic: naming them would just be
+  // guessing at a seventeenth and eighteenth body part, and an unnamed one you know the meaning of
+  // beats a named one that's close but wrong.
+  { key: 'other1', label: 'Other 1', unit: 'length' },
+  { key: 'other2', label: 'Other 2', unit: 'length' },
 ];
 
 function setFitnessSubtab(t) { NAV.fitnessSubtab = t; resetTrainViewForSubtab(t); render(); }
@@ -1370,25 +1376,24 @@ function setFitnessSubtab(t) { NAV.fitnessSubtab = t; resetTrainViewForSubtab(t)
 function renderBody() {
   const tab = (key, label) =>
     `<button class="${NAV.bodySubtab===key?'active':''}" onclick="setBodySubtab('${key}')">${label}</button>`;
+  // WEIGHT and MEASUREMENTS merged into one BODY tab. They were two logs for one act -- you step on
+  // the scale and pick up the tape in the same two minutes -- and keeping them apart meant two
+  // buttons, two forms and two entries for one morning. The STORES stay separate (weightLog is read
+  // by TDEE, the weight plan, the rate and the long-cut flag; measurements by COMPARE), because
+  // what was wrong was the surface, not the data.
   const subnav = subNav(
-    tab('weight', 'WEIGHT') + tab('measurements', 'MEASUREMENTS') + tab('labs', 'LABS') +
+    tab('body', 'BODY') + tab('labs', 'LABS') +
     tab('volume', 'SET VOLUME') + tab('compare', 'COMPARE') + tab('pr', 'PR LOG'),
     { marginTop: false });
   let body;
-  if (NAV.bodySubtab === 'weight') {
-    body = renderBodyWeightChart() + `<div class="divider"></div>
-      <div class="subtle-label" style="margin-bottom:8px;">LOG</div>` + renderWeightLog();
-  } else if (NAV.bodySubtab === 'measurements') {
-    // No chart above this log, unlike WEIGHT. Measurements are SIXTEEN fields, so a chart here can
-    // only ever be one-at-a-time behind a dropdown -- and one at a time is the question nobody
-    // asks of a tape. COMPARE draws up to four of them together, against the same range control as
-    // everything else, so that is where the trend lives.
-    body = `<div class="subtle-label" style="margin-bottom:8px;">LOG</div>` + renderMeasurements();
-  }
-  else if (NAV.bodySubtab === 'labs') body = renderLabPanels();
+  if (NAV.bodySubtab === 'labs') body = renderLabPanels();
   else if (NAV.bodySubtab === 'compare') body = renderCompareView();
   else if (NAV.bodySubtab === 'pr') body = renderPrLog();
-  else body = renderVolume();
+  else if (NAV.bodySubtab === 'volume') body = renderVolume();
+  // Anything else -- including the retired 'weight' and 'measurements' riding in on a saved nav
+  // snapshot -- lands on the tab that absorbed them.
+  else body = renderBodyWeightChart() + `<div class="divider"></div>
+    <div class="subtle-label" style="margin-bottom:8px;">LOG</div>` + renderBodyLog();
   return `<div class="screen">
     <div class="section-title">Health &amp; Wellness</div>
     ${subnav}

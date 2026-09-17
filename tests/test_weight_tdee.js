@@ -35,13 +35,13 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   // 1. Add a weight entry via the real form, including the new optional fields
   await page.evaluate(() => { STATE.weightLog = []; saveState(); });
-  await page.evaluate(() => { switchTab('train'); setFitnessSubtab('body'); setBodySubtab('weight'); });
+  await page.evaluate(() => { switchTab('train'); setFitnessSubtab('body'); setBodySubtab('body'); });
   await settle(page);
-  await page.evaluate(() => toggleWeightForm());
+  await page.evaluate(() => openBodyAdd());  // WEIGHT + MEASUREMENTS merged into one BODY form
   await page.fill('#wWeight', '180');
   await page.fill('#wBodyFat', '17.5');
   await page.fill('#wBodyWater', '55.2');
-  await page.evaluate(() => saveWeightEntry());
+  await page.evaluate(() => saveBodyEntry());
   await settle(page);
   const added = await page.evaluate(() => STATE.weightLog[STATE.weightLog.length - 1]);
   console.log('added weight entry:', added);
@@ -59,7 +59,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (JSON.stringify(trend) !== JSON.stringify([10, 15, 25])) throw new Error(`Expected [10,15,25], got ${JSON.stringify(trend)}`);
 
   // 3. Body Weight chart's metric selector: Body Fat % has < 2 points (only 1 entry so far) -> empty state
-  await page.evaluate(() => { switchTab('train'); setFitnessSubtab('body'); setBodySubtab('weight'); setWeightMetric('bodyFatPct'); });
+  await page.evaluate(() => { switchTab('train'); setFitnessSubtab('body'); setBodySubtab('body'); setWeightMetric('bodyFatPct'); });
   await settle(page);
   const bfEmptyState = await page.evaluate(() => !!document.querySelector('.empty-state'));
   if (!bfEmptyState) throw new Error('Expected an empty-state with only 1 Body Fat % entry logged');

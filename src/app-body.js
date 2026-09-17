@@ -35,47 +35,251 @@ function measurementHasTrend(key) { return measurementSeries(key).length >= 2; }
 // here was an A-vs-B delta table between two hand-picked entries; COMPARE answers the same question
 // over a date range, against the same shared range control as everything else, and charts the shape
 // instead of only stating the endpoints.
-function renderMeasurements() {
-  const list = [...STATE.measurements].sort((a,b) => b.date.localeCompare(a.date));
-  // Today's entry gets the button, because the correction you actually make is to the reading you
-  // just took. It reverts to ADD on its own tomorrow -- nothing resets it, the button simply asks
-  // whether TODAY has an entry, so the answer changes when the day does.
-  const today = measurementOn(todayStr());
-  const addForm = UI.measureFormOpen
-    ? renderMeasureForm()
-    : today
-      ? `<button class="btn btn-primary btn-block" onclick="openMeasureEditor('${today.id}')">&#916; EDIT TODAY'S MEASUREMENT</button>`
-      : `<button class="btn btn-primary btn-block" onclick="toggleMeasureForm()">+ ADD MEASUREMENT</button>`;
-  // Pointing at where the trend went, only once there is a trend to see.
-  const trendLink = list.length >= 2 ? `
-    <div class="panel" style="margin-bottom:12px; font-size:11px; color:var(--text-dim);">
-      Charting these over time lives in <b style="color:var(--text)">COMPARE</b>, under <b style="color:var(--text)">MUSCLES</b> — alongside your body weight and your lifts.
-      <button class="btn btn-ghost btn-sm" style="margin-top:8px;" onclick="setBodySubtab('compare')">OPEN COMPARE</button>
-    </div>` : '';
+// ================= THE MERGED BODY LOG =================
+// One form over TWO STORES, joined by date. STATE.weightLog and STATE.measurements stay separate on
+// purpose: the first is read by TDEE, the weight plan, the rate and the long-cut flag; the second by
+// COMPARE's MUSCLES group. Merging them would have meant touching all of that to fix a UI problem.
+// What was actually wrong was the surface -- two buttons and two forms for one act.
+//
+// The weight half leads because it's the daily one; the tape comes out every few weeks, so the
+// circumferences sit behind a disclosure. MEASURE_FIELDS' own `weight` and `bf` are deliberately NOT
+// offered there any more: they are the same two numbers as the top section, and a form asking twice
+// is a form inviting them to disagree.
+function measureLengthFields() { return MEASURE_FIELDS.filter(f => f.unit === 'length'); }
+function bodyLogDates() {
+  const dates = new Set();
+  STATE.weightLog.forEach(e => dates.add(e.date));
+  STATE.measurements.forEach(m => dates.add(m.date));
+  return [...dates].sort((a, b) => b.localeCompare(a));   // newest first
+}
+function bodyEntryOn(dateStr) {
+  return { date: dateStr, weight: weightEntryOn(dateStr), measure: measurementOn(dateStr) };
+}
+function bodyHasEntryOn(dateStr) {
+  const e = bodyEntryOn(dateStr);
+  return !!(e.weight || e.measure);
+}
 
-  // The whole card opens it. The X stops the click reaching the card, so delete stays a deliberate
-  // separate act rather than something you hit while aiming to look at an entry.
-  const cards = list.map(m => `
-    <div class="entry-card entry-card-tap ${UI.measureEditId === m.id ? 'entry-card-editing' : ''}"
-         onclick="openMeasureEditor('${m.id}')" role="button" tabindex="0"
-         onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openMeasureEditor('${m.id}');}">
-      <div class="ehead">
-        <div class="edate">${m.date}${m.date === todayStr() ? ' <span class="entry-today">TODAY</span>' : ''}</div>
-        <button class="icon-btn" onclick="event.stopPropagation(); deleteMeasurement('${m.id}')">${icon('close')}</button>
-      </div>
-      <div class="estats">
-        ${m.fields.weight ? `<span>Weight <b>${fmt(lbToDisplay(m.fields.weight),1)}</b> ${weightUnitLabel()}</span>` : ''}
-        ${m.fields.bf ? `<span>BF <b>${fmt(m.fields.bf,1)}</b>%</span>` : ''}
-        ${MEASURE_FIELDS.filter(f=>f.unit==='length' && m.fields[f.key]).map(f => `<span>${f.label} <b>${fmt(cmToDisplay(m.fields[f.key]),1)}</b> ${lengthUnitLabel()}</span>`).join('')}
-      </div>
-      ${renderPhotoThumbs(m.photos)}
-    </div>`).join('');
+function openBodyEditor(dateStr) {
+  UI.bodyEditDate = dateStr;
+  UI.bodyFormOpen = true;
+  const m = measurementOn(dateStr);
+  VIEW.measureDraftPhotos = m ? (m.photos || []).slice() : [];
+  // Open the detail section when there is detail to see -- otherwise editing a taped day hides the
+  // very numbers you came to fix.
+  UI.bodyDetailOpen = !!(m && measureLengthFields().some(f => m.fields[f.key] != null));
+  render();
+}
+function openBodyAdd() {
+  UI.bodyFormOpen = true;
+  UI.bodyEditDate = null;
+  UI.bodyDetailOpen = false;
+  VIEW.measureDraftPhotos = [];
+  render();
+}
+function closeBodyForm() {
+  UI.bodyFormOpen = false;
+  UI.bodyEditDate = null;
+  UI.bodyDetailOpen = false;
+  VIEW.measureDraftPhotos = [];
+  render();
+}
+function toggleBodyDetail() { UI.bodyDetailOpen = !UI.bodyDetailOpen; render(); }
+
+function renderBodyLog() {
+  const dates = bodyLogDates();
+  const today = todayStr();
+  const form = UI.bodyFormOpen
+    ? renderBodyForm()
+    : bodyHasEntryOn(today)
+      // Today's entry takes the button: the correction you actually make is to the reading you just
+      // took. Nothing resets this tomorrow -- it asks whether TODAY has an entry, so the answer
+      // changes when the day does.
+      ? `<button class="btn btn-primary btn-block" onclick="openBodyEditor('${today}')">&#916; EDIT TODAY'S ENTRY</button>`
+      : `<button class="btn btn-primary btn-block" onclick="openBodyAdd()">+ ADD ENTRY</button>`;
+
+  const cards = dates.map(d => {
+    const e = bodyEntryOn(d);
+    const w = e.weight, m = e.measure;
+    const bits = [];
+    if (w) {
+      bits.push(`<span>Weight <b>${fmt(lbToDisplay(w.weightLb), 1)}</b> ${weightUnitLabel()}</span>`);
+      if (w.bodyFatPct) bits.push(`<span>Body Fat <b>${fmt(w.bodyFatPct, 1)}</b>%</span>`);
+      if (w.bodyWaterPct) bits.push(`<span>Body Water <b>${fmt(w.bodyWaterPct, 1)}</b>%</span>`);
+      if (w.calories) bits.push(`<span>Calories <b>${w.calories}</b></span>`);
+      if (w.cardioCalories) bits.push(`<span>Cardio Cal <b>${w.cardioCalories}</b></span>`);
+    }
+    if (m) {
+      measureLengthFields().forEach(f => {
+        if (m.fields[f.key] != null && m.fields[f.key] !== '') {
+          bits.push(`<span>${f.label} <b>${fmt(cmToDisplay(m.fields[f.key]), 1)}</b> ${lengthUnitLabel()}</span>`);
+        }
+      });
+    }
+    return `
+      <div class="entry-card entry-card-tap ${UI.bodyEditDate === d ? 'entry-card-editing' : ''}"
+           onclick="openBodyEditor('${d}')" role="button" tabindex="0"
+           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openBodyEditor('${d}');}">
+        <div class="ehead">
+          <div class="edate">${d}${d === today ? ' <span class="entry-today">TODAY</span>' : ''}</div>
+          <button class="icon-btn" onclick="event.stopPropagation(); deleteBodyEntry('${d}')">${icon('close')}</button>
+        </div>
+        <div class="estats">${bits.join('')}</div>
+        ${m ? renderPhotoThumbs(m.photos) : ''}
+      </div>`;
+  }).join('');
 
   return `
-    <div style="margin-bottom:12px;">${addForm}</div>
-    ${trendLink}
-    <div class="entry-list">${cards || emptyState('No measurements logged yet.')}</div>`;
+    <div style="margin-bottom:12px;">${form}</div>
+    ${dates.length >= 2 ? `
+      <div class="panel" style="margin-bottom:12px; font-size:11px; color:var(--text-dim);">
+        Charting a measurement over time lives in <b style="color:var(--text)">COMPARE</b>, under <b style="color:var(--text)">MUSCLES</b> — alongside your body weight and your lifts.
+        <button class="btn btn-ghost btn-sm" style="margin-top:8px;" onclick="setBodySubtab('compare')">OPEN COMPARE</button>
+      </div>` : ''}
+    <div class="entry-list">${cards || emptyState('Nothing logged yet.')}</div>`;
 }
+
+function renderBodyForm() {
+  const editing = UI.bodyEditDate;
+  const e = editing ? bodyEntryOn(editing) : { weight: null, measure: null };
+  const w = e.weight, m = e.measure;
+  const num = (v, dec) => (v === undefined || v === null || v === '') ? '' : fmt(Number(v), dec == null ? 1 : dec);
+  const mval = (key) => {
+    if (!m) return '';
+    const raw = m.fields[key];
+    if (raw === undefined || raw === null || raw === '') return '';
+    return fmt(cmToDisplay(Number(raw)), 1);
+  };
+  const filled = m ? measureLengthFields().filter(f => m.fields[f.key] != null).length : 0;
+  return `
+    <div class="panel">
+      ${editing
+        // Fixed, not just prefilled. An entry IS its day -- letting an edit move the date would
+        // turn a correction into a silent re-dating of a reading taken on a particular morning.
+        ? `<div class="row" style="margin-bottom:12px;">
+             <span class="lbl" style="margin-bottom:0;">Editing</span>
+             <span class="mono" style="font-weight:700;">${escapeHtml(editing)}</span>
+           </div>`
+        : `<label class="field"><span class="lbl">Date</span><input type="date" id="bDate" value="${todayStr()}"></label>`}
+
+      <div class="field-row">
+        <label class="field"><span class="lbl">Weight (${weightUnitLabel()})</span><input type="number" step="0.1" id="wWeight" value="${w ? num(lbToDisplay(w.weightLb)) : ''}"></label>
+        <label class="field"><span class="lbl">Body Fat % (optional)</span><input type="number" step="0.1" id="wBodyFat" value="${w ? num(w.bodyFatPct) : ''}"></label>
+      </div>
+      <div class="field-row">
+        <label class="field"><span class="lbl">Body Water % (optional)</span><input type="number" step="0.1" id="wBodyWater" value="${w ? num(w.bodyWaterPct) : ''}"></label>
+        <label class="field"><span class="lbl">Calories (optional)</span><input type="number" id="wCal" value="${w && w.calories != null ? w.calories : ''}"></label>
+      </div>
+      <div class="field-row">
+        <label class="field"><span class="lbl">Cardio Calories (optional)</span><input type="number" id="wCardioCal" value="${w && w.cardioCalories != null ? w.cardioCalories : ''}"></label>
+        <span style="flex:1;"></span>
+      </div>
+      <div style="font-size:10px; color:var(--text-faint); margin:-4px 0 12px;">Body Fat / Water from a smart scale, if you have one. Cardio Calories = burned through direct cardio work.</div>
+
+      ${/* The tape comes out every few weeks, not every morning, so it folds. The header carries the
+            count so you can see a day HAS measurements without opening it. */''}
+      <div class="lift-note ${filled ? 'has-note' : ''} ${UI.bodyDetailOpen ? 'is-open' : ''}" style="margin-bottom:12px;">
+        <button class="lift-note-head" onclick="toggleBodyDetail()" aria-expanded="${UI.bodyDetailOpen}">
+          <span class="lift-note-caret">${UI.bodyDetailOpen ? '&minus;' : '+'}</span>
+          <span class="lift-note-label">Detailed measurements${filled ? ` &middot; ${filled}` : ''}</span>
+        </button>
+        ${UI.bodyDetailOpen ? `
+          <div class="lift-note-body">
+            <div class="grid2">
+              ${measureLengthFields().map(f => `
+                <label class="field">
+                  <span class="lbl">${f.label} (${lengthUnitLabel()})</span>
+                  <input type="number" step="0.1" id="mf_${f.key}" value="${mval(f.key)}">
+                </label>`).join('')}
+            </div>
+            <div class="subtle-label" style="margin:10px 0 8px;">PHOTO (optional)</div>
+            <div class="photo-thumb-row" id="measurePhotoRow"></div>
+            <button class="btn btn-ghost btn-sm" onclick="document.getElementById('measurePhotoInput').click()">+ ADD PHOTO</button>
+            <input type="file" id="measurePhotoInput" accept="image/*" multiple style="display:none" onchange="handleMeasurePhotoInput(event)">
+            <div class="lift-note-hint">Clearing a field removes it from this entry. Charting these over time is in COMPARE → MUSCLES.</div>
+          </div>` : ''}
+      </div>
+
+      <button class="btn btn-primary btn-block" onclick="saveBodyEntry()">${editing ? 'SAVE CHANGES' : 'SAVE ENTRY'}</button>
+      <div class="field-row" style="margin-top:8px;">
+        <button class="btn" style="flex:1;" onclick="closeBodyForm()">CANCEL</button>
+        ${editing ? `<button class="btn btn-danger" style="flex:1;" onclick="deleteBodyEntry('${editing}')">DELETE</button>` : ''}
+      </div>
+    </div>`;
+}
+
+// One save, two stores. Each half is written only if it has something in it, and an emptied half is
+// REMOVED rather than left as a hollow entry -- a weightLog row with no weight would poison the
+// trend, and a measurement with no fields would draw a point on nothing.
+function saveBodyEntry() {
+  const editing = UI.bodyEditDate;
+  const date = editing || inputVal('bDate') || todayStr();
+  const wRaw = inputVal('wWeight');
+
+  // Detail fields only exist in the DOM while the section is open; a closed one must keep whatever
+  // the entry already had rather than reading blanks and wiping it.
+  const existing = measurementOn(date);
+  let fields = existing ? Object.assign({}, existing.fields) : {};
+  if (UI.bodyDetailOpen) {
+    fields = {};
+    // `weight`/`bf` from the old MEASURE_FIELDS shape are no longer collected here -- the top
+    // section owns those numbers. Anything an older entry stored is carried through untouched.
+    if (existing) {
+      ['weight', 'bf'].forEach(k => { if (existing.fields[k] != null) fields[k] = existing.fields[k]; });
+    }
+    measureLengthFields().forEach(f => {
+      const raw = inputVal('mf_' + f.key);
+      if (raw !== '') fields[f.key] = displayToCm(raw);
+    });
+  }
+  const hasMeasure = Object.keys(fields).length > 0;
+  // Photos count as content. A progress photo with no tape reading is a real entry -- arguably the
+  // most common kind -- and refusing it would make the camera useless without a number beside it.
+  const photos = VIEW.measureDraftPhotos.slice();
+  if (wRaw === '' && !hasMeasure && !photos.length) { showToast('Enter a weight, a measurement or a photo'); return; }
+
+  // ---- weight half ----
+  const wEntry = weightEntryOn(date);
+  if (wRaw !== '') {
+    const values = {
+      weightLb: displayToLb(wRaw),
+      bodyFatPct: inputVal('wBodyFat') ? Number(inputVal('wBodyFat')) : null,
+      bodyWaterPct: inputVal('wBodyWater') ? Number(inputVal('wBodyWater')) : null,
+      calories: inputVal('wCal') ? Number(inputVal('wCal')) : null,
+      cardioCalories: inputVal('wCardioCal') ? Number(inputVal('wCardioCal')) : null,
+    };
+    if (wEntry) Object.assign(wEntry, values);
+    else STATE.weightLog.push(Object.assign({ id: uid(), date }, values));
+  } else if (wEntry) {
+    STATE.weightLog = STATE.weightLog.filter(x => x.id !== wEntry.id);
+  }
+
+  // ---- measurement half ----
+  if (hasMeasure || photos.length) {
+    if (existing) { existing.fields = fields; existing.photos = photos; }
+    else STATE.measurements.push({ id: uid(), date, fields, photos });
+  } else if (existing) {
+    STATE.measurements = STATE.measurements.filter(x => x.id !== existing.id);
+  }
+
+  closeBodyForm();
+  saveState();
+  showToast(editing ? 'Entry updated' : 'Entry saved');
+  drawWeightChart();
+}
+
+// Removes BOTH halves of a day, because one card is one day -- deleting what you can see should not
+// leave an invisible remainder behind.
+function deleteBodyEntry(dateStr) {
+  showConfirm(`Delete everything logged on ${dateStr}?`, () => {
+    STATE.weightLog = STATE.weightLog.filter(e => e.date !== dateStr);
+    STATE.measurements = STATE.measurements.filter(m => m.date !== dateStr);
+    if (UI.bodyEditDate === dateStr) closeBodyForm(); else render();
+    saveState();
+    drawWeightChart();
+  });
+}
+
 // ---- Editing an entry ----
 // An entry is one day's reading, so the DATE is what identifies it and editing never moves it. That
 // is also why today's entry gets its own button: the common correction is "I typed 38 and meant 39",
@@ -83,67 +287,6 @@ function renderMeasurements() {
 // again, which loses the photos with it.
 function measurementOn(dateStr) { return STATE.measurements.find(m => m.date === dateStr) || null; }
 function measurementById(id) { return STATE.measurements.find(m => m.id === id) || null; }
-function editingMeasurement() { return UI.measureEditId ? measurementById(UI.measureEditId) : null; }
-function openMeasureEditor(id) {
-  const m = measurementById(id);
-  if (!m) return;
-  UI.measureEditId = id;
-  UI.measureFormOpen = true;
-  // The draft starts as what the entry already holds, so saving without touching the photo row
-  // keeps them rather than silently clearing them.
-  VIEW.measureDraftPhotos = (m.photos || []).slice();
-  render();
-}
-function toggleMeasureForm() {
-  UI.measureFormOpen = !UI.measureFormOpen;
-  UI.measureEditId = null;          // the + button always opens a NEW entry
-  if (UI.measureFormOpen) VIEW.measureDraftPhotos = [];
-  render();
-}
-function closeMeasureForm() {
-  UI.measureFormOpen = false;
-  UI.measureEditId = null;
-  VIEW.measureDraftPhotos = [];
-  render();
-}
-function renderMeasureForm() {
-  const editing = editingMeasurement();
-  const val = (key) => {
-    if (!editing) return '';
-    const raw = editing.fields[key];
-    if (raw === undefined || raw === null || raw === '') return '';
-    const f = MEASURE_FIELDS.find(x => x.key === key);
-    return fmt(measurementConv(f.unit)(Number(raw)), 1);
-  };
-  return `
-    <div class="panel">
-      ${editing
-        // Fixed, not just prefilled. A measurement IS its day; letting the date move would turn an
-        // edit into a silent re-dating of a reading you took at a particular moment.
-        ? `<div class="row" style="margin-bottom:12px;">
-             <span class="lbl" style="margin-bottom:0;">Editing</span>
-             <span class="mono" style="font-weight:700;">${escapeHtml(editing.date)}</span>
-           </div>`
-        : `<label class="field"><span class="lbl">Date</span><input type="date" id="mDate" value="${todayStr()}"></label>`}
-      <div class="grid2">
-        ${MEASURE_FIELDS.map(f => `
-          <label class="field">
-            <span class="lbl">${f.label} ${f.unit === 'weight' ? '('+weightUnitLabel()+')' : f.unit==='length' ? '('+lengthUnitLabel()+')' : f.unit==='pct' ? '(%)' : ''}</span>
-            <input type="number" step="0.1" id="mf_${f.key}" value="${val(f.key)}">
-          </label>`).join('')}
-      </div>
-      ${editing ? `<div style="font-size:10px; color:var(--text-faint); margin:-4px 0 10px;">Clearing a field removes it from this entry.</div>` : ''}
-      <div class="subtle-label" style="margin:10px 0 8px;">PHOTO (optional)</div>
-      <div class="photo-thumb-row" id="measurePhotoRow"></div>
-      <button class="btn btn-ghost btn-sm" style="margin-bottom:12px;" onclick="document.getElementById('measurePhotoInput').click()">+ ADD PHOTO</button>
-      <input type="file" id="measurePhotoInput" accept="image/*" multiple style="display:none" onchange="handleMeasurePhotoInput(event)">
-      <button class="btn btn-primary btn-block" onclick="saveMeasurement()">${editing ? 'SAVE CHANGES' : 'SAVE ENTRY'}</button>
-      <div class="field-row" style="margin-top:8px;">
-        <button class="btn" style="flex:1;" onclick="closeMeasureForm()">CANCEL</button>
-        ${editing ? `<button class="btn btn-danger" style="flex:1;" onclick="deleteMeasurement('${editing.id}')">DELETE</button>` : ''}
-      </div>
-    </div>`;
-}
 const MAX_MEASURE_PHOTOS = 4;
 async function handleMeasurePhotoInput(evt) {
   const files = Array.from(evt.target.files || []);
@@ -170,60 +313,15 @@ function renderMeasurePhotoRow() {
       <button type="button" class="photo-thumb-remove" onclick="removeMeasureDraftPhoto(${i})">${icon('close')}</button>
     </div>`).join('');
 }
-function saveMeasurement() {
-  const editing = editingMeasurement();
-  // An edit keeps the entry's own date. Reading #mDate here would find nothing (the edit form shows
-  // the date as text, not an input) and silently re-date the entry to today.
-  const date = editing ? editing.date : (inputVal('mDate') || todayStr());
-  const fields = {};
-  MEASURE_FIELDS.forEach(f => {
-    const el = document.getElementById('mf_' + f.key);
-    const raw = el.value;
-    if (raw === '') return;
-    if (f.unit === 'weight') fields[f.key] = displayToLb(raw);
-    else if (f.unit === 'length') fields[f.key] = displayToCm(raw);
-    else fields[f.key] = Number(raw);
-  });
-  // Editing in place: same id, same date, new numbers. The photos come from the draft, which was
-  // seeded with the entry's own, so they survive unless you removed them.
-  if (editing) {
-    editing.fields = fields;
-    editing.photos = VIEW.measureDraftPhotos.slice();
-    closeMeasureForm();
-    saveState();
-    showToast('Measurement updated');
-    return;
-  }
-  // Two entries on one date is almost always a correction, not a second measurement -- you don't
-  // tape your arm twice in an afternoon and mean both. Left alone it also draws a "trend" from a
-  // date to itself, which is a chart of nothing. So the second one ASKS, and replacing keeps the
-  // date's single reading rather than silently averaging or stacking.
-  const clash = STATE.measurements.find(m => m.date === date);
-  if (clash) {
-    const when = new Date(date + 'T12:00:00').toLocaleDateString(undefined, { month: 'long', day: 'numeric' });
-    showConfirm(`There's already a measurement for ${when}. Replace it?`, () => {
-      STATE.measurements = STATE.measurements.filter(m => m.id !== clash.id);
-      commitMeasurement(date, fields);
-      showToast('Measurement replaced');
-    });
-    return;
-  }
-  commitMeasurement(date, fields);
-  showToast('Measurement saved');
-}
-function commitMeasurement(date, fields) {
-  STATE.measurements.push({ id: uid(), date, fields, photos: VIEW.measureDraftPhotos.slice() });
-  UI.measureFormOpen = false;
-  VIEW.measureDraftPhotos = [];
-  saveState();
-  render();
-}
+// Removes only the measurement half of a day. The UI deletes whole days through deleteBodyEntry();
+// this stays because the two stores are still separate and something has to be able to drop one.
 function deleteMeasurement(id) {
+  const m = measurementById(id);
+  if (!m) return;
   showConfirm('Delete this measurement entry?', () => {
-    STATE.measurements = STATE.measurements.filter(m => m.id !== id);
-    // Deleting the one being edited has to close the form, or it keeps rendering against an entry
-    // that no longer exists.
-    if (UI.measureEditId === id) closeMeasureForm(); else render();
+    STATE.measurements = STATE.measurements.filter(x => x.id !== id);
+    // The merged form is keyed by DATE, so it closes only if that day has nothing left at all.
+    if (UI.bodyEditDate === m.date && !bodyHasEntryOn(m.date)) closeBodyForm(); else render();
     saveState();
   });
 }
@@ -233,121 +331,15 @@ function deleteMeasurement(id) {
 // Health -> Specs, with their CHARTS a whole tab away under Exercise -> Progress. The Health &
 // Fitness merge put each log directly under its own chart instead (see renderBody()), so the
 // wrapper had nothing left to wrap and went away.
-function renderWeightLog() {
-  const list = [...STATE.weightLog].sort((a,b) => b.date.localeCompare(a.date));
-  // Same rule as measurements: today's entry is the one you correct, and the button reverts on its
-  // own tomorrow because it asks about today rather than remembering a state.
-  const today = weightEntryOn(todayStr());
-  const addForm = UI.weightLogFormOpen
-    ? renderWeightForm()
-    : today
-      ? `<button class="btn btn-primary btn-block" onclick="openWeightEditor('${today.id}')">&#916; EDIT TODAY'S ENTRY</button>`
-      : `<button class="btn btn-primary btn-block" onclick="toggleWeightForm()">+ ADD ENTRY</button>`;
-  const cards = list.map(e => `
-    <div class="entry-card entry-card-tap ${UI.weightEditId === e.id ? 'entry-card-editing' : ''}"
-         onclick="openWeightEditor('${e.id}')" role="button" tabindex="0"
-         onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openWeightEditor('${e.id}');}">
-      <div class="ehead">
-        <div class="edate">${e.date}${e.date === todayStr() ? ' <span class="entry-today">TODAY</span>' : ''}</div>
-        <button class="icon-btn" onclick="event.stopPropagation(); deleteWeightEntry('${e.id}')">${icon('close')}</button>
-      </div>
-      <div class="estats">
-        <span>Weight <b>${fmt(lbToDisplay(e.weightLb),1)}</b> ${weightUnitLabel()}</span>
-        ${e.bodyFatPct ? `<span>Body Fat <b>${fmt(e.bodyFatPct,1)}</b>%</span>` : ''}
-        ${e.bodyWaterPct ? `<span>Body Water <b>${fmt(e.bodyWaterPct,1)}</b>%</span>` : ''}
-        ${e.calories ? `<span>Calories <b>${e.calories}</b></span>` : ''}
-        ${e.cardioCalories ? `<span>Cardio Cal <b>${e.cardioCalories}</b></span>` : ''}
-      </div>
-    </div>`).join('');
-  return `
-    <div style="margin-bottom:12px;">${addForm}</div>
-    <div class="entry-list">${cards || emptyState('No weight entries logged yet.')}</div>`;
-}
 function weightEntryOn(dateStr) { return STATE.weightLog.find(e => e.date === dateStr) || null; }
 function weightEntryById(id) { return STATE.weightLog.find(e => e.id === id) || null; }
-function editingWeightEntry() { return UI.weightEditId ? weightEntryById(UI.weightEditId) : null; }
-function openWeightEditor(id) {
-  if (!weightEntryById(id)) return;
-  UI.weightEditId = id;
-  UI.weightLogFormOpen = true;
-  render();
-}
-function toggleWeightForm() {
-  UI.weightLogFormOpen = !UI.weightLogFormOpen;
-  UI.weightEditId = null;          // the + button always opens a NEW entry
-  render();
-}
-function closeWeightForm() { UI.weightLogFormOpen = false; UI.weightEditId = null; render(); }
-function renderWeightForm() {
-  const ed = editingWeightEntry();
-  const num = (v, dec) => (v === undefined || v === null || v === '') ? '' : fmt(Number(v), dec == null ? 1 : dec);
-  return `
-    <div class="panel">
-      <div class="field-row">
-        ${ed
-          // Fixed: an entry IS its day, and an edit that could move the date would turn a
-          // correction into a re-dating of a weigh-in you took on a particular morning.
-          ? `<label class="field"><span class="lbl">Editing</span>
-               <div class="mono" style="font-weight:700; padding:10px 0;">${escapeHtml(ed.date)}</div></label>`
-          : `<label class="field"><span class="lbl">Date</span><input type="date" id="wDate" value="${todayStr()}"></label>`}
-        <label class="field"><span class="lbl">Weight (${weightUnitLabel()})</span><input type="number" step="0.1" id="wWeight" value="${ed ? num(lbToDisplay(ed.weightLb)) : ''}"></label>
-      </div>
-      <div class="field-row">
-        <label class="field"><span class="lbl">Body Fat % (optional)</span><input type="number" step="0.1" id="wBodyFat" value="${ed ? num(ed.bodyFatPct) : ''}"></label>
-        <label class="field"><span class="lbl">Body Water % (optional)</span><input type="number" step="0.1" id="wBodyWater" value="${ed ? num(ed.bodyWaterPct) : ''}"></label>
-      </div>
-      <div style="font-size:10px; color:var(--text-faint); margin-top:-4px; margin-bottom:10px;">From a smart scale reading, if you have one — separate from the occasional tape/caliper Body Fat % under Body Measurements.</div>
-      <div class="field-row">
-        <label class="field"><span class="lbl">Calories (optional)</span><input type="number" id="wCal" value="${ed && ed.calories != null ? ed.calories : ''}"></label>
-        <label class="field"><span class="lbl">Cardio Calories (optional)</span><input type="number" id="wCardioCal" value="${ed && ed.cardioCalories != null ? ed.cardioCalories : ''}"></label>
-      </div>
-      <div style="font-size:10px; color:var(--text-faint); margin-top:-4px; margin-bottom:10px;">Cardio Calories = calories burned through direct cardio work.</div>
-      <button class="btn btn-primary btn-block" onclick="saveWeightEntry()">${ed ? 'SAVE CHANGES' : 'SAVE ENTRY'}</button>
-      <div class="field-row" style="margin-top:8px;">
-        <button class="btn" style="flex:1;" onclick="closeWeightForm()">CANCEL</button>
-        ${ed ? `<button class="btn btn-danger" style="flex:1;" onclick="deleteWeightEntry('${ed.id}')">DELETE</button>` : ''}
-      </div>
-    </div>`;
-}
-function saveWeightEntry() {
-  const ed = editingWeightEntry();
-  // An edit keeps its own date -- the edit form shows it as text, so reading #wDate would find
-  // nothing and silently re-date the entry to today.
-  const date = ed ? ed.date : (inputVal('wDate') || todayStr());
-  const w = inputVal('wWeight');
-  const bodyFat = inputVal('wBodyFat');
-  const bodyWater = inputVal('wBodyWater');
-  const cal = inputVal('wCal');
-  const cardioCal = inputVal('wCardioCal');
-  if (w === '') { showToast('Enter a weight'); return; }
-  const values = {
-    weightLb: displayToLb(w),
-    bodyFatPct: bodyFat ? Number(bodyFat) : null,
-    bodyWaterPct: bodyWater ? Number(bodyWater) : null,
-    calories: cal ? Number(cal) : null, cardioCalories: cardioCal ? Number(cardioCal) : null,
-  };
-  if (ed) {
-    Object.assign(ed, values);
-    closeWeightForm();
-    saveState();
-    showToast('Entry updated');
-    drawWeightChart();
-    return;
-  }
-  STATE.weightLog.push(Object.assign({ id: uid(), date }, values));
-  UI.weightLogFormOpen = false;
-  UI.weightEditId = null;
-  saveState();
-  showToast('Entry saved');
-  render();
-  drawWeightChart();
-}
+// The weight half only — same reasoning as deleteMeasurement() above.
 function deleteWeightEntry(id) {
+  const w = weightEntryById(id);
+  if (!w) return;
   showConfirm('Delete this entry?', () => {
     STATE.weightLog = STATE.weightLog.filter(e => e.id !== id);
-    // Deleting the one being edited closes the form; leaving it open would render against an entry
-    // that no longer exists.
-    if (UI.weightEditId === id) closeWeightForm(); else render();
+    if (UI.bodyEditDate === w.date && !bodyHasEntryOn(w.date)) closeBodyForm(); else render();
     saveState();
     drawWeightChart();
   });
@@ -1110,8 +1102,8 @@ function changeVolumeWeek(delta) {
 }
 
 function attachBodyHandlers() {
-  if (NAV.bodySubtab === 'weight') setTimeout(drawWeightChart, 0);
-  else if (NAV.bodySubtab === 'compare') setTimeout(drawCompareCharts, 0);
+  if (NAV.bodySubtab === 'compare') setTimeout(drawCompareCharts, 0);
+  else if (['labs','volume','pr'].indexOf(NAV.bodySubtab) === -1) setTimeout(drawWeightChart, 0);
 }
 function setUnits(u) {
   STATE.units = u;

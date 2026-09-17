@@ -386,8 +386,9 @@ function resetUI() {
     STATE.settings.homeLayout = defaultHomeLayout();
     UI.homeEditMode = false;
     UI.homeAddPopup = null;
-    UI.measureFormOpen = false;
-    UI.weightLogFormOpen = false;
+    UI.bodyFormOpen = false;
+    UI.bodyEditDate = null;
+    UI.bodyDetailOpen = false;
     UI.tdeeCalcOpen = false;
     UI.builderStylePickerOpen = false;
     UI.autofillPickerOpen = false;

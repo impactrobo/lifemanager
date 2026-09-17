@@ -109,27 +109,19 @@ const { settle, pinClock } = require('./helpers.js');
   const closed = await page.evaluate(() => ({ d: NAVI_DIALOGUE, hidden: document.getElementById('naviBox').classList.contains('hidden') }));
   if (closed.d !== null || !closed.hidden) throw new Error('Tapping past the last line still closes it');
 
-  // ---- 4. Two measurements on one date ask, rather than drawing a trend from a day to itself ----
+  // ---- 4. One reading per date — now structural rather than a prompt ----
+  // This used to be a "there's already a measurement for today, replace it?" dialog. The merged
+  // BODY form is keyed by DATE, so a second entry on one day can't be created at all: saving looks
+  // the day up and updates it. Same invariant, enforced by the shape instead of by asking.
   await page.evaluate(() => {
     STATE.measurements = [{ id: 'm1', date: todayStr(), fields: { rArm: 38 }, photos: [] }];
     // switchTab() calls resetTransientUi(), which closes the form — so navigate FIRST, then open it.
-    switchTab('train'); setFitnessSubtab('body'); setBodySubtab('measurements');
-    UI.measureFormOpen = true; VIEW.measureDraftPhotos = [];
+    switchTab('train'); setFitnessSubtab('body'); setBodySubtab('body');
+    openBodyAdd(); toggleBodyDetail();   // circumferences live behind the disclosure now
     render();
   });
   await settle(page);
-  await page.evaluate(() => { document.getElementById('mf_rArm').value = '40'; saveMeasurement(); });
-  const asked = await page.evaluate(() => ({
-    dialog: !document.getElementById('confirmOverlay').classList.contains('hidden'),
-    msg: document.getElementById('confirmMsg').textContent,
-    count: STATE.measurements.length,
-  }));
-  console.log('same-date:', asked);
-  if (!asked.dialog) throw new Error('A second entry on one date should ask before landing');
-  if (!/already a measurement/i.test(asked.msg)) throw new Error('...naming what it clashes with: ' + asked.msg);
-  if (asked.count !== 1) throw new Error('...and must not have saved yet, got ' + asked.count);
-
-  await page.evaluate(() => confirmYes());
+  await page.evaluate(() => { document.getElementById('mf_rArm').value = '40'; saveBodyEntry(); });
   await settle(page);
   const replaced = await page.evaluate(() => ({
     count: STATE.measurements.length,

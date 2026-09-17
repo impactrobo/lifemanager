@@ -159,6 +159,6 @@ function renderStartWeightPrompt() {
           ? `Your last weigh-in is more than ${PHASE_START_WEIGHT_MAX_STALE_DAYS} days old, which is long enough to be several pounds out. Log a current weight and the projection picks it up.`
           : 'Log a weight and this plan can project where it lands.'}
       </div>
-      <button class="btn btn-primary btn-sm" onclick="switchTab('train'); setFitnessSubtab('body'); NAV.bodySubtab='weight'; render();">LOG A WEIGHT</button>
+      <button class="btn btn-primary btn-sm" onclick="switchTab('train'); setFitnessSubtab('body'); NAV.bodySubtab='body'; render();">LOG A WEIGHT</button>
     </div>`;
 }

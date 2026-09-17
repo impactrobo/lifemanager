@@ -106,12 +106,10 @@ function defaultTransientUi() {
     tdeeCalcOpen: false,
     macroCalcOpen: false,
     mealTargetSettingsOpen: false,     // the gear on MEAL PLAN's TARGETS panel: TDEE + averaging window
-    measureFormOpen: false,
-    // Which entry the open form is EDITING; null means it is adding a new one. Transient, so
-    // navigating away abandons a half-made edit rather than resuming it somewhere unexpected.
-    measureEditId: null,
-    weightLogFormOpen: false,
-    weightEditId: null,
+    // The merged BODY log: one form over weightLog + measurements, joined by date.
+    bodyFormOpen: false,
+    bodyEditDate: null,          // which DAY is being edited; null means adding
+    bodyDetailOpen: false,       // the circumferences disclosure
     builderStylePickerOpen: false,
     autofillPickerOpen: false,
     noteTagPaletteOpen: null,
@@ -245,7 +243,9 @@ let NAV = {
   // BODY's own subnav. Same five values progressSubtab carried, with the two chart views renamed
   // for what they now are: each shows its entry list AND its chart, instead of the chart alone
   // while the entry list sat in a different tab.
-  bodySubtab: 'weight',            // 'weight' | 'measurements' | 'labs' | 'volume' | 'compare' | 'pr'
+  // 'body' | 'labs' | 'volume' | 'compare' | 'pr'. 'weight' and 'measurements' are retired values
+  // that still ride in on saved nav snapshots; renderBody() lands both on the tab that absorbed them.
+  bodySubtab: 'body',
   // Which half of SETUP is showing. The two panels keep their own existing subnav state
   // (setupSubtab / healthSetupSubtab) untouched -- only the roof over them is new.
   setupPanel: 'workouts',          // 'workouts' | 'meals' | 'supplements'
@@ -630,7 +630,10 @@ function renderTabbar() {
       fb('workouts', 'exercise', 'DIET &amp;<br>EXERCISE') +
       fb('phases', 'planner', 'PHASES') +
       fb('builder', 'setup', 'BUILDER') +
-      fb('body', 'progress', 'BODY');
+      // PROGRESS, not BODY: the tab holds weight, measurements, labs, set volume, COMPARE and the
+      // PR log -- only one of which is a body measurement. BODY is now the subtab inside it that
+      // absorbed WEIGHT and MEASUREMENTS, which is what that word actually names.
+      fb('body', 'progress', 'PROGRESS');
   } else if (NAV.currentTab === 'hobbies') {
     // Inside a Skill the bottom bar stays at TWO fixed buttons, because that skill's list strip is
     // variable-width and lives in the in-screen .subnav instead -- the strip that has scroll
@@ -679,7 +682,7 @@ function _doRender() {
     if (NAV.fitnessSubtab === 'body') {
       app.innerHTML = renderBody();
       attachBodyHandlers();
-      if (NAV.bodySubtab === 'measurements' && UI.measureFormOpen) renderMeasurePhotoRow();
+      if (UI.bodyFormOpen && UI.bodyDetailOpen) renderMeasurePhotoRow();
     } else if (NAV.fitnessSubtab === 'builder' || NAV.fitnessSubtab === 'setup') {
       // 'setup' is the old name for this tab, still riding in on saved nav snapshots.
       app.innerHTML = renderFitnessSetup();
