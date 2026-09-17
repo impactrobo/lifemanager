@@ -46,18 +46,54 @@ function measurementHasTrend(key) { return measurementSeries(key).length >= 2; }
 // offered there any more: they are the same two numbers as the top section, and a form asking twice
 // is a form inviting them to disagree.
 function measureLengthFields() { return MEASURE_FIELDS.filter(f => f.unit === 'length'); }
+
+// The daily readings that belong to a BODY entry rather than to your day. Exactly the AM strip:
+// weight (already here, via weightLog) plus these three, all taken on waking.
+//
+// WHY THEY'RE HERE AT ALL. They live in life.dailyLog, a third store -- which was my argument
+// against putting them on this form, and it was the wrong argument. Someone whose default page is
+// Health & Wellness never opens Home, and sleep was then unreachable: not "harder", unreachable.
+// A form writing to three stores is an implementation detail; a field you cannot get to is not.
+//
+// It is genuinely TWO-WAY. Both surfaces read and write lifeLogForDate() for the same date, so
+// logging sleep on Home fills this form in and editing it here moves the Home chip. There is one
+// copy of the number; only the way in differs.
+//
+// Steps, water and stool are NOT here. Those are your day rather than your body, and water in
+// particular is a running tally you tap at through the afternoon, not a figure you type once.
+const BODY_DAILY_FIELDS = [
+  { key: 'sleepHours',   id: 'bSleep',   label: 'Sleep',      unit: 'hrs', step: '0.1' },
+  { key: 'sleepQuality', id: 'bSleepQ',  label: 'Quality',    unit: '1-5', step: '1' },
+  { key: 'restingHR',    id: 'bRestHR',  label: 'Resting HR', unit: 'bpm', step: '1' },
+];
+function bodyDailyOn(dateStr) {
+  const log = lifeLogForDate(dateStr);
+  const out = {};
+  BODY_DAILY_FIELDS.forEach(f => { if (log[f.key] != null) out[f.key] = log[f.key]; });
+  return out;
+}
+function bodyHasDailyOn(dateStr) { return Object.keys(bodyDailyOn(dateStr)).length > 0; }
+
 function bodyLogDates() {
   const dates = new Set();
   STATE.weightLog.forEach(e => dates.add(e.date));
   STATE.measurements.forEach(m => dates.add(m.date));
+  // A day where you only logged sleep still belongs in this record -- but a day where you only
+  // drank water does not, which is why this checks the three fields rather than the whole log.
+  Object.keys(STATE.life.dailyLog || {}).forEach(d => { if (bodyHasDailyOn(d)) dates.add(d); });
   return [...dates].sort((a, b) => b.localeCompare(a));   // newest first
 }
 function bodyEntryOn(dateStr) {
-  return { date: dateStr, weight: weightEntryOn(dateStr), measure: measurementOn(dateStr) };
+  return {
+    date: dateStr,
+    weight: weightEntryOn(dateStr),
+    measure: measurementOn(dateStr),
+    daily: bodyDailyOn(dateStr),
+  };
 }
 function bodyHasEntryOn(dateStr) {
   const e = bodyEntryOn(dateStr);
-  return !!(e.weight || e.measure);
+  return !!(e.weight || e.measure || Object.keys(e.daily).length);
 }
 
 function openBodyEditor(dateStr) {
@@ -109,6 +145,9 @@ function renderBodyLog() {
       if (w.calories) bits.push(`<span>Calories <b>${w.calories}</b></span>`);
       if (w.cardioCalories) bits.push(`<span>Cardio Cal <b>${w.cardioCalories}</b></span>`);
     }
+    BODY_DAILY_FIELDS.forEach(f => {
+      if (e.daily[f.key] != null) bits.push(`<span>${f.label} <b>${fmt(e.daily[f.key], 1)}</b> ${f.unit}</span>`);
+    });
     if (m) {
       measureLengthFields().forEach(f => {
         if (m.fields[f.key] != null && m.fields[f.key] !== '') {
@@ -141,8 +180,12 @@ function renderBodyLog() {
 
 function renderBodyForm() {
   const editing = UI.bodyEditDate;
-  const e = editing ? bodyEntryOn(editing) : { weight: null, measure: null };
-  const w = e.weight, m = e.measure;
+  // An ADD form still reads the daily fields for the date it will write: sleep logged on Home this
+  // morning should already be in the form, not blanked by opening it from here.
+  const e = editing ? bodyEntryOn(editing) : bodyEntryOn(todayStr());
+  const w = editing ? e.weight : null;
+  const m = editing ? e.measure : null;
+  const daily = e.daily;
   const num = (v, dec) => (v === undefined || v === null || v === '') ? '' : fmt(Number(v), dec == null ? 1 : dec);
   const mval = (key) => {
     if (!m) return '';
@@ -178,7 +221,14 @@ function renderBodyForm() {
         <label class="field"><span class="lbl">Cardio Calories</span><input type="number" id="wCardioCal" value="${w && w.cardioCalories != null ? w.cardioCalories : ''}"></label>
         <span style="flex:1;"></span>
       </div>
-      <div style="font-size:10px; color:var(--text-faint); margin:-4px 0 12px;">Body Fat / Water from a smart scale, if you have one. Cardio Calories = burned through direct cardio work. Weight and Calories are the same entry the Home strip logs.</div>
+      ${/* The rest of the AM strip. Here so that someone who never opens Home can still log it --
+            same numbers, same store, either way in. */''}
+      <div class="field-row">
+        ${BODY_DAILY_FIELDS.map(f => `
+          <label class="field"><span class="lbl">${f.label} (${f.unit})</span>
+            <input type="number" step="${f.step}" id="${f.id}" value="${daily[f.key] != null ? daily[f.key] : ''}"></label>`).join('')}
+      </div>
+      <div style="font-size:10px; color:var(--text-faint); margin:-4px 0 12px;">Body Fat / Water from a smart scale, if you have one. Cardio Calories = burned through direct cardio work. Weight, Calories, Sleep, Quality and Resting HR are the same readings Home's AM/PM strips log — edit them in either place.</div>
 
       ${/* The tape comes out every few weeks, not every morning, so it folds. The header carries the
             count so you can see a day HAS measurements without opening it. */''}
@@ -240,7 +290,24 @@ function saveBodyEntry() {
   // Photos count as content. A progress photo with no tape reading is a real entry -- arguably the
   // most common kind -- and refusing it would make the camera useless without a number beside it.
   const photos = VIEW.measureDraftPhotos.slice();
-  if (wRaw === '' && !hasMeasure && !photos.length) { showToast('Enter a weight, a measurement or a photo'); return; }
+  const dailyRaw = {};
+  let hasDaily = false;
+  BODY_DAILY_FIELDS.forEach(f => {
+    const v = inputVal(f.id);
+    dailyRaw[f.key] = v;
+    if (v !== '') hasDaily = true;
+  });
+  if (wRaw === '' && !hasMeasure && !photos.length && !hasDaily) {
+    showToast('Enter something — a weight, a measurement, a photo or a reading');
+    return;
+  }
+
+  // ---- daily half ----
+  // Written straight into the same life.dailyLog the Home chips read, which is what makes this
+  // two-way rather than a copy. setOrClear deletes on blank, so clearing here clears there.
+  if (!STATE.life.dailyLog[date]) STATE.life.dailyLog[date] = {};
+  BODY_DAILY_FIELDS.forEach(f => setOrClear(STATE.life.dailyLog[date], f.key, dailyRaw[f.key]));
+  if (!Object.keys(STATE.life.dailyLog[date]).length) delete STATE.life.dailyLog[date];
 
   // ---- weight half ----
   const wEntry = weightEntryOn(date);
@@ -278,6 +345,14 @@ function deleteBodyEntry(dateStr) {
   showConfirm(`Delete everything logged on ${dateStr}?`, () => {
     STATE.weightLog = STATE.weightLog.filter(e => e.date !== dateStr);
     STATE.measurements = STATE.measurements.filter(m => m.date !== dateStr);
+    // Only the three fields this card SHOWS. That day's water, steps and stool live in the same
+    // log and are none of this card's business -- deleting what you can see must not quietly take
+    // things you can't.
+    const log = STATE.life.dailyLog[dateStr];
+    if (log) {
+      BODY_DAILY_FIELDS.forEach(f => { delete log[f.key]; });
+      if (!Object.keys(log).length) delete STATE.life.dailyLog[dateStr];
+    }
     if (UI.bodyEditDate === dateStr) closeBodyForm(); else render();
     saveState();
     drawWeightChart();

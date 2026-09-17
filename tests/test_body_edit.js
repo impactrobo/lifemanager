@@ -106,6 +106,78 @@ const { settle, pinClock } = require('./helpers.js');
   }
   if (!both.sameDate) throw new Error('Both halves carry the same date — that is what joins them');
 
+  // ---- 3b. The daily readings are TWO-WAY with Home's AM strip ----
+  // Someone whose default page is Health & Wellness never opens Home, and sleep was then not
+  // "harder to reach" but unreachable. Both surfaces read and write the same life.dailyLog entry,
+  // so there is one copy of the number and only the way in differs.
+  await page.evaluate(() => {
+    STATE.life.dailyLog = {};
+    switchTab('home');
+    saveLogField('sleepLen', '7.5');
+    saveLogField('sleepQual', '4');
+  });
+  await settle(page);
+  await go();
+  await page.evaluate(() => openBodyAdd());
+  await settle(page);
+  const fromHome = await page.evaluate(() => ({
+    sleep: document.getElementById('bSleep').value,
+    quality: document.getElementById('bSleepQ').value,
+  }));
+  console.log('Home -> BODY:', fromHome);
+  if (fromHome.sleep !== '7.5' || fromHome.quality !== '4') {
+    throw new Error('Sleep logged on Home must already be in this form: ' + JSON.stringify(fromHome));
+  }
+
+  await page.evaluate(() => {
+    document.getElementById('bSleep').value = '6.25';
+    document.getElementById('bRestHR').value = '52';
+    document.getElementById('wWeight').value = '80';
+    saveBodyEntry();
+  });
+  await settle(page);
+  const toHome = await page.evaluate(() => ({
+    chipSleep: logFieldValue('sleepLen'),
+    chipHR: logFieldValue('restingHR'),
+    quality: logFieldValue('sleepQual'),
+    // One store: the form wrote into the very entry the chip reads.
+    inLog: STATE.life.dailyLog[todayStr()].sleepHours,
+  }));
+  console.log('BODY -> Home:', toHome);
+  if (toHome.chipSleep !== 6.25 || toHome.chipHR !== 52) throw new Error('Editing here moves the Home chip: ' + JSON.stringify(toHome));
+  if (toHome.quality !== 4) throw new Error('...and leaves untouched fields alone: ' + toHome.quality);
+  if (toHome.inLog !== 6.25) throw new Error('...because it is the same life.dailyLog entry, not a copy');
+
+  // A day with only sleep on it still belongs in this record; a day with only water does not.
+  const listing = await page.evaluate(() => {
+    STATE.weightLog = []; STATE.measurements = [];
+    STATE.life.dailyLog = { '2026-06-10': { sleepHours: 8 }, '2026-06-09': { waterMl: 1500, steps: 9000 } };
+    return { dates: bodyLogDates() };
+  });
+  console.log('which days are body days:', listing);
+  if (!listing.dates.includes('2026-06-10')) throw new Error('A sleep-only day is a body entry: ' + listing.dates.join(','));
+  if (listing.dates.includes('2026-06-09')) throw new Error('A water-only day is your DAY, not your body: ' + listing.dates.join(','));
+
+  // Deleting a card clears what it SHOWS and nothing else — that day's water is none of its business.
+  await page.evaluate(() => {
+    STATE.life.dailyLog = { '2026-06-10': { sleepHours: 8, waterMl: 1500, steps: 9000 } };
+    deleteBodyEntry('2026-06-10'); confirmYes();
+  });
+  await settle(page);
+  const kept = await page.evaluate(() => STATE.life.dailyLog['2026-06-10'] || null);
+  console.log('after deleting a sleep-only card:', kept);
+  if (!kept || kept.waterMl !== 1500 || kept.steps !== 9000) throw new Error('Water and steps must survive: ' + JSON.stringify(kept));
+  if (kept.sleepHours !== undefined) throw new Error('...while the sleep the card showed is gone');
+
+  // Put the fixture back for the sections below.
+  await page.evaluate(() => {
+    STATE.life.dailyLog = {};
+    STATE.weightLog = [{ id: 'w1', date: todayStr(), weightLb: 176.37, bodyFatPct: 18, bodyWaterPct: null, calories: null, cardioCalories: null }];
+    STATE.measurements = [{ id: 'm1', date: todayStr(), fields: { rArm: 39, other1: 25 }, photos: [] }];
+    render();
+  });
+  await settle(page);
+
   // ---- 4. Today's entry takes the button, and reverts when the day turns ----
   await settle(page);
   const btn = await page.evaluate(() => [...document.querySelectorAll('.btn-primary')].map(b => b.textContent.trim())[0]);
