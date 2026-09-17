@@ -7,7 +7,7 @@
      app.js re-fetches this page on launch + on foreground and reloads if this value moved —
      that's what lets an installed iOS PWA self-update instead of getting stuck on a snapshot.
      Format is just a sortable stamp; the value only has to differ from the last deploy. -->
-<meta name="app-build" content="2026.09.17-1">
+<meta name="app-build" content="2026.09.17-2">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#15171a">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -48,6 +48,10 @@
 
 <button class="icon-btn rest-timer-fab" id="restTimerFab" onclick="openRestPicker()" title="Rest timer"></button>
 <div class="rest-timer-widget panel hidden" id="restTimerWidget"></div>
+
+<!-- The NetNavi dialogue box. Outside #app deliberately: render() replaces #app.innerHTML
+     wholesale, and this has to survive one. src/app-navi.js writes it directly, same as #toast. -->
+<div id="naviBox" class="navi-box hidden"></div>
 
 <div id="toast" class="toast"></div>
 <div id="pageScrollIndicator" class="scroll-indicator scroll-indicator-page"></div>
@@ -128,6 +132,7 @@
 <script src="src/app-skill-session.js"></script>
 <script src="src/app-skill-templates.js"></script>
 <script src="src/app-skill-targets.js"></script>
+<script src="src/app-navi.js"></script>
 <script src="src/app-boot.js"></script>
 </body>
 </html>

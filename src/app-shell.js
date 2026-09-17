@@ -312,7 +312,9 @@ function pushNavHistory() {
 // for Back/Forward, and the direct NAV.currentTab assignments in openSetup()/openTodayWorkout()) --
 // not inside _doRender(), because render() is rAF-deferred and would close a form that
 // `switchTab(); toggleReminderForm()` had just opened in the same tick.
-function resetTransientUi() { Object.assign(UI, defaultTransientUi()); LINK_PICKER = null; LINK_PICKER_QUERY = ''; }
+// The Navi dialogue box lives on <body>, outside #app, so a render() can't clear it -- navigating
+// away has to close it explicitly or it would follow you onto the next screen.
+function resetTransientUi() { Object.assign(UI, defaultTransientUi()); LINK_PICKER = null; LINK_PICKER_QUERY = ''; closeNaviDialogue(); }
 function switchTab(tab) {
   // A merged-away tab is still a live HOME_SECTION_META entry (the link chips need its colour), so
   // a saved Home layout or an old deep link can still hand one in. Without the redirect you land on

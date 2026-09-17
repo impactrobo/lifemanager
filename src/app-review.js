@@ -347,6 +347,7 @@ function renderHomeReviewBox() {
 
       <div style="font-size:15px; font-weight:600; margin-bottom:${chips.length ? '10px' : '4px'};">${escapeHtml(reviewHeadline(r))}</div>
       ${chips.length ? `<div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:4px;">${chips.join('')}</div>` : ''}
+      ${renderReviewNaviButton(r)}
 
       ${open ? renderReviewDetail(r) : ''}
 
@@ -354,6 +355,21 @@ function renderHomeReviewBox() {
         ${open ? 'HIDE DETAIL' : 'FULL REVIEW'}
       </button>
     </div>`;
+}
+
+// The Navi's way in, if one is jacked in. A BUTTON, not an auto-play: the review is the same
+// numbers either way, and a character that starts talking every time you glance at the box is the
+// thing that makes people stop opening the box. Nothing is hidden behind it -- the headline and the
+// chips above already say what happened; this is the same week in somebody's voice.
+function renderReviewNaviButton(r) {
+  const navi = activeNavi();
+  if (!navi) return '';
+  return `
+    <button class="btn btn-ghost btn-sm btn-block" style="margin-top:12px; display:flex; align-items:center; justify-content:center; gap:8px;"
+            onclick="naviSpeak(naviReviewLines(weeklyReview('${r.start}')))">
+      <img src="${navi.icon}" alt="" style="width:22px; height:22px; border-radius:50%; object-fit:cover; object-position:top center; border:1px solid ${navi.color};">
+      <span style="color:${navi.color}; font-weight:700;">ASK ${escapeHtml(navi.short.toUpperCase())}</span>
+    </button>`;
 }
 
 function reviewChip(text, tone) {

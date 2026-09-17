@@ -716,6 +716,8 @@ interface Reminder {
 interface AppState {
   units: 'lb' | 'kg';
   rounding: number;
+  /** Which NetNavi is jacked in; null for none, which is the default. See src/app-navi.js. */
+  naviId: string | null;
   updatedAt: number | null;
   settings: AppSettings;
   program: ProgramConfig;

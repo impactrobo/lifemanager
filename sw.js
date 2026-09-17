@@ -8,7 +8,7 @@
 // on an installed (esp. iOS) PWA is handled in app.js by the <meta name="app-build"> check —
 // NOT by this file. Bump CACHE_NAME only to force-purge the offline cache (e.g. you removed a
 // file from APP_SHELL or a cached response went bad); it is not part of the normal deploy step.
-const CACHE_NAME = 'lifeman-v16'; // v4: app.js split into src/app-*.js -- old caches hold a now-404 './app.js'
+const CACHE_NAME = 'lifeman-v17'; // v4: app.js split into src/app-*.js -- old caches hold a now-404 './app.js'
 const APP_SHELL = ['./', './index.html', './styles.css', './manifest.json']
   .concat([
     './src/app-aesthetics.js',
@@ -39,7 +39,19 @@ const APP_SHELL = ['./', './index.html', './styles.css', './manifest.json']
     './src/app-skill-session.js',
     './src/app-skill-templates.js',
     './src/app-skill-targets.js',
+    './src/app-navi.js',
     './src/app-boot.js',
+  ])
+  // The six NetNavi face icons. 200x200 each, ~93KB for the set -- small enough to precache, and a
+  // dialogue box that renders with a broken portrait offline is worse than no dialogue box.
+  // addAll() rejects wholesale on a single 404, so every path here has to exist.
+  .concat([
+    './navis/strike.jpg',
+    './navis/vitalya.jpg',
+    './navis/digi.jpg',
+    './navis/wenceslas.jpg',
+    './navis/muze.jpg',
+    './navis/clay.jpg',
   ]);
 
 self.addEventListener('install', (event) => {

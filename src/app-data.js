@@ -756,6 +756,10 @@ function defaultState() {
   return {
     units: 'lb',
     rounding: 2.5,
+    // Which NetNavi is jacked in, or null for none -- which is the default, and a real answer: the
+    // app behaves exactly as it did before this feature with nobody selected. One at a time, chosen
+    // in Settings. A scalar, so loadState()'s shallow merge carries a saved one through unaided.
+    naviId: null,
     // Bumped to Date.now() on every saveState() call — the one thing Cloud Sync compares
     // between the local copy and whatever's in Firestore to decide which is newer. Not shown
     // in the UI; purely a sync implementation detail. See CLOUD SYNC section below.

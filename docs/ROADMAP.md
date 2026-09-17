@@ -298,6 +298,36 @@ Newest first. Keep this reasonably current so a fresh session can see what alrea
 without re-reading the whole diff history. Roughly grouped: this project spent early Sept 2026
 on an architecture split + a large wave of Maximalist aesthetics.
 
+- **NetNavis, first slice (2026-09-17).** Shipped after the five open decisions were answered; the
+  scoping entry under "Ideas worth considering" has the background.
+  - **One at a time, chosen in Settings.** Not per-domain — the relationships between the six were a
+    fun exercise in the source material but aren't modelled. `STATE.naviId`, default **null**, which
+    is a real answer: with nobody jacked in the app is exactly what it was.
+  - **Colours stay on the Navi.** Name, frame and portrait ring only. Sections keep their identity
+    colours and link chips still derive from those, so `test_home_bar.js` needed no change.
+  - **The dialogue box is a video-game text box** — pinned along the bottom, square 200×200 portrait
+    on the left, text to the right, tap to advance, last tap closes. It lives in `index.html` beside
+    `#toast` rather than inside `#app`, because `render()` replaces `#app.innerHTML` wholesale;
+    `resetTransientUi()` closes it so it can't follow you to the next screen.
+  - **The weekly review is the first surface**, via an `ASK <NAVI>` button rather than auto-play. A
+    character that starts talking every time you glance at the box is what makes people stop opening
+    the box, and the headline and chips already say what happened — this is the same week in
+    somebody's voice.
+  - **Templates, not a model — and the test is the reason.** `naviReviewFacts()` reduces a
+    `weeklyReview()` result once; six voices read *that*, so they can't drift apart on the same week.
+    Because the voices are pure functions, `test_navi.js` asserts the contracts each profile actually
+    states: DigiMan emits no exclamation mark and no emphasis, Muze emits emoticons and never emoji,
+    Wenceslas never emoji at all and always the Old English second person, StrikeMan always "bro",
+    ClayMan never `!!!`. Built prompt-first those rules bake into strings no test can see.
+  - **Vitalya is as written** — her spec's "slightly mean" nickname ships, rotated by week so it
+    reads as a habit rather than a catchphrase. It sits at the casual end because "without real
+    malice" is the same sentence of the spec. The escape hatch is the one the Operator already has:
+    pick a different Navi.
+  - The rule the feature is built under, written down in `src/app-navi.js` rather than rediscovered:
+    **a Navi reacts to what you did; it never asks you to do it for the Navi.** Nothing awards
+    anything, tracks a streak of its own, or asks to be visited.
+  - **Not built:** streak/PR moments and bad-day mode (the other two surfaces scoped), and any
+    model-backed voice.
 - **COMPARE owns the measurement trend (2026-09-16).** The last of the restructure moves. COMPARE
   already held every trend in the app — body weight, lifts, lab markers — except the one that had
   two of its own inside MEASUREMENTS.
