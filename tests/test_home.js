@@ -154,10 +154,12 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   const restoredOrder = await page.evaluate(() => STATE.settings.homeLayout.sectionOrder);
   if (!restoredOrder.includes(targetId)) throw new Error(`Expected '${targetId}' restored to sectionOrder after showHomeSection`);
 
-  // 6. Each section tile gets its own fixed color (not shared/generic) as a vignette on the tile's
-  // own background (homeTileGlowStyle()) — checked via the raw `style` attribute text
-  // (unnormalized), since the color is embedded inside a radial-gradient() string rather than
-  // being its own recognized CSS property browsers would normalize on read-back.
+  // 6. Each section tile gets its own fixed color (not shared/generic), painted as a thick bar
+  // along its bottom edge (homeTileAccentStyle()) — checked via the raw `style` attribute text
+  // (unnormalized), since the color is embedded inside a box-shadow string rather than being its
+  // own recognized CSS property browsers would normalize on read-back. The assertion is about
+  // each section being DISTINGUISHABLE, so it survived this changing from a vignette to a bar and
+  // should survive whatever comes next.
   // Counted off sectionOrder rather than hardcoded: SCHEDULE retired as a tile when Home started
   // rendering the schedule itself, and the number will move again.
   await page.evaluate(() => { switchTab('home'); });
@@ -169,7 +171,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
       return { id, expected: HOME_SECTION_META[id].color, tileStyle: tile ? tile.getAttribute('style') : null };
     });
   });
-  console.log('tile vignette colors:', tileColors);
+  console.log('tile accent colors:', tileColors);
   const uniqueColors = new Set(tileColors.map(t => t.expected));
   if (!tileColors.length) throw new Error('Expected Home to render some section tiles');
   if (uniqueColors.size !== tileColors.length) {

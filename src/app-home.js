@@ -1307,17 +1307,23 @@ function renderHomeAddPopup() {
       </div>
     </div>`;
 }
-// A soft radial glow sitting behind the icon, rather than tinting the whole tile (an earlier,
-// more heavy-handed pass with a colored border + background) — the tile itself stays neutral,
-// just the icon gets its section's color as an ambient aura. Still enough to track a tile by
-// color through a drag-reorder, without recoloring the tile's whole footprint.
-// Second revision, same day — first pass tinted the whole tile flat, second put a glow behind
-// just the icon; this one puts the color at the tile's own edges, fading inward toward a neutral
-// center (a vignette, not a spotlight). `circle at center` with the default farthest-corner sizing
-// naturally reaches every corner of a square tile, so the color genuinely traces the tile's own
-// border rather than just glowing around the icon in the middle.
-function homeTileGlowStyle(color) {
-  return `background: radial-gradient(circle at center, transparent 0%, transparent 40%, ${color}80 100%), var(--surface);`;
+// A section tile carries its own colour as a thick bar along its bottom edge. The tile itself
+// stays neutral, which is the point: the colour is a label, not a wash.
+//
+// Fourth revision of the same idea, and the previous three are why this one is a flat bar. First
+// tinted the whole tile; second put a radial glow behind the icon; third spread that glow to the
+// tile's edges as a vignette. Every one of them was a soft gradient over the whole footprint, and
+// soft gradients at tile size read as smudges rather than as colour-coding — you could tell a tile
+// had *some* colour without being able to say which, especially for the darker sections. A solid
+// bar answers "which section is this" at a glance, which was the whole job.
+//
+// An INSET box-shadow rather than a border-bottom: `.workout-cell` is `aspect-ratio: 1` with
+// `box-sizing: border-box`, so a 4px border would eat 4px out of the content box, and the icon +
+// label already fill that budget (see CLAUDE.md on tiles overrunning their grid track — it has
+// happened twice). A shadow paints inside the same box and costs the layout nothing. It also
+// follows the tile's border-radius, so the bar's ends curve with the corners.
+function homeTileAccentStyle(color) {
+  return `background: var(--surface); box-shadow: inset 0 -4px 0 ${color};`;
 }
 function renderHomeSectionsGrid() {
   const L = homeLayout();
@@ -1325,12 +1331,12 @@ function renderHomeSectionsGrid() {
     const meta = HOME_SECTION_META[id];
     if (!meta) return '';
     if (!UI.homeEditMode) {
-      return `<div class="workout-cell home-tile" style="${homeTileGlowStyle(meta.color)}" onclick="goHomeSection('${id}')">
+      return `<div class="workout-cell home-tile" style="${homeTileAccentStyle(meta.color)}" onclick="goHomeSection('${id}')">
         <div style="font-size:36px;">${icon(meta.icon)}</div>
         <div class="wname">${meta.label}</div>
       </div>`;
     }
-    return `<div class="workout-cell home-tile home-edit-item" style="${homeTileGlowStyle(meta.color)}" data-home-drag-list="sections" data-home-drag-id="${id}" onpointerdown="startHomeDrag('sections','${id}',event,this)">
+    return `<div class="workout-cell home-tile home-edit-item" style="${homeTileAccentStyle(meta.color)}" data-home-drag-list="sections" data-home-drag-id="${id}" onpointerdown="startHomeDrag('sections','${id}',event,this)">
       <button class="home-edit-x" onclick="event.stopPropagation(); hideHomeSection('${id}')" title="Hide">${icon('close')}</button>
       <div style="font-size:36px;">${icon(meta.icon)}</div>
       <div class="wname">${meta.label}</div>
