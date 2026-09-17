@@ -1184,4 +1184,113 @@ function shiftDate(dateStr, days) {
   d.setDate(d.getDate() + days);
   return dateKeyOf(d);
 }
-function todayStr() { return dateKeyOf(new Date()); }
+// ---------------- THE CLOCK ----------------
+// nowDate() is the app's ONLY reading of the wall clock. Every `new Date()` that meant "right now"
+// goes through here, so a debug offset moves the whole app together -- today's date, the schedule's
+// idea of what has already passed, which month the calendar opens on, the year stamped on a budget
+// goal. One of those left on the real clock is worse than none of them being shifted: the app would
+// disagree with itself and you'd be debugging the debugger.
+//
+// Why an OFFSET IN DAYS rather than a pinned timestamp: the clock still runs. Time of day keeps
+// advancing naturally, so the passed-activity marker, the AM/PM split and the rest timer all behave
+// as they really would -- you're moving the calendar, not stopping time. It also makes the gesture
+// you actually want ("jump forward a week and read the review") a single number.
+//
+// `new Date(...)` WITH arguments is untouched anywhere: that's parsing a stored date, not asking
+// what time it is, and shifting it would corrupt data rather than simulate a day.
+function debugDayOffset() {
+  const n = STATE && STATE.settings ? Number(STATE.settings.debugDayOffset) : 0;
+  return Number.isFinite(n) ? Math.trunc(n) : 0;
+}
+function debugClockActive() { return debugDayOffset() !== 0; }
+function nowDate() {
+  const d = new Date();
+  const off = debugDayOffset();
+  if (off) d.setDate(d.getDate() + off);
+  return d;
+}
+function todayStr() { return dateKeyOf(nowDate()); }
+// The real date regardless of the offset. Only for the debug panel itself, which has to be able to
+// say what it is lying about.
+function realTodayStr() { return dateKeyOf(new Date()); }
+function setDebugDayOffset(n) {
+  const v = Number.isFinite(Number(n)) ? Math.trunc(Number(n)) : 0;
+  STATE.settings.debugDayOffset = v;
+  // Anything cached off "which month/week am I looking at" has to let go, or the screens keep
+  // showing the month you were on before the jump.
+  NAV.calMonth = null; NAV.budgetMonth = null; NAV.habitCalMonth = null;
+  NAV.trainWeekStart = null; NAV.volumeWeekStart = null;
+  VIEW.reviewWeekStart = null; VIEW.mealPlannerDate = null; VIEW.plannerDate = null;
+  NAV.dietLogDate = null; NAV.calSelectedDate = null;
+  saveState(); render();
+}
+// Jump to a real calendar date by solving for the offset, so there is still only one stored concept.
+function setDebugDate(dateStr) {
+  if (!dateStr) { setDebugDayOffset(0); return; }
+  const target = new Date(dateStr + 'T12:00:00');
+  const real = new Date(); real.setHours(12, 0, 0, 0);
+  setDebugDayOffset(Math.round((target.getTime() - real.getTime()) / 86400000));
+}
+// Forward to the NEXT Monday, or back to this week's if you're already past it -- the review is
+// Monday-anchored, so "show me a finished week" is the commonest reason to move the clock at all.
+function debugJumpWeekday(targetDow) {
+  const d = nowDate();
+  let delta = (targetDow - d.getDay() + 7) % 7;
+  if (delta === 0) delta = 7;
+  setDebugDayOffset(debugDayOffset() + delta);
+}
+
+// ---------------- THE DEBUG PANEL ----------------
+// Settings, at the bottom, under its own heading. Two things it must never be: hidden behind a
+// gesture nobody can find, or invisible once engaged.
+//
+// THE BANNER IS THE POINT. A shifted clock does not fake anything -- a session logged while it is
+// on is written to the shifted date for real, in the same save as everything else. That's what makes
+// it useful and also what makes it dangerous, so while the offset is non-zero the app says so on
+// every screen. See #debugBar in index.html.
+function renderDebugClockSetting() {
+  const off = debugDayOffset();
+  const today = todayStr();
+  const d = nowDate();
+  const dow = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][d.getDay()];
+  const step = (n, label) =>
+    `<button class="btn btn-sm" style="flex:1; min-width:52px;" onclick="setDebugDayOffset(${off + n})">${label}</button>`;
+  return `
+    <div class="subtle-label" style="margin:22px 0 10px;">DEBUG CLOCK</div>
+    <div class="panel">
+      <div style="font-size:11px; color:var(--text-dim); margin-bottom:10px;">
+        Moves the whole app's idea of today, so a week, a phase or an archive can be read without waiting for one.
+        <b style="color:var(--text)">Anything you log while it's on is really written to the shifted date.</b>
+      </div>
+      <div class="row" style="margin-bottom:10px;">
+        <span class="lbl" style="margin-bottom:0;">App date</span>
+        <span class="mono" style="font-weight:700; color:${off ? 'var(--bad)' : 'var(--text)'};">${today} · ${dow}</span>
+      </div>
+      ${off ? `<div style="font-size:11px; color:var(--text-faint); margin-bottom:10px;">Really ${realTodayStr()} — shifted ${off > 0 ? '+' : ''}${off} day${Math.abs(off) === 1 ? '' : 's'}.</div>` : ''}
+      <div class="field-row" style="gap:6px; margin-bottom:8px;">
+        ${step(-7, '−1w')}${step(-1, '−1d')}${step(1, '+1d')}${step(7, '+1w')}
+      </div>
+      <div class="field-row" style="gap:6px; margin-bottom:10px;">
+        <button class="btn btn-sm" style="flex:1;" onclick="debugJumpWeekday(1)">NEXT MONDAY</button>
+        <button class="btn btn-sm" style="flex:1;" onclick="setDebugDayOffset(${off - 7 * 4})">−4 WEEKS</button>
+      </div>
+      <label class="field" style="margin-bottom:10px;">
+        <span class="lbl">Jump to a date</span>
+        <input type="date" value="${today}" onchange="setDebugDate(this.value)">
+      </label>
+      <button class="btn btn-block btn-sm ${off ? 'btn-danger' : ''}" ${off ? '' : 'disabled'} onclick="setDebugDayOffset(0)">
+        ${off ? 'BACK TO THE REAL DATE' : 'CLOCK IS REAL'}
+      </button>
+    </div>`;
+}
+// Painted straight onto the element in index.html rather than returned as markup, because it has to
+// survive a render() the same way the Navi box does -- and unlike the Navi box it must NOT be
+// closeable, which is the whole reason it isn't a toast.
+function syncDebugBar() {
+  const el = document.getElementById('debugBar');
+  if (!el) return;
+  if (!debugClockActive()) { el.classList.add('hidden'); el.textContent = ''; return; }
+  const off = debugDayOffset();
+  el.classList.remove('hidden');
+  el.textContent = 'DEBUG CLOCK · ' + todayStr() + ' (' + (off > 0 ? '+' : '') + off + 'd)';
+}

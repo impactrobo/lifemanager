@@ -19,7 +19,7 @@ function todayLifeLog() {
 function lifeLogForDate(dateStr) {
   return STATE.life.dailyLog[dateStr] || {};
 }
-// Was renderLifeDaily(), hardcoded to `new Date()` under the old dedicated TODAY subtab — now
+// Was renderLifeDaily(), hardcoded to `nowDate()` under the old dedicated TODAY subtab — now
 // generalized to any date and rendered inside Calendar's Day zoom (see renderCalDay()), so
 // browsing to a past or future day shows that day's anchors/schedule too, not just today's.
 // Below this many blocks there is nothing worth folding away, so the day renders in full.
@@ -126,7 +126,7 @@ function renderDailySchedule(dateStr, compact) {
   // Home's day box can never disagree about which block you're actually in.
   const currentId = isToday ? ((currentScheduleBlock() || {}).id || null) : null;
   const booked = day.bookedMinutes;
-  const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+  const nowMin = nowDate().getHours() * 60 + nowDate().getMinutes();
   const ctx = {
     log, dateStr, currentId, nowMin,
     maxDur: Math.max(...blocks.map(blockDurationMinutes), 1),

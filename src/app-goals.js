@@ -62,7 +62,7 @@ function activeExerciseGoal() { return activeGoalOfKind('exercise'); }
 // June rather than next. The year appears only when it differs, so the common case stays short.
 function fmtGoalDate(dateStr) {
   const d = new Date(dateStr + 'T00:00:00');
-  const sameYear = d.getFullYear() === new Date().getFullYear();
+  const sameYear = d.getFullYear() === nowDate().getFullYear();
   return d.toLocaleDateString(undefined, sameYear
     ? { month: 'short', day: 'numeric' }
     : { month: 'short', day: 'numeric', year: 'numeric' });

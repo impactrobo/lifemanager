@@ -2688,3 +2688,19 @@ button.brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 4
 .navi-chip.active .navi-chip-name { color: var(--navi); }
 .navi-chip-name { font-size: 11px; font-weight: 700; letter-spacing: 0.02em; }
 .navi-chip-role { font-size: 9px; color: var(--text-faint); line-height: 1.25; }
+
+/* ---- DEBUG CLOCK BANNER (see syncDebugBar() in src/app-state.js) ----
+   Pinned under the topbar, full width, and deliberately NOT dismissable: while the app date is
+   shifted, anything logged is really written to the shifted date. A bar you can close is a bar you
+   will close and then forget about. Sits above .tabbar (30) and the Navi box (40) so it is never
+   the thing hidden behind something else. */
+.debug-bar {
+  /* In normal flow, ABOVE the sticky .topbar in the document rather than fixed over it. A fixed bar
+     at top:0 would cover the back/forward buttons and the wordmark; in flow it simply pushes the
+     page down by its own height and never fights anyone for stacking. See CLAUDE.md: don't restyle
+     .topbar's position to win a z-index argument. */
+  background: var(--bad); color: #fff;
+  font-family: var(--font-mono); font-size: 10px; font-weight: 700;
+  letter-spacing: 0.1em; text-align: center;
+  padding: calc(3px + env(safe-area-inset-top)) 8px 3px;
+}

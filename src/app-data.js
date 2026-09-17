@@ -772,6 +772,10 @@ function defaultState() {
       // two are new, and exist because "hit your step target 5 of 7 days" needs a target to
       // be a sentence at all. Edited beside their own log fields, same as water's.
       stepsTargetDaily: 8000, sleepTargetHours: 7.5,
+      // Debug clock: whole days added to "now" everywhere, via nowDate() in app-state.js. 0 is off.
+      // Persisted on purpose -- jumping forward, closing the app and reopening it is exactly the
+      // gesture being simulated, and a setting that silently reset on launch would test nothing.
+      debugDayOffset: 0,
       homeLayout: defaultHomeLayout(),
       // Purely a user preference flag ("did I opt into this"). The actual signed-in/out truth
       // comes from Firebase Auth itself at runtime (see CLOUD SYNC section) — this just decides

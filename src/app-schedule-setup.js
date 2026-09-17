@@ -437,7 +437,7 @@ function renderHabitSetupRow(h) {
 // tell apart). Its own independent month state (NAV.habitCalMonth), deliberately not wired into the
 // Reminders/Schedule Calendar's NAV.calZoom system — a separate, focused view.
 function ensureHabitCalState() {
-  if (!NAV.habitCalMonth) { const d = new Date(); NAV.habitCalMonth = { year: d.getFullYear(), month: d.getMonth() }; }
+  if (!NAV.habitCalMonth) { const d = nowDate(); NAV.habitCalMonth = { year: d.getFullYear(), month: d.getMonth() }; }
 }
 function habitCalGoToMonth(delta) {
   ensureHabitCalState();

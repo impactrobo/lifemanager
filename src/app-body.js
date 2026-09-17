@@ -634,7 +634,7 @@ function setComparePreset(key) {
   r.preset = p.key;
   if (p.months == null) { r.from = null; r.to = null; }
   else {
-    const to = new Date();
+    const to = nowDate();
     const from = new Date(to.getFullYear(), to.getMonth() - p.months, to.getDate());
     r.from = dateKeyOf(from); r.to = dateKeyOf(to);
   }

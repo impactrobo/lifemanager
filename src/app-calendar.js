@@ -15,7 +15,7 @@ const MONTH_NAMES = ['January','February','March','April','May','June','July','A
 // tab switches, same treatment as NAV.calMonth/NAV.calSelectedDate — it's a "where you left the
 // calendar" convenience, not part of the tab/subtab nav history.
 function ensureCalState() {
-  if (!NAV.calMonth) { const d = new Date(); NAV.calMonth = { year: d.getFullYear(), month: d.getMonth() }; }
+  if (!NAV.calMonth) { const d = nowDate(); NAV.calMonth = { year: d.getFullYear(), month: d.getMonth() }; }
   if (!NAV.calSelectedDate) NAV.calSelectedDate = todayStr();
 }
 function calSetZoom(z) { NAV.calZoom = z; render(); }
@@ -161,7 +161,7 @@ function reminderIsPastDue(r) {
   if (r.date > today) return false;
   const dueAt = r.endTime || r.time;
   if (!dueAt) return false;
-  const now = new Date();
+  const now = nowDate();
   return anchorMinutes(dueAt) < now.getHours() * 60 + now.getMinutes();
 }
 // Styled off the active aesthetic's own --warn (see .past-due-mark in styles.css) rather than one

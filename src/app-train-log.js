@@ -1535,6 +1535,7 @@ function renderHomeSetup() {
     </div>
     ${renderDailyTargetsSetting()}
     ${renderNaviPicker()}
+    ${renderDebugClockSetting()}
     <div class="subtle-label" style="margin:18px 0 10px;">AESTHETIC</div>
     <div class="stack" id="aestheticOptions"></div>
     <div class="subtle-label" style="margin:22px 0 10px;">INTERFACE</div>

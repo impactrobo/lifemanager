@@ -63,6 +63,8 @@ interface RestTimerSettings {
 }
 
 interface AppSettings {
+  /** Whole days added to "now" by the debug clock; 0 is off. See nowDate() in app-state.js. */
+  debugDayOffset: number;
   aesthetic: string;
   accentByAesthetic: Record<string, string>;
   noteTagNames: Record<string, string>;

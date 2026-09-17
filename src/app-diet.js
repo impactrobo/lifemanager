@@ -158,7 +158,7 @@ function saveMealDraft() {
   if (!draft || !draft.items.length) return;
   const name = (draft.name || '').trim() || 'Untitled meal';
   const items = draft.items.map(it => ({ id: it.id, foodId: it.foodId, qty: Number(it.qty) || 0, unit: it.unit }));
-  const now = new Date().toISOString();
+  const now = nowDate().toISOString();
   if (draft.id) {
     const meal = STATE.diet.meals.find(m => m.id === draft.id);
     if (meal) { meal.name = name; meal.items = items; meal.updatedAt = now; }

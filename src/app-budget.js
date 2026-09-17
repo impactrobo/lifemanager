@@ -11,7 +11,7 @@
 // Month state is shared across all three Budget subtabs (Home/Income/Recurring) so paging
 // to a different month in one carries over to the others, same spirit as NAV.calMonth.
 function ensureBudgetMonth() {
-  if (!NAV.budgetMonth) { const d = new Date(); NAV.budgetMonth = { year: d.getFullYear(), month: d.getMonth() }; }
+  if (!NAV.budgetMonth) { const d = nowDate(); NAV.budgetMonth = { year: d.getFullYear(), month: d.getMonth() }; }
 }
 function budgetMonthKey() {
   ensureBudgetMonth();
@@ -106,7 +106,7 @@ function syncGoalContributionForRecurringCharge(monthKey, chargeId, checked) {
 // slice above — see the comment above defaultBudgetState()'s `goals` field for the full picture. ----
 function goalContributionsInScope(goal) {
   if (!goal.resetsAnnually) return goal.contributions;
-  const year = String(new Date().getFullYear());
+  const year = String(nowDate().getFullYear());
   return goal.contributions.filter(c => c.date.slice(0, 4) === year);
 }
 function goalProgress(goal) {
@@ -224,7 +224,7 @@ function renderGoalCard(g) {
   return `<div class="panel" ${entityAttr('goal', g.id)} style="${complete ? 'border-color:var(--good);' : ''}">
     <div class="row" style="align-items:flex-start; cursor:pointer;" onclick="toggleGoalExpanded('${g.id}')">
       <div style="flex:1; min-width:0;">
-        <div style="font-size:14px; font-weight:700;">${escapeHtml(g.name)}${g.resetsAnnually ? ` <span style="font-size:10px; font-weight:700; color:var(--text-faint);">&middot; ${new Date().getFullYear()}</span>` : ''}${complete ? ` <span style="color:var(--good); font-size:11px; font-weight:700;">&#10003; COMPLETE</span>` : ''}</div>
+        <div style="font-size:14px; font-weight:700;">${escapeHtml(g.name)}${g.resetsAnnually ? ` <span style="font-size:10px; font-weight:700; color:var(--text-faint);">&middot; ${nowDate().getFullYear()}</span>` : ''}${complete ? ` <span style="color:var(--good); font-size:11px; font-weight:700;">&#10003; COMPLETE</span>` : ''}</div>
         <div style="font-size:12px; color:var(--text-dim); margin-top:2px;">${fmtMoney(progress)} / ${fmtMoney(g.targetAmount)}${linkedCharge ? ` &middot; linked to "${escapeHtml(linkedCharge.name)}"` : ''}</div>
       </div>
       <button class="icon-btn" style="color:var(--bad); flex-shrink:0;" onclick="event.stopPropagation(); deleteSavingsGoal('${g.id}')" title="Delete goal">${icon('close')}</button>
@@ -258,7 +258,7 @@ function renderGoalCard(g) {
         Also count against this month's budget (logs as an Incidental too)
       </label>
       <button class="btn btn-primary btn-sm btn-block" style="margin-bottom:14px;" onclick="addGoalContribution('${g.id}')">+ ADD CONTRIBUTION</button>
-      <div class="subtle-label" style="margin-bottom:8px;">${g.resetsAnnually ? `${new Date().getFullYear()} ` : ''}CONTRIBUTIONS</div>
+      <div class="subtle-label" style="margin-bottom:8px;">${g.resetsAnnually ? `${nowDate().getFullYear()} ` : ''}CONTRIBUTIONS</div>
       <div class="entry-list">${contribs.length ? contribs.map(c => renderGoalContributionCard(g.id, c)).join('') : emptyState('Nothing logged yet.')}</div>
     ` : ''}
     ${renderLinkChips('goal', g.id)}

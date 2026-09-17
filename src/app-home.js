@@ -442,8 +442,8 @@ function scheduleBlocksForDate(dateObj) {
 // actually just started sat underneath it. The answer to "what am I doing right now" is the
 // block that started most recently, tie-broken by the shorter (more specific) one.
 function currentScheduleBlock() {
-  const now = new Date();                     // read the clock once — the old code called
-  const nowMin = now.getHours() * 60 + now.getMinutes();   // new Date() three separate times
+  const now = nowDate();                     // read the clock once — the old code called
+  const nowMin = now.getHours() * 60 + now.getMinutes();   // nowDate() three separate times
   const { blocks } = scheduleBlocksForDate(now);
   let best = null;
   let bestSince = Infinity;   // minutes since the block began — smaller is more recent
@@ -730,7 +730,7 @@ function setScaleReading(scale, v) {
   if (existing) {
     existing.value = n;          // still the same reading, corrected
   } else {
-    const rec = { id: uid(), value: n, at: new Date().toISOString() };
+    const rec = { id: uid(), value: n, at: nowDate().toISOString() };
     log.push(rec);
     UI.scaleSessionId[scale] = rec.id;
     // A scale you touch a few times a day will never approach this; the cap just stops an unbounded
@@ -1483,7 +1483,7 @@ document.getElementById('app').addEventListener('click', (e) => {
   e.preventDefault();
 }, true);
 function renderHome() {
-  const now = new Date();
+  const now = nowDate();
   const dateStr = now.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
   return `<div class="screen">
     <div class="section-title" style="margin-bottom:2px;">Home</div>

@@ -340,7 +340,7 @@ function switchTab(tab) {
     // affected by this — only actually leaving and re-entering the Schedule tab resets it.
     NAV.calZoom = 'day';
     NAV.calSelectedDate = todayStr();
-    const d = new Date();
+    const d = nowDate();
     NAV.calMonth = { year: d.getFullYear(), month: d.getMonth() };
   }
   if (tab === 'budget') { NAV.budgetSubtab = 'overview'; }
@@ -661,6 +661,7 @@ function renderTabbar() {
 }
 function _doRender() {
   _captureSubnavScroll(); // read the outgoing DOM's scroll positions before innerHTML below destroys it
+  syncDebugBar();         // lives outside #app, so nothing below would ever touch it
   const app = document.getElementById('app');
   if (NAV.currentTab === 'home') {
     app.innerHTML = renderHome();
