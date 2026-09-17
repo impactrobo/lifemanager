@@ -298,6 +298,38 @@ Newest first. Keep this reasonably current so a fresh session can see what alrea
 without re-reading the whole diff history. Roughly grouped: this project spent early Sept 2026
 on an architecture split + a large wave of Maximalist aesthetics.
 
+- **Notes Phase 5, "Meals" (2026-09-17) — the Notes rebuild is complete.** The bridge between a
+  recipe's two halves: `fields.ingredientText` (what you write, or what Convert produced) and
+  `fields.ingredients` (rows with exact macros that feed Meals). `src/app-recipe-match.js`.
+  - **Matching is a review, not an automatic pass.** A guessed food silently changes every calorie
+    number downstream, so a guess is confirmed once — and then *remembered*
+    (`STATE.diet.ingredientMap`), which is why a recipe's second import is quiet. That remembering
+    is the whole payoff for sitting through the review the first time.
+  - **Five statuses, per the spec**: matched, "did you mean…", not found, unit mismatch, no amount.
+    Repairs are confirm, pick another, create the food (into the shared list, via the real Custom
+    Foods form), enter an amount, fix the unit, or skip.
+  - **Skipping records what was skipped.** It lands on the recipe and travels to the Meal as
+    `notCounted`, which the recipe shows too — totals that quietly exclude something are worse than
+    totals that say what they are missing.
+  - **The parser reads what people actually write**: mixed fractions ("1 1/2 tsp"), plural unit
+    words, list markers, parentheticals, preparation words. `kg`/`l`/`mg` normalise to the units the
+    app stores with the quantity scaled — an exact conversion, so no prompt.
+  - **One normalisation on both sides of every comparison.** The parser strips commas, so comparing
+    its output against a raw food name could never match "Chicken breast, cooked". Caught by the
+    test on its first run.
+  - **Staleness is compared for INEQUALITY, not "is newer".** A meal records the exact `updatedAt`
+    it copied; anything different means the recipe moved. A `>` test fails silently whenever two
+    writes land in the same millisecond and says nothing useful if a clock runs backwards.
+    Re-import updates the meal **in place**, keeping its id, so anything already planning it works.
+  - **Shopping lists build on the plan the app already had** — seven real dates walked through the
+    meal rotation, which is what you'd actually buy (a five-day rotation over seven days is two of
+    A, two of B). That answers the spec's own open question. What's new: amounts now combine across
+    units that convert (200 g + 1 oz is one line) while genuinely different measures stay apart,
+    since converting cups of flour to grams needs a density the app doesn't have; skipped
+    ingredients are listed anyway, marked; and the list can be saved as a **checklist note** —
+    tagged `shopping`, linked to its recipes, with an **UPDATE** that re-plans while keeping what
+    you've already ticked off. The dated to-do reminder stays as the other destination.
+
 - **Notes Phase 4, "Convert" (2026-09-17).** Everything starts as a Quick note so that writing
   something down never requires deciding what it is first. Convert is the other half of that
   bargain: the moment you know, the note sorts itself into the right shape. `src/app-entry-convert.js`.

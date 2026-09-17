@@ -283,7 +283,32 @@ this is the only migration in the app that can destroy something you personally 
 - [ ] The sort you pick is still there after a relaunch; the filter and search are deliberately not.
 - [ ] Photos still attach, up to four, and open full-size.
 
-**Known gaps, not bugs — later phases:** Recipe→Meal matching and shopping lists are Phase 5.
+## Notes Phase 5 — Meals & shopping (2026-09-17) — the rebuild is complete
+`tests/test_recipe_match.js` covers the parser, all five statuses, the repairs, the remembered
+mappings and the combining maths. What it can't judge is whether the matcher guesses *well* against
+the foods you actually use, which is the only question left.
+- [ ] Open a recipe with written ingredients and tap **⟳ MATCH WRITTEN INGREDIENTS TO FOODS**.
+      Read the five rows: green is matched, amber wants an answer, red found nothing.
+- [ ] **Does it parse your way of writing?** Try "1 1/2 tsp salt", "2.5 kg potatoes", "- 3 tbsp
+      olive oil", "1 cup flour (plus more for dusting)". If a line you'd really write comes out
+      wrong, tell me the line.
+- [ ] Use each repair: **YES** on a "did you mean", **PICK…** for another food, **CREATE** for one
+      that doesn't exist, an amount for a bare name, a unit for a mismatch, and **SKIP**.
+- [ ] Save, then run the match **again** — everything you confirmed should now match with no
+      prompts at all. That's the payoff for doing it once.
+- [ ] A skipped ingredient shows on the recipe in an amber **"Not counted"** box, and rides along to
+      the Meal. Confirm the macro totals visibly exclude it rather than pretending.
+- [ ] **ADD 1 SERVING / ADD WHOLE BATCH** still work, and the resulting meal appears as a chip on
+      the recipe.
+- [ ] Edit the recipe afterwards: the chip should say **"recipe updated"** with **RE-IMPORT**.
+      Nothing updates on its own — confirm that, then re-import and check the meal changed.
+- [ ] **PHASES → MEAL PLAN → SHOPPING LIST → GENERATE** now offers two destinations. Try
+      **SAVE AS A CHECKLIST NOTE**: it lands in Notes tagged `shopping`, linked to its recipes.
+- [ ] Tick a few items off, then **⟳ UPDATE LIST**. Items still on the list keep their ticks — a
+      half-done shop should stay half done.
+- [ ] **Check the combining.** If two planned meals use the same food in different units, it should
+      be one line with the amounts added. Different measures that can't convert (cups vs grams)
+      stay separate on purpose.
 
 ## Notes Phase 4 — Convert (2026-09-17)
 The type chip is a button now: tap it to turn a Quick note into a Journal, Writing, Travel, Recipe

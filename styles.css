@@ -3073,3 +3073,39 @@ textarea.tmpl-input { line-height: 1.5; }
 }
 .tmpl-add:hover { color: var(--text-dim); border-color: var(--text-faint); }
 .tmpl-add:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ---- Ingredient matching (NOTES_SPEC Phase 5) ----
+   Each row is a written line, what the app thinks it is, and what to do about it. Colour carries
+   the status: green resolved, amber needs an answer, faint skipped. */
+.ing-row {
+  background: var(--surface); border: 1px solid var(--border-soft);
+  border-left-width: 3px; border-radius: 8px; padding: 8px 10px; margin-bottom: 6px;
+}
+.ing-row.is-matched  { border-left-color: var(--good); }
+.ing-row.is-close,
+.ing-row.is-unit,
+.ing-row.is-noamount { border-left-color: var(--amber); }
+.ing-row.is-notfound { border-left-color: var(--bad); }
+.ing-row.is-skip     { border-left-color: var(--border); opacity: 0.6; }
+.ing-row-head { display: flex; align-items: center; gap: 8px; }
+.ing-raw { flex: 1; min-width: 0; font-size: 13px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ing-status { font-size: 12px; color: var(--text-dim); margin-top: 3px; }
+.ing-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 7px; }
+.ing-qty { width: 78px; }
+.ing-unit { width: 84px; }
+/* A chip that is itself two buttons — open the meal, or re-import into it. */
+.ing-chip-open {
+  background: none; border: 0; padding: 0; margin: 0; cursor: pointer;
+  font: inherit; color: inherit; text-decoration: none;
+}
+.entry-textlink.is-stale { border-style: solid; border-color: var(--amber); color: var(--amber); }
+.entry-textlink.is-stale b { color: var(--amber); }
+/* Skipped ingredients, said out loud on the recipe — totals that quietly exclude something are
+   worse than totals that say what they are missing. */
+.ing-skipped {
+  margin-top: 10px; padding: 9px 11px; font-size: 12px; line-height: 1.5;
+  color: var(--text-dim); background: var(--surface);
+  border: 1px solid var(--amber); border-radius: var(--radius);
+}
+.ing-skipped b { color: var(--amber); }
+.ing-skipped div { margin-top: 4px; color: var(--text); }

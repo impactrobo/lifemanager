@@ -321,7 +321,7 @@ function renderNotes() {
   return `<div class="screen">
     <div class="section-title">Notes</div>
     ${open ? renderEntryEditor(open) : renderEntryList()}
-  </div>${renderEntryPreview()}${renderHubPicker()}${renderConvertSheet()}`;
+  </div>${renderEntryPreview()}${renderHubPicker()}${renderConvertSheet()}${renderIngredientMatchSheet()}`;
 }
 
 function renderEntryList() {
@@ -452,6 +452,9 @@ function renderEntryEditor(e) {
                 }</p>`
            }</div>`}
     </div>
+    ${/* A shopping list knows which week it was planned from, so it can be re-run in place. */ ''}
+    ${entryFieldValue(e, 'shoppingFrom') ? `<button class="btn btn-ghost btn-sm btn-block" style="margin-top:12px;"
+      onclick="updateShoppingNote('${e.id}')">⟳ UPDATE LIST — re-plan from ${escapeHtml(entryFieldValue(e, 'shoppingFrom'))}, keeping what's ticked</button>` : ''}
     ${renderEntryTemplateFields(e)}
     ${isRecipeEntry(e) ? renderRecipeEditor(e) : ''}
     ${isHubEntry(e) ? renderHubMembers(e) : ''}
@@ -473,6 +476,191 @@ function renderEntryEditor(e) {
       <button class="btn btn-ghost" onclick="closeEntry()">DONE</button>
     </div>
     <button class="btn btn-ghost btn-sm btn-block" style="margin-top:10px; color:var(--bad);" onclick="deleteEntry('${e.id}')">DELETE NOTE</button>`;
+}
+
+// ---- Matching written ingredients to real foods ----
+// The review screen is the feature. A guessed food silently changes every calorie number
+// downstream, so each guess is confirmed once — and then remembered, which is why a recipe's
+// second import is quiet.
+function openIngredientMatch(id) {
+  const e = liveEntryById(id);
+  if (!e) return;
+  commitEntryDraft();
+  saveState();
+  VIEW.ingMatch = { id, rows: planIngredientMatch(e), picking: null, creating: null };
+  render();
+}
+function closeIngredientMatch() { VIEW.ingMatch = null; render(); }
+function ingMatchRow(i) { const m = VIEW.ingMatch; return m && m.rows[i]; }
+function setIngRowFood(i, foodId) {
+  const row = ingMatchRow(i);
+  const food = foodById(foodId);
+  if (!row || !food) return;
+  row.food = food;
+  row.status = 'matched';
+  row.skip = false;
+  // Re-check the two things a new food can invalidate: whether it can hold the written unit, and
+  // whether there is an amount at all.
+  if (row.unit && !foodAcceptsUnit(food, row.unit)) row.status = 'unit';
+  else {
+    if (!row.unit) row.unit = defaultMealUnitFor(food);
+    if (row.qty == null) row.status = 'noamount';
+  }
+  VIEW.ingMatch.picking = null;
+  render();
+}
+function setIngRowQty(i, v) {
+  const row = ingMatchRow(i);
+  if (!row) return;
+  const n = parseMatchQty(v);
+  row.qty = n != null && n > 0 ? n : null;
+  if (row.food && row.qty != null && row.status === 'noamount') row.status = 'matched';
+  render();
+}
+function setIngRowUnit(i, unit) {
+  const row = ingMatchRow(i);
+  if (!row || !row.food) return;
+  row.unit = unit;
+  if (row.status === 'unit' && foodAcceptsUnit(row.food, unit)) row.status = row.qty == null ? 'noamount' : 'matched';
+  render();
+}
+function toggleIngRowSkip(i) {
+  const row = ingMatchRow(i);
+  if (!row) return;
+  row.skip = !row.skip;
+  render();
+}
+function startIngPick(i) { if (VIEW.ingMatch) { VIEW.ingMatch.picking = { index: i, query: '' }; render(); } }
+function cancelIngPick() { if (VIEW.ingMatch) { VIEW.ingMatch.picking = null; render(); } }
+function setIngPickQuery(v) {
+  if (!VIEW.ingMatch || !VIEW.ingMatch.picking) return;
+  VIEW.ingMatch.picking.query = v;
+  const box = document.getElementById('ingPickResults');
+  if (box) box.innerHTML = renderFoodSearchResults(v, 'pickIngFood');
+}
+function pickIngFood(foodId) {
+  const m = VIEW.ingMatch;
+  if (!m || !m.picking) return;
+  setIngRowFood(m.picking.index, foodId);
+}
+// Creating a food during an import reuses the real Custom Foods form rather than a cut-down copy,
+// and it goes into the SHARED list — a food invented here is a food you will want next time too.
+function startIngCreate(i) {
+  if (!VIEW.ingMatch) return;
+  VIEW.ingMatch.creating = i;
+  UI.customFoodFormOpen = true;
+  UI.customFoodEditId = null;
+  render();
+}
+function cancelIngCreate() { if (VIEW.ingMatch) { VIEW.ingMatch.creating = null; UI.customFoodFormOpen = false; render(); } }
+function saveIngCreate() {
+  const m = VIEW.ingMatch;
+  if (!m || m.creating == null) return;
+  const before = STATE.diet.customFoods.length;
+  saveCustomFood();
+  if (STATE.diet.customFoods.length > before) {
+    const added = STATE.diet.customFoods[STATE.diet.customFoods.length - 1];
+    const i = m.creating;
+    m.creating = null;
+    UI.customFoodFormOpen = false;
+    setIngRowFood(i, added.id);
+  }
+}
+function applyIngredientMatchNow() {
+  const m = VIEW.ingMatch;
+  const e = m && liveEntryById(m.id);
+  if (!e) return;
+  const res = applyIngredientMatch(e, m.rows);
+  VIEW.ingMatch = null;
+  saveState();
+  showToast(res.skipped
+    ? `${res.matched} matched, ${res.skipped} not counted`
+    : `${res.matched} ingredient${res.matched === 1 ? '' : 's'} matched`);
+  render();
+}
+const ING_STATUS_TEXT = {
+  matched:  (r) => `${r.food.name} · ${Math.round(r.food.per100.cal)} cal/100${r.food.base}`,
+  close:    (r) => `Did you mean ${r.food.name}?`,
+  notfound: (r) => `No food for “${r.name || r.raw.trim()}”`,
+  unit:     (r) => `${r.qty != null ? r.qty + ' ' : ''}${r.unit}, but ${r.food.name} is tracked in ${r.food.unit === 'count' ? r.food.itemLabel + 's' : r.food.base}`,
+  noamount: (r) => `${r.food.name} — no amount given`,
+};
+function renderIngredientMatchSheet() {
+  const m = VIEW.ingMatch;
+  const e = m && liveEntryById(m.id);
+  if (!e) return '';
+  if (m.creating != null) {
+    return `<div class="link-picker-backdrop" onclick="cancelIngCreate()"></div>
+      <div class="link-picker">
+        <div class="row" style="margin-bottom:8px;">
+          <div class="subtle-label" style="margin-bottom:0;">NEW FOOD</div>
+          <button class="icon-btn" onclick="cancelIngCreate()">${icon('close')}</button>
+        </div>
+        ${renderCustomFoodForm()}
+        <button class="btn btn-primary btn-block" style="margin-top:10px;" onclick="saveIngCreate()">SAVE &amp; USE IT</button>
+      </div>`;
+  }
+  if (m.picking) {
+    return `<div class="link-picker-backdrop" onclick="cancelIngPick()"></div>
+      <div class="link-picker">
+        <div class="row" style="margin-bottom:8px;">
+          <div class="subtle-label" style="margin-bottom:0;">PICK A FOOD</div>
+          <button class="icon-btn" onclick="cancelIngPick()">${icon('close')}</button>
+        </div>
+        <label class="field"><input type="text" placeholder="Search foods…" value="${escapeHtml(m.picking.query)}" oninput="setIngPickQuery(this.value)"></label>
+        <div id="ingPickResults">${renderFoodSearchResults(m.picking.query, 'pickIngFood')}</div>
+      </div>`;
+  }
+  const open = ingredientPlanOpen(m.rows);
+  return `
+    <div class="link-picker-backdrop" onclick="closeIngredientMatch()"></div>
+    <div class="link-picker convert-sheet">
+      <div class="row" style="margin-bottom:8px;">
+        <div style="min-width:0;">
+          <div class="subtle-label" style="margin-bottom:2px;">MATCH INGREDIENTS</div>
+          <div style="font-size:12px; color:var(--text-dim);">${escapeHtml(entryTitleOf(e))}</div>
+        </div>
+        <button class="icon-btn" onclick="closeIngredientMatch()">${icon('close')}</button>
+      </div>
+      <div class="convert-review">
+        ${m.rows.length ? m.rows.map((r, i) => renderIngRow(r, i)).join('')
+          : '<div class="entry-empty-line">No written ingredients on this recipe yet.</div>'}
+      </div>
+      <div style="font-size:11px; color:${open ? 'var(--amber)' : 'var(--text-faint)'}; margin-top:8px;">
+        ${open ? `${open} still need${open === 1 ? 's' : ''} an answer — anything left unresolved is skipped and marked “not counted” on the meal.`
+               : 'Everything resolved. Confirmed names are remembered, so the next import is quiet.'}
+      </div>
+      <div class="row" style="gap:8px; margin-top:12px;">
+        <button class="btn btn-sm" onclick="closeIngredientMatch()">CANCEL</button>
+        <button class="btn btn-sm btn-primary" style="flex:1;" ${m.rows.length ? '' : 'disabled'} onclick="applyIngredientMatchNow()">SAVE MATCHES</button>
+      </div>
+    </div>`;
+}
+function renderIngRow(r, i) {
+  const status = r.skip ? 'skip' : r.status;
+  const text = r.skip ? 'Skipped — listed as not counted' : (ING_STATUS_TEXT[r.status] || (() => ''))(r);
+  const units = r.food && r.food.unit !== 'count'
+    ? (r.food.unit === 'weight' ? Object.keys(WEIGHT_TO_G) : Object.keys(VOLUME_TO_ML))
+    : [];
+  return `<div class="ing-row is-${status}">
+    <div class="ing-row-head">
+      <span class="ing-raw">${escapeHtml(r.raw.trim())}</span>
+      <button class="btn btn-sm btn-ghost" onclick="toggleIngRowSkip(${i})">${r.skip ? 'UNSKIP' : 'SKIP'}</button>
+    </div>
+    <div class="ing-status">${escapeHtml(text)}</div>
+    ${r.skip ? '' : `
+      <div class="ing-actions">
+        ${r.status === 'close' ? `<button class="btn btn-sm btn-primary" onclick="setIngRowFood(${i},'${r.food.id}')">YES</button>` : ''}
+        ${r.status === 'noamount' || r.status === 'unit' ? `
+          <input type="text" inputmode="decimal" class="ing-qty" placeholder="amount" value="${r.qty != null ? r.qty : ''}" onchange="setIngRowQty(${i}, this.value)">` : ''}
+        ${r.status === 'unit' && units.length ? `
+          <select class="ing-unit" onchange="setIngRowUnit(${i}, this.value)">
+            ${units.map(u => `<option value="${u}" ${u === r.unit ? 'selected' : ''}>${u}</option>`).join('')}
+          </select>` : ''}
+        <button class="btn btn-sm btn-ghost" onclick="startIngPick(${i})">${r.food ? 'ANOTHER…' : 'PICK…'}</button>
+        ${r.status === 'notfound' ? `<button class="btn btn-sm btn-ghost" onclick="startIngCreate(${i})">CREATE</button>` : ''}
+      </div>`}
+  </div>`;
 }
 
 // ---- Convert ----
@@ -1217,7 +1405,16 @@ function ensureRecipeIngredients(e) {
 }
 function renderRecipeEditor(e) {
   const q = VIEW.entryIngredientQuery || '';
-  return `<div class="subtle-label" style="margin:16px 0 8px;">MATCHED INGREDIENTS</div>
+  const written = entryFieldValue(e, 'ingredientText');
+  const skipped = entryFieldValue(e, 'ingredientsSkipped');
+  return `
+    ${written ? `<button class="btn btn-sm btn-block" style="margin:12px 0 0;" onclick="openIngredientMatch('${e.id}')">
+      ⟳ MATCH WRITTEN INGREDIENTS TO FOODS</button>` : ''}
+    ${skipped ? `<div class="ing-skipped">
+      <b>Not counted</b> — these were skipped when matching, so the totals below don't include them:
+      <div>${escapeHtml(skipped).replace(/\n/g, '<br>')}</div>
+    </div>` : ''}
+    <div class="subtle-label" style="margin:16px 0 8px;">MATCHED INGREDIENTS</div>
     <div class="panel">
       <div class="field-row">
         ${/* TEXT, not number: Convert can write a whole sentence here ("Serves 4 generously"),
@@ -1378,6 +1575,12 @@ function addRecipeToMeals(entryId, perServing) {
     name: entryTitleOf(e) + (divisor > 1 ? ' (1 serving)' : ''),
     unitSystem: MEAL_UNIT_SYSTEM,
     items: items.map(it => ({ id: uid(), foodId: it.foodId, qty: Math.round((it.qty / divisor) * 100) / 100, unit: it.unit })),
+    // Where this meal came from, and WHEN — the timestamp is what lets the recipe notice it has
+    // been edited since and offer a re-import. The import is one-way on purpose: editing the meal
+    // must never reach back and rewrite the recipe, which is somebody's actual writing.
+    recipeId: e.id,
+    recipeAt: e.updatedAt || Date.now(),
+    notCounted: entryFieldValue(e, 'ingredientsSkipped') || '',
     createdAt: Date.now(), updatedAt: Date.now(),
   };
   STATE.diet.meals.push(meal);
@@ -1385,6 +1588,48 @@ function addRecipeToMeals(entryId, perServing) {
   // keeps the method and the story, and each shows the other.
   addEntityLink('note', e.id, 'meal', meal.id); // saves + renders
   showToast(divisor > 1 ? 'Added one serving to Meals' : 'Added to Meals');
+}
+// Meals made from this recipe, newest first.
+function mealsFromRecipe(e) {
+  return (STATE.diet.meals || []).filter(m => m.recipeId === (e && e.id))
+    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+}
+// Nothing updates automatically — the spec is explicit, and it is right: a meal you have already
+// planned a week around should not change under you because you fixed a typo in the method. The
+// recipe just says so, and offers the re-import as a choice.
+// Has the recipe changed since this meal was taken from it? Compared for INEQUALITY rather than
+// "is newer": the meal records the exact updatedAt it copied, so anything different means the
+// recipe moved. A `>` test quietly fails whenever two writes land in the same millisecond, and
+// says nothing useful at all if a clock ever runs backwards — an imported save, a device whose
+// time was wrong. "Different" is the fact being asked about; "later" was only ever a proxy.
+function recipeMealStale(e, m) { return (e.updatedAt || 0) !== (m.recipeAt || 0); }
+function renderRecipeMealChips(e) {
+  const meals = mealsFromRecipe(e);
+  if (!meals.length) return '';
+  return `<div class="entry-link-row" style="margin-top:8px;">${meals.map(m => {
+    const stale = recipeMealStale(e, m);
+    return `<span class="entry-textlink ${stale ? 'is-stale' : ''}" style="--tc:var(--note-recipe)">
+      <button class="ing-chip-open" onclick="navigateToEntity('meal','${m.id}')">${escapeHtml(m.name)}</button>
+      ${stale ? `<b>recipe updated</b><button class="ing-chip-open" onclick="reimportRecipeMeal('${e.id}','${m.id}')">RE-IMPORT</button>` : '<b>meal</b>'}
+    </span>`;
+  }).join('')}</div>`;
+}
+// Replaces that meal's items in place, keeping its id — anything already planning it keeps
+// working, which is the whole reason not to just make a second meal.
+function reimportRecipeMeal(entryId, mealId) {
+  const e = liveEntryById(entryId);
+  const meal = (STATE.diet.meals || []).find(m => m.id === mealId);
+  if (!e || !meal) return;
+  const items = recipeIngredients(e);
+  if (!items.length) { showToast('Match some ingredients first'); return; }
+  const divisor = /1 serving/.test(meal.name) && recipeServings(e) > 1 ? recipeServings(e) : 1;
+  meal.items = items.map(it => ({ id: uid(), foodId: it.foodId, qty: Math.round((it.qty / divisor) * 100) / 100, unit: it.unit }));
+  meal.recipeAt = e.updatedAt || Date.now();
+  meal.notCounted = entryFieldValue(e, 'ingredientsSkipped') || '';
+  meal.updatedAt = Date.now();
+  saveState();
+  showToast('Meal re-imported from the recipe');
+  render();
 }
 function renderRecipeCardBody(e) {
   const { totals, servings, perServingCal } = recipeTotals(e);

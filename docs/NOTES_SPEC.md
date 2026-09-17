@@ -2,7 +2,7 @@
 
 As of 2026-09-17. Source of truth: the shared Claude Doc "LIFEMan Notes — Feature Spec". Re-export this file if the doc changes.
 
-**Build status: Phases 1 (Capture), 2 (Links), 3 (Hubs) and 4 (Convert) shipped 2026-09-17.** Where the code and this document disagree,
+**Build status: all five phases shipped 2026-09-17.** Where the code and this document disagree,
 the code wins and the divergence is recorded in `docs/ROADMAP.md`. Seven deliberate departures so
 far: tags kept no colour but the six entry TYPES carry it; `links` is stored in app-links.js's
 cross-entity `[{type, id}]` shape rather than a bare id array, so one link system serves the whole
@@ -16,7 +16,10 @@ full rebuild measures 3ms at 1,000 entries. Phase 4 added two more: the `serving
 whole line rather than trimming it to a digit (recipeServings() extracts the count instead, so that
 "no text is ever dropped" stays literally true), and a recipe carries BOTH a written ingredient list
 and matched rows — `ingredientText` and `ingredients` — which is what the "free text plus a Match
-button" decision requires.
+button" decision requires. Phase 5 added the last: shopping lists build on the meal PLAN the app
+already had — seven real dates walked through the rotation — rather than the spec's pick-meals-and-
+servings flow, because that is what you would actually need to buy; and they can be saved either as
+a checklist note (the spec's shape) or as the dated to-do reminder that already existed.
 
 ## Overview
 

@@ -877,33 +877,44 @@ function toggleShoppingListForm() { UI.shoppingListFormOpen = !UI.shoppingListFo
 // different units (e.g. one in g, another in oz) stay as separate lines rather than risking a
 // wrong unit conversion just to merge them into one.
 function generateShoppingListItems(fromDate) {
-  const totals = new Map();
-  // Seven REAL dates resolved through the rotation, not seven weekday buckets. On a five-day meal
-  // rotation A B C D E starting Monday, the week is A B C D E A B -- two of A, two of B, one each
-  // of the rest. That's what you'd actually need to buy; a bucket sum would have said one of each.
-  // And because a rotation needn't divide into seven, WHICH seven days matters -- hence the date.
+  return generateShoppingRows(fromDate).rows.map(shoppingItemLabel);
+}
+// The rows behind the list. Split out from the label-making above so the shopping NOTE can link
+// each line back to the recipe it came from, which a pre-joined string can't.
+function generateShoppingRows(fromDate) {
+  const entries = [];
+  const recipeIds = new Set();
   const from = fromDate || todayStr();
   for (let i = 0; i < 7; i++) {
     plannedMealsOn(shiftDate(from, i)).forEach(entry => {
       if (!entry.mealId) return;
       const meal = STATE.diet.meals.find(m => m.id === entry.mealId);
       if (!meal) return;
+      if (meal.recipeId) recipeIds.add(meal.recipeId);
       meal.items.forEach(it => {
         const food = foodById(it.foodId);
-        if (!food) return;
-        const key = it.foodId + ':' + it.unit;
-        if (!totals.has(key)) totals.set(key, { food, unit: it.unit, qty: 0 });
-        totals.get(key).qty += Number(it.qty) || 0;
+        if (food) entries.push({ food, unit: it.unit, qty: Number(it.qty) || 0 });
       });
     });
   }
-  return [...totals.values()]
-    .sort((a, b) => a.food.name.localeCompare(b.food.name))
-    .map(t => {
-      const qty = Math.round(t.qty * 100) / 100;
-      const unitLabel = t.food.unit === 'count' ? (t.food.itemLabel + (qty === 1 ? '' : 's')) : t.unit;
-      return `${t.food.name} — ${qty} ${unitLabel}`;
+  return { rows: combineShoppingItems(entries), recipeIds: Array.from(recipeIds) };
+}
+// Ingredients that were skipped when a planned meal's recipe was matched. They have no food and
+// so no quantity to combine, but leaving them off the list entirely is how you get home without
+// the one thing the recipe actually needed — so they go on, as written, marked.
+function shoppingSkippedLines(fromDate) {
+  const out = [];
+  const from = fromDate || todayStr();
+  const seen = new Set();
+  for (let i = 0; i < 7; i++) {
+    plannedMealsOn(shiftDate(from, i)).forEach(entry => {
+      const meal = STATE.diet.meals.find(m => m.id === entry.mealId);
+      if (!meal || !meal.notCounted || seen.has(meal.id)) return;
+      seen.add(meal.id);
+      String(meal.notCounted).split('\n').forEach(l => { if (l.trim()) out.push(l.trim() + '  (not counted)'); });
     });
+  }
+  return out;
 }
 function renderShoppingListGenerator() {
   const items = generateShoppingListItems();
@@ -917,10 +928,67 @@ function renderShoppingListGenerator() {
         <button class="btn btn-sm btn-primary" ${items.length ? '' : 'disabled'} onclick="toggleShoppingListForm()">${UI.shoppingListFormOpen ? 'CANCEL' : 'GENERATE'}</button>
       </div>
       ${UI.shoppingListFormOpen ? `
-        <label class="field"><span class="lbl">Save as a to-do list on this date</span><input type="date" id="shoppingListDate" value="${todayStr()}"></label>
-        <button class="btn btn-primary btn-block" onclick="generateShoppingListReminder()">+ CREATE TO-DO LIST</button>
+        <label class="field"><span class="lbl">Shopping on this date, for the seven days from it</span><input type="date" id="shoppingListDate" value="${todayStr()}"></label>
+        ${/* Two destinations because they are genuinely different things, not one thing done twice.
+              A to-do reminder lands on a date and can push-notify. A checklist NOTE is searchable,
+              taggable, links back to the recipes it came from, and can be re-run later keeping what
+              you have already ticked off. */ ''}
+        <button class="btn btn-primary btn-block" onclick="generateShoppingListNote()">+ SAVE AS A CHECKLIST NOTE</button>
+        <button class="btn btn-block btn-sm" style="margin-top:8px;" onclick="generateShoppingListReminder()">+ CREATE TO-DO LIST ON THE CALENDAR</button>
       ` : ''}
     </div>`;
+}
+// Saves the list as a checklist NOTE: one `- [ ]` line per ingredient, tagged `shopping`, linked
+// to every recipe that fed it. `shoppingFrom` is what makes UPDATE possible later — the list can
+// be re-planned from the same date without asking you to remember which one it was.
+function shoppingNoteBody(date) {
+  const { rows } = generateShoppingRows(date);
+  const lines = rows.map(r => '- [ ] ' + shoppingItemLabel(r));
+  const skipped = shoppingSkippedLines(date);
+  if (skipped.length) lines.push('', '## Not counted', ...skipped.map(s => '- [ ] ' + s));
+  return lines.join('\n');
+}
+function generateShoppingListNote() {
+  const dateEl = document.getElementById('shoppingListDate');
+  const date = (dateEl && dateEl.value) || todayStr();
+  const { rows, recipeIds } = generateShoppingRows(date);
+  if (!rows.length) { showToast('No meals planned in the 7 days from that date'); return; }
+  const e = Object.assign(blankEntry('quick'), {
+    title: 'Shopping · ' + date,
+    body: shoppingNoteBody(date),
+    tags: ['shopping'],
+    fields: { shoppingFrom: date },
+    links: recipeIds.map(id => ({ type: 'note', id })),
+  });
+  allEntries().push(e);
+  invalidateEntryIndex();
+  UI.shoppingListFormOpen = false;
+  saveState();
+  showToast('Shopping list saved to Notes');
+  openEntry(e.id);
+}
+// Re-runs the plan. Lines that are still on the list keep whatever you had already ticked — the
+// point of updating rather than regenerating is that a half-done shop stays half done.
+function updateShoppingNote(id) {
+  const e = liveEntryById(id);
+  const date = e && entryFieldValue(e, 'shoppingFrom');
+  if (!e || !date) return;
+  const ticked = new Set();
+  String(e.body || '').split('\n').forEach(l => {
+    const m = l.match(/^\s*[-*]\s+\[[xX]\]\s+(.*)$/);
+    if (m) ticked.add(m[1].trim());
+  });
+  const { recipeIds } = generateShoppingRows(date);
+  e.body = shoppingNoteBody(date).split('\n')
+    .map(l => {
+      const m = l.match(/^(\s*[-*]\s+)\[ \]\s+(.*)$/);
+      return m && ticked.has(m[2].trim()) ? `${m[1]}[x] ${m[2]}` : l;
+    }).join('\n');
+  e.links = recipeIds.map(rid => ({ type: 'note', id: rid }));
+  touchEntry(e);
+  saveState();
+  showToast('Shopping list updated');
+  render();
 }
 function generateShoppingListReminder() {
   // Shop on the chosen date, FOR the seven days from it -- one date, both meanings, since that is

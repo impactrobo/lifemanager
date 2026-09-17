@@ -286,6 +286,10 @@ STATE = {
     ...
   ],
   reminders: [ { id, date, time, title, notes, createdAt } ],
+  // Confirmed ingredient-name -> foodId, so a name only has to be matched once ever. Keyed by the
+  // NORMALISED name (lowercase, punctuation stripped) — see normaliseFoodName() in
+  // src/app-recipe-match.js, which is applied to both sides of every comparison.
+  // Lives under STATE.diet; listed here for findability.
 
   // ---------------- BUDGET ----------------
   budget: {

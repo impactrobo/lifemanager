@@ -176,6 +176,7 @@ let VIEW = {
   entryTagQuery: '',                 // what's in the tag input, which also narrows suggestions
   hubPicker: null,                   // { mode:'hub'|'member', id, query } -- one sheet, both directions
   convert: null,                     // { id, step:'type'|'review', toType, plan, moving } -- the Convert sheet
+  ingMatch: null,                    // { id, rows, picking, creating } -- written ingredients -> real foods
   entryFieldOpen: {},                // template fields opened from their "+ Add ..." placeholder
   entryIngredientQuery: '',          // recipe only: the ingredient search box's current text
   recipeCustomFoodOpen: false,       // the '+ NEW INGREDIENT' overlay, over the Notes screen
@@ -343,7 +344,7 @@ function switchTab(tab) {
     VIEW.entryMode = 'view';
     VIEW.entryDraftTitle = null; VIEW.entryDraftBody = null; VIEW.entryTagQuery = '';
     VIEW.entryBackStack = []; VIEW.entryAutocomplete = null; VIEW.entryPreview = null;
-    VIEW.hubPicker = null; VIEW.convert = null; VIEW.entryFieldOpen = {};
+    VIEW.hubPicker = null; VIEW.convert = null; VIEW.entryFieldOpen = {}; VIEW.ingMatch = null;
     NAV.notesSubtab = 'view';
   }
   if (tab === 'schedule') {
