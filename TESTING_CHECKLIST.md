@@ -224,10 +224,16 @@ The bottom-bar tab is renamed **PROGRESS**.
 - [x] Sleep, Quality and Resting HR are on this form **and** on Home, reading and writing the same
       daily-log entry — genuinely two-way, not a synced copy. Someone who never opens Home can still
       log sleep. (This was the call that mattered: a field you cannot reach is worse than a third store.)
-- [ ] **Open flag (2026-09-17):** deleting a card currently clears only what the card shows — weight,
-      measurements, sleep, quality, resting HR — leaving water/steps/stool. Field feedback says the
-      entry should be the day's *whole* record: carry water/steps/stool on the form too and delete
-      as one. Queued; re-check when it ships.
+- [ ] **Your flag, now shipped — re-check this one.** An entry is the day's whole record. **Water**
+      and **Steps** are on the form (water in whichever unit you've set), stool and urine are behind
+      the toilet button, and the card shows all of it. **Deleting a card takes the whole day** —
+      every daily field, the weigh-in, the measurements and that day's bathroom readings. Log a day
+      with a bit of everything, delete it, and confirm nothing survives on Home either.
+- [ ] Days you only drank water still do **not** appear as entries — that would bury the days you
+      actually weighed in. Save water-only from the form and the toast says where it went rather
+      than looking like nothing happened.
+- [ ] Switch **water units** (Settings → cups/mL) and reopen the form: the number must convert, not
+      be reinterpreted. 2000 mL should read as ~8.5 cups, and typing 8.5 cups should store ~2010 mL.
 
 ## Phases: the shelf and the popup editor (2026-09-17)
 Adding a phase used to start it immediately, which made planning two blocks in a row impossible to

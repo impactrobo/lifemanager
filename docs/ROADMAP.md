@@ -298,6 +298,27 @@ Newest first. Keep this reasonably current so a fresh session can see what alrea
 without re-reading the whole diff history. Roughly grouped: this project spent early Sept 2026
 on an architecture split + a large wave of Maximalist aesthetics.
 
+- **A BODY entry is the day's record, and deleting one deletes the day (2026-09-17).** Closes the
+  flag from the field: *"why not allow the user to track it all? Delete everything together and
+  maintain the other aspects as part of the tracked items."*
+  - **Water and steps join the form.** They were the last two daily readings only reachable from
+    Home, which matters because someone whose default screen is EXERCISE never opens Home. Water
+    converts both ways — millilitres on disk whatever unit the field shows — because writing back
+    whatever was typed would silently reinterpret every stored number the moment you switched to cups.
+  - **Delete now takes the whole day**: every daily-log field, the weight row, the measurements, and
+    that day's bathroom readings. The old behaviour cleared only the three fields the card showed,
+    on the reasoning that deleting what you can see must not quietly take what you can't. The
+    reasoning was sound; the premise stopped being true the moment the card started showing water,
+    steps and the day's bathroom figures.
+  - **Two lists, not one**, and the distinction is now explicit. `BODY_DAILY_FIELDS` is what the form
+    edits (five); `BODY_ENTRY_FIELDS` is what makes a day an *entry* (three). Water and steps are
+    reachable here without every day you drank water burying the days you actually weighed in. A save
+    that produces no card says so rather than looking like a no-op.
+  - Caught by the tests: `test_body_edit.js` was **asserting the old behaviour** — that water and
+    steps survived a delete — so it was pinning the thing that got reported.
+  - Caught by a screenshot: five fields across 390px wrapped their labels to different heights and
+    left the inputs at three different baselines. They're a grid now.
+
 - **Stool and urine become tracked measurements (2026-09-17).** Both scales were already logged as
   several timestamped readings a day; what was missing was any way to compare them over time, or to
   reach them from the BODY screen at all.

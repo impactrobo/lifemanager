@@ -158,16 +158,56 @@ const { settle, pinClock } = require('./helpers.js');
   if (!listing.dates.includes('2026-06-10')) throw new Error('A sleep-only day is a body entry: ' + listing.dates.join(','));
   if (listing.dates.includes('2026-06-09')) throw new Error('A water-only day is your DAY, not your body: ' + listing.dates.join(','));
 
-  // Deleting a card clears what it SHOWS and nothing else — that day's water is none of its business.
-  await page.evaluate(() => {
+  // Deleting a card takes THE WHOLE DAY. This used to assert the opposite — that water and steps
+  // survived, because the card didn't show them — and that reasoning stopped holding the moment the
+  // form grew them and the card started listing them. Reported as "why not allow the user to track
+  // it all? Delete everything together." An entry is the day's record, so deleting it deletes the
+  // day: the daily-log fields AND that day's bathroom readings, which are several rows rather than
+  // one field and so are filtered out by date.
+  const swept = await page.evaluate(() => {
     STATE.life.dailyLog = { '2026-06-10': { sleepHours: 8, waterMl: 1500, steps: 9000 } };
+    STATE.life.stoolLog = []; STATE.life.waterColorLog = [];
+    addScaleReadingOn('stool', 4, '2026-06-10');
+    addScaleReadingOn('waterColor', 3, '2026-06-10');
+    addScaleReadingOn('stool', 5, '2026-06-11');          // a different day, must be untouched
     deleteBodyEntry('2026-06-10'); confirmYes();
+    return { log: STATE.life.dailyLog['2026-06-10'] || null,
+             stoolThatDay: scaleDayStats('stool', '2026-06-10').count,
+             urineThatDay: scaleDayStats('waterColor', '2026-06-10').count,
+             nextDay: scaleDayStats('stool', '2026-06-11').count };
   });
   await settle(page);
-  const kept = await page.evaluate(() => STATE.life.dailyLog['2026-06-10'] || null);
-  console.log('after deleting a sleep-only card:', kept);
-  if (!kept || kept.waterMl !== 1500 || kept.steps !== 9000) throw new Error('Water and steps must survive: ' + JSON.stringify(kept));
-  if (kept.sleepHours !== undefined) throw new Error('...while the sleep the card showed is gone');
+  console.log('after deleting the card:', JSON.stringify(swept));
+  if (swept.log) throw new Error('The whole day goes, not just the fields the card used to show: ' + JSON.stringify(swept.log));
+  if (swept.stoolThatDay !== 0 || swept.urineThatDay !== 0) throw new Error("...including that day's bathroom readings");
+  if (swept.nextDay !== 1) throw new Error('...and nothing outside that day is touched');
+
+  // ---- Water and steps are on the form, and water round-trips through its display unit ----
+  // Water is millilitres on disk whatever the field says. If the form wrote back whatever was
+  // typed, switching to cups would silently reinterpret every stored number as a thousand times
+  // too small — so the conversion has to happen on the way in as well as out.
+  const water = await page.evaluate(() => {
+    const keys = BODY_DAILY_FIELDS.map(f => f.key);
+    const onForm = ['waterMl', 'steps'].every(k => keys.includes(k));
+    // Entry-constituting is a SHORTER list on purpose: water and steps are reachable here without
+    // every day you drank water becoming a row in this list.
+    const constitutes = BODY_ENTRY_FIELDS.slice();
+    const f = BODY_DAILY_FIELDS.find(x => x.key === 'waterMl');
+    STATE.settings.waterUnit = 'ml';
+    const ml = { shown: f.conv(2000), stored: f.back(2000) };
+    STATE.settings.waterUnit = 'cup';
+    const cup = { shown: Math.round(f.conv(2000) * 10) / 10, stored: Math.round(f.back(8.5)) };
+    STATE.settings.waterUnit = 'ml';
+    return { onForm, constitutes, ml, cup, unitLabel: bodyFieldUnit(f) };
+  });
+  console.log('water/steps on the form:', JSON.stringify(water));
+  if (!water.onForm) throw new Error('Water and steps belong on the BODY form — someone who never opens Home has no other way in');
+  if (water.constitutes.join() !== 'sleepHours,sleepQuality,restingHR') {
+    throw new Error(`Water and steps must NOT make a day an entry, or every day you drank water buries the ones you weighed in on — got ${water.constitutes}`);
+  }
+  if (water.ml.shown !== 2000 || water.ml.stored !== 2000) throw new Error('In mL the number passes through untouched');
+  if (Math.abs(water.cup.shown - 8.5) > 0.1) throw new Error(`2000 mL is about 8.5 cups, got ${water.cup.shown}`);
+  if (Math.abs(water.cup.stored - 2010) > 15) throw new Error(`8.5 cups must store back as about 2010 mL, got ${water.cup.stored}`);
 
   // Put the fixture back for the sections below.
   await page.evaluate(() => {

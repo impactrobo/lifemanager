@@ -164,18 +164,40 @@ function bathroomSummaryLine(dateStr) {
 // them. They get their own sheet instead (see renderBathroomSheet below), reached by the toilet
 // button beside the entry button. What lands on the entry is the pair of numbers derived from that
 // day's readings: the average, and the count.
+// `conv` and `back` are for a field stored canonically and shown in your units — water is
+// millilitres on disk whatever the chip says. Everything else is stored as typed.
 const BODY_DAILY_FIELDS = [
   { key: 'sleepHours',   id: 'bSleep',   label: 'Sleep',      unit: 'hrs', step: '0.1' },
   { key: 'sleepQuality', id: 'bSleepQ',  label: 'Quality',    unit: '1-5', step: '1' },
   { key: 'restingHR',    id: 'bRestHR',  label: 'Resting HR', unit: 'bpm', step: '1' },
+  // WRAPPED IN ARROWS, not bare references. mlToDisplay/displayToMl/waterUnitLabel live in
+  // app-home.js, which loads AFTER this file — a bare `conv: mlToDisplay` is evaluated while this
+  // file is being read, throws ReferenceError, and kills the rest of app-body.js silently. The
+  // symptom is the whole Health & Wellness screen rendering as nothing. See CLAUDE.md on what load
+  // order does and doesn't constrain, and HOME_BOX_RENDERERS for the same fix.
+  { key: 'waterMl',      id: 'bWater',   label: 'Water',      unit: () => waterUnitLabel(), step: 'any',
+    conv: (ml) => mlToDisplay(ml), back: (v) => displayToMl(v) },
+  { key: 'steps',        id: 'bSteps',   label: 'Steps',      unit: 'steps', step: '1' },
 ];
+function bodyFieldUnit(f) { return typeof f.unit === 'function' ? f.unit() : f.unit; }
+// WHICH of those fields makes a day an ENTRY. Not all of them, and the difference matters: water
+// and steps are on the form so they are reachable from here (someone who lives in EXERCISE never
+// opens Home), but a day you only drank water is a Tuesday, not a body reading. Listing every such
+// day would bury the ones where you actually stepped on a scale.
+//
+// So the form edits five fields and three of them constitute an entry. What an entry OWNS once it
+// exists is a separate question again — see deleteBodyEntry(), which takes the whole day.
+const BODY_ENTRY_FIELDS = ['sleepHours', 'sleepQuality', 'restingHR'];
 function bodyDailyOn(dateStr) {
   const log = lifeLogForDate(dateStr);
   const out = {};
   BODY_DAILY_FIELDS.forEach(f => { if (log[f.key] != null) out[f.key] = log[f.key]; });
   return out;
 }
-function bodyHasDailyOn(dateStr) { return Object.keys(bodyDailyOn(dateStr)).length > 0; }
+function bodyHasDailyOn(dateStr) {
+  const log = lifeLogForDate(dateStr);
+  return BODY_ENTRY_FIELDS.some(k => log[k] != null);
+}
 
 function bodyLogDates() {
   const dates = new Set();
@@ -259,7 +281,9 @@ function renderBodyLog() {
       if (w.cardioCalories) bits.push(`<span>Cardio Cal <b>${w.cardioCalories}</b></span>`);
     }
     BODY_DAILY_FIELDS.forEach(f => {
-      if (e.daily[f.key] != null) bits.push(`<span>${f.label} <b>${fmt(e.daily[f.key], 1)}</b> ${f.unit}</span>`);
+      if (e.daily[f.key] == null) return;
+      const shown = f.conv ? f.conv(e.daily[f.key]) : e.daily[f.key];
+      bits.push(`<span>${f.label} <b>${fmt(shown, 1)}</b> ${bodyFieldUnit(f)}</span>`);
     });
     // Derived from that day's readings, never stored. Count first: it is the number that moves when
     // you change fibre, and the average is what it moved to.
@@ -342,12 +366,15 @@ function renderBodyForm() {
       </div>
       ${/* The rest of the AM strip. Here so that someone who never opens Home can still log it --
             same numbers, same store, either way in. */''}
-      <div class="field-row">
-        ${BODY_DAILY_FIELDS.map(f => `
-          <label class="field"><span class="lbl">${f.label} (${f.unit})</span>
-            <input type="number" step="${f.step}" id="${f.id}" value="${daily[f.key] != null ? daily[f.key] : ''}"></label>`).join('')}
+      <div class="body-daily-grid">
+        ${BODY_DAILY_FIELDS.map(f => {
+          const raw = daily[f.key];
+          const shown = raw == null ? '' : (f.conv ? fmt(f.conv(raw), 1) : raw);
+          return `<label class="field"><span class="lbl">${f.label} (${bodyFieldUnit(f)})</span>
+            <input type="number" step="${f.step}" id="${f.id}" value="${shown}"></label>`;
+        }).join('')}
       </div>
-      <div style="font-size:10px; color:var(--text-faint); margin:-4px 0 12px;">Body Fat / Water from a smart scale, if you have one. Cardio Calories = burned through direct cardio work. Weight, Calories, Sleep, Quality and Resting HR are the same readings Home's AM/PM strips log — edit them in either place.</div>
+      <div style="font-size:10px; color:var(--text-faint); margin:-4px 0 12px;">Body Fat / Water from a smart scale, if you have one. Cardio Calories = burned through direct cardio work. Weight, Calories, Sleep, Quality, Resting HR, Water and Steps are the same readings Home's AM/PM strips log — edit them in either place. Stool and urine are several readings a day, so they get the toilet button rather than a box here.</div>
 
       ${/* The tape comes out every few weeks, not every morning, so it folds. The header carries the
             count so you can see a day HAS measurements without opening it. */''}
@@ -425,7 +452,12 @@ function saveBodyEntry() {
   // Written straight into the same life.dailyLog the Home chips read, which is what makes this
   // two-way rather than a copy. setOrClear deletes on blank, so clearing here clears there.
   if (!STATE.life.dailyLog[date]) STATE.life.dailyLog[date] = {};
-  BODY_DAILY_FIELDS.forEach(f => setOrClear(STATE.life.dailyLog[date], f.key, dailyRaw[f.key]));
+  BODY_DAILY_FIELDS.forEach(f => {
+    const raw = dailyRaw[f.key];
+    // Water is millilitres on disk whatever unit the field is showing, so it converts on the way
+    // back in — otherwise switching to cups would silently reinterpret every stored number.
+    setOrClear(STATE.life.dailyLog[date], f.key, raw === '' || raw == null ? '' : (f.back ? f.back(raw) : raw));
+  });
   if (!Object.keys(STATE.life.dailyLog[date]).length) delete STATE.life.dailyLog[date];
 
   // ---- weight half ----
@@ -454,7 +486,13 @@ function saveBodyEntry() {
 
   closeBodyForm();
   saveState();
-  showToast(editing ? 'Entry updated' : 'Entry saved');
+  // A save that produces no card is the kind of silent no-op this app keeps finding, so it says so.
+  // Water and steps are on this form to be REACHABLE, not to constitute a body entry (see
+  // BODY_ENTRY_FIELDS) — logging only those is a real write that lands on Home's chips and in
+  // COMPARE, it just doesn't put a row in this list.
+  const listed = bodyHasEntryOn(date);
+  showToast(listed ? (editing ? 'Entry updated' : 'Entry saved')
+                   : 'Saved to your day — no body reading, so no entry here');
   drawWeightChart();
 }
 
@@ -464,14 +502,24 @@ function deleteBodyEntry(dateStr) {
   showConfirm(`Delete everything logged on ${dateStr}?`, () => {
     STATE.weightLog = STATE.weightLog.filter(e => e.date !== dateStr);
     STATE.measurements = STATE.measurements.filter(m => m.date !== dateStr);
-    // Only the three fields this card SHOWS. That day's water, steps and stool live in the same
-    // log and are none of this card's business -- deleting what you can see must not quietly take
-    // things you can't.
+    // THE WHOLE DAY, and that is a deliberate reversal. This used to clear only the three fields
+    // the card showed, on the reasoning that deleting what you can see must not quietly take things
+    // you can't. The reasoning was sound and the premise was wrong: the card now shows water, steps
+    // and the day's bathroom figures too, so they ARE what you can see. An entry is the day's
+    // record, so deleting it deletes the day.
+    //
+    // Reported as: "why not allow the user to track it all? Delete everything together and maintain
+    // the other aspects as part of the tracked items."
     const log = STATE.life.dailyLog[dateStr];
     if (log) {
       BODY_DAILY_FIELDS.forEach(f => { delete log[f.key]; });
       if (!Object.keys(log).length) delete STATE.life.dailyLog[dateStr];
     }
+    // The observation scales are several readings rather than one field, so they are filtered out
+    // by date rather than deleted by key.
+    ['stool', 'waterColor'].forEach(s => {
+      STATE.life[SCALES[s].field] = scaleLog(s).filter(r => scaleDateOf(r) !== dateStr);
+    });
     if (UI.bodyEditDate === dateStr) closeBodyForm(); else render();
     saveState();
     drawWeightChart();

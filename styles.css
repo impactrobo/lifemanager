@@ -3151,3 +3151,13 @@ textarea.tmpl-input { line-height: 1.5; }
   font-size: 12px; color: var(--text-dim);
 }
 .bathroom-summary b { color: var(--text); }
+
+/* The BODY form's five daily readings. A flex .field-row put all five on one line at 390px, where
+   "Resting HR (bpm)" and "Quality (1-5)" wrap to two lines and "Sleep (hrs)" doesn't — so the
+   inputs sat at three different heights. A grid gives every cell the same box and bottom-aligns the
+   inputs, so a label wrapping costs alignment nothing. */
+.body-daily-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 10px; align-items: end;
+  margin-bottom: 12px;
+}
+.body-daily-grid .field { margin-bottom: 0; }
