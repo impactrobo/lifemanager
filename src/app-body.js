@@ -162,19 +162,23 @@ function renderBodyForm() {
            </div>`
         : `<label class="field"><span class="lbl">Date</span><input type="date" id="bDate" value="${todayStr()}"></label>`}
 
+      ${/* One note instead of "(optional)" on five labels. Every field here is optional except the
+            implicit "at least something", and repeating the word made the form read as mostly
+            things you were failing to fill in. */''}
+      <div style="font-size:11px; color:var(--text-dim); margin-bottom:10px;">Track as many or as few of these as you want — an entry needs one of them, not all of them.</div>
       <div class="field-row">
         <label class="field"><span class="lbl">Weight (${weightUnitLabel()})</span><input type="number" step="0.1" id="wWeight" value="${w ? num(lbToDisplay(w.weightLb)) : ''}"></label>
-        <label class="field"><span class="lbl">Body Fat % (optional)</span><input type="number" step="0.1" id="wBodyFat" value="${w ? num(w.bodyFatPct) : ''}"></label>
+        <label class="field"><span class="lbl">Body Fat %</span><input type="number" step="0.1" id="wBodyFat" value="${w ? num(w.bodyFatPct) : ''}"></label>
       </div>
       <div class="field-row">
-        <label class="field"><span class="lbl">Body Water % (optional)</span><input type="number" step="0.1" id="wBodyWater" value="${w ? num(w.bodyWaterPct) : ''}"></label>
-        <label class="field"><span class="lbl">Calories (optional)</span><input type="number" id="wCal" value="${w && w.calories != null ? w.calories : ''}"></label>
+        <label class="field"><span class="lbl">Body Water %</span><input type="number" step="0.1" id="wBodyWater" value="${w ? num(w.bodyWaterPct) : ''}"></label>
+        <label class="field"><span class="lbl">Calories</span><input type="number" id="wCal" value="${w && w.calories != null ? w.calories : ''}"></label>
       </div>
       <div class="field-row">
-        <label class="field"><span class="lbl">Cardio Calories (optional)</span><input type="number" id="wCardioCal" value="${w && w.cardioCalories != null ? w.cardioCalories : ''}"></label>
+        <label class="field"><span class="lbl">Cardio Calories</span><input type="number" id="wCardioCal" value="${w && w.cardioCalories != null ? w.cardioCalories : ''}"></label>
         <span style="flex:1;"></span>
       </div>
-      <div style="font-size:10px; color:var(--text-faint); margin:-4px 0 12px;">Body Fat / Water from a smart scale, if you have one. Cardio Calories = burned through direct cardio work.</div>
+      <div style="font-size:10px; color:var(--text-faint); margin:-4px 0 12px;">Body Fat / Water from a smart scale, if you have one. Cardio Calories = burned through direct cardio work. Weight and Calories are the same entry the Home strip logs.</div>
 
       ${/* The tape comes out every few weeks, not every morning, so it folds. The header carries the
             count so you can see a day HAS measurements without opening it. */''}
@@ -192,7 +196,7 @@ function renderBodyForm() {
                   <input type="number" step="0.1" id="mf_${f.key}" value="${mval(f.key)}">
                 </label>`).join('')}
             </div>
-            <div class="subtle-label" style="margin:10px 0 8px;">PHOTO (optional)</div>
+            <div class="subtle-label" style="margin:10px 0 8px;">PHOTO</div>
             <div class="photo-thumb-row" id="measurePhotoRow"></div>
             <button class="btn btn-ghost btn-sm" onclick="document.getElementById('measurePhotoInput').click()">+ ADD PHOTO</button>
             <input type="file" id="measurePhotoInput" accept="image/*" multiple style="display:none" onchange="handleMeasurePhotoInput(event)">
