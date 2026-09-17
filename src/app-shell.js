@@ -619,7 +619,11 @@ function renderTabbar() {
     // which is what that tab holds once both logs are on it. The bar's overflow bug is logged
     // against exactly this strip, so every button that leaves it is worth keeping off.
     sectionBtns =
-      fb('workouts', 'exercise', 'D&amp;E') +
+      // "DIET &amp; EXERCISE" over two lines rather than the initialism. It fits now that the bar is
+      // four buttons, and the tab holding both logs is worth naming rather than abbreviating --
+      // D&E reads as a code until you already know what it stands for. `.tabbar button` is
+      // `white-space: nowrap`, so the break is an explicit <br> rather than a hope.
+      fb('workouts', 'exercise', 'DIET &amp;<br>EXERCISE') +
       fb('phases', 'planner', 'PHASES') +
       fb('builder', 'setup', 'BUILDER') +
       fb('body', 'progress', 'BODY');
@@ -665,6 +669,9 @@ function _doRender() {
   const app = document.getElementById('app');
   if (NAV.currentTab === 'home') {
     app.innerHTML = renderHome();
+    // The clock box paints itself on an interval rather than through render(); this starts that
+    // when it is on screen and stops it when it isn't. Same shape as syncSkillTimer() below.
+    syncHomeClock();
   } else if (NAV.currentTab === 'schedule') {
     app.innerHTML = renderSchedule();
   } else if (NAV.currentTab === 'train') {

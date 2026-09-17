@@ -21,8 +21,12 @@ const { settle, pinClock } = require('./helpers.js');
   await settle(page);
   const bar = await page.evaluate(() => [...document.querySelectorAll('#tabbar button')].map(b => b.textContent.trim()));
   console.log('bar:', bar);
-  if (bar.includes('DIET')) throw new Error('DIET should be off the bar: ' + bar);
-  if (!bar.includes('D&E')) throw new Error('WORKOUTS should read D&E now that both logs are on it: ' + bar);
+  // A button LABELLED exactly DIET is the retired tab. The workouts button now reads "DIET &
+  // EXERCISE" over two lines, which contains the word — so the check is on the whole label, not a
+  // substring of it.
+  if (bar.some(b => b === 'DIET')) throw new Error('The DIET tab should be gone: ' + bar);
+  const de = bar.find(b => /EXERCISE/.test(b));
+  if (!de || !/DIET/.test(de)) throw new Error('WORKOUTS should name both logs now that both are on it: ' + bar);
 
   // ---- 2. D&E holds both logs, and only switching the strip moves between them ----
   const strip = await page.evaluate(() => [...document.querySelectorAll('.subnav button')].map(b => b.textContent.trim()));
@@ -101,7 +105,11 @@ const { settle, pinClock } = require('./helpers.js');
   console.log('stale DIET snapshot:', stale);
   if (stale.landedOn !== 'workouts' || stale.logTab !== 'meals') throw new Error('A stale DIET subtab should land on D&E / MEALS: ' + JSON.stringify(stale));
   if (!stale.picker) throw new Error('...actually rendering the log, not a blank screen');
-  if (stale.lit.join() !== 'D&E') throw new Error('...with D&E lit on the bar, so the bar and screen agree: ' + stale.lit);
+  // Exactly one button lit, and it is the one holding both logs — the bar and the screen agreeing
+  // about where you are is the whole point of the redirect.
+  if (stale.lit.length !== 1 || !/EXERCISE/.test(stale.lit[0])) {
+    throw new Error('...with the D&E button lit on the bar, so the bar and screen agree: ' + JSON.stringify(stale.lit));
+  }
 
   // ---- 5. Nothing is left calling the retired renderers ----
   const gone = await page.evaluate(() => ({

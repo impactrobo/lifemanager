@@ -269,9 +269,15 @@ function setHabitStatus(habitId, dateStr, status) {
 // message is the content and the shake is the delivery.
 const HABIT_BREAK_MS = 520;
 function breakHabitFeedback(habit) {
-  showToast(habitBreakLine(habit));
+  // With a Navi jacked in, THEY say it -- this was always the seam that was left open for them. The
+  // toast is the no-Navi form of the same message, not a thing to show alongside: two reactions to
+  // one press reads as the app being startled twice.
+  const lines = naviHabitBreakLines(habit);
+  if (!lines.length) showToast(habitBreakLine(habit));
+
   const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if (reduced) return;
+  if (reduced) { if (lines.length) naviSpeak(lines); return; }
+
   const flash = document.createElement('div');
   flash.className = 'break-flash';
   document.body.appendChild(flash);
@@ -279,6 +285,9 @@ function breakHabitFeedback(habit) {
   setTimeout(() => {
     document.body.classList.remove('break-shake');
     flash.remove();
+    // AFTER the shake, not during. The shake is the app registering the press; the Navi is a
+    // reaction to it, and a character sliding up mid-judder reads as part of the malfunction.
+    if (lines.length) naviSpeak(lines);
   }, HABIT_BREAK_MS);
 }
 // WHERE A NAVI WILL SPEAK. Written as templates on purpose, and the roadmap's NetNavi entry says

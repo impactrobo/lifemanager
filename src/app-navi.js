@@ -262,6 +262,51 @@ const NAVI_VOICES = {
   },
 };
 
+// ---------------- BREAKING A HABIT ----------------
+// The second surface, and the one the seam in app-schedule-setup.js was left open for. It is also
+// the sharpest test of the rule this file is built under, because a broken habit is exactly where a
+// companion app would reach for leverage: the lost streak, the disappointed pet, the guilt trip.
+//
+// None of these do that. They react to what happened and stop. Nobody mentions the streak you just
+// ended -- you know, you just pressed the button that ended it -- and nobody asks you to do better
+// for their sake. What each Navi brings is a different way of being unbothered about it.
+const NAVI_HABIT_BREAK = {
+  strike: (h) => [
+    naviLine('You marked it, bro. That took more than skipping it would have.'),
+    naviLine('Tomorrow is a different day and I am still here. Let us GET IT.'),
+  ],
+  vitalya: (h, nick) => [
+    naviLine('Oh no. *Anyway* 💅'),
+    naviLine('It is marked, ' + nick + '. Genuinely — better than pretending you did it.'),
+  ],
+  digi: (h) => [
+    naviLine('HABIT "' + String(h.name || '').toUpperCase() + '" RECORDED AS BROKEN. ENTRY IS PERMANENT.', 'mono'),
+    naviLine('NO FURTHER ACTION REQUIRED. NO INFERENCE DRAWN FROM A SINGLE DATA POINT.', 'mono'),
+  ],
+  wenceslas: (h) => [
+    naviLine('It is written, and thou didst write it thyself.'),
+    naviLine('A ruler who records his own failings honestly is worth ten who record none.'),
+  ],
+  muze: (h) => [
+    naviLine('aw ;w;'),
+    naviLine('you still LOGGED it though, thats the honest thing ^^ tomorrow!!'),
+  ],
+  clay: (h) => [
+    naviLine('Marked, my friend. I have been there.'),
+    naviLine('One day is a day. Nothing about tomorrow changed.'),
+  ],
+};
+// Empty when nobody is jacked in, which leaves breakHabitFeedback() on its existing toast.
+function naviHabitBreakLines(habit) {
+  const navi = activeNavi();
+  if (!navi) return [];
+  const fn = NAVI_HABIT_BREAK[navi.id];
+  if (!fn) return [];
+  // Vitalya's nickname is keyed off the habit's name here rather than a week, so the same habit
+  // reads consistently instead of rerolling every time you look at it.
+  return fn(habit, vitalyaNick({ range: String(habit && habit.name || '') }));
+}
+
 // The one entry point. Returns [] when nobody is jacked in, which is what keeps every caller from
 // having to check first.
 function naviReviewLines(review) {
@@ -370,7 +415,7 @@ function renderNaviPicker() {
         Tap the active one again to jack out.
       </div>
       <div class="navi-grid">${NAVI_ROSTER.map(card).join('')}</div>
-      ${active ? `<button class="btn btn-ghost btn-sm btn-block" style="margin-top:12px;" onclick="naviSpeak(naviGreeting())">HEAR ${escapeHtml(active.short.toUpperCase())}</button>` : ''}
+      ${active ? `<button class="btn btn-ghost btn-sm btn-block" style="margin-top:12px;" onclick="naviSpeak(naviGreeting())">TEST COMMS</button>` : ''}
     </div>`;
 }
 

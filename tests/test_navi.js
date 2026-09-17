@@ -248,6 +248,36 @@ const EMOJI = /[⌚-⌛⏩-⏺▪-➿⬀-⯿️\u{1F000}-\u{1FAFF}]/u;
   console.log('after reload:', persisted);
   if (persisted.id !== 'strike') throw new Error('The chosen Navi should persist, got ' + JSON.stringify(persisted));
 
+
+  // ---- 11. Breaking a habit: the second surface, and the sharpest test of the rule ----
+  // A broken habit is exactly where a companion app reaches for leverage -- the lost streak, the
+  // disappointed pet. None of these do that, and the assertions below are what keep it that way.
+  const habit = { id: "h1", name: "No phone in bed" };
+  for (const n of roster) {
+    await page.evaluate((id) => setNavi(id), n.id);
+    const lines = await page.evaluate((h) => naviHabitBreakLines(h), habit);
+    const text = lines.map(l => l.t).join(" ");
+    console.log("break /", n.short + ":", text);
+    if (!lines.length) throw new Error(n.short + " should react to a break");
+    if (lines.length > 3) throw new Error(n.short + " reacts, it does not lecture: " + lines.length + " lines");
+    // The rule, asserted rather than trusted: no streak as leverage, nothing asked of the Operator
+    // on the Navi's behalf, no guilt.
+    if (/streak/i.test(text)) throw new Error(n.short + " must not invoke the streak you just ended: " + text);
+    if (/\b(for me|let me down|disappoint|promise me|do it for)\b/i.test(text)) {
+      throw new Error(n.short + " must never make the app the injured party: " + text);
+    }
+    // The same per-Navi formatting contracts hold here as on the review.
+    if (n.id === "digi" && (EMOJI.test(text) || /!/.test(text))) throw new Error("DigiMan: no emoji, no exclamation: " + text);
+    if (n.id === "muze" && EMOJI.test(text)) throw new Error("Muze uses emoticons, never emoji: " + text);
+    if (n.id === "wenceslas" && EMOJI.test(text)) throw new Error("Wenceslas uses no emoji: " + text);
+    if (n.id === "strike" && !/\bbro\b/i.test(text)) throw new Error("StrikeMan still says bro: " + text);
+    if (n.id === "clay" && !/(my friend|brother)/i.test(text)) throw new Error("ClayMan still says my friend: " + text);
+  }
+  // With nobody jacked in the break keeps its plain toast line instead.
+  await page.evaluate(() => setNavi(""));
+  const none = await page.evaluate((h) => naviHabitBreakLines(h), habit);
+  if (none.length) throw new Error("No Navi means no dialogue -- the toast covers it");
+
   // Restore everything the fixture clobbered, not just the Navi — phases, workouts and logs are
   // shared state, and leaving a three-session test block behind would land in whatever test runs next.
   await page.evaluate((snap) => {

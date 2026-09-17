@@ -2719,3 +2719,38 @@ button.brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 4
    sip — so this is (0,4,0) rather than relying on source order. See logChip() in app-home.js. */
 .log-chip-set.log-chip-water.log-chip-goal .log-chip-value { color: var(--good); }
 .log-chip-set.log-chip-goal { border-color: var(--good); }
+
+/* ---- Tab bar: the icon follows the label's colour ----
+   Every ICONS entry hardcodes fill="var(--accent)" / stroke="var(--accent)", which is right almost
+   everywhere in the app but wrong here: the label dims to --text-faint when a tab is inactive while
+   its icon stayed lit, so a bar of four buttons read as four active ones. These are PRESENTATION
+   attributes, so any CSS rule beats them — no !important needed. fill-opacity is left alone, so the
+   two-tone depth in the icons survives the recolour. */
+.tabbar button .ic svg [fill]:not([fill="none"]) { fill: currentColor; }
+.tabbar button .ic svg [stroke]:not([stroke="none"]) { stroke: currentColor; }
+/* Two-line labels (DIET & EXERCISE) shouldn't make the bar noticeably taller. */
+.tabbar button { line-height: 1.1; }
+
+/* ---- HOME: the digital clock (see renderHomeClockBox() in app-home.js) ----
+   A PET-device readout: big tabular time, seconds sized down because they are what makes it read as
+   running rather than printed, and the date underneath. tabular-nums matters more here than almost
+   anywhere else in the app — proportional digits make the whole line jiggle once a second as the
+   glyph widths change. */
+.home-clock { text-align: center; padding: 18px 12px 14px; }
+.home-clock-time {
+  font-family: var(--font-head);
+  font-size: clamp(38px, 13vw, 54px); font-weight: 800;
+  line-height: 1; letter-spacing: 0.01em;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  display: flex; align-items: baseline; justify-content: center; gap: 4px;
+}
+.home-clock-secs {
+  font-size: 0.42em; font-weight: 700; color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.home-clock-mer { font-size: 0.3em; font-weight: 700; letter-spacing: 0.1em; color: var(--text-faint); }
+.home-clock-date {
+  margin-top: 8px; font-size: 12px; font-weight: 600;
+  letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-dim);
+}

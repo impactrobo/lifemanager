@@ -52,11 +52,13 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     renderers: Object.keys(HOME_BOX_RENDERERS),
   }));
   console.log('boxes:', boxes);
-  // The point is that these four keep their IDS and their order, so no saved layout needs
-  // migrating — not that the list can never grow. A box appended after them (YOUR WEEK) is exactly
-  // the case loadState()'s boxOrder top-up already handles.
-  if (JSON.stringify(boxes.order.slice(0, 4)) !== JSON.stringify(['reminders', 'day', 'wakeup', 'calories'])) {
-    throw new Error(`The original four box ids should be unchanged and still lead, got ${JSON.stringify(boxes.order)}`);
+  // The point is that these four keep their IDS and their ORDER RELATIVE TO EACH OTHER, so no saved
+  // layout needs migrating — not that the list can never grow, or that nothing may be added before
+  // them. A box appended after them (YOUR WEEK) or ahead of them (TIME) is exactly the case
+  // loadState()'s boxOrder top-up already handles.
+  const four = ['reminders', 'day', 'wakeup', 'calories'];
+  if (JSON.stringify(boxes.order.filter(id => four.includes(id))) !== JSON.stringify(four)) {
+    throw new Error(`The original four box ids should be unchanged and in order, got ${JSON.stringify(boxes.order)}`);
   }
   if (!/AM/.test(boxes.amLabel) || !/PM/.test(boxes.pmLabel)) throw new Error('The two strips should be labelled AM and PM');
   if (!/^LOG/.test(boxes.amLabel) || !/^LOG/.test(boxes.pmLabel)) throw new Error('Both labels share the LOG prefix so they read as one section');
