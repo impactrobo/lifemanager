@@ -779,6 +779,8 @@ function defaultState() {
       // Persisted on purpose -- jumping forward, closing the app and reopening it is exactly the
       // gesture being simulated, and a setting that silently reset on launch would test nothing.
       debugDayOffset: 0,
+      // ...and minutes, for everything that turns on the TIME of day rather than the date.
+      debugMinuteOffset: 0,
       homeLayout: defaultHomeLayout(),
       // Purely a user preference flag ("did I opt into this"). The actual signed-in/out truth
       // comes from Firebase Auth itself at runtime (see CLOUD SYNC section) — this just decides

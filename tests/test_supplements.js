@@ -186,42 +186,45 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (fresh.items !== 0) throw new Error('A save that never ticked anything starts empty, got ' + fresh.items);
   if (!fresh.offers) throw new Error('...with the preset offered, so the old screen is one tap away');
 
-  // ---- 5. It lives in BUILDER, without adding a bottom-bar button ----
-  // Defining a regimen is the same act as building a meal, so it's a tab beside the meal builder.
-  // It used to be a strip inside DIET, which put "define this" on the same screen as "read today's
-  // targets."
+  // ---- 5. It is one of BUILDER's three panels, without adding a bottom-bar button ----
+  // It arrived as a fourth tab inside DIET, on the reasoning that defining a regimen is the same
+  // act as building a meal. True, but it left DIET with four subnav buttons while the panel row had
+  // two — and a regimen isn't a kind of food. It is a PANEL now: WORKOUT / DIET / SUPPLEMENTS.
   await page.evaluate(() => {
     STATE.supplements = []; STATE.supplementStacks = [];
     installSupplementPreset('baseLongevity');
-    switchTab('train'); setFitnessSubtab('builder'); setSetupPanel('meals');
-    setHealthSetupSubtab('supplements');
+    switchTab('train'); setFitnessSubtab('builder'); setSetupPanel('supplements');
   });
   await settle(page);
   const placement = await page.evaluate(() => ({
-    subtab: NAV.healthSetupSubtab,
+    panel: NAV.setupPanel,
     onScreen: /Morning stack/.test(document.getElementById('app').innerHTML),
-    // The tab is in-screen, not the bottom bar — .tabbar is the one with the logged overflow bug.
+    // In-screen, not the bottom bar — .tabbar is the one with the logged overflow bug.
     barButtons: document.querySelectorAll('#tabbar button').length,
     barHasSupplements: /SUPPLEMENT/.test(document.getElementById('tabbar').textContent.toUpperCase()),
-    inSubnav: Array.from(document.querySelectorAll('.subnav button')).map(b => b.textContent.trim()),
+    panels: Array.from(document.querySelectorAll('.unit-toggle button')).map(b => b.textContent.trim()),
+    // DIET is back to three tabs now that it no longer carries this.
+    dietTabs: (() => { setSetupPanel('meals'); render();
+      return Array.from(document.querySelectorAll('.subnav button')).map(b => b.textContent.trim()); })(),
     medicineKind: (() => { addSupplement('medicine'); return STATE.supplements[STATE.supplements.length - 1].kind; })(),
   }));
   console.log('placement:', JSON.stringify(placement));
-  if (placement.subtab !== 'supplements' || !placement.onScreen) throw new Error('The regimen renders in BUILDER: ' + JSON.stringify(placement));
-  if (!placement.inSubnav.includes('SUPPLEMENTS')) throw new Error('...as its own tab in the builder subnav, got ' + placement.inSubnav.join('/'));
+  if (placement.panel !== 'supplements' || !placement.onScreen) throw new Error('The regimen renders in BUILDER: ' + JSON.stringify(placement));
+  if (!placement.panels.includes('SUPPLEMENTS')) throw new Error('...as its own panel, got ' + placement.panels.join('/'));
+  if (placement.dietTabs.includes('SUPPLEMENTS')) throw new Error('...and no longer a tab inside DIET: ' + placement.dietTabs.join('/'));
   if (placement.barHasSupplements) throw new Error('It must NOT add a bottom-bar button — that bar already overruns at seven');
   // Medicine and supplements are one model with a `kind`, not two parallel ones.
   if (placement.medicineKind !== 'medicine') throw new Error('Medicine is the same model with a different kind, got ' + placement.medicineKind);
 
-  // Switching back leaves the meal builder intact.
-  await page.evaluate(() => setHealthSetupSubtab('builder'));
+  // Switching panels leaves the regimen behind.
+  await page.evaluate(() => { setSetupPanel('workouts'); });
   await settle(page);
-  const backToMeals = await page.evaluate(() => document.getElementById('app').innerText);
-  if (/Morning stack/.test(backToMeals)) throw new Error('Leaving SUPPLEMENTS should leave the regimen behind');
+  const backToWorkouts = await page.evaluate(() => document.getElementById('app').innerText);
+  if (/Morning stack/.test(backToWorkouts)) throw new Error('Leaving SUPPLEMENTS should leave the regimen behind');
 
   await page.evaluate(() => {
     STATE.supplements = []; STATE.supplementStacks = []; STATE.life.supplementLog = {};
-    NAV.healthSetupSubtab = 'builder'; VIEW.supplementEditing = null;
+    NAV.setupPanel = 'workouts'; VIEW.supplementEditing = null;
     saveState();
   });
   await browser.close();

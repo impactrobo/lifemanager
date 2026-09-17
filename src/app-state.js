@@ -1202,11 +1202,23 @@ function debugDayOffset() {
   const n = STATE && STATE.settings ? Number(STATE.settings.debugDayOffset) : 0;
   return Number.isFinite(n) ? Math.trunc(n) : 0;
 }
-function debugClockActive() { return debugDayOffset() !== 0; }
+// Minutes, for everything that turns on the TIME rather than the date: whether a scheduled activity
+// has passed, which of AM/PM you're logging into, what the day timeline calls "now". Whole days
+// alone could never reach any of that -- 3pm is 3pm however many days you jump.
+function debugMinuteOffset() {
+  const n = STATE && STATE.settings ? Number(STATE.settings.debugMinuteOffset) : 0;
+  return Number.isFinite(n) ? Math.trunc(n) : 0;
+}
+function debugClockActive() { return debugDayOffset() !== 0 || debugMinuteOffset() !== 0; }
 function nowDate() {
   const d = new Date();
   const off = debugDayOffset();
+  const min = debugMinuteOffset();
   if (off) d.setDate(d.getDate() + off);
+  // Applied as an offset rather than a pinned time, so THE CLOCK STILL RUNS: set the app to 9pm and
+  // a minute later it is 9:01pm. You are dragging the clock's hands, not stopping them -- which is
+  // what makes "watch an activity go from upcoming to passed" testable at all.
+  if (min) d.setMinutes(d.getMinutes() + min);
   return d;
 }
 function todayStr() { return dateKeyOf(nowDate()); }
@@ -1231,6 +1243,24 @@ function setDebugDate(dateStr) {
   const real = new Date(); real.setHours(12, 0, 0, 0);
   setDebugDayOffset(Math.round((target.getTime() - real.getTime()) / 86400000));
 }
+function setDebugMinuteOffset(n) {
+  const v = Number.isFinite(Number(n)) ? Math.trunc(Number(n)) : 0;
+  STATE.settings.debugMinuteOffset = v;
+  saveState(); render();
+}
+// Set the app's clock to a wall time. Solved into an offset from the REAL time of day, so the two
+// stored numbers stay "days" and "minutes" rather than becoming a third concept.
+//
+// Both sides are within one day, so the delta lands on that time on the real calendar day and the
+// day offset moves the date independently -- asking for 1am at 11pm walks the clock BACK to 1am
+// this morning rather than forward into tomorrow, which is what "set the time to 1am" means.
+function setDebugTime(hhmm) {
+  const parts = String(hhmm || '').split(':');
+  const h = Number(parts[0]), m = Number(parts[1]);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return;
+  const real = new Date();
+  setDebugMinuteOffset((h * 60 + m) - (real.getHours() * 60 + real.getMinutes()));
+}
 // Forward to the NEXT Monday, or back to this week's if you're already past it -- the review is
 // Monday-anchored, so "show me a finished week" is the commonest reason to move the clock at all.
 function debugJumpWeekday(targetDow) {
@@ -1250,36 +1280,60 @@ function debugJumpWeekday(targetDow) {
 // every screen. See #debugBar in index.html.
 function renderDebugClockSetting() {
   const off = debugDayOffset();
+  const moff = debugMinuteOffset();
+  const on = debugClockActive();
   const today = todayStr();
   const d = nowDate();
   const dow = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][d.getDay()];
-  const step = (n, label) =>
+  const pad = (n) => String(n).padStart(2, '0');
+  const clock = pad(d.getHours()) + ':' + pad(d.getMinutes());
+  const day = (n, label) =>
     `<button class="btn btn-sm" style="flex:1; min-width:52px;" onclick="setDebugDayOffset(${off + n})">${label}</button>`;
+  const min = (n, label) =>
+    `<button class="btn btn-sm" style="flex:1; min-width:52px;" onclick="setDebugMinuteOffset(${moff + n})">${label}</button>`;
+  const shifted = [];
+  if (off) shifted.push((off > 0 ? '+' : '') + off + ' day' + (Math.abs(off) === 1 ? '' : 's'));
+  if (moff) shifted.push((moff > 0 ? '+' : '') + (Math.abs(moff) % 60 === 0 ? (moff / 60) + 'h' : moff + 'm'));
   return `
     <div class="subtle-label" style="margin:22px 0 10px;">DEBUG CLOCK</div>
     <div class="panel">
       <div style="font-size:11px; color:var(--text-dim); margin-bottom:10px;">
-        Moves the whole app's idea of today, so a week, a phase or an archive can be read without waiting for one.
+        Moves the whole app's idea of now — the date for weeks, phases and archives, the time for
+        whether an activity has passed or which half of the day you're logging into. The clock keeps
+        running from wherever you put it.
         <b style="color:var(--text)">Anything you log while it's on is really written to the shifted date.</b>
       </div>
-      <div class="row" style="margin-bottom:10px;">
-        <span class="lbl" style="margin-bottom:0;">App date</span>
-        <span class="mono" style="font-weight:700; color:${off ? 'var(--bad)' : 'var(--text)'};">${today} · ${dow}</span>
+      <div class="row" style="margin-bottom:${on ? '4px' : '10px'};">
+        <span class="lbl" style="margin-bottom:0;">App now</span>
+        <span class="mono" style="font-weight:700; color:${on ? 'var(--bad)' : 'var(--text)'};">${today} · ${dow} · ${clock}</span>
       </div>
-      ${off ? `<div style="font-size:11px; color:var(--text-faint); margin-bottom:10px;">Really ${realTodayStr()} — shifted ${off > 0 ? '+' : ''}${off} day${Math.abs(off) === 1 ? '' : 's'}.</div>` : ''}
+      ${on ? `<div style="font-size:11px; color:var(--text-faint); margin-bottom:10px;">Really ${realTodayStr()} — shifted ${shifted.join(' and ')}.</div>` : ''}
+
+      <div class="subtle-label" style="margin:0 0 6px;">DATE</div>
       <div class="field-row" style="gap:6px; margin-bottom:8px;">
-        ${step(-7, '−1w')}${step(-1, '−1d')}${step(1, '+1d')}${step(7, '+1w')}
+        ${day(-7, '−1w')}${day(-1, '−1d')}${day(1, '+1d')}${day(7, '+1w')}
       </div>
-      <div class="field-row" style="gap:6px; margin-bottom:10px;">
+      <div class="field-row" style="gap:6px; margin-bottom:8px;">
         <button class="btn btn-sm" style="flex:1;" onclick="debugJumpWeekday(1)">NEXT MONDAY</button>
         <button class="btn btn-sm" style="flex:1;" onclick="setDebugDayOffset(${off - 7 * 4})">−4 WEEKS</button>
       </div>
-      <label class="field" style="margin-bottom:10px;">
+      <label class="field" style="margin-bottom:12px;">
         <span class="lbl">Jump to a date</span>
         <input type="date" value="${today}" onchange="setDebugDate(this.value)">
       </label>
-      <button class="btn btn-block btn-sm ${off ? 'btn-danger' : ''}" ${off ? '' : 'disabled'} onclick="setDebugDayOffset(0)">
-        ${off ? 'BACK TO THE REAL DATE' : 'CLOCK IS REAL'}
+
+      <div class="subtle-label" style="margin:0 0 6px;">TIME OF DAY</div>
+      <div class="field-row" style="gap:6px; margin-bottom:8px;">
+        ${min(-60, '−1h')}${min(-15, '−15m')}${min(15, '+15m')}${min(60, '+1h')}
+      </div>
+      <label class="field" style="margin-bottom:12px;">
+        <span class="lbl">Set the time</span>
+        <input type="time" value="${clock}" onchange="setDebugTime(this.value)">
+      </label>
+
+      <button class="btn btn-block btn-sm ${on ? 'btn-danger' : ''}" ${on ? '' : 'disabled'}
+              onclick="setDebugDayOffset(0); setDebugMinuteOffset(0);">
+        ${on ? 'BACK TO THE REAL DATE &amp; TIME' : 'CLOCK IS REAL'}
       </button>
     </div>`;
 }
@@ -1290,7 +1344,13 @@ function syncDebugBar() {
   const el = document.getElementById('debugBar');
   if (!el) return;
   if (!debugClockActive()) { el.classList.add('hidden'); el.textContent = ''; return; }
-  const off = debugDayOffset();
+  const off = debugDayOffset(), moff = debugMinuteOffset();
+  const d = nowDate();
+  const pad = (n) => String(n).padStart(2, '0');
+  const bits = [];
+  if (off) bits.push((off > 0 ? '+' : '') + off + 'd');
+  if (moff) bits.push((moff > 0 ? '+' : '') + moff + 'm');
   el.classList.remove('hidden');
-  el.textContent = 'DEBUG CLOCK · ' + todayStr() + ' (' + (off > 0 ? '+' : '') + off + 'd)';
+  el.textContent = 'DEBUG CLOCK · ' + todayStr() + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) +
+    ' (' + bits.join(' ') + ')';
 }

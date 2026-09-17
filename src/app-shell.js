@@ -244,7 +244,7 @@ let NAV = {
   bodySubtab: 'weight',            // 'weight' | 'measurements' | 'labs' | 'volume' | 'compare' | 'pr'
   // Which half of SETUP is showing. The two panels keep their own existing subnav state
   // (setupSubtab / healthSetupSubtab) untouched -- only the roof over them is new.
-  setupPanel: 'workouts',          // 'workouts' | 'meals'
+  setupPanel: 'workouts',          // 'workouts' | 'meals' | 'supplements'
   // Which skill is open (null = the list), and which of its subtabs: 'log' | 'progress' | a
   // list id. Not persisted -- NAV never is.
   skillId: null,
@@ -700,8 +700,7 @@ function _doRender() {
       // it lands on the screen that inherited the thing you were most likely after rather than
       // rendering nothing. That regimen now lives in BUILDER, not DIET.
       NAV.fitnessSubtab = 'builder';
-      NAV.setupPanel = 'meals';
-      NAV.healthSetupSubtab = 'supplements';
+      NAV.setupPanel = 'supplements';
       app.innerHTML = renderFitnessSetup();
     } else if (NAV.trainView.mode === 'grid') app.innerHTML = renderTrainScreen();
     else if (NAV.trainView.mode === 'cardioLog') app.innerHTML = renderCardioLog(NAV.trainView.cardioId);

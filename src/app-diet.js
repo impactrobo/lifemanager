@@ -32,11 +32,9 @@ function renderHealthSetup() {
       <button class="${sub==='builder'||!sub?'active':''}" onclick="setHealthSetupSubtab('builder')">MEAL</button>
       <button class="${sub==='meals'?'active':''}" onclick="setHealthSetupSubtab('meals')">ALL MEALS</button>
       <button class="${sub==='myfoods'?'active':''}" onclick="setHealthSetupSubtab('myfoods')">MY FOODS</button>
-      <button class="${sub==='supplements'?'active':''}" onclick="setHealthSetupSubtab('supplements')">SUPPLEMENTS</button>
     `)}
     ${sub === 'meals' ? renderAllMeals()
       : sub === 'myfoods' ? renderMyFoodsTab()
-      : sub === 'supplements' ? renderSupplements()
       : renderMealBuilderTab()}
   </div>`;
 }
@@ -484,10 +482,65 @@ function logSavedMeal(mealId) {
   const meal = STATE.diet.meals.find(m => m.id === mealId);
   if (!meal) return;
   const entries = dietLogEntriesFor(NAV.dietLogDate);
-  meal.items.forEach(it => entries.push({ id: uid(), foodId: it.foodId, qty: it.qty, unit: it.unit }));
+  // Every item from one logging carries the same group id, so the day reads as "Chicken bowl"
+  // rather than the six loose foods it happens to be made of. The NAME is copied in rather than
+  // looked up later: renaming or deleting the meal tomorrow must not rewrite what you ate today.
+  const g = uid();
+  meal.items.forEach(it => entries.push({
+    id: uid(), foodId: it.foodId, qty: it.qty, unit: it.unit, g: g, gname: meal.name,
+  }));
   saveState();
   showToast(`Logged "${meal.name}"`);
   render();
+}
+// Entries in log order, with anything sharing a group id folded into one row. An entry with no `g`
+// is a single food and stays exactly as it was -- which is also why no migration is needed: every
+// entry logged before this existed simply has no group.
+function dietLogGroups(entries) {
+  const out = [];
+  const byId = {};
+  entries.forEach(e => {
+    if (!e.g) { out.push({ single: e }); return; }
+    if (!byId[e.g]) { byId[e.g] = { id: e.g, name: e.gname || 'Meal', items: [] }; out.push({ group: byId[e.g] }); }
+    byId[e.g].items.push(e);
+  });
+  return out;
+}
+function dietLogGroupOpen(g) { return !!(VIEW.dietLogGroupOpen && VIEW.dietLogGroupOpen[g]); }
+function toggleDietLogGroup(g) {
+  if (!VIEW.dietLogGroupOpen) VIEW.dietLogGroupOpen = {};
+  if (VIEW.dietLogGroupOpen[g]) delete VIEW.dietLogGroupOpen[g];
+  else VIEW.dietLogGroupOpen[g] = true;
+  render();
+}
+function removeLogGroup(g) {
+  ensureDietLogState();
+  const entries = dietLogEntriesFor(NAV.dietLogDate);
+  const name = (entries.find(e => e.g === g) || {}).gname || 'that meal';
+  showConfirm(`Remove “${name}” and everything in it from this day?`, () => {
+    STATE.diet.foodLog[NAV.dietLogDate] = entries.filter(e => e.g !== g);
+    saveState(); render();
+  });
+}
+function renderLogGroupRow(group) {
+  const open = dietLogGroupOpen(group.id);
+  const macro = computeMealTotals(group.items);
+  const n = group.items.length;
+  return `
+    <div class="panel">
+      <div class="row" style="margin-bottom:0;">
+        <button class="disclose" style="flex:1; min-width:0;" onclick="toggleDietLogGroup('${group.id}')" aria-expanded="${open}">
+          <span class="disclose-caret">${open ? '&#9662;' : '&#9656;'}</span>
+          <span class="disclose-label" style="color:var(--text); font-size:13px; letter-spacing:0.02em; text-transform:none;">${escapeHtml(group.name)}</span>
+          <span class="disclose-value mono">${Math.round(macro.cal)} cal</span>
+        </button>
+        <button class="icon-btn" style="color:var(--bad); flex:none;" onclick="removeLogGroup('${group.id}')" title="Remove meal">${icon('close')}</button>
+      </div>
+      <div style="font-size:11px; color:var(--text-dim); margin-top:4px;">
+        ${n} item${n === 1 ? '' : 's'} &middot; P ${roundMacro(macro.protein)}g &middot; C ${roundMacro(macro.carb)}g &middot; F ${roundMacro(macro.fat)}g
+      </div>
+      ${open ? `<div class="stack" style="margin-top:10px;">${group.items.map(renderLogItemRow).join('')}</div>` : ''}
+    </div>`;
 }
 function updateLogItemQty(itemId, val) {
   ensureDietLogState();
@@ -583,7 +636,9 @@ function renderDietLog() {
       ${VIEW.dietLogSearchQuery.trim() ? renderFoodSearchResults(VIEW.dietLogSearchQuery, 'addFoodToLog') : renderLogCategoryPicker()}
     </div>
     <div class="stack" style="margin-bottom:16px;">
-      ${entries.length ? entries.map(renderLogItemRow).join('') : emptyState('Nothing logged for this day yet.')}
+      ${entries.length
+        ? dietLogGroups(entries).map(x => x.group ? renderLogGroupRow(x.group) : renderLogItemRow(x.single)).join('')
+        : emptyState('Nothing logged for this day yet.')}
     </div>
     ${entries.length ? `
       <div class="panel">
@@ -756,6 +811,9 @@ function renderMealPlannerScope() {
 // The split inside it is by how often you touch each thing. Calories and macros are what you READ
 // every time you plan, so they're the panel. TDEE is what those are DERIVED from, adjusted rarely,
 // so it's behind the gear -- along with the averaging window, which is a setting about a setting.
+// A DISCLOSURE, not a gear. A gear means "configure this thing"; what's behind it is a second
+// readout you open to look at, and the arrow says so. It also stops the panel having two controls
+// that both look like settings when only one is.
 function toggleMealTargetSettings() { UI.mealTargetSettingsOpen = !UI.mealTargetSettingsOpen; render(); }
 function renderMealPlanTargets() {
   const target = calorieTargetForDate(mealPlannerDate());
@@ -769,13 +827,21 @@ function renderMealPlanTargets() {
          ? `from phase &ldquo;${escapeHtml(target.label)}&rdquo;`
          : 'your TDEE &mdash; no phase target covers this week, so this is maintenance'}</div>`
     : `<div style="font-size:11px; color:var(--text-faint);">No calorie target for this week yet — set one on this phase, or a TDEE below.</div>`;
+  const open = UI.mealTargetSettingsOpen;
+  // TDEE SITS ABOVE THE TARGETS, not inside them. It is what the maintenance figure is derived
+  // FROM, so burying it under the thing it produces had the dependency backwards -- and the panel
+  // it was hidden in is the one you read every time you plan.
   return `
+    <div class="panel" style="margin-bottom:10px;">
+      <button class="disclose" onclick="toggleMealTargetSettings()" aria-expanded="${open}">
+        <span class="disclose-caret">${open ? '&#9662;' : '&#9656;'}</span>
+        <span class="disclose-label">TDEE</span>
+        <span class="disclose-value mono">${STATE.diet.tdee ? STATE.diet.tdee.toLocaleString() + ' cal' : 'not set'}</span>
+      </button>
+      ${open ? renderTdeeSettings() : ''}
+    </div>
     <div class="panel" style="margin-bottom:14px;">
-      <div class="row" style="margin-bottom:8px;">
-        <span class="subtle-label" style="margin:0;">TARGETS TO MEET</span>
-        <button class="icon-btn" style="width:28px; height:28px;" title="TDEE &amp; averaging window"
-                aria-label="TDEE and averaging window" onclick="toggleMealTargetSettings()">${icon('settings')}</button>
-      </div>
+      <div class="subtle-label" style="margin-bottom:8px;">TARGETS TO MEET</div>
       ${calLine}
       <div class="row" style="margin-top:8px;">
         <span style="font-size:13px;color:var(--text-dim)">Protein / Fat / Carb (g)</span>
@@ -784,24 +850,22 @@ function renderMealPlanTargets() {
       ${macroSet ? '' : `<div style="font-size:11px; color:var(--text-faint); margin-top:4px;">No macro split set — the calculator turns the calories above into grams.</div>`}
       <button class="btn btn-ghost btn-sm" style="margin-top:10px;" onclick="toggleMacroCalc()">${UI.macroCalcOpen ? 'HIDE' : 'OPEN'} MACRO CALCULATOR</button>
     </div>
-    ${UI.macroCalcOpen ? renderMacroCalcPanel() : ''}
-    ${UI.mealTargetSettingsOpen ? renderTdeeSettings() : ''}`;
+    ${UI.macroCalcOpen ? renderMacroCalcPanel() : ''}`;
 }
-// Everything behind the gear: the TDEE the maintenance figure comes from, its own calculator, the
-// adaptive estimate read off real weight-and-calorie history, and the window that estimate averages.
+// Behind the disclosure: the TDEE field itself, its calculator, the adaptive estimate read off real
+// weight-and-calorie history, and the window that estimate averages.
 function renderTdeeSettings() {
   return `
-    <div class="panel">
-      <div class="subtle-label" style="margin-bottom:8px;">TDEE</div>
+    <div style="margin-top:10px;">
       <label class="field">
         <span class="lbl">TDEE (calories/day)</span>
         <input type="number" value="${STATE.diet.tdee ?? ''}" onchange="updateTDEE(this.value)">
       </label>
       <div style="font-size:11px; color:var(--text-faint); margin-top:4px;">Your estimated Total Daily Energy Expenditure — what the calorie target falls back to when no phase sets one.</div>
       <button class="btn btn-ghost btn-sm" style="margin-top:10px;" onclick="toggleTDEECalc()">${UI.tdeeCalcOpen ? 'HIDE' : 'OPEN'} CALCULATOR</button>
-    </div>
-    ${UI.tdeeCalcOpen ? renderTdeeCalcPanel() : ''}
-    ${renderRollingTdeePanel()}`;
+      ${UI.tdeeCalcOpen ? renderTdeeCalcPanel() : ''}
+      ${renderRollingTdeePanel()}
+    </div>`;
 }
 
 // ---- Shopping list: aggregates every food + quantity across the whole week's assigned meals

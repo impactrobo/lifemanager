@@ -1480,18 +1480,32 @@ function renderExerciseSetup() {
 // subnav and its own existing subtab state (setupSubtab / healthSetupSubtab). Only the switch above
 // them is new, which is why this merge costs no churn inside either one.
 function renderFitnessSetup() {
-  const panel = NAV.setupPanel === 'meals' ? 'meals' : 'workouts';
-  // A segmented toggle, not two loose buttons -- the same `.unit-toggle` control LB/KG uses. Two
-  // buttons sitting side by side read as two independent actions; a segmented control reads as one
-  // choice with two positions, which is what this is. It also does the real work of the screen: it
-  // halves how many subnav buttons you're choosing between at any moment.
+  const panel = ['meals', 'supplements'].includes(NAV.setupPanel) ? NAV.setupPanel : 'workouts';
+  // A segmented toggle, not loose buttons -- the same `.unit-toggle` control LB/KG uses. Buttons
+  // sitting side by side read as independent actions; a segmented control reads as one choice with
+  // several positions, which is what this is. It also does the real work of the screen: it cuts how
+  // many subnav buttons you're choosing between at any moment.
+  //
+  // SUPPLEMENTS is a third POSITION here rather than a fourth tab inside DIET. It arrived as a tab
+  // beside the meal builder on the reasoning that defining a regimen is the same act as building a
+  // meal -- true, but it left DIET with four subnav buttons while this row had two, and a regimen
+  // isn't a kind of food. Promoting it balances both rows and says what it is.
   const btn = (key, label) =>
     `<button class="${panel === key ? 'active' : ''}" onclick="setSetupPanel('${key}')">${label}</button>`;
-  const switcher = `<div class="unit-toggle" style="margin:16px 0 4px; width:fit-content;">${btn('workouts', 'WORKOUTS')}${btn('meals', 'DIET')}</div>`;
-  // Both inner renderers return a complete `.screen` with their own title -- splice the switcher in
+  const switcher = `<div class="unit-toggle" style="margin:16px 0 4px; width:fit-content;">${btn('workouts', 'WORKOUT')}${btn('meals', 'DIET')}${btn('supplements', 'SUPPLEMENTS')}</div>`;
+  // Every inner renderer returns a complete `.screen` with its own title -- splice the switcher in
   // just after that title rather than wrapping, so there's one header on the page, not two.
-  const inner = panel === 'meals' ? renderHealthSetup() : renderExerciseSetup();
+  const inner = panel === 'meals' ? renderHealthSetup()
+              : panel === 'supplements' ? renderSupplementsPanel()
+              : renderExerciseSetup();
   return inner.replace('</div>', '</div>' + switcher);
+}
+// The regimen with the screen chrome the other two panels bring themselves.
+function renderSupplementsPanel() {
+  return `<div class="screen">
+    <div class="section-title">Builder</div>
+    ${renderSupplements()}
+  </div>`;
 }
 function setSetupPanel(p) { NAV.setupPanel = p; render(); }
 // Home's own Setup: a full page (not a popup) for the app-wide Aesthetic/Accent Color choice, the
@@ -1557,7 +1571,21 @@ function renderHomeSetup() {
     ${renderCloudSyncModal()}
     <div class="subtle-label" style="margin:22px 0 10px;">REMINDER NOTIFICATIONS</div>
     <div class="panel">${renderReminderPushPanel()}</div>
+    ${renderBuildStamp()}
   </div>`;
+}
+// Which build you are actually running. Read off the same <meta> stamp autoUpdate() compares, so it
+// can't disagree with the thing that decides whether to reload -- and last on the page, because it
+// is the answer to a question you only ask when something looks wrong.
+function renderBuildStamp() {
+  const meta = document.querySelector('meta[name="app-build"]');
+  const build = meta ? (meta.getAttribute('content') || '') : '';
+  if (!build) return '';
+  return `
+    <div style="margin:26px 0 0; text-align:center; font-family:var(--font-mono); font-size:10px;
+                letter-spacing:0.08em; color:var(--text-faint);">
+      LIFEMAN.EXE &middot; BUILD ${escapeHtml(build)}
+    </div>`;
 }
 function updateDefaultPage(val) {
   STATE.settings.defaultPage = val;

@@ -98,6 +98,56 @@ const { settle, pinClock, appFiles } = require('./helpers.js');
         f.file + ':\n' + f.lines.map(x => '  ' + x.n + ': ' + x.l.trim()).join('\n')).join('\n'));
   }
 
+  // ---- 3b. TIME OF DAY ----
+  // Whole days can never reach the things that turn on the clock: whether an activity has passed,
+  // which half of the day you're logging into, what the timeline calls "now". 3pm is 3pm however
+  // many days you jump.
+  await page.evaluate(() => { setDebugDayOffset(0); setDebugMinuteOffset(0); });
+  const noon = await page.evaluate(() => {
+    const d = nowDate();
+    return { h: d.getHours(), m: d.getMinutes(), active: debugClockActive() };
+  });
+  if (noon.h !== 13 || noon.m !== 30 || noon.active) throw new Error('Baseline is the pinned 13:30, clock real: ' + JSON.stringify(noon));
+
+  await page.evaluate(() => setDebugMinuteOffset(150));   // +2h30
+  const later = await page.evaluate(() => {
+    const d = nowDate();
+    return { h: d.getHours(), m: d.getMinutes(), day: todayStr(), active: debugClockActive() };
+  });
+  console.log('+150m:', later);
+  if (later.h !== 16 || later.m !== 0) throw new Error('13:30 + 150m is 16:00, got ' + later.h + ':' + later.m);
+  if (later.day !== '2026-06-15') throw new Error('A time shift inside the day must not move the date, got ' + later.day);
+  if (!later.active) throw new Error('A minute offset alone still counts as a shifted clock');
+
+  // Setting a wall time solves back into an offset, so there are still only two stored numbers.
+  await page.evaluate(() => setDebugTime('06:05'));
+  const early = await page.evaluate(() => {
+    const d = nowDate();
+    return { h: d.getHours(), m: d.getMinutes(), day: todayStr(), off: debugMinuteOffset() };
+  });
+  console.log('set 06:05:', early);
+  if (early.h !== 6 || early.m !== 5) throw new Error('Setting the time should land on it, got ' + early.h + ':' + early.m);
+  // 06:05 is BEHIND the pinned 13:30, so it walks back to this morning rather than forward into
+  // tomorrow — that is what "set the time to 6am" means.
+  if (early.day !== '2026-06-15') throw new Error('...on the same day, got ' + early.day);
+  if (early.off !== -445) throw new Error('...solved into a minute offset, got ' + early.off);
+
+  // Date and time offsets compose rather than fighting.
+  await page.evaluate(() => { setDebugDayOffset(3); });
+  const both = await page.evaluate(() => {
+    const d = nowDate();
+    return { day: todayStr(), h: d.getHours(), m: d.getMinutes() };
+  });
+  console.log('+3d and 06:05:', both);
+  if (both.day !== '2026-06-18' || both.h !== 6 || both.m !== 5) throw new Error('Days and minutes should compose: ' + JSON.stringify(both));
+  // The banner names both.
+  await page.evaluate(() => render());
+  await settle(page);
+  const banner = await page.evaluate(() => document.getElementById('debugBar').textContent.trim());
+  console.log('banner:', banner);
+  if (!/2026-06-18/.test(banner) || !/06:05/.test(banner)) throw new Error('The banner names the shifted date AND time: ' + banner);
+  await page.evaluate(() => { setDebugDayOffset(0); setDebugMinuteOffset(0); });
+
   // ---- 4. Jumping to a weekday, and to an absolute date ----
   await page.evaluate(() => setDebugDayOffset(0));
   await page.evaluate(() => debugJumpWeekday(1));   // next Monday

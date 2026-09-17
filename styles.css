@@ -2754,3 +2754,20 @@ button.brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 4
   margin-top: 8px; font-size: 12px; font-weight: 600;
   letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-dim);
 }
+
+/* ---- A disclosure header: caret, label, and the current value on the right ----
+   Used where a panel's contents are a second readout you open to look at rather than a setting you
+   go and configure — a gear would claim the latter. Shares the shape of .lift-note-head but carries
+   a value, because the point is that you can read the answer without opening it. */
+.disclose {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  background: none; border: 0; padding: 0; cursor: pointer; text-align: left;
+  -webkit-tap-highlight-color: transparent;
+}
+.disclose:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+.disclose-caret { color: var(--accent); font-size: 11px; line-height: 1; flex: none; }
+.disclose-label {
+  font-family: var(--font-head); font-size: 11px; font-weight: 800;
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-dim);
+}
+.disclose-value { margin-left: auto; font-size: 13px; font-weight: 700; color: var(--text); }
