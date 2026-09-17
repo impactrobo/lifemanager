@@ -273,13 +273,20 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   await seed();
   await page.evaluate(() => { switchTab('train'); setFitnessSubtab('goal'); });
   await settle(page);
-  const ui = await page.evaluate(() => ({
-    cards: document.querySelectorAll('.phase-card').length,
-    now: document.querySelectorAll('.phase-state-current').length,
-    summary: !!document.querySelector('.phase-sum'),
+  const ui = await page.evaluate(async () => {
+    const cards = document.querySelectorAll('.phase-card').length;
+    const now = document.querySelectorAll('.phase-state-current').length;
+    const summary = !!document.querySelector('.phase-sum');
+    // The editable label lives in the MODAL editor now — a folded card in the list shows
+    // .phase-label-static instead — so the cascade contract below needs the editor open.
+    openPhaseCard(currentPhase().phase.id);
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
     // The label input is borderless only if the (0,2,1) selector beat the base input rule.
-    labelBorder: getComputedStyle(document.querySelector('.phase-label')).borderTopWidth,
-  }));
+    const labelBorder = getComputedStyle(document.querySelector('.phase-label')).borderTopWidth;
+    closePhaseCard();
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    return { cards, now, summary, labelBorder };
+  });
   console.log('screen:', ui);
   // NEW lists what's still live; finished blocks moved to ARCHIVED, so the list you plan from
   // doesn't grow by one every block you complete. The fixture's first phase has ended.

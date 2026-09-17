@@ -143,6 +143,68 @@ const { settle, pinClock } = require('./helpers.js');
   console.log('labels:', labels);
   if (new Set(labels).size !== labels.length) throw new Error('Phase names must not collide: ' + labels.join(', '));
 
+  // ---- 6b. The editor is a MODAL, and every editor reaches the shelf ----
+  // Both reported together, and they share a cause. A new phase appended to NOT SCHEDULED below
+  // everything already there, so the thing you just made was off the bottom of the screen — easy
+  // to think nothing happened and add another nine. And `setPhaseWeightGoal` (like every other
+  // phase mutator) looked the phase up in STATE.phases ONLY, so on a shelved phase it silently did
+  // nothing — which is why the rate field could never be enabled: it waits for a direction that
+  // could not be set.
+  await page.evaluate(() => { VIEW.phaseOpen = null; render(); });
+  await settle(page);
+  const onArrival = await page.evaluate(() => !!document.querySelector('.phase-modal'));
+  if (onArrival) throw new Error('Arriving at PHASES must not throw the editor open — it only opens when you ask for a phase');
+
+  await page.evaluate(() => addPhase());
+  await settle(page);
+  const opened = await page.evaluate(() => {
+    const m = document.querySelector('.phase-modal');
+    return {
+      modal: !!m,
+      // The point of the popup: it is ON SCREEN, not scrolled off the bottom of a growing list.
+      visible: m ? m.getBoundingClientRect().top < window.innerHeight : false,
+      showsNewest: (document.querySelector('.phase-modal .phase-label') || {}).value === phaseShelf()[phaseShelf().length - 1].label,
+      // And it is not counted as a row in the list — that class means "a card in the list".
+      notAListCard: !document.querySelector('.phase-modal .phase-card'),
+    };
+  });
+  console.log('add opens the editor:', opened);
+  if (!opened.modal || !opened.visible) throw new Error('Adding a phase opens its editor as a modal: ' + JSON.stringify(opened));
+  if (!opened.showsNewest) throw new Error('...showing the phase you just made, not one already there');
+  if (!opened.notAListCard) throw new Error('The modal is not a list card');
+
+  // Every editor must reach a shelved phase. The weight goal is the one that was broken; the rate
+  // field is downstream of it and is what actually gets reported.
+  const shelfId = await page.evaluate(() => phaseShelf()[phaseShelf().length - 1].id);
+  const rate = await page.evaluate((id) => {
+    const read = () => {
+      const f = [...document.querySelectorAll('.phase-modal .field')].find(x => /Rate/.test(x.textContent));
+      const i = f && f.querySelector('input');
+      return i ? { disabled: i.disabled, placeholder: i.getAttribute('placeholder') } : null;
+    };
+    const before = read();
+    setPhaseWeightGoal(id, 'deficit');
+    return { before, goal: JSON.stringify(shelvedPhase(id).weightGoal) };
+  }, shelfId);
+  await settle(page);
+  const after = await page.evaluate((id) => {
+    const f = [...document.querySelectorAll('.phase-modal .field')].find(x => /Rate/.test(x.textContent));
+    const i = f && f.querySelector('input');
+    updateWeightGoalRate(id, '0.75');
+    return { disabled: i.disabled, stored: shelvedPhase(id).weightGoal.ratePctPerWeek };
+  }, shelfId);
+  console.log('rate on a shelved phase:', rate, '->', after);
+  // With no goal it WAITS rather than being broken — and says which, since a disabled box showing
+  // a dash reads as a bug.
+  if (!rate.before || !rate.before.disabled) throw new Error('With no goal the rate has nothing to be a rate of');
+  if (!/pick a goal/i.test(rate.before.placeholder || '')) throw new Error('...and it names what it wants: ' + rate.before.placeholder);
+  if (rate.goal === 'null') throw new Error('setPhaseWeightGoal must reach a SHELVED phase — this is the reported bug');
+  if (after.disabled) throw new Error('Picking a direction enables the rate');
+  if (after.stored !== 0.75) throw new Error('...and the rate stores, got ' + after.stored);
+
+  await page.evaluate(() => { deletePhase(phaseShelf()[phaseShelf().length - 1].id); confirmYes(); });
+  await settle(page);
+
   // ---- 7. A shelved phase is fully editable, and deleting one moves nothing ----
   const edited = await page.evaluate(() => {
     const id = phaseShelf()[0].id;

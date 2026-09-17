@@ -216,7 +216,12 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (!ui.chips.includes('Barbell Bench Press')) throw new Error('The lift should appear as a pickable metric');
   if (!ui.chips.includes('Body Weight')) throw new Error('Body weight is still there');
 
-  await page.evaluate(() => { switchTab('train'); setFitnessSubtab('goal'); });
+  // The active-rest control lives in the phase EDITOR, which is a modal now and opens only when a
+  // phase is asked for by name — the folded card in the list is just name, dates and a summary.
+  await page.evaluate(() => {
+    switchTab('train'); setFitnessSubtab('goal');
+    openPhaseCard(currentPhase().phase.id);
+  });
   await settle(page);
   const card = await page.evaluate(() => {
     const txt = document.getElementById('app').innerText;

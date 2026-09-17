@@ -55,7 +55,13 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (fresh.after !== 5) throw new Error(`Setting a 5-day rotation on a fresh install should stick, got ${fresh.after}`);
 
   // And the control on screen is actually enabled, with no CHANGE… offered.
-  await page.evaluate(() => { switchTab('train'); setFitnessSubtab('phases'); setPhasesSubtab('goal'); });
+  // The editor is a MODAL now and opens only when you ask for a phase by name — it no longer
+  // falls back to auto-expanding the current one, because a dialog that appears just because you
+  // arrived is a dialog you dismiss without reading.
+  await page.evaluate((id) => {
+    switchTab('train'); setFitnessSubtab('phases'); setPhasesSubtab('goal');
+    openPhaseCard(id);
+  }, fresh.id);
   await settle(page);
   const ui = await page.evaluate(() => ({
     inputs: [...document.querySelectorAll('input[onchange^="setPhaseRotationDays"]')].map(i => ({ value: i.value, disabled: i.disabled, min: i.min, max: i.max })),

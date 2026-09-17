@@ -123,7 +123,7 @@ function phaseSignedPct(phase) {
 // start editing rather than a grid of zeroes. Turning it OFF keeps the flat rate that was already
 // there -- the per-week values are dropped, which is the honest reading of "no longer varying".
 function togglePhaseWeekRates(id) {
-  const p = (STATE.phases || []).find(x => x.id === id);
+  const p = anyPhaseById(id);
   const g = phaseWeightGoal(p);
   if (!g) return;
   if (Array.isArray(g.weekRates)) {
@@ -136,7 +136,7 @@ function togglePhaseWeekRates(id) {
   saveState(); render();
 }
 function updateWeekRate(id, weekIndex, value) {
-  const p = (STATE.phases || []).find(x => x.id === id);
+  const p = anyPhaseById(id);
   const g = phaseWeightGoal(p);
   if (!g || !Array.isArray(g.weekRates)) return;
   const n = Math.abs(Number(value));
@@ -150,7 +150,7 @@ function updateWeekRate(id, weekIndex, value) {
 // Choosing Maintain LOCKS the rate to zero rather than merely labelling it. A "Maintain" phase
 // carrying 0.5%/wk is a contradiction the data shouldn't be able to express in the first place.
 function setPhaseWeightGoal(id, direction) {
-  const p = (STATE.phases || []).find(x => x.id === id);
+  const p = anyPhaseById(id);
   if (!p) return;
   if (direction === 'none') { p.weightGoal = null; saveState(); render(); return; }
   if (!PHASE_DIRECTIONS.some(d => d.key === direction)) return;
@@ -161,7 +161,7 @@ function setPhaseWeightGoal(id, direction) {
   saveState(); render();
 }
 function updateWeightGoalRate(id, value) {
-  const g = phaseWeightGoal((STATE.phases || []).find(x => x.id === id));
+  const g = phaseWeightGoal(anyPhaseById(id));
   if (!g || g.direction === 'maintain') return;
   const n = Math.abs(Number(value));
   if (!isFinite(n)) return;

@@ -1202,7 +1202,7 @@ function endPerpetualPhaseAt(entry, dateStr) {
 }
 
 function setPhaseActiveRest(id, delta) {
-  const p = (STATE.phases || []).find(x => x.id === id);
+  const p = anyPhaseById(id);
   if (!p) return;
   const weeks = Math.max(0, Math.round(Number(p.activeRestWeeks) || 0) + delta);
   // Capped below the block's own length: a block that is entirely active rest isn't a block.
@@ -1211,7 +1211,7 @@ function setPhaseActiveRest(id, delta) {
 }
 
 function togglePhaseDeload(id) {
-  const p = (STATE.phases || []).find(x => x.id === id);
+  const p = anyPhaseById(id);
   if (!p) return;
   // Stored as an explicit false rather than deleted, so "on by default" and "deliberately off" stay
   // distinguishable -- a block created before this shipped should still get a trailing deload.
@@ -1219,7 +1219,7 @@ function togglePhaseDeload(id) {
   saveState(); render();
 }
 function updatePhaseDeloadLever(id, key, value) {
-  const p = (STATE.phases || []).find(x => x.id === id);
+  const p = anyPhaseById(id);
   if (!p) return;
   const n = Math.round(Number(value));
   if (!isFinite(n)) return;
@@ -1228,7 +1228,7 @@ function updatePhaseDeloadLever(id, key, value) {
   saveState(); render();
 }
 function togglePhaseDeloadAccessories(id) {
-  const p = (STATE.phases || []).find(x => x.id === id);
+  const p = anyPhaseById(id);
   if (!p) return;
   p.deloadStyle = Object.assign({}, deloadStyleOf(p));
   p.deloadStyle.accExercises = !p.deloadStyle.accExercises;
@@ -1236,7 +1236,7 @@ function togglePhaseDeloadAccessories(id) {
 }
 
 function seedPhaseCalorieTarget(id) {
-  const p = (STATE.phases || []).find(x => x.id === id);
+  const p = anyPhaseById(id);
   if (!p) return;
   const entry = phaseTimeline().find(s => s.phase.id === id);
   const seed = entry && phaseCalorieSeed(entry);
@@ -1249,7 +1249,7 @@ function seedPhaseCalorieTarget(id) {
 }
 
 function updatePhaseCalorieTarget(id, value) {
-  const p = (STATE.phases || []).find(x => x.id === id);
+  const p = anyPhaseById(id);
   if (!p) return;
   const n = Math.round(Number(value));
   p.calorieTarget = (value === '' || !isFinite(n) || n <= 0) ? null : n;
@@ -1264,7 +1264,7 @@ function updatePhaseCalorieTarget(id, value) {
 // reappear tomorrow -- declining is an answer, and an app that asks again immediately isn't
 // listening.
 function dismissPhaseCalorieDrift(id) {
-  const p = (STATE.phases || []).find(x => x.id === id);
+  const p = anyPhaseById(id);
   if (!p) return;
   p.calorieSetOn = todayStr();
   saveState();
@@ -1367,7 +1367,7 @@ function deletePhase(id) {
     });
     return;
   }
-  const p = (STATE.phases || []).find(x => x.id === id);
+  const p = anyPhaseById(id);
   if (!p) return;
   showConfirm(`Delete “${p.label}”? Later phases move earlier to close the gap.`, () => {
     STATE.phases = (STATE.phases || []).filter(x => x.id !== id);
@@ -1395,6 +1395,7 @@ function renderPhases() {
          ${renderPhaseSummary(summary)}`
       : emptyState('No phases yet. One long push is a plan too — add phases when you want to change pace partway, or take a planned break.')}
     ${renderPhaseShelfSection()}
+    ${renderPhaseEditorModal()}
     ${done.length ? `<div class="phase-cal-note" style="margin-top:12px;">${done.length} finished phase${done.length === 1 ? '' : 's'} moved to ARCHIVED.</div>` : ''}`;
 }
 
@@ -1427,7 +1428,8 @@ function renderArchivedPhasesTab() {
   }
   return `
     <div style="font-size:11px; color:var(--text-dim); margin:18px 0 10px;">Blocks you've finished, newest first. Tap one to look inside; a finished phase keeps what it ran.</div>
-    <div class="phase-list">${done.map(renderPhaseCard).join('')}</div>`;
+    <div class="phase-list">${done.map(renderPhaseCard).join('')}</div>
+    ${renderPhaseEditorModal()}`;
 }
 
 // The long-cut flag, at the top of the screen rather than on a card -- it's a property of the
@@ -1494,9 +1496,12 @@ function renderPhaseCard(entry) {
   // through hunting for the one you meant. Closed, a phase is its name, its dates and a one-line
   // summary of what it holds; open, it is the editor. Exactly one is open, because "move onto the
   // next" is a sequence, and leaving five expanded behind you rebuilds the wall.
-  const open = phaseCardIsOpen(p.id, entry);
-  if (!open) {
-    return `
+  // In the LIST, a phase is always its folded form -- name, dates, one-line summary. The editor is
+  // no longer an expanded card inline: it opens as a modal (see renderPhaseEditorModal). A new
+  // phase used to be appended to the NOT SCHEDULED group below everything already there, so adding
+  // one scrolled the thing you just made off the bottom of the screen -- easy to think nothing
+  // happened and add nine more.
+  return `
       <div class="phase-card phase-card-closed phase-state-${entry.state}"
            onclick="openPhaseCard('${p.id}')" role="button" tabindex="0"
            onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openPhaseCard('${p.id}');}">
@@ -1508,15 +1513,36 @@ function renderPhaseCard(entry) {
         <div class="phase-when">${when}${projection}</div>
         <div class="phase-closed-sum">${phaseSummaryLine(entry)}</div>
       </div>`;
-  }
+}
+
+// The editor, as a modal over whatever list you came from. One phase at a time by construction --
+// there is one VIEW.phaseOpen -- and impossible to miss, which was the whole problem with the
+// inline version.
+function renderPhaseEditorModal() {
+  const entry = openPhaseEntry();
+  if (!entry) return '';
+  const p = entry.phase;
+  const stateLabel = { past: 'DONE', current: 'NOW', future: 'UPCOMING', shelf: 'NOT SCHEDULED' }[entry.state];
+  const when = entry.state === 'shelf'
+    ? (entry.perpetual ? 'No end &middot; not scheduled' : `${entry.weeks} weeks &middot; not scheduled`)
+    : entry.perpetual
+    ? `${fmtGoalDate(entry.startDate)} &ndash; <b style="color:var(--text)">until you change it</b>`
+    : `${fmtGoalDate(entry.startDate)} &ndash; ${fmtGoalDate(entry.endDate)} · ${entry.weeks} weeks`;
+  const projection = (entry.startWeightLb == null || entry.endWeightLb == null) ? ''
+    : ` · ${fmt(lbToDisplay(entry.startWeightLb), 1)} &rarr; ${fmt(lbToDisplay(entry.endWeightLb), 1)} ${weightUnitLabel()} projected`;
+  // Backdrop click closes, the panel swallows it -- same contract every other overlay in the app
+  // uses, so a tap inside the editor can't dismiss the editor.
   return `
-    <div class="phase-card phase-state-${entry.state}">
-      <div class="ehead">
-        <input type="text" class="phase-label" value="${escapeHtml(p.label)}"
-               onchange="updatePhaseField('${p.id}','label',this.value)">
-        ${renderPhaseSavedChip(p.id)}
-        <span class="phase-chip phase-chip-${entry.state}">${stateLabel}</span>
-      </div>
+    <div class="modal-overlay phase-modal" onclick="if(event.target===this)closePhaseCard()">
+      <div class="phase-modal-box phase-state-${entry.state}">
+        <div class="phase-modal-head">
+          <input type="text" class="phase-label" value="${escapeHtml(p.label)}"
+                 onchange="updatePhaseField('${p.id}','label',this.value)">
+          ${renderPhaseSavedChip(p.id)}
+          <span class="phase-chip phase-chip-${entry.state}">${stateLabel}</span>
+          <button class="icon-btn" onclick="closePhaseCard()" title="Close" aria-label="Close">${icon('close')}</button>
+        </div>
+        <div class="phase-modal-body">
       <div class="phase-when">${when}${projection}</div>
 
       ${renderWeightPhaseBody(entry)}
@@ -1537,8 +1563,12 @@ function renderPhaseCard(entry) {
           : ''}
         <button class="btn btn-sm btn-danger" onclick="deletePhase('${p.id}')">DELETE</button>
       </div>
-      ${entry.state === 'shelf' ? renderShelfActions(p) :
-        `<button class="btn btn-primary btn-block phase-done" onclick="closePhaseCard()">DONE &mdash; EVERYTHING'S SAVED</button>`}
+        </div>
+        <div class="phase-modal-foot">
+          ${entry.state === 'shelf' ? renderShelfActions(p) :
+            `<button class="btn btn-primary btn-block phase-done" onclick="closePhaseCard()">DONE &mdash; EVERYTHING'S SAVED</button>`}
+        </div>
+      </div>
     </div>`;
 }
 
@@ -1571,13 +1601,24 @@ function renderShelfActions(p) {
 //
 // Nothing open falls back to the phase you're IN, so arriving at this screen lands you on the one
 // you almost certainly came for, and a fresh install -- one perpetual phase -- is simply open.
-function phaseCardIsOpen(id, entry) {
-  if (VIEW.phaseOpen) return VIEW.phaseOpen === id;
-  return entry.state === 'current';
-}
-// A sentinel rather than null: null means "no choice made", which falls back to the current phase --
-// so DONE on the phase you're in would reopen it instantly.
+// The editor is a MODAL now, so "open" means exactly one thing: you asked for this phase. It used
+// to fall back to the phase you were IN when nothing was chosen, which was right for an inline
+// card -- arriving landed you on the one you came for -- and is wrong for a popup, where it would
+// throw a dialog in your face every time you opened the screen.
+function phaseCardIsOpen(id) { return VIEW.phaseOpen === id; }
+// Kept as a distinct value from null so closePhaseCard() reads as a deliberate "nothing open"
+// rather than "no choice yet". Nothing falls back to it any more, but the two still mean
+// different things to anyone reading VIEW.
 const PHASE_NONE_OPEN = '__none__';
+// The phase the modal is showing, wherever it lives -- or null when the editor is closed.
+function openPhaseEntry() {
+  const id = VIEW.phaseOpen;
+  if (!id || id === PHASE_NONE_OPEN) return null;
+  const scheduled = phaseTimeline().find(e => e.phase.id === id);
+  if (scheduled) return scheduled;
+  const shelved = shelvedPhase(id);
+  return shelved ? shelfEntry(shelved) : null;
+}
 function openPhaseCard(id) { VIEW.phaseOpen = id; render(); }
 function closePhaseCard() {
   VIEW.phaseOpen = PHASE_NONE_OPEN;
@@ -1717,7 +1758,12 @@ function renderWeightPhaseBody(entry) {
         <label class="field"><span class="lbl">Rate %bw/wk</span>
           <input type="number" min="0" step="0.05"
                  value="${maintain || varying ? '' : fmt(Math.abs(Number(g.ratePctPerWeek) || 0), 2)}"
-                 ${maintain ? 'disabled placeholder="—"' : varying ? 'disabled placeholder="varies"' : ''} inputmode="decimal"
+                 ${/* A rate needs a DIRECTION to be a rate at all, so the field waits for one --
+                       but "—" never said that, and a disabled box with a dash in it reads as
+                       broken rather than as waiting. It names what it wants now. */''}
+                 ${!g ? 'disabled placeholder="pick a goal first"'
+                   : maintain ? 'disabled placeholder="holding"'
+                   : varying ? 'disabled placeholder="varies"' : ''} inputmode="decimal"
                  onchange="updateWeightGoalRate('${p.id}',this.value)"></label>
       </div>
 
@@ -2005,7 +2051,7 @@ function earliestLoggedDate() {
 // are keyed to this number. So changing it on a running phase means starting a new one, and the
 // button says so rather than silently refusing.
 function setPhaseRotationDays(id, value) {
-  const p = (STATE.phases || []).find(x => x.id === id);
+  const p = anyPhaseById(id);
   const entry = phaseTimeline().find(s => s.phase.id === id);
   if (!p || !entry) return;
   const n = Math.round(Number(value));
@@ -2046,7 +2092,7 @@ function startPhaseWithNewRotation(id) {
 // freely. The plan is reshaped to the new slot count, and switching to fewer slots confirms first
 // if any of the slots being dropped hold a meal.
 function setPhaseMealRotation(id, mode) {
-  const p = (STATE.phases || []).find(x => x.id === id);
+  const p = anyPhaseById(id);
   if (!p || MEAL_ROTATIONS.indexOf(mode) < 0 || mealRotationOf(p) === mode) return;
   const n = mode === 'workout' ? rotationDaysOf(p) : 7;
   const dropping = Object.keys(p.mealPlan || {}).some(k => Number(k) >= n && (p.mealPlan[k] || []).some(e => e.mealId));

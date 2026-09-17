@@ -2773,3 +2773,40 @@ button.brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 4
   border: 1px solid var(--accent-dim); border-radius: 4px; padding: 1px 5px; margin-left: 6px;
   vertical-align: middle;
 }
+
+/* ---- PHASE EDITOR MODAL (renderPhaseEditorModal() in app-phases.js) ----
+   The editor used to expand inline in the list. A new phase appends to NOT SCHEDULED, below
+   everything already there, so adding one scrolled the thing you just created off the bottom —
+   easy to conclude nothing happened and add another nine. As a modal it cannot be missed, and
+   "am I in the builder?" stops being a question.
+
+   Taller and wider than .modal-box: this holds a real form (weeks, goal, rate, rotation, deload,
+   meal mode), not a one-line confirm. The head and foot are pinned so the label and the
+   DONE / QUEUE NEXT action stay put while the body scrolls. */
+.phase-modal { align-items: stretch; padding: 0; }
+.phase-modal-box {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 0; margin: 0; width: 100%; max-width: 620px;
+  margin-left: auto; margin-right: auto;
+  display: flex; flex-direction: column;
+  max-height: 100dvh;
+}
+@media (min-width: 560px) {
+  .phase-modal { align-items: center; padding: 24px; }
+  .phase-modal-box { border-radius: var(--radius); max-height: calc(100dvh - 48px); }
+}
+.phase-modal-head {
+  display: flex; align-items: center; gap: 8px; flex: none;
+  padding: calc(12px + env(safe-area-inset-top)) 14px 10px;
+  border-bottom: 1px solid var(--border-soft);
+}
+.phase-modal-head .phase-label { flex: 1; min-width: 0; }
+.phase-modal-body { flex: 1; overflow-y: auto; padding: 14px; -webkit-overflow-scrolling: touch; }
+.phase-modal-foot {
+  flex: none; padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--border-soft); background: var(--surface);
+}
+/* It carries the same left-edge state accent the list cards use (.phase-state-* only set the
+   COLOUR, so the width has to come from somewhere) -- but it is deliberately NOT a .phase-card:
+   that class means "a row in the list", and test_exercise_goals counts those. */
+.phase-modal-box { border-left: 3px solid var(--border); }
