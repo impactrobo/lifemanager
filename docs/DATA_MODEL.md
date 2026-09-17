@@ -278,7 +278,9 @@ STATE = {
       links: [],            // app-links.js's cross-entity [{type, id}] — an entry-to-entry link is
                             //   {type:'note', id}. NOT a second link array; see NOTES_SPEC's header
       photos: [],
-      hubItems: [],         // hubs only: ordered [{id, note}]  (Phase 3, not yet written)
+      hubItems: [],         // hubs only: ordered [{id, note}] — array order IS display order, and
+                            //   `note` is that member's line of context, owned by the HUB (the same
+                            //   entry in two hubs needs two different reasons for being there)
       createdAt, updatedAt, // updatedAt drives the "Edited" sort; touchEntry() is the only writer
       deleted },            // tombstone, so a deletion survives a sync instead of being re-pulled
     ...

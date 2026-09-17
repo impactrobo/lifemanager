@@ -2,7 +2,7 @@
 
 As of 2026-09-17. Source of truth: the shared Claude Doc "LIFEMan Notes — Feature Spec". Re-export this file if the doc changes.
 
-**Build status: Phases 1 (Capture) and 2 (Links) shipped 2026-09-17.** Where the code and this document disagree,
+**Build status: Phases 1 (Capture), 2 (Links) and 3 (Hubs) shipped 2026-09-17.** Where the code and this document disagree,
 the code wins and the divergence is recorded in `docs/ROADMAP.md`. Five deliberate departures so
 far: tags kept no colour but the six entry TYPES carry it; `links` is stored in app-links.js's
 cross-entity `[{type, id}]` shape rather than a bare id array, so one link system serves the whole

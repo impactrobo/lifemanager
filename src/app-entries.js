@@ -190,6 +190,11 @@ function entryOutgoingLinks(e) {
   entryLinkRows(e).forEach(l => { if (l && l.type === 'note') push(l.id); });
   entryTokenIds(e.body).forEach(push);
   Object.keys(e.fields || {}).forEach(k => entryTokenIds(e.fields[k]).forEach(push));
+  // A hub's membership is a link like any other. Routing it through here rather than treating it
+  // as a separate relationship is what makes "In hubs" fall out of the backlink index for free,
+  // makes the card counts include it, and makes a hub stop appearing in its members' lists the
+  // moment it's deleted — no second mechanism to keep in step with this one.
+  hubItems(e).forEach(it => push(it && it.id));
   return out;
 }
 function entryBacklinks(e) {
@@ -540,6 +545,76 @@ function entryTextLinkIds(e) {
   entryTokenIds(e.body).forEach(push);
   Object.keys((e && e.fields) || {}).forEach(k => entryTokenIds(e.fields[k]).forEach(push));
   return out;
+}
+
+// ---- Hubs (NOTES_SPEC Phase 3) ----
+// A hub is an entry whose job is to gather other entries in an order you chose, each with an
+// optional line saying why it's there. Manual only, by design: nothing fills a hub for you, which
+// is what separates it from a saved search (that's in the Backlog as "smart hubs").
+//
+// DEPARTURE FROM THE SPEC, worth knowing: the spec gives the hub type a template field called
+// `intro`. A hub's `body` IS its intro here. Every entry already has a body, every editor already
+// edits it, and the alternative was a type with one live text field and one dead one — the reader
+// of a hub cannot tell which is which, and Convert (Phase 4) would have to pick a side anyway.
+function isHubEntry(e) { return !!e && e.type === 'hub'; }
+function hubItems(e) {
+  if (!e || e.type !== 'hub') return [];
+  if (!Array.isArray(e.hubItems)) e.hubItems = [];
+  return e.hubItems;
+}
+// The members that still exist, in hub order. Order IS the array's order — nothing is sorted on
+// read, because the whole point of a hub is that you chose the sequence.
+function hubMembers(e) {
+  return hubItems(e).map(it => {
+    const target = liveEntryById(it.id);
+    return target ? { entry: target, note: it.note || '' } : null;
+  }).filter(Boolean);
+}
+function hubHasMember(hub, id) { return hubItems(hub).some(it => it.id === id); }
+function addToHub(hubId, entryId) {
+  const hub = liveEntryById(hubId);
+  if (!hub || hub.type !== 'hub' || hubId === entryId) return false;   // a hub can't hold itself
+  if (!liveEntryById(entryId) || hubHasMember(hub, entryId)) return false;
+  hubItems(hub).push({ id: entryId, note: '' });
+  touchEntry(hub);
+  return true;
+}
+// Removing a member never deletes it — the entry goes on existing, it just stops being gathered
+// here. That distinction is the reason this is its own action and not the delete button.
+function removeFromHub(hubId, entryId) {
+  const hub = liveEntryById(hubId);
+  if (!hub) return;
+  hub.hubItems = hubItems(hub).filter(it => it.id !== entryId);
+  touchEntry(hub);
+}
+function setHubItemNote(hubId, entryId, note) {
+  const hub = liveEntryById(hubId);
+  const it = hub && hubItems(hub).find(x => x.id === entryId);
+  if (!it) return;
+  const v = String(note || '').trim();
+  if (v) it.note = v; else delete it.note;
+  touchEntry(hub);
+}
+// dir is -1 (up) or +1 (down). Clamped rather than wrapping: an item at the top jumping to the
+// bottom because you tapped up once is never what was meant.
+function moveHubItem(hubId, entryId, dir) {
+  const hub = liveEntryById(hubId);
+  if (!hub) return false;
+  const items = hubItems(hub);
+  const from = items.findIndex(it => it.id === entryId);
+  const to = from + dir;
+  if (from === -1 || to < 0 || to >= items.length) return false;
+  const [moved] = items.splice(from, 1);
+  items.splice(to, 0, moved);
+  touchEntry(hub);
+  return true;
+}
+// Every hub this entry is gathered into. Read off the backlink index, since hub membership is an
+// outgoing link from the hub (see entryOutgoingLinks) — so a deleted hub disappears from here on
+// its own, with nothing to clean up.
+function hubsContaining(e) {
+  if (!e) return [];
+  return entryBacklinks(e).filter(o => o.type === 'hub' && hubHasMember(o, e.id));
 }
 
 // ---- Sentences ----

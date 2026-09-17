@@ -298,6 +298,27 @@ Newest first. Keep this reasonably current so a fresh session can see what alrea
 without re-reading the whole diff history. Roughly grouped: this project spent early Sept 2026
 on an architecture split + a large wave of Maximalist aesthetics.
 
+- **Notes Phase 3, "Hubs" (2026-09-17).** A hub is an entry whose job is to gather other entries in
+  an order you chose, each with an optional line saying why it's there. Manual only — nothing fills
+  a hub for you, which is what separates it from the saved-search "smart hubs" in the Backlog.
+  - **Hub membership is a LINK**, routed through `entryOutgoingLinks()` rather than given its own
+    relationship. That one decision is why "In hubs" falls out of the backlink index for free, why
+    the card counts include it, and why deleting a hub vanishes from its members' lists with no
+    cleanup pass — there is no second mechanism that could fall out of step.
+  - **A hub's `body` IS its intro.** The spec gives the hub type a template field called `intro`;
+    using it would have meant a type with one live text field and one dead one, which no reader can
+    tell apart and which Convert (Phase 4) would have to pick between anyway.
+  - **A hub is the one type you can create outright** (`+ HUB` on the list, or "new hub with this in
+    it" from any entry). Every other type is reached by Convert, because a journal or a recipe is a
+    quick note that turned out to be something — whereas nothing becomes a hub by accident.
+  - Context lines belong to the **hub**, not the entry: the same note in two hubs needs two
+    different reasons for being there.
+  - **Removing a member never deletes it**, which is exactly why it's a separate action from delete.
+  - **Reordering is move up / move down, not drag.** The spec offers both. The app's existing
+    pointer-drag lives in Home, coupled to `UI.homeEditMode`, and its gesture half has no test
+    coverage — duplicating it for a secondary affordance is the "two systems" trade this project
+    keeps refusing. Generalising it properly is its own piece of work if drag turns out to matter.
+
 - **Notes Phase 2, "Links" (2026-09-17).** Entries point at each other two ways, and both are read
   by one function: the `links` array (added through the picker) and `[[id]]` tokens written inline.
   - **Stored as an id, shown as a title.** That's what makes renaming safe — a rename rewrites

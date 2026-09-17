@@ -174,6 +174,7 @@ let VIEW = {
   entryFilter: 'all',                // 'all' | 'fav' | an ENTRY_TYPES key
   entrySearch: '',
   entryTagQuery: '',                 // what's in the tag input, which also narrows suggestions
+  hubPicker: null,                   // { mode:'hub'|'member', id, query } -- one sheet, both directions
   entryIngredientQuery: '',          // recipe only: the ingredient search box's current text
   recipeCustomFoodOpen: false,       // the '+ NEW INGREDIENT' overlay, over the Notes screen
   goalExpanded: null,                // which goal's ledger is open, one at a time
@@ -340,6 +341,7 @@ function switchTab(tab) {
     VIEW.entryMode = 'view';
     VIEW.entryDraftTitle = null; VIEW.entryDraftBody = null; VIEW.entryTagQuery = '';
     VIEW.entryBackStack = []; VIEW.entryAutocomplete = null; VIEW.entryPreview = null;
+    VIEW.hubPicker = null;
     NAV.notesSubtab = 'view';
   }
   if (tab === 'schedule') {

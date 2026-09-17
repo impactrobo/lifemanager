@@ -283,8 +283,7 @@ this is the only migration in the app that can destroy something you personally 
 - [ ] The sort you pick is still there after a relaunch; the filter and search are deliberately not.
 - [ ] Photos still attach, up to four, and open full-size.
 
-**Known gaps, not bugs — later phases:** the type chip is a readout (Convert is Phase 4), and hubs
-exist as a type with no hub view (Phase 3).
+**Known gaps, not bugs — later phases:** the type chip is a readout (Convert is Phase 4).
 
 ## Notes Phase 2 — Links (2026-09-17)
 `tests/test_entry_links.js` is the spec's own acceptance list turned into assertions, including a
@@ -311,5 +310,27 @@ touchscreen and an on-screen keyboard.
       offered, and LINK IT should turn that text into a working link.
 - [ ] Delete a note something links to: the link reads **"Deleted note"**, struck through. Undo
       from the toast and the link works again.
+
+## Notes Phase 3 — Hubs (2026-09-17)
+`tests/test_hubs.js` covers ordering, context lines, nesting, membership and deletion. What it
+can't judge is whether the hub is a good way to work, which is the actual question here.
+- [ ] **+ HUB** on the Notes list makes an empty hub and opens it. Give it a name and an intro —
+      the body text IS the intro, there's no second field.
+- [ ] **+ ADD ENTRY** gathers notes into it. The picker won't offer anything already in the hub,
+      and won't offer the hub itself.
+- [ ] **Move up / move down** reorder the list, and the arrows go dead at the ends rather than
+      wrapping around. Force-close and relaunch — the order is still yours.
+- [ ] Give a member a **line of context** ("Start here — diagnose before touching anything"). Open
+      that note directly: the line shows under LINKED FROM beside the hub's name, marked IN HUB.
+- [ ] Put the **same note in two hubs** and give it a different context line in each. They must not
+      overwrite one another — the line belongs to the hub, not the note.
+- [ ] **Remove a member.** The note itself must still exist in the list afterwards; this is the one
+      place the difference between "remove" and "delete" really matters.
+- [ ] **Put a hub inside a hub.** It should show with a square yellow dot, and tapping it goes in.
+- [ ] **Delete a hub.** Its members all survive, and it disappears from their LINKED FROM.
+- [ ] From any note, **+ ADD TO HUB** → pick an existing hub, or "NEW HUB WITH THIS IN IT".
+- [ ] **A judgement call, not a bug:** reordering is buttons, not drag. Does that feel right on a
+      phone, or is dragging worth building properly? (It would mean generalising Home's edit-mode
+      drag, which is why it isn't here yet.)
 
 ## Add future items below as new features ship

@@ -2972,3 +2972,34 @@ button.brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 4
 .entry-preview-backdrop { position: fixed; inset: 0; z-index: 44; background: transparent; }
 .entry-preview { position: fixed; z-index: 45; width: 260px; max-width: calc(100vw - 20px); }
 .entry-preview .entry-ref { box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45); background: var(--surface2); }
+
+/* ---- Hubs (NOTES_SPEC Phase 3) ----
+   A gathered entry is two lines: the entry itself with its controls, and the optional line of
+   context saying why it's here. The context input is deliberately quiet — it's an annotation on
+   someone else's note, not a field of this one. */
+.hub-list { display: flex; flex-direction: column; gap: 8px; }
+.hub-row {
+  background: var(--surface); border: 1px solid var(--border-soft);
+  border-radius: var(--radius); padding: 8px 10px;
+}
+.hub-row-main { display: flex; align-items: center; gap: 8px; }
+.hub-row-title {
+  flex: 1; min-width: 0; text-align: left; background: none; border: 0; padding: 0;
+  font-size: 13px; font-weight: 700; color: var(--text); cursor: pointer;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.hub-row-title:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.hub-row .icon-btn { flex: none; }
+.hub-row-note {
+  width: 100%; margin-top: 6px; padding: 4px 0; font-size: 12px;
+  color: var(--text-dim); background: transparent; border: 0;
+  border-bottom: 1px dashed var(--border-soft);
+}
+.hub-row-note:focus { outline: none; border-bottom-color: var(--accent); color: var(--text); }
+.hub-row-note::placeholder { color: var(--text-faint); }
+/* "in hub" beside a backlink's title — hub membership joins that list rather than getting its own
+   heading, so it needs to say which kind of pointer it is. */
+.entry-ref-kind {
+  font-family: var(--font-mono); font-size: 9px; font-weight: 700; font-style: normal;
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--note-hub); margin-left: 6px;
+}

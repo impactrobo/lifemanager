@@ -10,19 +10,22 @@
 //
 // ================= NOTES =================
 // The record model, the Markdown and the migration live in src/app-entries.js; this file is the
-// screens. docs/NOTES_SPEC.md Phases 1 (Capture) and 2 (Links).
+// screens. docs/NOTES_SPEC.md Phases 1 (Capture), 2 (Links) and 3 (Hubs).
 //
 // Phase 2 (Links) added the [[ ]] system on top: autocomplete, title-tokens in the editor,
 // backlinks with the sentence each link sits in, unlinked mentions, the press-and-hold preview and
 // a back stack for following links. The index and the text transforms behind all of it are in
 // src/app-entries.js.
 //
-// STILL DELIBERATELY SHORT of two things the spec describes, so that what ships is finished
-// rather than half-present:
-//   - The type chip is a READOUT. Types exist as data and as colour, but Convert (rule sort,
-//     review, Undo) is Phase 4, and a type picker with no templates behind it would let you set
-//     an entry to Journal and see nothing change but a dot.
-//   - Hubs are a type the model knows; the hub view is Phase 3.
+// Phase 3 (Hubs) added the hub view: ordered members, a line of context on each, add/remove, and
+// hub membership showing up in every member's "Linked from". A hub is the ONE type you can create
+// outright — every other type is reached by Convert, because a journal or a recipe is a quick note
+// that turned out to be something, whereas nothing becomes a hub by accident.
+//
+// STILL DELIBERATELY SHORT of one thing the spec describes: the type chip is a READOUT. Types
+// exist as data and as colour, but Convert (rule sort, review, Undo) is Phase 4, and a type picker
+// with no templates behind it would let you set an entry to Journal and see nothing change but a
+// dot. Reordering a hub by DRAG is also deferred — see renderHubRow().
 // Recipes are the exception to "everything starts as a Quick note": they arrived already
 // structured from the old Notes and keep working, ingredients and "add to Meals" included.
 
@@ -118,6 +121,25 @@ function newQuickEntry() {
   VIEW.entryOpenId = e.id;
   VIEW.entryMode = 'edit';
   VIEW.entryBackStack = [];   // a note you started fresh isn't "behind" anything
+  clearEntryDraft();
+  NAV.notesSubtab = 'view';
+  saveState();
+  render();
+}
+// A hub is the one type you can create outright. Every other type is reached by Convert (Phase 4),
+// because a journal or a recipe is a quick note that turned out to be something — whereas nothing
+// becomes a hub by accident. You make one because you've decided to gather things.
+function newHubEntry(seedMemberId) {
+  const e = blankEntry('hub');
+  e.hubItems = [];
+  allEntries().push(e);
+  invalidateEntryIndex();
+  if (seedMemberId) addToHub(e.id, seedMemberId);
+  ensureTab('notes');
+  VIEW.entryOpenId = e.id;
+  VIEW.entryMode = 'edit';
+  VIEW.entryBackStack = [];
+  VIEW.hubPicker = null;
   clearEntryDraft();
   NAV.notesSubtab = 'view';
   saveState();
@@ -299,7 +321,7 @@ function renderNotes() {
   return `<div class="screen">
     <div class="section-title">Notes</div>
     ${open ? renderEntryEditor(open) : renderEntryList()}
-  </div>${renderEntryPreview()}`;
+  </div>${renderEntryPreview()}${renderHubPicker()}`;
 }
 
 function renderEntryList() {
@@ -307,9 +329,10 @@ function renderEntryList() {
   const filter = VIEW.entryFilter || 'all';
   const sort = entrySort();
   return `
-    <div class="row" style="align-items:baseline; margin:14px 0 10px;">
+    <div class="row" style="align-items:center; margin:14px 0 10px;">
       <div class="subtle-label" style="margin-bottom:0;">ALL NOTES</div>
-      <span class="mono" style="font-size:11px; color:var(--text-faint);">${total} ${total === 1 ? 'entry' : 'entries'}</span>
+      <span class="mono" style="font-size:11px; color:var(--text-faint); margin-left:auto;">${total} ${total === 1 ? 'entry' : 'entries'}</span>
+      <button class="btn btn-ghost btn-sm" style="margin-left:10px; color:var(--note-hub); border-color:var(--note-hub);" onclick="newHubEntry()">+ HUB</button>
     </div>
     <label class="field" style="margin-bottom:10px;">
       <input type="text" id="entrySearchInput" placeholder="Search notes, or #tag…" value="${escapeHtml(VIEW.entrySearch || '')}" oninput="onEntrySearchInput(this.value)">
@@ -419,6 +442,7 @@ function renderEntryEditor(e) {
            }</div>`}
     </div>
     ${isRecipeEntry(e) ? renderRecipeEditor(e) : ''}
+    ${isHubEntry(e) ? renderHubMembers(e) : ''}
     <div class="subtle-label" style="margin:16px 0 8px;">PHOTOS</div>
     <div class="photo-thumb-row" id="entryPhotoRow"></div>
     <button class="btn btn-ghost btn-sm" onclick="document.getElementById('entryPhotoInput').click()">+ ADD PHOTO</button>
@@ -428,6 +452,7 @@ function renderEntryEditor(e) {
     <div class="subtle-label" style="margin:16px 0 8px;">LINKED</div>
     ${renderLinkChips('note', e.id)}
     ${renderEntryTextLinks(e)}
+    <button class="btn btn-ghost btn-sm" style="margin-top:8px;" onclick="openHubPicker('hub','${e.id}')">+ ADD TO HUB</button>
     <div class="subtle-label" style="margin:16px 0 8px;">LINKED FROM</div>
     ${renderEntryBacklinks(e)}
     ${renderEntryUnlinkedMentions(e)}
@@ -436,6 +461,130 @@ function renderEntryEditor(e) {
       <button class="btn btn-ghost" onclick="closeEntry()">DONE</button>
     </div>
     <button class="btn btn-ghost btn-sm btn-block" style="margin-top:10px; color:var(--bad);" onclick="deleteEntry('${e.id}')">DELETE NOTE</button>`;
+}
+
+// ---- Hubs ----
+// The hub view: the intro (a hub's body IS its intro — see app-entries.js), then the members in
+// the order you put them in, each with its own line of context.
+function renderHubMembers(hub) {
+  const members = hubMembers(hub);
+  const count = members.length;
+  return `
+    <div class="row" style="align-items:center; margin:16px 0 8px;">
+      <div class="subtle-label" style="margin-bottom:0;">IN THIS HUB</div>
+      <span class="mono" style="font-size:11px; color:var(--text-faint); margin-left:auto;">${count} ${count === 1 ? 'entry' : 'entries'}</span>
+    </div>
+    ${count ? `<div class="hub-list">${members.map((m, i) => renderHubRow(hub, m, i, count)).join('')}</div>`
+            : `<div class="entry-empty-line">Nothing gathered here yet. A hub is manual — you pick what goes in it, and the order.</div>`}
+    <button class="btn btn-ghost btn-sm btn-block" style="margin-top:10px;" onclick="openHubPicker('member','${hub.id}')">+ ADD ENTRY</button>`;
+}
+function renderHubRow(hub, m, i, count) {
+  const e = m.entry;
+  const meta = entryTypeMeta(e.type);
+  const color = entryTypeColor(e.type);
+  return `<div class="hub-row">
+    <div class="hub-row-main">
+      <span class="entry-dot ${meta.dot === 'square' ? 'is-square' : ''}" style="background:${color}"></span>
+      <button class="hub-row-title" onclick="openEntry('${e.id}')">${escapeHtml(entryTitleOf(e))}</button>
+      ${/* Clamped, not wrapping: an item at the top jumping to the bottom on one tap is never
+            what was meant, so the end buttons simply go dead. */ ''}
+      <button class="icon-btn" ${i === 0 ? 'disabled style="opacity:.3;"' : ''} onclick="moveHubMember('${hub.id}','${e.id}',-1)" title="Move up" aria-label="Move up">${icon('up')}</button>
+      <button class="icon-btn" ${i === count - 1 ? 'disabled style="opacity:.3;"' : ''} onclick="moveHubMember('${hub.id}','${e.id}',1)" title="Move down" aria-label="Move down">${icon('down')}</button>
+      <button class="icon-btn" style="color:var(--bad);" onclick="removeHubMember('${hub.id}','${e.id}')" title="Remove from hub — the note itself is kept" aria-label="Remove from hub">${icon('close')}</button>
+    </div>
+    <input type="text" class="hub-row-note" placeholder="Why it's here (optional)…"
+      value="${escapeHtml(m.note)}" onchange="updateHubMemberNote('${hub.id}','${e.id}', this.value)">
+  </div>`;
+}
+function moveHubMember(hubId, entryId, dir) {
+  if (!moveHubItem(hubId, entryId, dir)) return;
+  saveState();
+  render();
+}
+function removeHubMember(hubId, entryId) {
+  removeFromHub(hubId, entryId);
+  saveState();
+  showToast('Removed from hub — the note is still there');
+  render();
+}
+function updateHubMemberNote(hubId, entryId, val) {
+  setHubItemNote(hubId, entryId, val);
+  saveState();
+}
+
+// One sheet, two jobs: 'member' picks an entry to add TO this hub; 'hub' picks a hub to add this
+// entry INTO. Same list, opposite direction, so they share everything but the filter.
+function openHubPicker(mode, id) { VIEW.hubPicker = { mode, id, query: '' }; render(); }
+function closeHubPicker() { VIEW.hubPicker = null; render(); }
+function setHubPickerQuery(v) {
+  if (!VIEW.hubPicker) return;
+  VIEW.hubPicker.query = v;
+  const box = document.getElementById('hubPickerResults');
+  if (box) box.innerHTML = hubPickerResultsHtml();
+}
+function hubPickerRows() {
+  const p = VIEW.hubPicker;
+  if (!p) return [];
+  const q = (p.query || '').trim().toLowerCase();
+  const subject = liveEntryById(p.id);
+  if (!subject) return [];
+  return liveEntries().filter(e => {
+    if (e.id === p.id) return false;                                 // never itself
+    if (p.mode === 'hub') {
+      if (e.type !== 'hub') return false;                            // adding INTO a hub
+      if (hubHasMember(e, p.id)) return false;                       // already in it
+    } else {
+      if (hubHasMember(subject, e.id)) return false;                 // already gathered here
+    }
+    return !q || entryTitleOf(e).toLowerCase().includes(q);
+  }).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 40);
+}
+function hubPickerResultsHtml() {
+  const p = VIEW.hubPicker;
+  if (!p) return '';
+  const rows = hubPickerRows();
+  if (!rows.length) {
+    return `<div style="font-size:12px; color:var(--text-faint); padding:10px 0;">${
+      p.query ? 'Nothing matches that.' : p.mode === 'hub' ? 'No other hubs yet — make one below.' : 'Nothing left to add.'}</div>`;
+  }
+  return rows.map(e => `
+    <div class="link-result" onclick="pickHubTarget('${e.id}')">
+      <i class="link-swatch" style="background:${entryTypeColor(e.type)};"></i>
+      <span class="link-result-title">${escapeHtml(entryTitleOf(e))}</span>
+      <span class="link-result-meta">${entryTypeMeta(e.type).label}</span>
+    </div>`).join('');
+}
+function pickHubTarget(id) {
+  const p = VIEW.hubPicker;
+  if (!p) return;
+  // 'hub' mode: the picked row IS the hub and the subject goes into it. 'member' mode: the other
+  // way round. One call, arguments swapped.
+  const ok = p.mode === 'hub' ? addToHub(id, p.id) : addToHub(p.id, id);
+  VIEW.hubPicker = null;
+  if (ok) { saveState(); showToast(p.mode === 'hub' ? 'Added to hub' : 'Added to this hub'); }
+  render();
+}
+function renderHubPicker() {
+  const p = VIEW.hubPicker;
+  if (!p) return '';
+  const subject = liveEntryById(p.id);
+  if (!subject) return '';
+  const addingToHub = p.mode === 'hub';
+  return `
+    <div class="link-picker-backdrop" onclick="closeHubPicker()"></div>
+    <div class="link-picker">
+      <div class="row" style="margin-bottom:8px;">
+        <div style="min-width:0;">
+          <div class="subtle-label" style="margin-bottom:2px;">${addingToHub ? 'ADD TO HUB' : 'ADD TO THIS HUB'}</div>
+          <div style="font-size:12px; color:var(--text-dim);">${escapeHtml(entryTitleOf(subject))}</div>
+        </div>
+        <button class="icon-btn" onclick="closeHubPicker()">${icon('close')}</button>
+      </div>
+      <label class="field"><input type="text" placeholder="Search notes…" oninput="setHubPickerQuery(this.value)"></label>
+      <div id="hubPickerResults" class="link-results">${hubPickerResultsHtml()}</div>
+      ${addingToHub ? `<button class="btn btn-sm btn-block" style="margin-top:8px; color:var(--note-hub); border-color:var(--note-hub);"
+        onclick="newHubEntry('${p.id}')">+ NEW HUB WITH THIS IN IT</button>` : ''}
+    </div>`;
 }
 
 // ---- The three link surfaces ----
@@ -456,14 +605,21 @@ function renderEntryTextLinks(e) {
 function renderEntryBacklinks(e) {
   const back = entryBacklinks(e);
   if (!back.length) return `<div class="entry-empty-line">Nothing links here yet.</div>`;
-  return `<div class="entry-ref-list">${back.map(o => `
-    <button class="entry-ref" onclick="openEntry('${o.id}')">
-      <span class="entry-ref-dot" style="background:${entryTypeColor(o.type)}"></span>
+  // Hub membership joins this list rather than getting its own heading — "what points at this" is
+  // one question, and a hub answers it with its context line instead of a sentence from prose.
+  const inHubs = new Set(hubsContaining(e).map(h => h.id));
+  return `<div class="entry-ref-list">${back.map(o => {
+    const isHub = inHubs.has(o.id);
+    const note = isHub ? (hubItems(o).find(it => it.id === e.id) || {}).note : '';
+    const line = isHub ? (note || 'Gathered in this hub.') : entrySentenceLinkingTo(o, e.id);
+    return `<button class="entry-ref" onclick="openEntry('${o.id}')">
+      <span class="entry-ref-dot ${isHub ? 'is-square' : ''}" style="background:${entryTypeColor(o.type)}"></span>
       <span class="entry-ref-body">
-        <span class="entry-ref-title">${escapeHtml(entryTitleOf(o))}</span>
-        <span class="entry-ref-sentence">${escapeHtml(entrySentenceLinkingTo(o, e.id))}</span>
+        <span class="entry-ref-title">${escapeHtml(entryTitleOf(o))}${isHub ? ' <em class="entry-ref-kind">in hub</em>' : ''}</span>
+        <span class="entry-ref-sentence">${escapeHtml(line)}</span>
       </span>
-    </button>`).join('')}</div>`;
+    </button>`;
+  }).join('')}</div>`;
 }
 // Entries that NAME this one without linking to it. The point is to catch the link you meant to
 // make and didn't; "LINK IT" turns that text into a real link in place.
