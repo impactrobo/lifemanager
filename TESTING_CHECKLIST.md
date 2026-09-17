@@ -130,4 +130,67 @@ bug here can't be undone by definition.
 - [ ] Turn on iOS **Settings → Accessibility → Motion → Reduce Motion**, then break a habit: the
       shake and flash should be skipped entirely while the toast line still appears.
 
+## The navigation restructure (2026-09-17) — DO FIRST
+Seven moves across builds `-23` to `2026.09.17-1`. Most of it is verifiable in a sandbox; what isn't
+is that **your installed app carries a saved nav snapshot pointing at tabs that no longer exist**,
+and that your real data made the journey. `test_diet_dissolved.js` covers the redirects against a
+synthetic snapshot — yours is the one fixture the sandbox never had.
+- [ ] Open the installed app cold. It should land on a real screen, not a blank one with the bottom
+      bar missing its section buttons. (A stale `diet` subtab now redirects to **D&E → MEALS**;
+      `longevity` to **BUILDER → SUPPLEMENTS**; `lifts` to **BUILDER → EXERCISES**.)
+- [ ] Whichever tab it lands on, the bottom bar has the matching button **lit**. A bar and a screen
+      disagreeing about where you are is how the last stale-tab bug showed itself.
+- [ ] **The bottom bar is four buttons now** (D&E / PHASES / BUILDER / BODY) — down from five, then
+      six. Does it still overrun on your device? This is the open ROADMAP item; if four fits, it
+      closes. If it still clips, say so and the chevron affordance goes on.
+- [ ] Your **supplement regimen** is intact under BUILDER → DIET → SUPPLEMENTS — same items, doses,
+      stacks and slots. The daily tick is still on Home.
+- [ ] Your **calorie and macro targets** show up in PHASES → MEAL PLAN under TARGETS TO MEET, with
+      the right phase named as their source.
+- [ ] The **gear** on that panel opens TDEE, the rolling estimate, and the averaging window.
+- [ ] Your **diet log** history is intact under D&E → MEALS, paging back through days.
+- [ ] Past phases are under PHASES → ARCHIVED, newest first, and the live ones are still on NEW.
+- [ ] BODY → COMPARE offers a **MUSCLES** group, and it lists the parts you've actually measured
+      twice — not all sixteen.
+- [ ] Adding a lift to training maxes offers a **Nickname** field under the name, and the shorthand
+      shows up where that lift is referenced.
+
+## NetNavis (2026-09-17)
+Nothing is selected by default, so none of this appears until you pick one in Settings.
+- [ ] Settings → NETNAVI: six portraits load. Pick one; tap **HEAR &lt;NAME&gt;** — the dialogue box
+      rises from the bottom.
+- [ ] **The box sits above the bottom bar without colliding with the home indicator.** It carries
+      `env(safe-area-inset-bottom)`, which a sandbox viewport can't reproduce.
+- [ ] Tapping the box advances a line; the last tap closes it. Navigating away closes it too.
+- [ ] Home → YOUR WEEK → **ASK &lt;NAVI&gt;** delivers your actual week in that Navi's voice, and the
+      numbers agree with the headline and chips above it.
+- [ ] **Vitalya's register is a judgement call only you can make.** Her profile has her calling you
+      something "slightly mean… about being overweight, inactive, or lazy". It ships as written. Read
+      it on a real screen on a real week and say whether it lands or grates — the set is one line to
+      change, and picking someone else is always the other answer.
+- [ ] Airplane mode, open the app, tap a Navi: **the portrait still renders.** The six icons are
+      precached; a box with a broken portrait is worse than no box.
+
+## Offline cache & self-update (2026-09-17)
+`CACHE_NAME` went `lifeman-v16` → `v17` and `APP_SHELL` gained seven entries (`app-navi.js` plus six
+portraits). `addAll()` rejects **wholesale** on a single 404, and the failure is silent — the offline
+cache simply never installs, and you'd only find out with no signal.
+- [ ] After updating, put the phone in airplane mode and cold-launch the installed app. It should
+      load fully, not show a browser error page.
+- [ ] The app self-updated to build `2026.09.17-2` without being reinstalled — check the stamp via
+      the update toast, or `window._lmCheckForUpdate()` from a console.
+
+## Phases: rotation length, folding cards, planner scope (2026-09-16)
+- [ ] The bug you reported: **a rotation can now be set to something other than 7 days.** It locks
+      only once you've actually logged a session inside that phase, not the moment it starts.
+- [ ] Phase cards fold, one open at a time; **DONE** closes one and the card shows a brief
+      "✓ saved" when a field commits.
+- [ ] Both planners show **"Adding to which phase"** even when there's only one phase.
+
+## YOUR DAY (2026-09-16)
+- [ ] Home's day panel is one panel, not two — the old "today's schedule" summary is gone and the
+      count moved into the header.
+- [ ] Let a scheduled activity's time pass without marking it: a **glowing `!`** appears in the
+      schedule header. Does the pulse read clearly on a real screen, or is it too subtle / too loud?
+
 ## Add future items below as new features ship
