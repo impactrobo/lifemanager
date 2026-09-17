@@ -953,7 +953,7 @@ function renderTierBlock(workout, cycle, log, tierKey, liftId) {
       <div class="tier-head done-keep" ${headStyle}>
         ${exBlockHead(workout.id, entryKey, `
         <div>
-          <div class="tname">${escapeHtml(liftName(liftId, tierField))}</div>
+          <div class="tname">${escapeHtml(liftLabel(liftId, tierField))}</div>
           <div class="tmove">${scheme.label}${muscle ? ` <span style="background:${mColor}; color:#1a1a1a; padding:1px 7px; border-radius:10px; font-size:10px; font-weight:700; margin-left:4px;">${muscle}</span>` : ''}</div>
         </div>
         <div class="plate-row">${plates}</div>`, entry, tSets)}

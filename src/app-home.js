@@ -917,7 +917,12 @@ function logChip(field) {
   // it would replay on the next unrelated render, which is the failure mode this avoids.
   const pulse = field === 'water' && UI.waterPulse;
   if (pulse) UI.waterPulse = false;
-  return `<button class="log-chip ${logged ? 'log-chip-set' : ''} ${wide ? 'log-chip-wide' : ''} ${field === 'water' ? 'log-chip-water' : ''} ${pulse ? 'log-chip-pulse' : ''}" onclick="${onclick}">
+  // Water shows "1250/2000" rather than a single number, so its value is painted plain instead of
+  // the accent every other logged chip gets -- otherwise the target would read as achievement from
+  // the first sip. That left it with NO way to say you got there, which is the one moment the chip
+  // exists for. At or over the target it goes --good.
+  const goal = field === 'water' && (logFieldValue('water') || 0) >= waterTargetMl();
+  return `<button class="log-chip ${logged ? 'log-chip-set' : ''} ${wide ? 'log-chip-wide' : ''} ${field === 'water' ? 'log-chip-water' : ''} ${goal ? 'log-chip-goal' : ''} ${pulse ? 'log-chip-pulse' : ''}" onclick="${onclick}">
     <span class="log-chip-label">${label}</span>
     <span class="log-chip-value">${logFieldDisplay(field)}${dot}</span>
   </button>`;

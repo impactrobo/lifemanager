@@ -125,11 +125,28 @@ function saveMeasurement() {
     else if (f.unit === 'length') fields[f.key] = displayToCm(raw);
     else fields[f.key] = Number(raw);
   });
+  // Two entries on one date is almost always a correction, not a second measurement -- you don't
+  // tape your arm twice in an afternoon and mean both. Left alone it also draws a "trend" from a
+  // date to itself, which is a chart of nothing. So the second one ASKS, and replacing keeps the
+  // date's single reading rather than silently averaging or stacking.
+  const clash = STATE.measurements.find(m => m.date === date);
+  if (clash) {
+    const when = new Date(date + 'T12:00:00').toLocaleDateString(undefined, { month: 'long', day: 'numeric' });
+    showConfirm(`There's already a measurement for ${when}. Replace it?`, () => {
+      STATE.measurements = STATE.measurements.filter(m => m.id !== clash.id);
+      commitMeasurement(date, fields);
+      showToast('Measurement replaced');
+    });
+    return;
+  }
+  commitMeasurement(date, fields);
+  showToast('Measurement saved');
+}
+function commitMeasurement(date, fields) {
   STATE.measurements.push({ id: uid(), date, fields, photos: VIEW.measureDraftPhotos.slice() });
   UI.measureFormOpen = false;
   VIEW.measureDraftPhotos = [];
   saveState();
-  showToast('Measurement saved');
   render();
 }
 function deleteMeasurement(id) {
@@ -519,17 +536,18 @@ function liftHistorySeries(categoryId, tierKey) {
 }
 function compareMetricId(categoryId, tierKey) { return `lift:${categoryId}:${tierKey}`; }
 function liftMetricId(liftId) { return `liftid:${liftId}`; }
+// A chip and a chart heading are both tight, so a nickname wins here -- see liftShort().
 function compareMetricLabel(id) {
   if (id === 'bodyweight') return 'Body Weight';
   if (id.indexOf('liftid:') === 0) {
-    const lift = liftById(id.slice(7));
-    return lift ? lift.name : 'Removed lift';
+    const liftId = id.slice(7);
+    return liftById(liftId) ? liftLabel(liftId) : 'Removed lift';
   }
   // The middle segment is a LIFT id now -- a tier slot names a lift directly. The metric id keeps
   // its `lift:` prefix so a saved COMPARE selection still resolves.
   const [, slotLiftId, tierKey] = id.split(':');
   const l = liftById(slotLiftId);
-  return l ? `${l.name} (${tierKeyToField(tierKey)})` : 'Removed lift';
+  return l ? `${liftLabel(slotLiftId)} (${tierKeyToField(tierKey)})` : 'Removed lift';
 }
 function compareMetricSeries(id) {
   if (id === 'bodyweight') {

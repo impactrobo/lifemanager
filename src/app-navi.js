@@ -290,6 +290,7 @@ function naviSpeak(lines) {
   if (!navi || !el || !lines || !lines.length) return;
   NAVI_DIALOGUE = { navi: navi, lines: lines, i: 0 };
   el.classList.remove('hidden');
+  el.onclick = advanceNaviDialogue;
   drawNaviDialogue();
 }
 
@@ -305,13 +306,25 @@ function advanceNaviDialogue() {
 function closeNaviDialogue() {
   NAVI_DIALOGUE = null;
   const el = naviDialogueEl();
-  if (el) { el.classList.add('hidden'); el.innerHTML = ''; }
+  if (el) { el.classList.add('hidden'); el.innerHTML = ''; el.onclick = null; }
 }
 
 // The tiny markup the styles above describe. Deliberately minimal: escape everything first, then
 // re-admit *italics*, so no Navi's text can inject markup no matter what a template interpolates.
 function naviMarkup(text) {
   return escapeHtml(text).replace(/\*([^*]+)\*/g, '<i>$1</i>');
+}
+
+// How far the frame has to sit above the bottom of the screen to clear the tab bar. Measured rather
+// than guessed: .tabbar's height varies with the aesthetic's font and the device's safe-area inset,
+// and it is hidden outright on some screens -- in which case this is 0 and the box drops to the
+// bottom, which is right. A hardcoded value was wrong on a real iPhone 15 Pro, where the box sat
+// over the bar.
+function naviBottomClearance() {
+  const bar = document.getElementById('tabbar');
+  if (!bar || bar.classList.contains('hidden')) return 0;
+  const r = bar.getBoundingClientRect();
+  return r.height > 0 ? Math.round(r.height) : 0;
 }
 
 function drawNaviDialogue() {
@@ -321,8 +334,12 @@ function drawNaviDialogue() {
   const line = lines[i];
   const last = i >= lines.length - 1;
   const cls = 'navi-text' + (line.s ? ' navi-text-' + line.s : '');
+  el.style.setProperty('--navi-clear', naviBottomClearance() + 'px');
+  // The CLICK HANDLER IS ON THE BOX, not the frame. The box covers the whole screen while a Navi is
+  // speaking, so a tap anywhere advances -- which is both how these boxes work in the games this
+  // borrows from, and the fix for taps landing on the app underneath and navigating away mid-line.
   el.innerHTML = `
-    <div class="navi-frame" style="--navi: ${navi.color};" onclick="advanceNaviDialogue()" role="button" tabindex="0">
+    <div class="navi-frame" style="--navi: ${navi.color};" role="button" tabindex="0" aria-live="polite">
       <img class="navi-face" src="${navi.icon}" alt="${escapeHtml(navi.short)}">
       <div class="navi-body">
         <div class="navi-name">${escapeHtml(navi.short)}</div>

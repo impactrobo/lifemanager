@@ -194,11 +194,56 @@ function setLiftNickname(id, value) {
   saveState(); render();
 }
 function liftName(id, fallback) { const l = liftById(id); return l ? l.name : (fallback || ''); }
-// The short form, with your own nickname winning over the library's.
+// YOUR name for it, or its own. This is what every surface that used to print liftName() now calls:
+// with no nickname set it returns exactly what it always did, so nothing is renamed for anyone who
+// hasn't asked for it. That distinction matters -- the library's `short` ("BB Bench") is a different
+// thing from a nickname, and quietly promoting it everywhere would rename half the app.
+function liftLabel(id, fallback) {
+  const l = liftById(id);
+  if (!l) return fallback || '';
+  return liftNickname(id) || l.name;
+}
+// The SHORT form, nickname first, then the library's own abbreviation. Only for places that were
+// already showing an abbreviation -- the lift-link chip beside a full name in the builder.
 function liftShort(id, fallback) {
   const l = liftById(id);
   if (!l) return fallback || '';
   return liftNickname(id) || l.short || l.name;
+}
+
+// The nickname editor, folded shut by default and using exactly the disclosure renderLiftNoteRow()
+// already established -- same caret, same "the header IS the signal" colouring when it holds
+// something. It shipped as a permanently-open text input whose placeholder was the lift's own name,
+// which read as a nickname that was already set; the field looked full and did nothing.
+//
+// Collapsed, the header shows the nickname itself. That is the answer to "I set one and don't see
+// it anywhere": the first place it has to appear is right where you typed it.
+function liftNicknameOpen(liftId) { return !!(VIEW.liftNicknameOpen && VIEW.liftNicknameOpen[liftId]); }
+function toggleLiftNicknameEditor(liftId) {
+  if (!VIEW.liftNicknameOpen) VIEW.liftNicknameOpen = {};
+  if (VIEW.liftNicknameOpen[liftId]) delete VIEW.liftNicknameOpen[liftId];
+  else VIEW.liftNicknameOpen[liftId] = true;
+  render();
+}
+function renderLiftNicknameRow(liftId) {
+  if (!liftId) return '';
+  const nick = liftNickname(liftId);
+  const open = liftNicknameOpen(liftId);
+  return `
+    <div class="lift-note ${nick ? 'has-note' : ''} ${open ? 'is-open' : ''}" style="margin-bottom:8px;">
+      <button class="lift-note-head" onclick="toggleLiftNicknameEditor('${liftId}')" aria-expanded="${open}">
+        <span class="lift-note-caret">${open ? '&minus;' : '+'}</span>
+        <span class="lift-note-label">Nickname${nick ? ' &middot; ' + escapeHtml(nick) : ''}</span>
+      </button>
+      ${open ? `
+        <div class="lift-note-body">
+          ${/* No placeholder standing in for a value. It used to show the lift's own short form,
+                which looked like a nickname that was already set. */''}
+          <input class="lift-note-input" type="text" value="${escapeHtml(nick)}"
+                 onchange="setLiftNickname('${liftId}', this.value)">
+          <div class="lift-note-hint">A shorthand for this exercise, used where the full name won't fit — the session screen, the workout's slot list, a chart label. Leave it empty to use the full name.</div>
+        </div>` : ''}
+    </div>`;
 }
 function liftIsCustom(id) { return !!(Array.isArray(STATE.lifts) && STATE.lifts.some(l => l.id === id)); }
 
@@ -372,7 +417,7 @@ function renderLiftLink(token, liftId) {
     <button class="lift-link ${lift ? 'lift-link-set' : ''}" onclick="openLiftPicker('${token}','${liftId || ''}')">
       <span class="lift-link-k">LIFT</span>
       <span class="lift-link-v">${lift ? escapeHtml(lift.name) : 'not linked — tap to choose'}</span>
-      ${lift && lift.short && lift.short !== lift.name ? `<span class="lift-link-short">${escapeHtml(lift.short)}</span>` : ''}
+      ${lift && liftShort(lift.id) !== lift.name ? `<span class="lift-link-short">${escapeHtml(liftShort(lift.id))}</span>` : ''}
     </button>`;
 }
 

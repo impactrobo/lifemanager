@@ -188,11 +188,7 @@ function renderLiftMaxCard(lift) {
         ? `<span class="pill pill-${lu === 'lower' ? 'lower' : 'upper'}">${lu.toUpperCase()}${lu === 'core' ? '' : ' BODY'}</span>`
         : ''}
     </div>
-    <div class="log-sheet-row" style="margin-bottom:8px;">
-      <span class="log-sheet-label">Nickname</span>
-      <input type="text" placeholder="${escapeHtml(lift.short || lift.name)}" value="${escapeHtml(liftNickname(lift.id))}"
-             onchange="setLiftNickname('${lift.id}', this.value)">
-    </div>
+    ${renderLiftNicknameRow(lift.id)}
     ${entry.t1 ? renderLiftMaxRow(lift, 't1') : ''}
     ${entry.t2 ? renderLiftMaxRow(lift, 't2') : ''}
     <div style="display:flex; gap:8px; margin-top:10px;">
@@ -990,11 +986,11 @@ function tierLiftOptions(selectedId) {
 function getLiveExercisesForWorkout(w) {
   const list = [];
   if (w.t1Revealed >= 1 && w.t1.liftId) {
-    list.push({ key: 't1', label: 'T1 — ' + liftName(w.t1.liftId, 'T1') });
+    list.push({ key: 't1', label: 'T1 — ' + liftLabel(w.t1.liftId, 'T1') });
   }
   ['t2a','t2b','t2c'].forEach((tk, i) => {
     if (w.t2Revealed > i && w[tk].liftId) {
-      list.push({ key: tk, label: tk.toUpperCase() + ' — ' + liftName(w[tk].liftId, tk.toUpperCase()) });
+      list.push({ key: tk, label: tk.toUpperCase() + ' — ' + liftLabel(w[tk].liftId, tk.toUpperCase()) });
     }
   });
   w.t3.slice(0, w.t3Revealed).forEach((t, i) => {
