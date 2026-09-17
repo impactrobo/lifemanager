@@ -312,12 +312,15 @@ function reviewHeadline(r) {
 
 function renderHomeReviewBox() {
   const r = weeklyReview(reviewWeekStart());
-  // Nothing planned, nothing logged, nothing marked: a fresh install has no week to reflect on, and
-  // an empty review is just a dead box. Home drops a box whose renderer returns ''.
-  const empty = !r.training.planned && !r.training.sessions && !r.prs.length &&
-                !r.habits.perHabit.length && !r.targets.some(t => t.logged) &&
-                !r.practice.sessions && !r.practice.planned && !r.off && !r.note;
-  if (empty && !VIEW.reviewWeekStart) return '';
+  // THIS BOX ALWAYS RENDERS. It used to drop out on a week with nothing in it, reasoning that an
+  // empty review is a dead box -- which was right about the box and wrong about the consequence:
+  // everything the box carries went with it, including the week arrows that are the only way to
+  // reach a week that ISN'T empty, and the ASK <NAVI> button. Picking a Navi and then finding
+  // nowhere for them to speak was exactly that, reported from a real device.
+  //
+  // The headline already has an honest thing to say about an empty week ("Nothing was planned, and
+  // nothing was logged"), and a Navi has a line written for it. Hiding the box was solving for a
+  // fresh install at the cost of every week after it.
   const open = !!UI.reviewExpanded;
   const t = r.training;
   const atLatest = reviewWeekStart() >= mondayOf(todayStr());
