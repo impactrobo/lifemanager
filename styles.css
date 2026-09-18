@@ -779,9 +779,11 @@ button.hit-mark { padding: 0; background: none; font: inherit; color: inherit; c
 
 .link-picker-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 60; }
 .link-picker { position: fixed; left: 50%; transform: translateX(-50%); top: 8vh; width: min(92vw, 460px);
-  max-height: 80vh; overflow-y: auto; z-index: 61; background: var(--surface); border: 1px solid var(--accent);
+  max-height: 80vh; overflow-y: auto; overscroll-behavior: contain; z-index: 61; background: var(--surface); border: 1px solid var(--accent);
   border-radius: var(--radius); padding: 14px; box-shadow: 0 12px 40px rgba(0,0,0,.5); }
-.link-results { max-height: 52vh; overflow-y: auto; }
+/* Same containment as .phase-modal-body — a flick that runs out of list must not scroll the page
+   underneath the picker. */
+.link-results { max-height: 52vh; overflow-y: auto; overscroll-behavior: contain; }
 .link-result { display: flex; align-items: baseline; gap: 8px; padding: 8px 0; cursor: pointer; }
 .link-result + .link-result { border-top: 1px solid var(--border-soft); }
 .link-result-title { font-size: 13px; font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -2813,7 +2815,10 @@ button.brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 4
   border-bottom: 1px solid var(--border-soft);
 }
 .phase-modal-head .phase-label { flex: 1; min-width: 0; }
-.phase-modal-body { flex: 1; overflow-y: auto; padding: 14px; -webkit-overflow-scrolling: touch; }
+/* `overscroll-behavior: contain` so a drag that reaches the end of the modal STOPS there instead of
+   chaining into the page behind it. Without it, flicking inside a full-screen sheet scrolls the
+   list underneath — which reads as the modal randomly refusing to move. */
+.phase-modal-body { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 14px; -webkit-overflow-scrolling: touch; }
 .phase-modal-foot {
   flex: none; padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
   border-top: 1px solid var(--border-soft); background: var(--surface);

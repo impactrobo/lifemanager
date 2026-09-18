@@ -771,8 +771,38 @@ function _hoistOverlays() {
   });
 }
 
+// The same problem _captureSubnavScroll() solves, one layer up. An overlay is rebuilt from markup
+// on EVERY render -- and a modal re-renders constantly, because every control inside it commits on
+// change -- so its scroll container is a brand-new node each time, starting at scrollTop 0. Scroll
+// down to a field in the phase editor, change it, and you are thrown back to the top: reported
+// 2026-09-18 as "editing or making NEW still has strange scroll issues".
+//
+// Keyed by class name, which is stable and unique per overlay region (.phase-modal-body,
+// .link-results). The memory is cleared the moment no overlay is open, so opening a DIFFERENT phase
+// later starts at the top rather than inheriting the last one's offset.
+let _overlayScrollMemory = new Map();
+function _captureOverlayScroll() {
+  const root = document.getElementById('overlayRoot');
+  if (!root || !root.children.length) return;
+  root.querySelectorAll('*').forEach((/** @type {any} */ el) => {
+    if (el.scrollTop && el.className) _overlayScrollMemory.set(el.className, el.scrollTop);
+  });
+}
+function _restoreOverlayScroll() {
+  const root = document.getElementById('overlayRoot');
+  if (!root) return;
+  if (!root.children.length) { _overlayScrollMemory.clear(); return; }
+  _overlayScrollMemory.forEach((top, cls) => {
+    const sel = '.' + String(cls).trim().split(/\s+/).join('.');
+    let el = null;
+    try { el = root.querySelector(sel); } catch (e) { /* a class the selector syntax can't express */ }
+    if (el) el.scrollTop = top;   // out of range is clamped by the browser, same as the subnav case
+  });
+}
+
 function _doRender() {
   _captureSubnavScroll(); // read the outgoing DOM's scroll positions before innerHTML below destroys it
+  _captureOverlayScroll(); // ...and the overlays', before _hoistOverlays() empties their host
   syncDebugBar();         // lives outside #app, so nothing below would ever touch it
   const app = document.getElementById('app');
   if (NAV.currentTab === 'home') {
@@ -836,6 +866,7 @@ function _doRender() {
   // ...and then every overlay leaves #app entirely. Must come before the focus call below: moving a
   // node after focusing something inside it drops the focus.
   _hoistOverlays();
+  _restoreOverlayScroll();   // before the focus call below, which would otherwise scroll it again
   // The sheet opens focused on whichever chip was tapped, which can only happen after the markup
   // above is in the DOM.
   if (UI.logPopup && UI.logPopup.focus) {

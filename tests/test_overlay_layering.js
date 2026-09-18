@@ -193,6 +193,52 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     }
   }
 
+  // ---- 2c. An overlay's scroll position survives a re-render ----
+  // Reported 2026-09-18: "navigating into PHASES and editing or making NEW still has strange scroll
+  // issues." Every control in the phase editor commits on change, so every change re-renders, and a
+  // render rebuilds the overlay from markup — a brand-new scroll container, starting at 0. Scroll
+  // down to a field, change it, and you are thrown back to the top. Same problem
+  // _captureSubnavScroll() solves for the sub-nav strips, one layer up.
+  await page.evaluate(() => {
+    switchTab('train'); setFitnessSubtab('phases');
+    addPhase();   // opens the editor on the phase it just made — the "making NEW" path
+  });
+  await settle(page);
+  const scrollable = await page.evaluate(() => {
+    const b = document.querySelector('.phase-modal-body');
+    return b && b.scrollHeight > b.clientHeight;
+  });
+  if (!scrollable) throw new Error('This check needs an editor taller than its box to mean anything');
+  await page.evaluate(() => { document.querySelector('.phase-modal-body').scrollTop = 200; });
+  await page.waitForTimeout(50);
+  const parked = await page.evaluate(() => document.querySelector('.phase-modal-body').scrollTop);
+  // A real edit, through the app's own handler rather than a direct render() call.
+  await page.evaluate(() => {
+    const b = [...document.querySelectorAll('.phase-actions button')].find(x => /\+1 WK/.test(x.textContent));
+    b.click();
+  });
+  await settle(page);
+  const kept = await page.evaluate(() => ({
+    top: document.querySelector('.phase-modal-body').scrollTop,
+    contains: getComputedStyle(document.querySelector('.phase-modal-body')).overscrollBehaviorY,
+  }));
+  console.log('2c. modal scroll across an edit:', parked, '->', JSON.stringify(kept));
+  if (!parked) throw new Error('Setup: the modal body should have scrolled');
+  if (kept.top !== parked) throw new Error(`Editing threw the modal back to ${kept.top} from ${parked} — every field commits on change, so this happens on every keystroke`);
+  // ...and a flick that runs out of modal must not scroll the page underneath it.
+  if (kept.contains !== 'contain') throw new Error('The modal must contain its overscroll, got ' + kept.contains);
+
+  // Closing and opening a DIFFERENT phase starts at the top rather than inheriting that offset.
+  await page.evaluate(() => { closePhaseCard(); });
+  await settle(page);
+  await page.evaluate(() => { openPhaseCard((STATE.phases || [])[0].id); });
+  await settle(page);
+  const fresh = await page.evaluate(() => document.querySelector('.phase-modal-body').scrollTop);
+  console.log('2c. a newly opened phase starts at:', fresh);
+  if (fresh !== 0) throw new Error('A freshly opened editor starts at the top, not where the last one was: ' + fresh);
+  await page.evaluate(() => { closePhaseCard(); });
+  await settle(page);
+
   // ---- 3. The reported case, in every aesthetic ----
   // This is the one that reproduces the report. Every aesthetic gives #app its own stacking context,
   // so a fix that only worked in the default theme would still be broken on the phone.
