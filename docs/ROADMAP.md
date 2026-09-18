@@ -298,6 +298,25 @@ Newest first. Keep this reasonably current so a fresh session can see what alrea
 without re-reading the whole diff history. Roughly grouped: this project spent early Sept 2026
 on an architecture split + a large wave of Maximalist aesthetics.
 
+- **The bottom bar becomes a registry (2026-09-17).** `renderTabbar()` was a ~90-line chain of
+  `if (NAV.currentTab === 'x')` with each section's buttons written out by hand, so every
+  navigation change meant editing control flow to express what is really a list — three times now.
+  Sections are entries in `SECTION_BARS` instead: `{ nav, set, alias, buttons }`, where a button
+  is `{ key, icon, label }` and its onclick and active state are generated. Odd shapes stay
+  expressible — `active: () => !VIEW.entryOpenId` for Notes (whose "current" lives in VIEW, not a
+  NAV subtab), a function-valued `buttons` for Hobbies (one button inside a skill, none outside),
+  `cls: 'tabbar-close'` for Settings.
+  - **The whole suite passed unchanged**, which is the evidence that mattered: behaviour is
+    identical, including all three retired-subtab aliases.
+  - `tests/test_tabbar_registry.js` is the new contract, and it exists because a registry only
+    pays off if a typo in it fails loudly — a hand-written bar was at least visible, whereas data
+    can name a setter, icon or subtab that doesn't exist and render a button that looks fine and
+    does nothing. All four of those mutations were verified to fail the test.
+  - The sharpest of the four: a mistyped subtab key **still "lands"**, because the setters just
+    assign. What actually breaks is downstream, where an unknown subtab falls through to the
+    section's default — so the button lights up and shows the first screen's content. Caught by
+    asserting every key renders a DISTINCT screen.
+
 - **CALENDAR and SETUP move off Home's bar into a PRODUCTIVITY tile (2026-09-17).** Asked for as
   "keep the HOME page clean". Home's bar carried two buttons for ONE section while every other
   section reached its subtabs from its own tile; `schedule` is a tile again, renamed PRODUCTIVITY,

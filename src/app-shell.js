@@ -594,95 +594,109 @@ function goSchedule(subtab) {
   switchTab('schedule');                                   // already lands on today's Day view
   if (subtab && subtab !== 'calendar') setScheduleSubtab(subtab);
 }
-function renderTabbar() {
-  // HOME MOVED TO THE WORDMARK. It sat first on every bar, on every screen, costing a slot on the
-  // strip with the logged overflow problem -- and the topbar already shows LIFEMan.EXE everywhere,
-  // so routing home through that costs no chrome at all. Health & Wellness drops from six buttons
-  // to five as a result.
-  //
-  // The tradeoff, taken knowingly: home is now a reach to the top of the screen rather than a
-  // thumb-height tap. Worth it for the room, and the wordmark is a bigger target than the button
-  // it replaced.
-  const homeBtn = '';
-  // Home used to be the one screen with no bottom bar, which is why Calendar cost two taps from it
-  // -- you had to go through the SCHEDULE tile. Home shows the day now, so it carries the day's own
-  // screens.
-  if (NAV.currentTab === 'home') {
-    // Home's bar is just Home. CALENDAR and SETUP used to sit here as peers of it, which put two
-    // buttons for ONE section on the root screen's bar while every other section reached its
-    // subtabs from its own tile. They are the PRODUCTIVITY tile's subtabs now, like everyone else's.
-    return homeBtn;
-  }
-  let sectionBtns = '';
-  if (NAV.currentTab === 'train') {
-    // Health & Wellness (shipped 2026-09-14 as "Health & Fitness", renamed 2026-09-15): Exercise
-    // and Health & Diet merged into one tab. Six buttons where there
-    // used to be eight across two tabs -- BODY absorbed Specs and Progress, SETUP absorbed both
-    // sections' Setup screens as panels. `.tabbar` scrolls horizontally past what fits.
-    // Retired values map onto their successors before the active check, or a nav snapshot carrying
-    // 'goal' would render PHASES' contents with no button lit -- the bar and the screen disagreeing
-    // about where you are.
-    const cur = { goal: 'phases', setup: 'builder', longevity: 'builder', diet: 'workouts' }[NAV.fitnessSubtab] || NAV.fitnessSubtab;
-    const fb = (key, ic, label) =>
-      `<button class="${cur===key?'active':''}" onclick="setFitnessSubtab('${key}')"><span class="ic">${icon(ic)}</span>${label}</button>`;
-    // PHASES and BUILDER replaced GOAL and SETUP (2026-09-15), same five buttons. The old pair split
-    // by SUBJECT -- your goal over here, the screens that configure things over there -- which put
-    // "assign workouts to weekdays" and "build a workout" side by side under SETUP even though one
-    // is a plan and the other is a thing. The new pair splits by WHAT YOU'RE DOING: PHASES sets the
-    // goal and maps workouts and meals onto time, BUILDER constructs the workouts and meals those
-    // plans point at. Builds are standalone and reusable; plans belong to a phase.
-    // FOUR now. DIET retired (2026-09-16): its targets went to PHASES / MEAL PLAN, where the week
-    // they govern is planned, and its log joined the session log under D&E -- Diet and Exercise,
-    // which is what that tab holds once both logs are on it. The bar's overflow bug is logged
-    // against exactly this strip, so every button that leaves it is worth keeping off.
-    sectionBtns =
-      // "DIET &amp; EXERCISE" over two lines rather than the initialism. It fits now that the bar is
-      // four buttons, and the tab holding both logs is worth naming rather than abbreviating --
-      // D&E reads as a code until you already know what it stands for. `.tabbar button` is
-      // `white-space: nowrap`, so the break is an explicit <br> rather than a hope.
-      fb('workouts', 'exercise', 'DIET &amp;<br>EXERCISE') +
-      fb('phases', 'planner', 'PHASES') +
-      fb('builder', 'setup', 'BUILDER') +
+// ---------------- THE SECTION BAR REGISTRY ----------------
+// Every section's bottom-bar buttons, as data.
+//
+// This was a ~90-line chain of `if (NAV.currentTab === 'x')` with each section's buttons written
+// out by hand. It worked. It also made every navigation change a surgical edit in the middle of a
+// long function -- which this project has now done three times (the seven-move restructure, the
+// Notes rebuild, and CALENDAR/SETUP moving into the PRODUCTIVITY tile), each time touching control
+// flow to express what is really just a list. Moving a section should be an edit to a list.
+//
+// A section entry is:
+//   nav      the NAV key holding its current subtab, for the active check
+//   set      the setter's name, used to generate each button's onclick
+//   alias    retired subtab values mapped onto their successors, applied BEFORE the active check.
+//            Without it a nav snapshot carrying 'goal' renders PHASES' contents with no button lit
+//            -- the bar and the screen disagreeing about where you are.
+//   buttons  an array, or a function returning one, of:
+//              { key, icon, label }         a subtab: onclick and active are both generated
+//              { icon, label, onclick }     an action: no active state
+//              { ..., active: () => bool }  an active rule a key comparison can't express
+//              { ..., cls: 'tabbar-close' } an extra class
+//
+// A section with no entry here -- or whose buttons come out empty -- gets no bar at all, and
+// renderApp() hides an empty bar rather than painting a blank strip.
+//
+// HOME IS DELIBERATELY ABSENT, twice over. Its own button moved to the wordmark (the topbar shows
+// LIFEMan.EXE on every screen, so routing home through it costs no chrome), and CALENDAR/SETUP
+// moved into the PRODUCTIVITY tile, so the root screen has nothing left of its own to offer.
+const SECTION_BARS = {
+  // Health & Wellness. Four buttons where there were once eight across two tabs; the bar's logged
+  // overflow bug is against exactly this strip, so every button that leaves it is worth keeping off.
+  train: {
+    nav: 'fitnessSubtab', set: 'setFitnessSubtab',
+    alias: { goal: 'phases', setup: 'builder', longevity: 'builder', diet: 'workouts' },
+    buttons: [
+      // Two lines rather than the initialism: it fits now the bar is four, and "D&E" reads as a
+      // code until you already know it. `.tabbar button` is white-space: nowrap, so the break is an
+      // explicit <br> rather than a hope.
+      { key: 'workouts', icon: 'exercise', label: 'DIET &amp;<br>EXERCISE' },
+      // PHASES sets the goal and maps workouts and meals onto time; BUILDER constructs the things
+      // those plans point at. Split by what you are DOING, not by subject.
+      { key: 'phases',   icon: 'planner',  label: 'PHASES' },
+      { key: 'builder',  icon: 'setup',    label: 'BUILDER' },
       // PROGRESS, not BODY: the tab holds weight, measurements, labs, set volume, COMPARE and the
-      // PR log -- only one of which is a body measurement. BODY is now the subtab inside it that
-      // absorbed WEIGHT and MEASUREMENTS, which is what that word actually names.
-      fb('body', 'progress', 'PROGRESS');
-  } else if (NAV.currentTab === 'hobbies') {
-    // Inside a Skill the bottom bar stays at TWO fixed buttons, because that skill's list strip is
-    // variable-width and lives in the in-screen .subnav instead -- the strip that has scroll
-    // chevrons, rather than the one with a logged overflow bug. The guitar strip below is the
-    // legacy screens' own bar and retires with them at the migration step.
-    // A skill's own lists deliberately do NOT come here: there can be any number of them, and
-    // `.subnav` is the strip with the scroll-chevron affordances while `.tabbar` is the one with a
-    // logged overflow bug. Variable-width content goes in the strip built to handle it. So this
-    // bar is one button or none -- which is also what retired the old five-button guitar strip.
-    sectionBtns = NAV.skillId
-      ? `<button onclick="closeSkill()"><span class="ic">${icon('hobbies')}</span>SKILLS</button>`
-      : '';   // the skill list: HOME is enough
-  } else if (NAV.currentTab === 'setup') {
-    // The Home/gear-icon Settings screen is the only Setup that still pops up as its own screen
-    // (see openSetup()) — HOME jumps all the way out, CLOSE returns to whichever screen opened it.
-    const closeBtn = `<button class="tabbar-close" onclick="goBack()"><span class="ic">${icon('close')}</span>CLOSE</button>`;
-    return homeBtn + closeBtn;
-  } else if (NAV.currentTab === 'notes') {
-    // Two buttons, not three: WRITE is gone because every entry now starts by tapping +, and
-    // SETUP is gone with the tag palette it used to configure (tags are freeform text now).
-    sectionBtns = `
-      <button class="${!VIEW.entryOpenId?'active':''}" onclick="setNotesSubtab('view')"><span class="ic">${icon('magnify')}</span>VIEW ALL</button>
-      <button onclick="setNotesSubtab('new')"><span class="ic">${icon('pencil')}</span>NEW</button>`;
-  } else if (NAV.currentTab === 'schedule') {
-    // TODAY used to be its own subtab here — folded into Calendar's Day zoom (defaults to today
-    // on every fresh visit, see switchTab()) so the bottom bar has one less button.
-    sectionBtns = `
-      <button class="${NAV.scheduleSubtab!=='setup'?'active':''}" onclick="setScheduleSubtab('calendar')"><span class="ic">${icon('schedule')}</span>CALENDAR</button>
-      <button class="${NAV.scheduleSubtab==='setup'?'active':''}" onclick="setScheduleSubtab('setup')"><span class="ic">${icon('setup')}</span>SETUP</button>`;
-  } else if (NAV.currentTab === 'budget') {
-    sectionBtns = `
-      <button class="${NAV.budgetSubtab==='overview'?'active':''}" onclick="setBudgetSubtab('overview')"><span class="ic">${icon('mountain')}</span>OVERVIEW</button>
-      <button class="${NAV.budgetSubtab==='recurring'?'active':''}" onclick="setBudgetSubtab('recurring')"><span class="ic">${icon('recurDollar')}</span>RECURRING</button>
-      <button class="${NAV.budgetSubtab==='goals'?'active':''}" onclick="setBudgetSubtab('goals')"><span class="ic">${icon('flag')}</span>GOALS</button>`;
-  }
-  return homeBtn + sectionBtns;
+      // PR log. BODY is the subtab inside it that absorbed WEIGHT and MEASUREMENTS.
+      { key: 'body',     icon: 'progress', label: 'PROGRESS' },
+    ],
+  },
+  // PRODUCTIVITY (tab id 'schedule' -- renaming it would orphan every stored link chip's colour).
+  schedule: {
+    nav: 'scheduleSubtab', set: 'setScheduleSubtab',
+    buttons: [
+      // Anything that is not 'setup' is the calendar. NAV.scheduleSubtab rides in nav snapshots and
+      // has outlived two of its own values ('today', then 'agenda'), so an unknown one still has to
+      // light something rather than leaving the bar blank.
+      { key: 'calendar', icon: 'schedule', label: 'CALENDAR', active: () => NAV.scheduleSubtab !== 'setup' },
+      { key: 'setup',    icon: 'setup',    label: 'SETUP' },
+    ],
+  },
+  budget: {
+    nav: 'budgetSubtab', set: 'setBudgetSubtab',
+    buttons: [
+      { key: 'overview',  icon: 'mountain',    label: 'OVERVIEW' },
+      { key: 'recurring', icon: 'recurDollar', label: 'RECURRING' },
+      { key: 'goals',     icon: 'flag',        label: 'GOALS' },
+    ],
+  },
+  notes: {
+    set: 'setNotesSubtab',
+    buttons: [
+      // Notes is ONE screen that an open entry takes over, so what counts as "current" lives in
+      // VIEW rather than in a NAV subtab -- which is why this needs its own active rule.
+      { key: 'view', icon: 'magnify', label: 'VIEW ALL', active: () => !VIEW.entryOpenId },
+      // An action, not a destination: it makes a note and opens it, so it is never "where you are".
+      { key: 'new',  icon: 'pencil',  label: 'NEW',      active: () => false },
+    ],
+  },
+  hobbies: {
+    // One button or none. A skill's own lists are variable in number and live in `.subnav`, the
+    // strip with the scroll-chevron affordances -- `.tabbar` is the one with the overflow bug. That
+    // is also what retired the old five-button guitar strip.
+    buttons: () => NAV.skillId
+      ? [{ icon: 'hobbies', label: 'SKILLS', onclick: 'closeSkill()' }]
+      : [],
+  },
+  setup: {
+    // Settings is the only screen that still pops up over another (see openSetup()), so its bar
+    // CLOSES rather than switches -- back to whatever opened it, while the wordmark goes all the
+    // way home.
+    buttons: [{ icon: 'close', label: 'CLOSE', onclick: 'goBack()', cls: 'tabbar-close' }],
+  },
+};
+function renderTabbar() {
+  const sec = SECTION_BARS[NAV.currentTab];
+  if (!sec) return '';
+  const buttons = typeof sec.buttons === 'function' ? sec.buttons() : sec.buttons;
+  const raw = sec.nav ? NAV[sec.nav] : null;
+  const cur = (sec.alias && sec.alias[raw]) || raw;
+  return buttons.map(b => {
+    const active = b.active ? b.active() : (b.key != null && b.key === cur);
+    const cls = [b.cls, active ? 'active' : ''].filter(Boolean).join(' ');
+    const onclick = b.onclick || `${sec.set}('${b.key}')`;
+    return `<button class="${cls}" onclick="${onclick}"><span class="ic">${icon(b.icon)}</span>${b.label}</button>`;
+  }).join('');
 }
 function _doRender() {
   _captureSubnavScroll(); // read the outgoing DOM's scroll positions before innerHTML below destroys it

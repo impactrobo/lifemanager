@@ -313,6 +313,23 @@ Settings, same discipline as Cloud Sync above.
 - `sw.js` has the delivery half: a `push` listener (`showNotification()`) and a
   `notificationclick` listener (focuses an existing tab or opens one).
 
+## Adding or moving a section's bottom-bar buttons
+The bar is DATA, not control flow: `SECTION_BARS` in `src/app-shell.js`. A section is
+`{ nav, set, alias, buttons }`; a button is `{ key, icon, label }` and its onclick and active
+state are generated from the section's `set` and `nav`. Odd shapes are still expressible —
+`active: () => ...` when "current" isn't a NAV subtab, a function-valued `buttons` for a bar that
+changes shape, `cls` for an extra class. A section with no entry (Home) gets no bar, and an empty
+bar hides itself rather than painting a blank strip.
+
+`alias` is not optional decoration: it maps RETIRED subtab values onto their successors before the
+active check. A nav snapshot carrying an old value otherwise renders the successor's screen with no
+button lit — the bar and the screen disagreeing about where you are.
+
+`tests/test_tabbar_registry.js` checks every entry: the setter and icon exist, every key reaches a
+distinct screen, aliases point at real keys, and exactly one button lights. Note the trap it was
+written for — the setters just assign, so a mistyped key "works" and only breaks downstream, where
+an unknown subtab falls through to the section's default.
+
 ## Testing
 Canonical test files live in `tests/` as individual `test_*.js` Node scripts using Playwright
 directly (no test runner) — run each with `node tests/test_whatever.js`; nonzero exit = failure.
@@ -329,7 +346,7 @@ contract — old saves gain new defaults, keep their data).
 
 Canonical tests didn't exist as committed files before this repo — they only ever lived inside
 temporary chat sandboxes and were lost between sessions, so building this suite out was genuinely
-new work, not a restore. `npm test` is currently **104/104 test files passing** (`run_all.js`
+new work, not a restore. `npm test` is currently **105/105 test files passing** (`run_all.js`
 auto-discovers every `test_*.js` in `tests/`, so this number moves — trust its own summary line
 over any count written here). Run the full suite before any publish, and add a new `test_*.js`
 whenever a new feature area is added, so this stays complete rather than drifting back toward the
