@@ -298,6 +298,24 @@ Newest first. Keep this reasonably current so a fresh session can see what alrea
 without re-reading the whole diff history. Roughly grouped: this project spent early Sept 2026
 on an architecture split + a large wave of Maximalist aesthetics.
 
+- **CALENDAR and SETUP move off Home's bar into a PRODUCTIVITY tile (2026-09-17).** Asked for as
+  "keep the HOME page clean". Home's bar carried two buttons for ONE section while every other
+  section reached its subtabs from its own tile; `schedule` is a tile again, renamed PRODUCTIVITY,
+  and those two are its subtabs like everybody else's. Home's bar is now empty, and **an empty bar
+  hides itself** rather than rendering a blank strip — driven by what `renderTabbar()` produced,
+  not by naming Home, so a future section with no subtabs behaves the same way for free.
+  - Three things had to be un-retired together, and the test suite found each one: `schedule` left
+    `RETIRED_SECTION_TILES`, the migration that rewrote a saved `defaultPage` of 'schedule' was
+    deleted, and Settings offers it as a landing page again.
+  - A **one-time migration** puts the tile back into existing layouts. It has to be named
+    explicitly: the retirement had pushed `schedule` into `sectionHidden`, and the generic
+    "append anything new" rule skips hidden ids — to that rule it looked like a section you'd chosen
+    to hide.
+  - Surfaced a real ordering subtlety worth writing down: `NAV.currentTab` is set by
+    `initialTab()` during **script evaluation**, before `migrateState()` runs. A migration that
+    rewrites `defaultPage` therefore cannot change the tab you boot into on that same launch — only
+    the next one. That is why `health` still needs `initialTab()`'s own guard as well.
+
 - **A BODY entry is the day's record, and deleting one deletes the day (2026-09-17).** Closes the
   flag from the field: *"why not allow the user to track it all? Delete everything together and
   maintain the other aspects as part of the tracked items."*

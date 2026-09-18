@@ -261,11 +261,13 @@ select { -webkit-appearance: none; appearance: none; background-image: linear-gr
 /* Home's 6 section tiles reuse .workout-cell/.wname but read bigger — this is the first thing
    tapped on the app's landing screen, not a dense data grid like Train's, so it can afford it. */
 .workout-cell.home-tile .wname { font-size: 13px; font-weight: 700; }
-/* Each section's color (HOME_SECTION_META) shows as a vignette tracing the tile's own edges,
-   fading to a neutral center (homeTileGlowStyle() in app.js) — set inline per tile since it's a
-   literal radial-gradient(color), not expressible as a CSS var alone. Third revision of this same
-   day: flat tile tint, then a glow behind the icon, now this — still enough to track a tile by
-   color through a drag-reorder, without a flat recolor or concentrating the color mid-tile. */
+/* Each section's colour (HOME_SECTION_META) is a thick bar down the tile's LEFT edge, set inline
+   per tile by homeTileAccentStyle() in app-home.js since the colour is per-section data rather than
+   a CSS var. Fourth revision: flat tile tint, then a glow behind the icon, then a vignette at the
+   edges, now a bar. The first three were all soft gradients over the whole footprint, and at tile
+   size those read as a smudge — you could tell a tile had SOME colour without being able to say
+   which. Left rather than any other edge because that is where every other colour-coded container
+   in the app carries it. */
 
 /* ---------- Stage plate indicator ---------- */
 .plate-row { display: flex; gap: 6px; }

@@ -1517,13 +1517,12 @@ function setSetupPanel(p) { NAV.setupPanel = p; render(); }
 // app-wide switch was reachable only from one section that happened to have a settings drawer.
 function renderHomeSetup() {
   const defaultPage = STATE.settings.defaultPage || 'home';
-  // No SCHEDULE entry: Home opens on the day, so "open to Schedule" and "open to Home" are the
-  // same choice now.
-  // No SCHEDULE and no HEALTH & DIET: Home opens on the day, and Health & Diet merged into
-  // Health & Wellness -- a saved 'health' migrates to 'train' on load (see migrateState()).
+  // No HEALTH & DIET: it merged into Health & Wellness, and a saved 'health' migrates to 'train'
+  // on load (see migrateState()). PRODUCTIVITY is offered again -- it is a tile with its own
+  // screens, so opening to it is a real choice.
   const pageOptions = [
-    ['home', 'HOME'], ['train', 'HEALTH & FITNESS'], ['hobbies', 'HOBBIES'],
-    ['notes', 'NOTES'], ['budget', 'FINANCIAL'],
+    ['home', 'HOME'], ['schedule', 'PRODUCTIVITY'], ['train', 'HEALTH & FITNESS'],
+    ['hobbies', 'HOBBIES'], ['notes', 'NOTES'], ['budget', 'FINANCIAL'],
   ];
   return `<div class="screen">
     <div class="section-title">Settings</div>

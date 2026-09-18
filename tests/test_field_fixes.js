@@ -72,7 +72,12 @@ const { settle, pinClock } = require('./helpers.js');
 
   // ---- 2. The Navi box clears the tab bar ----
   // It was a bottom strip at `bottom: 0` with z-index 40 over .tabbar's 30, so it sat ON the bar.
-  await page.evaluate(() => { setNavi('clay'); switchTab('home'); });
+  //
+  // Measured on a section rather than on Home: Home's bar is empty now (its CALENDAR and SETUP
+  // moved into the PRODUCTIVITY tile) and an empty bar hides itself, so there would be nothing to
+  // clear. The clearance is measured from whatever bar is actually on screen, which is the property
+  // worth pinning — so this needs a screen that has one.
+  await page.evaluate(() => { setNavi('clay'); switchTab('train'); });
   await settle(page);
   await page.evaluate(() => naviSpeak(naviGreeting()));
   // The frame rises 14px on entry, so measuring straight away reads its animation START, not where

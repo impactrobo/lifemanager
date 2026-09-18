@@ -115,9 +115,10 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // ---- 5. The Agenda is gone, root and branch ----
   const gone = await page.evaluate(() => ({
     fn: typeof renderAgenda,
-    // Schedule's bar, and Home's, are both three buttons now.
-    scheduleBar: (() => { switchTab('schedule'); return renderTabbar().match(/<button/g).length; })(),
-    homeBar: (() => { switchTab('home'); return renderTabbar().match(/<button/g).length; })(),
+    // PRODUCTIVITY (tab id 'schedule') carries CALENDAR and SETUP. Home carries nothing — those two
+    // moved onto the tile's own bar on 2026-09-17, so match() finds nothing and has to be guarded.
+    scheduleBar: (() => { switchTab('schedule'); return (renderTabbar().match(/<button/g) || []).length; })(),
+    homeBar: (() => { switchTab('home'); return (renderTabbar().match(/<button/g) || []).length; })(),
     barText: (switchTab('schedule'), renderTabbar()),
     // A stale snapshot value must still land on a real screen.
     staleRenders: (() => { NAV.scheduleSubtab = 'agenda'; const h = renderSchedule(); NAV.scheduleSubtab = 'calendar'; return h.length; })(),
@@ -126,8 +127,10 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   console.log('agenda removal:', JSON.stringify({ ...gone, barText: undefined }));
   if (gone.fn !== 'undefined') throw new Error('renderAgenda should no longer exist, got ' + gone.fn);
   if (/AGENDA/.test(gone.barText)) throw new Error('The bottom bar should no longer offer AGENDA');
-  // Two, not three: HOME moved to the wordmark on top (see renderTabbar()).
-  if (gone.scheduleBar !== 2 || gone.homeBar !== 2) throw new Error('Both bars are two buttons now: ' + JSON.stringify(gone));
+  // Two on PRODUCTIVITY (HOME moved to the wordmark long ago, so it is CALENDAR + SETUP), and none
+  // on Home — which is why an empty bar hides itself rather than showing as a blank strip.
+  if (gone.scheduleBar !== 2) throw new Error('PRODUCTIVITY carries CALENDAR and SETUP: ' + JSON.stringify(gone));
+  if (gone.homeBar !== 0) throw new Error("Home's bar carries nothing now: " + JSON.stringify(gone));
   // NAV.scheduleSubtab rides in nav snapshots and has now outlived two of its own values ('today',
   // then 'agenda'), so an unknown one must render the calendar rather than nothing at all.
   if (!gone.staleRenders || !gone.staleIsCalendar) throw new Error('A stale subtab value must fall back to the calendar, not render an empty screen');

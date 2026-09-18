@@ -715,7 +715,7 @@ function defaultHomeLayout() {
     // merged into Health & Wellness, which is the 'train' tile. BOTH keep their HOME_SECTION_META
     // entries -- LINKABLE_TYPES colours every reminder, habit, meal and workout link chip from it,
     // so deleting an entry would silently drop those chips back to an unstyled fallback.
-    sectionOrder: ['train', 'hobbies', 'notes', 'budget'],
+    sectionOrder: ['schedule', 'train', 'hobbies', 'notes', 'budget'],
     sectionHidden: [],
     boxOrder: ['reminders', 'day', 'wakeup', 'calories', 'review'],
     boxHidden: [],
@@ -728,7 +728,8 @@ function defaultHomeLayout() {
 // blue one moved up," not just a shuffled list of same-colored squares. Reuses hues already in
 // use elsewhere (Notes tags / muscle groups) for a consistent palette rather than a new one.
 const HOME_SECTION_META = {
-  schedule: { label: 'SCHEDULE', icon: 'schedule', color: '#819FFF' },
+  // Calendar + its own Setup. A tile again, as PRODUCTIVITY — see the note on sectionOrder.
+  schedule: { label: 'PRODUCTIVITY', icon: 'schedule', color: '#819FFF' },
   train: { label: 'WELLNESS', icon: 'wellness', color: '#FF9191' },
   hobbies: { label: 'HOBBIES', icon: 'hobbies', color: '#CAAFFF' },
   // Tile-less, like `schedule` above it: kept only so `meal` link chips keep their own colour
@@ -765,7 +766,7 @@ function defaultState() {
     // in the UI; purely a sync implementation detail. See CLOUD SYNC section below.
     updatedAt: null,
     settings: {
-      accentByAesthetic: {}, noteTagNames: {}, customNoteTags: [], noteTagsMigrated: false, aesthetic: 'cyberpunk',
+      accentByAesthetic: {}, noteTagNames: {}, customNoteTags: [], noteTagsMigrated: false, productivityTile: true, aesthetic: 'cyberpunk',
       restTimer: defaultRestTimerSettings(), mealUnitSystem: 'metric', defaultPage: 'home',
       waterTargetMl: 2000, waterServingMl: 250, waterUnit: 'ml', defaultReminderTime: '09:00',
       // Daily targets the weekly review counts DAYS HIT against. Water already had one; these

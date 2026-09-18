@@ -215,7 +215,7 @@ const NAV_SNAPSHOT_KEYS = [
 // RETIRED_SECTION_TILES: has a HOME_SECTION_META entry (its link chips need the colour) but no Home
 // tile and can't be a landing page. Both members qualify. Filtered out of saved layouts by name in
 // migrateState(), since the stale-id guard there can't drop an id whose entry deliberately survives.
-const RETIRED_SECTION_TILES = ['schedule', 'health'];
+const RETIRED_SECTION_TILES = ['health'];
 // MERGED_TABS: a tab id with NO render branch left, mapped to where its content actually went.
 // Only 'health' qualifies -- `schedule` is still a perfectly live tab that goSchedule() navigates
 // to on purpose; it just isn't a tile, because Home shows the day itself.
@@ -608,9 +608,10 @@ function renderTabbar() {
   // -- you had to go through the SCHEDULE tile. Home shows the day now, so it carries the day's own
   // screens.
   if (NAV.currentTab === 'home') {
-    return homeBtn + `
-      <button onclick="goSchedule('calendar')"><span class="ic">${icon('schedule')}</span>CALENDAR</button>
-      <button onclick="goSchedule('setup')"><span class="ic">${icon('setup')}</span>SETUP</button>`;
+    // Home's bar is just Home. CALENDAR and SETUP used to sit here as peers of it, which put two
+    // buttons for ONE section on the root screen's bar while every other section reached its
+    // subtabs from its own tile. They are the PRODUCTIVITY tile's subtabs now, like everyone else's.
+    return homeBtn;
   }
   let sectionBtns = '';
   if (NAV.currentTab === 'train') {
@@ -755,10 +756,14 @@ function _doRender() {
     if (f) f.focus();
   }
   const tabbarEl = document.getElementById('tabbar');
-  tabbarEl.innerHTML = renderTabbar();
+  const tabbarHtml = renderTabbar();
+  tabbarEl.innerHTML = tabbarHtml;
   // index.html ships the bar as .hidden so an empty one never flashes before the first render.
-  // Every screen has a bar now, Home included, so this only ever needs to reveal it.
-  tabbarEl.classList.remove('hidden');
+  // A screen whose bar has NOTHING on it keeps it hidden rather than showing an empty strip —
+  // which is Home again, now that CALENDAR and SETUP have moved into the PRODUCTIVITY tile. Driven
+  // by what renderTabbar() actually produced rather than by naming Home here, so a future section
+  // with no subtabs gets the same treatment without this line knowing about it.
+  tabbarEl.classList.toggle('hidden', !tabbarHtml.trim());
   document.getElementById('backBtn').classList.toggle('disabled', NAV_HISTORY.length === 0);
   // Forward is always shown alongside Back now (not hidden even on first launch) — just dimmed
   // and inert whenever its own stack is empty, same treatment as Back.

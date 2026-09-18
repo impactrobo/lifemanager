@@ -473,7 +473,6 @@ function migrateState() {
   // 'schedule' was a valid landing page while it was its own tile. Home shows the day now, so that
   // choice means Home -- and a save still holding it would otherwise boot to a tab with no way
   // back to Home in its bar's first slot.
-  if (STATE.settings.defaultPage === 'schedule') STATE.settings.defaultPage = 'home';
   // Health & Diet merged into Health & Wellness, whose tab id is still 'train'. Same shape as the
   // schedule line above: the tab is gone, the saved preference shouldn't strand you on it.
   if (STATE.settings.defaultPage === 'health') STATE.settings.defaultPage = 'train';
@@ -506,6 +505,17 @@ function migrateState() {
       L.boxHidden = L.boxHidden.filter(id => !HOME_BOXES_MERGED_INTO_DAY.includes(id));
       if (at >= 0) L.boxOrder.splice(at, 0, 'day');
       else if (!L.boxHidden.includes('day')) L.boxHidden.push('day');
+    }
+    // ---- PRODUCTIVITY comes back as a tile (one-time, 2026-09-17) ----
+    // `schedule` was a retired tile, so every existing save had it STRIPPED from sectionOrder and
+    // pushed into sectionHidden by the pass below. The generic "append anything new" rule under
+    // this can't undo that: it skips ids that are hidden, and to that rule this one looks like a
+    // section the person chose to hide. So it is named here, once, guarded by its own flag — after
+    // which hiding PRODUCTIVITY is an ordinary choice that sticks.
+    if (!STATE.settings.productivityTile) {
+      L.sectionHidden = L.sectionHidden.filter(id => id !== 'schedule');
+      if (!L.sectionOrder.includes('schedule')) L.sectionOrder.unshift('schedule');
+      STATE.settings.productivityTile = true;
     }
     // Any id that's neither ordered nor hidden (e.g. a newly-added box/section from an app
     // update) gets appended as visible, so it isn't silently lost from either list.

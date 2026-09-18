@@ -1,14 +1,21 @@
-// test_home_bar.js — Home carries the day's own bottom bar, and the SCHEDULE tile is retired.
+// test_home_bar.js — Home's bar is empty (so hidden), and the section is a tile again as
+// PRODUCTIVITY.
 //
-// Home used to be the one screen in the app with no bottom bar, which is precisely why Calendar and
-// Agenda cost two taps from it: you had to go out through the SCHEDULE tile. Home renders the day
-// now, so it carries the day's screens directly and the tile pointing at "where you already are"
-// is gone.
+// THE HISTORY MATTERS, because this file has now asserted both answers. Home originally had no bar
+// and you reached Calendar through the SCHEDULE tile — two taps. That was fixed by retiring the
+// tile and putting CALENDAR and SETUP on Home's bar directly. Which left the root screen's bar
+// carrying two buttons for ONE section, while every other section reached its subtabs from its own
+// tile. Asked for on 2026-09-17 as "keep the HOME page clean": the tile is back, renamed
+// PRODUCTIVITY, and its two subtabs live on ITS bar like everyone else's.
 //
-// The part most likely to break quietly is NOT the bar: it's that HOME_SECTION_META.schedule has to
-// SURVIVE the tile's removal, because LINKABLE_TYPES colours every reminder, habit and activity
-// link chip from it. Deleting the entry would drop those chips to an unstyled fallback with nothing
-// failing anywhere.
+// So the bar is empty on Home — and an empty bar is HIDDEN rather than shown as a blank strip. That
+// is driven by what renderTabbar() produced, not by naming Home, so a future section with no
+// subtabs behaves the same way without anything learning about it.
+//
+// The part most likely to break quietly is still NOT the bar: it's that HOME_SECTION_META.schedule
+// has to carry the right colour, because LINKABLE_TYPES colours every reminder, habit and activity
+// link chip from it. `health` remains genuinely retired — a meta entry with no tile — and the two
+// retirements must not be conflated, which is the bug a first pass at this shipped.
 const { chromium } = require('playwright');
 const { settle } = require('./helpers');
 const path = require('path');
@@ -35,14 +42,31 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     active: (document.querySelector('#tabbar button.active') || {}).textContent,
   }));
   console.log('Home bar:', bar);
-  if (!bar.revealed) throw new Error('Home should have a bottom bar now');
-  // Three, not four: AGENDA retired into the Calendar when Week and Month started rendering the
-  // same selected-day block Day does, which is what it was really for.
-  if (JSON.stringify(bar.labels) !== JSON.stringify(['CALENDAR', 'SETUP'])) {
-    throw new Error(`Expected CALENDAR/SETUP, got ${JSON.stringify(bar.labels)}`);
+  if (bar.labels.length) throw new Error(`Home's bar carries nothing now — CALENDAR and SETUP are PRODUCTIVITY's subtabs. Got ${JSON.stringify(bar.labels)}`);
+  // ...and an empty bar is hidden, not shown as a blank strip across the bottom of the root screen.
+  if (bar.revealed) throw new Error('A bar with no buttons must hide itself rather than render empty');
+
+  // PRODUCTIVITY's OWN bar is where those two live, and it marks the active one. Each read is
+  // settled first: render() is rAF-deferred, so reading the bar in the same evaluate() that
+  // navigated returns the PREVIOUS screen's bar.
+  const readBar = () => page.evaluate(() => ({
+    labels: Array.from(document.querySelectorAll('#tabbar button')).map(b => b.textContent.trim()),
+    active: (document.querySelector('#tabbar button.active') || {}).textContent || '',
+    revealed: !document.getElementById('tabbar').classList.contains('hidden'),
+  }));
+  await page.evaluate(() => goSchedule('calendar'));
+  await settle(page);
+  const onCal = await readBar();
+  await page.evaluate(() => setScheduleSubtab('setup'));
+  await settle(page);
+  const onSetup = await readBar();
+  console.log('PRODUCTIVITY bar:', JSON.stringify({ onCal, active: onSetup.active }));
+  if (!onCal.revealed) throw new Error('A section WITH subtabs still shows its bar');
+  if (!onCal.labels.includes('CALENDAR') || !onCal.labels.includes('SETUP')) {
+    throw new Error(`CALENDAR and SETUP belong on PRODUCTIVITY's bar, got ${JSON.stringify(onCal.labels)}`);
   }
-  // HOME moved to the wordmark, so Home's own bar has nothing on it to mark active.
-  if (bar.active) throw new Error('Nothing on Home’s bar should read as active, got ' + bar.active);
+  if (!/CALENDAR/.test(onCal.active)) throw new Error('...and the one you are on reads as active, unlike on the old Home bar');
+  if (!/SETUP/.test(onSetup.active)) throw new Error('...which follows the subtab you switch to');
 
   const dests = await page.evaluate(() => {
     const out = [];
@@ -101,7 +125,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     tilesOnHome: document.querySelectorAll('.home-tile').length,
   }));
   console.log('schedule identity:', identity);
-  if (identity.inDefaultLayout) throw new Error('The SCHEDULE tile should be retired from the default layout');
+  if (!identity.inDefaultLayout) throw new Error('PRODUCTIVITY is a tile again — it belongs in the default layout');
   if (!identity.inMeta) throw new Error('HOME_SECTION_META.schedule must survive: the link chips colour themselves from it');
   if (identity.healthInDefaultLayout) throw new Error('The HEALTH & DIET tile should be retired — it merged into Health & Fitness');
   if (!identity.healthInMeta) throw new Error('HOME_SECTION_META.health must survive: meal link chips colour themselves from it');
@@ -113,7 +137,8 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // Meal and workout chips staying DIFFERENT colours is the point of keeping both entries — one
   // tab now, but a meal and a workout are still different things to see at a glance.
   if (identity.mealChipColor === identity.workoutChipColor) throw new Error('meal and workout chips should stay visually distinct');
-  if (identity.tilesOnHome !== 4) throw new Error(`Expected 4 section tiles, got ${identity.tilesOnHome}`);
+  // Five: PRODUCTIVITY, WELLNESS, HOBBIES, NOTES, FINANCIAL. `health` is the only retired one left.
+  if (identity.tilesOnHome !== 5) throw new Error(`Expected 5 section tiles, got ${identity.tilesOnHome}`);
 
   // ---- 4. Schedule is still reachable, and its bar matches Home's ----
   // Navigate, settle, THEN read: reading inside the same evaluate gets the pre-render tabbar, which
@@ -141,23 +166,30 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // Every case below predated the Health & Fitness merge and expected `health` to survive; missing
   // that is what shipped a fifth tile to a real phone on 2026-09-14.
   const cases = [
-    { name: 'pre-retirement order, both tiles present',
+    { name: 'schedule already ordered, health still retired',
       order: ['schedule', 'train', 'hobbies', 'health', 'notes', 'budget'], hidden: [],
-      want: ['train', 'hobbies', 'notes', 'budget'], wantHidden: [] },
-    { name: 'retired tiles were hidden anyway',
+      want: ['schedule', 'train', 'hobbies', 'notes', 'budget'], wantHidden: [] },
+    // The case the one-time migration exists for: every save from the retired era had 'schedule'
+    // pushed into sectionHidden, and the generic "append anything new" rule skips hidden ids — so
+    // to that rule this looks like a section the person chose to hide. It has to be named once.
+    { name: 'schedule was hidden by the retirement, and comes back',
       order: ['train', 'hobbies', 'notes', 'budget'], hidden: ['schedule', 'health'],
-      want: ['train', 'hobbies', 'notes', 'budget'], wantHidden: [] },
-    { name: 'reordered, retired tiles mid-list',
-      order: ['budget', 'schedule', 'notes', 'health'], hidden: ['train', 'hobbies'],
-      want: ['budget', 'notes'], wantHidden: ['train', 'hobbies'] },
+      want: ['schedule', 'train', 'hobbies', 'notes', 'budget'], wantHidden: [] },
+    { name: 'reordered, health retired mid-list',
+      order: ['budget', 'notes', 'health'], hidden: ['train', 'hobbies'],
+      want: ['schedule', 'budget', 'notes'], wantHidden: ['train', 'hobbies'] },
     { name: 'a stale section id is dropped',
       order: ['train', 'gremlin', 'notes'], hidden: ['hobbies', 'health', 'budget'],
-      want: ['train', 'notes'], wantHidden: ['hobbies', 'budget'] },
+      want: ['schedule', 'train', 'notes'], wantHidden: ['hobbies', 'budget'] },
   ];
   for (const c of cases) {
     await page.evaluate((c) => {
       STATE.settings.homeLayout = { sectionOrder: c.order, sectionHidden: c.hidden,
                                     boxOrder: defaultHomeLayout().boxOrder, boxHidden: [] };
+      // Every case here is a synthetic save from BEFORE the tile came back, so it has to say so.
+      // Set to false rather than deleted: loadState() merges over defaultState(), where the flag is
+      // true, so a missing key would arrive as "already migrated" and the one-time pass would skip.
+      STATE.settings.productivityTile = false;
       saveState();
     }, c);
     await page.reload();
@@ -174,13 +206,14 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     }
   }
 
-  // ---- 6. defaultPage: 'schedule' is no longer a page you can land on ----
-  // A save still holding it would boot into a tab that no longer has a tile pointing at it.
-  const landing = await page.evaluate(() => {
-    STATE.settings.defaultPage = 'schedule';
-    saveState();
-    return null;
-  });
+  // ---- 6. defaultPage: PRODUCTIVITY is a page you can land on again ----
+  // This asserted the opposite while the tile was retired, and the ordering underneath is worth
+  // knowing: NAV.currentTab is set by initialTab() during SCRIPT EVALUATION, before migrateState()
+  // runs. So a migration that rewrites defaultPage cannot affect the tab you actually boot into on
+  // that same launch — it only takes effect next time. That mismatch is exactly what surfaced here
+  // when the tile came back, and it is why 'health' (a tab with no render branch at all) still has
+  // to be corrected by initialTab()'s own guard rather than by the migration alone.
+  await page.evaluate(() => { STATE.settings.defaultPage = 'schedule'; saveState(); });
   await page.reload();
   await settle(page);
   const afterBoot = await page.evaluate(() => ({
@@ -188,11 +221,23 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     tab: NAV.currentTab,
     offered: (renderHomeSetup().match(/<option value="([a-z]+)"/g) || []).map(m => m.replace(/.*"([a-z]+)".*/, '$1')),
   }));
-  console.log('after booting a save that asked for Schedule:', afterBoot);
-  if (afterBoot.defaultPage !== 'home') throw new Error("A saved defaultPage of 'schedule' should migrate to 'home'");
-  if (afterBoot.tab !== 'home') throw new Error('...and it should actually boot on Home');
-  if (afterBoot.offered.includes('schedule')) throw new Error('Settings should no longer offer Schedule as a landing page');
+  console.log('after booting a save that asked for PRODUCTIVITY:', afterBoot);
+  if (afterBoot.defaultPage !== 'schedule') throw new Error("'schedule' is a real tile again — the preference should be left alone");
+  if (afterBoot.tab !== 'schedule') throw new Error('...and it should actually boot there');
+  if (!afterBoot.offered.includes('schedule')) throw new Error('Settings must offer PRODUCTIVITY as a landing page');
   if (!afterBoot.offered.includes('home')) throw new Error('Settings must still offer Home');
+
+  // 'health' stays retired: a tab with no render branch, corrected on the way in.
+  await page.evaluate(() => { STATE.settings.defaultPage = 'health'; saveState(); });
+  await page.reload();
+  await settle(page);
+  const health = await page.evaluate(() => ({ defaultPage: STATE.settings.defaultPage, tab: NAV.currentTab }));
+  console.log('after booting a save that asked for HEALTH & DIET:', health);
+  if (health.defaultPage !== 'train') throw new Error("A saved 'health' must still migrate to 'train'");
+  if (health.tab === 'health') throw new Error('...and must never boot into a tab with no render branch');
+  await page.evaluate(() => { STATE.settings.defaultPage = 'home'; saveState(); });
+  await page.reload();
+  await settle(page);
 
   // ---- 7. Idempotent ----
   const first = await page.evaluate(() => JSON.stringify(STATE.settings.homeLayout));
