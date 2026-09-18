@@ -2862,7 +2862,19 @@ button.brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 4
   width: 100%; resize: vertical; min-height: 220px;
   font-family: var(--font-mono); font-size: 13px; line-height: 1.6;
 }
-.entry-view { min-height: 120px; cursor: text; font-size: 14px; line-height: 1.6; }
+/* The title in READ mode: a heading, not a field. Editing is entered from .entry-edit-btn only, so
+   nothing in the reading view should look or behave like something you type into. */
+.entry-title-view {
+  font-family: var(--font-head); font-size: 19px; font-weight: 700; line-height: 1.25;
+  color: var(--text); margin-bottom: 10px; overflow-wrap: anywhere;
+}
+/* The pencil that enters edit mode, and the tick that leaves it. Lit while editing, so the button
+   reads as a mode you are IN rather than an action you keep pressing. */
+.entry-edit-btn.is-editing { border-color: var(--accent); background: var(--surface2); }
+/* `cursor: text` deliberately NOT set: this is no longer a click target. Tapping the body used to
+   open the editor, which meant ticking a checklist box did both — the box's handler fired and the
+   event then bubbled to the body's. Reported 2026-09-18. */
+.entry-view { min-height: 120px; font-size: 14px; line-height: 1.6; }
 .entry-view .entry-h { margin: 12px 0 6px; font-size: 15px; font-weight: 800; }
 .entry-view h4.entry-h { font-size: 13px; color: var(--text-dim); }
 .entry-view p { margin: 0 0 8px; }

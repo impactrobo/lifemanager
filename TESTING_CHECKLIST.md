@@ -467,4 +467,16 @@ is the OTHER overlays and the OTHER search boxes, not just the two that were bro
 - [ ] Same for the **exercise picker** in the Workout Builder (tap LIFT on an exercise), which had
       the identical bug and wasn't reported. And the **Notes search**, which already worked.
 
+## Notes: read mode vs edit mode (2026-09-18)
+- [ ] Open a note with a checklist from VIEW ALL. **Tick a box** — it ticks, and you stay reading.
+      No jump into the editor, no raw `- [x]` markdown.
+- [ ] Tap the title, the body text, a heading: nothing happens. Reading is just reading now.
+- [ ] The **pencil** is top-right with the date beside it. Tap it → the editor, with the button lit.
+      Tap it again → back to reading, with whatever you typed kept.
+- [ ] **SAVE** is gone in read mode and present while editing. Confirm nothing feels lost by that —
+      a ticked box should survive closing the note and reopening it without ever pressing SAVE.
+- [ ] Tapping NOTES still drops you straight into a new note **ready to type**, not behind a pencil.
+- [ ] A note with no title: the heading area is simply absent rather than an empty box. Does that
+      read as intentional, or does it want a muted "Untitled"?
+
 ## Add future items below as new features ship

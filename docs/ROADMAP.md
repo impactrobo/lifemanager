@@ -298,6 +298,27 @@ Newest first. Keep this reasonably current so a fresh session can see what alrea
 without re-reading the whole diff history. Roughly grouped: this project spent early Sept 2026
 on an architecture split + a large wave of Maximalist aesthetics.
 
+- **Reading a note is no longer one tap from editing it (2026-09-18).** Reported: *"tapping to say
+  check off a TODO box then immediately enters edit mode instead of simply ticking the box. Let's
+  have neither the title nor text tap immediately go to edit. Add a specific pencil icon above on
+  the top-right."*
+  - The cause was a click handler on the whole body — `.entry-view` carried
+    `onclick="setEntryMode('edit')"`. Tapping a checklist box ran the box's own handler AND then
+    bubbled to the body's, so it ticked *and* opened the editor. The tick looked swallowed because
+    the re-render dropped you into a textarea showing raw `- [x]` markdown.
+  - Edit is now a **mode entered from one button**: a pencil at the top right, with the date pushed
+    left of it, which becomes a lit tick while editing. The read view is not a click target at all,
+    and the title renders as a heading rather than a focusable field.
+  - **SAVE is edit-only.** In read mode there is nothing uncommitted — ticking a box writes through
+    immediately — so a SAVE button there offered to do nothing while implying that skipping it might
+    lose something.
+  - The landing note still opens straight into **edit** mode. Read-mode-by-default would have put an
+    empty page behind a button press, which is the exact friction landing on a new note removes.
+  - `tests/test_note_read_mode.js`. Four mutations verified to fail, including restoring the
+    original `onclick`, which reproduces the report exactly: mode flips to `edit` and the checkboxes
+    vanish from the DOM. Checked with the static assertion disabled too, so the behavioural check
+    stands on its own rather than being carried by the easy one.
+
 - **Two field bugs: a modal under the header, and a search box that dropped focus (2026-09-18).**
   Both reported from a phone, and both turned out to be a whole class rather than one screen.
   - **The Phase editor opened UNDER the top bar** — its title input invisible and untappable (taps

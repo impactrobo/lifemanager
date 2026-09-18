@@ -445,13 +445,31 @@ function renderEntryEditor(e) {
           onclick="openConvert('${e.id}')" title="Convert to another type">${meta.short} ▾</button>
         <button class="entry-star ${e.favorite ? 'is-on' : ''}" onclick="toggleEntryFavorite('${e.id}')" aria-pressed="${!!e.favorite}" aria-label="Favourite">★</button>
       </div>
-      <span class="mono" style="font-size:11px; color:var(--text-faint);">${fmtEntryDate(e)}</span>
+      ${/* Editing is a MODE you enter deliberately, from this one button. Reading a note used to
+            be one stray tap away from editing it: the body carried onclick="setEntryMode('edit')",
+            so ticking a checklist box both ticked it AND opened the editor, because the box's own
+            handler fired and then the event bubbled to the body's. Reported 2026-09-18. */ ''}
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span class="mono" style="font-size:11px; color:var(--text-faint);">${fmtEntryDate(e)}</span>
+        <button class="icon-btn entry-edit-btn ${editing ? 'is-editing' : ''}"
+          onclick="setEntryMode('${editing ? 'view' : 'edit'}')"
+          title="${editing ? 'Done editing' : 'Edit this note'}"
+          aria-label="${editing ? 'Done editing' : 'Edit this note'}"
+          aria-pressed="${editing}">${icon(editing ? 'check' : 'pencil')}</button>
+      </div>
     </div>
     <div class="panel">
-      <label class="field" style="margin-bottom:10px;">
-        <span class="lbl">Title (optional)</span>
-        <input type="text" id="entryTitle" placeholder="Give it a title…" value="${escapeHtml(titleVal)}">
-      </label>
+      ${editing
+        ? `<label class="field" style="margin-bottom:10px;">
+             <span class="lbl">Title (optional)</span>
+             <input type="text" id="entryTitle" placeholder="Give it a title…" value="${escapeHtml(titleVal)}">
+           </label>`
+        : /* Read mode shows the title as a heading, not a focusable field -- tapping it was the
+             other half of the same complaint. A note with no title shows nothing here: the title is
+             optional, and an empty box labelled "Title" is only useful while you are editing. */
+          ((e.title || '').trim()
+            ? `<div class="entry-title-view">${escapeHtml(e.title)}</div>`
+            : '')}
       ${editing ? renderEntryToolbar() : ''}
       ${editing
         ? `<div class="entry-editor-wrap">
@@ -460,15 +478,15 @@ function renderEntryEditor(e) {
                onblur="closeEntryAutocompleteSoon()">${escapeHtml(editVal)}</textarea>
              <div id="entryAutocomplete">${renderEntryAutocomplete(e)}</div>
            </div>`
-        : `<div class="entry-view rich-text" onclick="setEntryMode('edit')" title="Tap to edit">${
+        : `<div class="entry-view rich-text">${
              (e.body || '').trim() ? renderEntryMarkdown(e.body, 'toggleOpenEntryCheck')
              : `<p class="entry-empty-line">${
                   /* A typed entry keeps its content in its FIELDS — Convert empties the body on the
                      way in. Inviting you to write in a box that isn't where the note lives would be
                      the wrong prompt, so say what the box is for instead. */
                   entryTypeMeta(e.type).fields.length
-                    ? 'Nothing here — this ' + entryTypeMeta(e.type).label.toLowerCase() + '’s content is in its fields below. Tap to add loose notes.'
-                    : 'Nothing written yet — tap to start.'
+                    ? 'Nothing here — this ' + entryTypeMeta(e.type).label.toLowerCase() + '’s content is in its fields below. Use the pencil above to add loose notes.'
+                    : 'Nothing written yet — tap the pencil above to start.'
                 }</p>`
            }</div>`}
     </div>
@@ -491,9 +509,12 @@ function renderEntryEditor(e) {
     <div class="subtle-label" style="margin:16px 0 8px;">LINKED FROM</div>
     ${renderEntryBacklinks(e)}
     ${renderEntryUnlinkedMentions(e)}
+    ${/* SAVE only while editing. In read mode there is nothing unsaved to commit -- ticking a
+          checklist box writes through immediately -- so a SAVE button there offered to do nothing
+          and implied that not pressing it might lose something. */ ''}
     <div class="row" style="gap:8px; margin-top:20px;">
-      <button class="btn btn-primary" style="flex:1;" onclick="saveOpenEntry()">SAVE</button>
-      <button class="btn btn-ghost" onclick="closeEntry()">DONE</button>
+      ${editing ? `<button class="btn btn-primary" style="flex:1;" onclick="saveOpenEntry()">SAVE</button>` : ''}
+      <button class="btn btn-ghost" ${editing ? '' : 'style="flex:1;"'} onclick="closeEntry()">DONE</button>
     </div>
     <button class="btn btn-ghost btn-sm btn-block" style="margin-top:10px; color:var(--bad);" onclick="deleteEntry('${e.id}')">DELETE NOTE</button>`;
 }
