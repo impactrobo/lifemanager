@@ -2021,12 +2021,12 @@ function renderComposeTab() {
     return emptyState('No phases yet. Add one under SCHEDULE, then come back here to fill in its week.');
   }
   const tab = VIEW.composeTab === 'meals' ? 'meals' : 'workouts';
-  // Grey until a phase is chosen, and genuinely inert -- a disabled button that still fires is
-  // worse than no affordance, because it teaches you the greying means nothing.
-  const chip = (key, label) => `<button class="compose-chip ${entry && tab === key ? 'active' : ''}"
-    ${entry ? `onclick="setComposeTab('${key}')"` : 'disabled aria-disabled="true"'}>${label}</button>`;
-  const chips = `<div class="compose-chips">${chip('workouts', 'WORKOUT PLAN')}${chip('meals', 'MEAL PLAN')}</div>`;
   if (!entry) {
+    // No chips at all until a phase is picked. They were rendered greyed-and-disabled at first, on
+    // the theory that showing what comes next is orienting. In practice the sentence above already
+    // says it, and two dead buttons under a list you are meant to be reading is just furniture --
+    // the screen is calmer without them (2026-09-18).
+    //
     // The shelf can't be composed for: a shelved phase has no dates, and a plan is resolved by the
     // day it is in force on. Said out loud rather than silently omitted.
     const shelved = phaseShelf().length;
@@ -2035,12 +2035,13 @@ function renderComposeTab() {
       <div class="subtle-label" style="margin-bottom:8px;">WHICH PHASE</div>
       <div class="stack">${timeline.map(renderComposePhaseCard).join('')}</div>
       ${shelved ? `<div style="font-size:11px; color:var(--text-faint); margin-top:10px;">
-        ${shelved} phase${shelved === 1 ? '' : 's'} on the shelf ${shelved === 1 ? 'is' : 'are'} not scheduled yet, so there is no week to plan onto. Begin or queue ${shelved === 1 ? 'it' : 'them'} under SCHEDULE first.</div>` : ''}
-      ${chips}`;
+        ${shelved} phase${shelved === 1 ? '' : 's'} on the shelf ${shelved === 1 ? 'is' : 'are'} not scheduled yet, so there is no week to plan onto. Begin or queue ${shelved === 1 ? 'it' : 'them'} under SCHEDULE first.</div>` : ''}`;
   }
+  const chip = (key, label) => `<button class="compose-chip ${tab === key ? 'active' : ''}"
+    onclick="setComposeTab('${key}')">${label}</button>`;
   return `
     ${renderComposeSelected(entry)}
-    ${chips}
+    <div class="compose-chips">${chip('workouts', 'WORKOUT PLAN')}${chip('meals', 'MEAL PLAN')}</div>
     ${tab === 'meals' ? renderMealPlanTab({ scope: false }) : renderExercisePlanTab({ scope: false })}`;
 }
 // The chosen phase, folded down to one line so the plan below it gets the screen.

@@ -57,19 +57,24 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     if (landed.chip !== want) throw new Error(`...on the ${want} chip, got ${landed.chip}`);
   }
 
-  // ---- 2. Grey means disabled ----
+  // ---- 2. The picker screen carries nothing inert ----
+  // The chips were greyed-and-disabled here at first. They are simply ABSENT now (2026-09-18): the
+  // line above the list already says the plans open once you pick, and two dead buttons under a
+  // list you are meant to be reading is furniture. So the contract is that nothing on this screen
+  // is present-but-unusable — checked against every control, not just the two that used to be here.
   await page.evaluate(() => { VIEW.composePhaseId = null; setPhasesSubtab('compose'); });
   await settle(page);
   const grey = await page.evaluate(() => ({
-    chips: [...document.querySelectorAll('.compose-chip')].map(b => ({ label: b.textContent.trim(), disabled: b.disabled })),
+    chips: document.querySelectorAll('.compose-chip').length,
     cards: document.querySelectorAll('.phase-card-closed').length,
     plans: document.querySelectorAll('.planner-scope').length,
+    dead: [...document.querySelectorAll('.screen button')].filter(b => b.disabled).map(b => b.textContent.trim()),
+    saysWhatsNext: /plans open once you have/i.test(document.querySelector('.screen').innerText),
   }));
   console.log('2. before picking:', JSON.stringify(grey));
-  if (grey.chips.map(c => c.label).join('/') !== 'WORKOUT PLAN/MEAL PLAN') throw new Error('Both chips should be there: ' + JSON.stringify(grey.chips));
-  if (!grey.chips.every(c => c.disabled)) {
-    throw new Error('The chips must be genuinely disabled, not just dimmed — a disabled-looking button that still works teaches you the greying means nothing');
-  }
+  if (grey.chips) throw new Error('No plan chips until a phase is picked — they are absent, not greyed');
+  if (grey.dead.length) throw new Error('Nothing on the picker screen should be present-but-disabled: ' + JSON.stringify(grey.dead));
+  if (!grey.saysWhatsNext) throw new Error('...so the prose has to be the thing that says what happens next');
   if (!grey.cards) throw new Error('...and the phases must be offered as something to tap');
 
   // ---- 3. Picking lights them and points BOTH planners at that phase ----
@@ -132,13 +137,17 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // CHANGE goes back to the picker.
   await page.evaluate(() => clearComposePhase());
   await settle(page);
+  // Counted, not `.every(b => b.disabled)` — that was the old check, and on an empty NodeList it
+  // returns true, so it would pass whatever the chips did.
   const back = await page.evaluate(() => ({
     picked: VIEW.composePhaseId,
     cards: document.querySelectorAll('.phase-card-closed').length,
-    disabled: [...document.querySelectorAll('.compose-chip')].every(b => b.disabled),
+    chips: document.querySelectorAll('.compose-chip').length,
   }));
   console.log('5. after CHANGE:', JSON.stringify(back));
-  if (back.picked || !back.cards || !back.disabled) throw new Error('CHANGE returns you to the picker with the chips grey again: ' + JSON.stringify(back));
+  if (back.picked) throw new Error('CHANGE clears the selection');
+  if (!back.cards) throw new Error('...and puts the phase list back');
+  if (back.chips) throw new Error('...with the plan chips gone again, not greyed: ' + back.chips);
 
   // ---- 6. It really is editing that phase, not today's ----
   // A future phase is the honest test: with the old date-driven default, both planners started on

@@ -880,8 +880,8 @@ button.hit-mark { padding: 0; background: none; font: inherit; color: inherit; c
   border-left: 3px solid var(--border); padding: 12px 13px;
 }
 /* ---- COMPOSE: pick a phase, then fill in its week ----
-   The two plan chips are grey and genuinely disabled until a phase is chosen, which is the whole
-   point of the screen: one selection, then two halves of one job done against it.
+   The two plan chips do not exist until a phase is chosen — they aren't greyed, they're absent.
+   Nothing on the picker screen is inert, which is what keeps it calm.
 
    .compose-selected sits HERE, immediately above the .phase-state-* rules, and not down with the
    rest of the phase styles. Those rules set only `border-left-color`, so a `border-left` shorthand
@@ -894,7 +894,6 @@ button.hit-mark { padding: 0; background: none; font: inherit; color: inherit; c
   letter-spacing: 0.04em; background: var(--surface2); color: var(--text-dim);
   border: 1px solid var(--border);
 }
-.compose-chip:disabled { opacity: 0.45; cursor: not-allowed; }
 .compose-chip.active { background: var(--accent); border-color: var(--accent); color: #17181b; }
 .compose-selected {
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);

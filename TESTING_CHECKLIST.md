@@ -490,8 +490,9 @@ is the OTHER overlays and the OTHER search boxes, not just the two that were bro
 
 ## PHASES: SCHEDULE / COMPOSE / ARCHIVED (2026-09-18)
 - [ ] The sub-nav reads **SCHEDULE / COMPOSE / ARCHIVED**. SCHEDULE is the old NEW tab, unchanged.
-- [ ] COMPOSE with nothing picked: the phases are tappable cards and both chips are grey **and
-      unresponsive**. Tap one anyway to confirm nothing happens.
+- [ ] COMPOSE with nothing picked: just the sentence, the phase cards, and the shelf note — **no
+      plan buttons at all** until you choose. Confirm that reads as calm rather than as something
+      missing.
 - [ ] Tap a phase → chips light, the phase stays named at the top with its state colour bar.
       **WORKOUT PLAN** and **MEAL PLAN** should each be exactly the screen you already know, minus
       the "Adding to which phase" dropdown (COMPOSE asks that once now).

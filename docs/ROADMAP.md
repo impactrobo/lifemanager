@@ -308,8 +308,10 @@ on an architecture split + a large wave of Maximalist aesthetics.
     could be laying out Phase 2's workouts and Phase 3's meals at the same time with nothing on
     screen saying so. COMPOSE asks once and drives both.
   - The picker is **tappable phase cards** (the user's pick over a dropdown), folding to a one-line
-    summary once chosen. The two chips are **genuinely `disabled`**, not merely dimmed — a
-    disabled-looking control that still works teaches you the greying means nothing.
+    summary once chosen. The two plan chips do not exist until a phase is picked: they were greyed
+    and disabled at first, and that was one revision too clever — the line above the list already
+    says the plans open once you choose, so two dead buttons under it were just furniture. Nothing
+    on the picker screen is present-but-unusable, which is what the test now pins.
   - Each chip renders its **existing workflow unchanged**, via a new `opts.scope === false` that
     drops the now-redundant per-tab dropdown. `renderPlannerScope()` / `renderMealPlannerScope()`
     still exist and still work; nothing in the UI passes `scope: true` any more, and
