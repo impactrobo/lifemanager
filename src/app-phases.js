@@ -1942,17 +1942,37 @@ function renderPhaseSummary(s) {
 //
 // The key stays 'goal' on purpose. It's in saved nav snapshots and in tests, and renaming a stored
 // value to match a label is churn with a migration attached — the label is what people read.
+// SCHEDULE is where phases live as a sequence; COMPOSE is where you fill one in. WORKOUT PLAN and
+// MEAL PLAN used to be peers of those at this level, which meant each carried its OWN "Adding to
+// which phase" dropdown, backed by its own VIEW.plannerDate / VIEW.mealPlannerDate. Two independent
+// selections for one question: you could be laying out Phase 2's workouts and Phase 3's meals at
+// the same time with nothing on screen saying so. COMPOSE asks once (2026-09-18).
 const PHASES_SUBTABS = [
-  ['goal', 'NEW'],
-  ['workouts', 'WORKOUT PLAN'],
-  ['meals', 'MEAL PLAN'],
+  // Key stays 'goal' -- it rides in saved nav snapshots, and renaming it would land old ones on the
+  // fallback rather than on the screen they mean. Only the label moved from NEW to SCHEDULE.
+  ['goal', 'SCHEDULE'],
+  ['compose', 'COMPOSE'],
   ['archived', 'ARCHIVED'],
 ];
-function setPhasesSubtab(t) { NAV.phasesSubtab = t; render(); }
+// 'workouts' and 'meals' were subtabs of their own until COMPOSE absorbed them; both still arrive on
+// saved snapshots. Each lands on COMPOSE with its own chip already chosen, so an old deep link
+// reaches what it was pointing at rather than the first screen.
+const PHASES_SUBTAB_ALIAS = { workouts: 'compose', meals: 'compose' };
+function setPhasesSubtab(t) {
+  if (t === 'workouts' || t === 'meals') VIEW.composeTab = t;
+  NAV.phasesSubtab = PHASES_SUBTAB_ALIAS[t] || t;
+  render();
+}
 function renderPhasesScreen() {
-  const sub = PHASES_SUBTABS.some(([k]) => k === NAV.phasesSubtab) ? NAV.phasesSubtab : 'goal';
-  const body = sub === 'workouts' ? renderExercisePlanTab()
-             : sub === 'meals' ? renderMealPlanTab()
+  const raw = PHASES_SUBTAB_ALIAS[NAV.phasesSubtab] || NAV.phasesSubtab;
+  const sub = PHASES_SUBTABS.some(([k]) => k === raw) ? raw : 'goal';
+  // A snapshot carrying 'workouts'/'meals' also says which chip it meant — honour it once, here,
+  // rather than making every caller remember to.
+  if (PHASES_SUBTAB_ALIAS[NAV.phasesSubtab]) {
+    VIEW.composeTab = NAV.phasesSubtab === 'meals' ? 'meals' : 'workouts';
+    NAV.phasesSubtab = sub;
+  }
+  const body = sub === 'compose' ? renderComposeTab()
              : sub === 'archived' ? renderArchivedPhasesTab()
              : renderGoalTab();
   return `<div class="screen">
@@ -1961,6 +1981,105 @@ function renderPhasesScreen() {
       `<button class="${sub === key ? 'active' : ''}" onclick="setPhasesSubtab('${key}')">${label}</button>`).join(''))}
     ${body}
   </div>`;
+}
+
+// ---------------- COMPOSE ----------------
+//
+// Pick a phase, then fill in its week. The two plans are chips rather than tabs because they are
+// two halves of one job done against ONE phase -- which is the thing the old layout couldn't say.
+//
+// The selection drives both planners. They still read dates (VIEW.plannerDate /
+// VIEW.mealPlannerDate) because that is how a plan is resolved -- a phase owns a span, and
+// exercisePlanInEffect()/mealPlanInEffect() answer "what is in force on this day". Selecting here
+// writes the same date to both, so the two can no longer drift apart.
+function composePhaseEntry() {
+  const id = VIEW.composePhaseId;
+  if (!id) return null;
+  return phaseTimeline().find(s => s.phase.id === id) || null;
+}
+// The date that stands for a phase, matching what the old scope dropdown put in its option values:
+// the phase you are IN is addressed as today, everything else by where it starts.
+function composePhaseDate(entry) {
+  return entry.state === 'current' ? todayStr() : entry.startDate;
+}
+function selectComposePhase(id) {
+  const entry = phaseTimeline().find(s => s.phase.id === id);
+  if (!entry) return;
+  VIEW.composePhaseId = id;
+  const date = composePhaseDate(entry);
+  VIEW.plannerDate = date;
+  VIEW.mealPlannerDate = date;
+  render();
+}
+function clearComposePhase() { VIEW.composePhaseId = null; render(); }
+function setComposeTab(t) { VIEW.composeTab = t === 'meals' ? 'meals' : 'workouts'; render(); }
+
+function renderComposeTab() {
+  const entry = composePhaseEntry();
+  const timeline = phaseTimeline();
+  if (!timeline.length) {
+    return emptyState('No phases yet. Add one under SCHEDULE, then come back here to fill in its week.');
+  }
+  const tab = VIEW.composeTab === 'meals' ? 'meals' : 'workouts';
+  // Grey until a phase is chosen, and genuinely inert -- a disabled button that still fires is
+  // worse than no affordance, because it teaches you the greying means nothing.
+  const chip = (key, label) => `<button class="compose-chip ${entry && tab === key ? 'active' : ''}"
+    ${entry ? `onclick="setComposeTab('${key}')"` : 'disabled aria-disabled="true"'}>${label}</button>`;
+  const chips = `<div class="compose-chips">${chip('workouts', 'WORKOUT PLAN')}${chip('meals', 'MEAL PLAN')}</div>`;
+  if (!entry) {
+    // The shelf can't be composed for: a shelved phase has no dates, and a plan is resolved by the
+    // day it is in force on. Said out loud rather than silently omitted.
+    const shelved = phaseShelf().length;
+    return `
+      <div style="font-size:11px; color:var(--text-dim); margin:18px 0 10px;">Pick the phase you are filling in. Its workout and meal plans open once you have.</div>
+      <div class="subtle-label" style="margin-bottom:8px;">WHICH PHASE</div>
+      <div class="stack">${timeline.map(renderComposePhaseCard).join('')}</div>
+      ${shelved ? `<div style="font-size:11px; color:var(--text-faint); margin-top:10px;">
+        ${shelved} phase${shelved === 1 ? '' : 's'} on the shelf ${shelved === 1 ? 'is' : 'are'} not scheduled yet, so there is no week to plan onto. Begin or queue ${shelved === 1 ? 'it' : 'them'} under SCHEDULE first.</div>` : ''}
+      ${chips}`;
+  }
+  return `
+    ${renderComposeSelected(entry)}
+    ${chips}
+    ${tab === 'meals' ? renderMealPlanTab({ scope: false }) : renderExercisePlanTab({ scope: false })}`;
+}
+// The chosen phase, folded down to one line so the plan below it gets the screen.
+function renderComposeSelected(entry) {
+  const stateLabel = { past: 'DONE', current: 'NOW', future: 'UPCOMING' }[entry.state] || '';
+  const when = entry.perpetual
+    ? `${fmtGoalDate(entry.startDate)} · until you change it`
+    : `${fmtGoalDate(entry.startDate)} – ${fmtGoalDate(entry.endDate)} · ${entry.weeks} wk`;
+  return `
+    <div class="compose-selected phase-state-${entry.state}">
+      <div class="row" style="align-items:center; gap:8px;">
+        <div style="min-width:0;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span class="phase-label-static">${escapeHtml(entry.phase.label)}</span>
+            ${stateLabel ? `<span class="phase-chip phase-chip-${entry.state}">${stateLabel}</span>` : ''}
+          </div>
+          <div class="phase-closed-sum" style="margin-top:4px;">${when}</div>
+        </div>
+        <button class="btn btn-sm btn-ghost" onclick="clearComposePhase()">CHANGE</button>
+      </div>
+    </div>`;
+}
+function renderComposePhaseCard(entry) {
+  const p = entry.phase;
+  const stateLabel = { past: 'DONE', current: 'NOW', future: 'UPCOMING' }[entry.state] || '';
+  const when = entry.perpetual
+    ? `${fmtGoalDate(entry.startDate)} · until you change it`
+    : `${fmtGoalDate(entry.startDate)} – ${fmtGoalDate(entry.endDate)} · ${entry.weeks} wk`;
+  return `
+    <div class="phase-card phase-card-closed phase-state-${entry.state}"
+         onclick="selectComposePhase('${p.id}')" role="button" tabindex="0"
+         onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();selectComposePhase('${p.id}');}">
+      <div class="ehead">
+        <span class="phase-label-static">${escapeHtml(p.label)}</span>
+        ${stateLabel ? `<span class="phase-chip phase-chip-${entry.state}">${stateLabel}</span>` : ''}
+      </div>
+      <div class="phase-when">${when}</div>
+      <div class="phase-closed-sum">${phaseSummaryLine(entry)}</div>
+    </div>`;
 }
 
 // ---------------- Migration to the one-timeline model ----------------

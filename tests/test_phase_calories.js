@@ -212,7 +212,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     ensureDietLogState();
     NAV.dietLogDate = todayStr();
     addFoodToLog(allFoods()[0].id);
-    switchTab('train'); setFitnessSubtab('phases'); setPhasesSubtab('meals');
+    switchTab('train'); setFitnessSubtab('phases'); setPhasesSubtab('meals'); selectComposePhase(currentPhase().phase.id); /* COMPOSE: pick the phase first, then its plan renders */
   });
   await settle(page);
   const screens = await page.evaluate(() => {

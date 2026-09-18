@@ -750,13 +750,15 @@ function pasteDayPlan(day) {
     doPaste();
   }
 }
-function renderMealPlanTab() {
+// `opts.scope === false`: see renderExercisePlanTab() — COMPOSE owns the phase choice for both.
+function renderMealPlanTab(opts) {
+  const showScope = !(opts && opts.scope === false);
   const clipboardLabel = VIEW.mealPlanClipboard
     ? `${MEAL_PLAN_DAY_LABELS[VIEW.mealPlanClipboard.day]} (${VIEW.mealPlanClipboard.entries.length} meal${VIEW.mealPlanClipboard.entries.length === 1 ? '' : 's'})`
     : null;
   return `
     <div style="font-size:11px; color:var(--text-dim); margin:18px 0 14px;">Assign saved meals to each day. Copy a day's plan to reuse it elsewhere.</div>
-    ${renderMealPlannerScope()}
+    ${showScope ? renderMealPlannerScope() : ''}
     ${renderMealPlanTargets()}
     ${renderShoppingListGenerator()}
     ${clipboardLabel ? `<div class="panel" style="margin-bottom:14px; font-size:11px; color:var(--text-dim);">Clipboard: ${escapeHtml(clipboardLabel)}</div>` : ''}

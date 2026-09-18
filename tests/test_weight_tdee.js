@@ -167,7 +167,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (breakdown.avgCardioPerDay + breakdown.nonExerciseTdee !== breakdown.tdee) throw new Error('Expected the two portions to sum back to the same tdee — this is a decomposition, not a new total');
 
   // The panel actually renders the breakdown line
-  await page.evaluate(() => { switchTab('train'); setFitnessSubtab('phases'); setPhasesSubtab('meals'); UI.mealTargetSettingsOpen = true; render(); });
+  await page.evaluate(() => { switchTab('train'); setFitnessSubtab('phases'); setPhasesSubtab('meals'); selectComposePhase(currentPhase().phase.id); /* COMPOSE: pick the phase first, then its plan renders */ UI.mealTargetSettingsOpen = true; render(); });
   await settle(page);
   const breakdownShown = await page.evaluate(() => document.body.textContent.includes('non-exercise'));
   if (!breakdownShown) throw new Error('Expected the ROLLING TDEE panel to render the cardio breakdown line');
@@ -197,7 +197,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
       }
     });
     saveState();
-    switchTab('train'); setFitnessSubtab('phases'); setPhasesSubtab('meals'); UI.mealTargetSettingsOpen = true; render();
+    switchTab('train'); setFitnessSubtab('phases'); setPhasesSubtab('meals'); selectComposePhase(currentPhase().phase.id); /* COMPOSE: pick the phase first, then its plan renders */ UI.mealTargetSettingsOpen = true; render();
   });
   await settle(page);
   const panelText = await page.evaluate(() => document.body.textContent);

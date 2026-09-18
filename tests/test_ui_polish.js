@@ -145,10 +145,16 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (!boxIndicatorTracks.ok) throw new Error('.scroll-box indicator drifted outside the box when scrolled: ' + JSON.stringify(boxIndicatorTracks));
   await page.evaluate(() => cancelMealDraft());
 
-  // 5. Sub-nav scroll affordances, tested on the widest subnav in the app. That used to be
-  // BUILDER's, which had five sub-tabs and now has three — GENERAL and LINK NAMES both retired.
-  // PHASES is the long one now: NEW / WORKOUT PLAN / MEAL PLAN / ARCHIVED overflows a 390px phone.
-  await page.evaluate(() => { switchTab('train'); NAV.fitnessSubtab = 'phases'; setPhasesSubtab('goal'); render(); });
+  // 5. Sub-nav scroll affordances, tested on the widest subnav in the app. Which one that IS keeps
+  // changing — BUILDER's five became three, then PHASES' four (NEW / WORKOUT PLAN / MEAL PLAN /
+  // ARCHIVED) became three when COMPOSE absorbed the two plans. PROGRESS is the long one now, at
+  // five: BODY / LABS / SET VOLUME / COMPARE / PR LOG.
+  //
+  // Measured at 360px rather than this file's 420, because at 420 nothing in the app overflows any
+  // more — and a scroll affordance tested against a strip that fits proves nothing. 360 is a real
+  // phone width (iPhone SE / small Android), so this is a narrower device, not a contrivance.
+  await page.setViewportSize({ width: 360, height: 900 });
+  await page.evaluate(() => { switchTab('train'); setFitnessSubtab('body'); render(); });
   await settle(page);
   const subnavFresh = await page.evaluate(() => {
     const w = document.querySelector('#app .subnav-wrap');
@@ -161,7 +167,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     };
   });
   console.log('sub-nav at rest (scrolled to start):', subnavFresh);
-  if (!subnavFresh.overflows) throw new Error("PHASES' sub-nav should overflow a 390px viewport");
+  if (!subnavFresh.overflows) throw new Error("PROGRESS' sub-nav should overflow a 360px viewport — if nothing overflows, this whole section is testing an affordance that never appears");
   if (subnavFresh.leftVisible) throw new Error('left chevron should be hidden at the start of the strip');
   if (!subnavFresh.rightVisible) throw new Error('right chevron should show when there is more strip to the right');
 
@@ -184,21 +190,21 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // 5b. Scroll position survives the real render a tap on the strip itself triggers — render()
   // fully replaces #app's innerHTML (see ARCHITECTURE.md), so without _captureSubnavScroll()/
   // restoration in attachSubnavScrollAffordances(), the freshly-created .subnav node's native
-  // scrollLeft would start back at 0 the instant any button in it (including ARCHIVED, off-screen
+  // scrollLeft would start back at 0 the instant any button in it (including PR LOG, off-screen
   // to the right) is tapped, snapping the whole strip back to the start.
   const scrollBeforeTap = await page.evaluate(() => document.querySelector('#app .subnav-wrap > .subnav').scrollLeft);
   await page.evaluate(() => {
-    const btn = [...document.querySelectorAll('#app .subnav button')].find(b => b.textContent.trim() === 'ARCHIVED');
-    btn.click(); // a real click through the real onclick="setPhasesSubtab('archived')", not calling the handler directly
+    const btn = [...document.querySelectorAll('#app .subnav button')].find(b => b.textContent.trim() === 'PR LOG');
+    btn.click(); // a real click through the real onclick, not calling the handler directly
   });
   await settle(page);
   const afterTap = await page.evaluate(() => ({
     scrollLeft: document.querySelector('#app .subnav-wrap > .subnav').scrollLeft,
-    lastTabActive: [...document.querySelectorAll('#app .subnav button')].find(b => b.textContent.trim() === 'ARCHIVED').classList.contains('active'),
+    lastTabActive: [...document.querySelectorAll('#app .subnav button')].find(b => b.textContent.trim() === 'PR LOG').classList.contains('active'),
     leftVisible: document.querySelector('#app .subnav-more-l').classList.contains('visible'),
   }));
-  console.log('sub-nav after tapping LINK NAMES (a real re-render):', { scrollBeforeTap, ...afterTap });
-  if (!afterTap.lastTabActive) throw new Error('Expected LINK NAMES to actually become the active sub-tab');
+  console.log('sub-nav after tapping PR LOG (a real re-render):', { scrollBeforeTap, ...afterTap });
+  if (!afterTap.lastTabActive) throw new Error('Expected PR LOG to actually become the active sub-tab');
   if (afterTap.scrollLeft !== scrollBeforeTap) throw new Error(`Expected scroll position to survive the re-render (was ${scrollBeforeTap}), got ${afterTap.scrollLeft} — the strip snapped back`);
   if (!afterTap.leftVisible) throw new Error('Expected the left chevron to still reflect the restored (scrolled-away-from-start) position, not the new node\'s default');
 
@@ -206,11 +212,14 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // scroll offset — _subnavScrollMemory is keyed by the strip's own text, specifically to prevent
   // a totally unrelated sub-nav that happens to land in the same structural slot from restoring a
   // stale, likely out-of-range position on first render.
-  await page.evaluate(() => { switchTab('train'); setFitnessSubtab('body'); });
+  // BUILDER's strip, not PROGRESS's — PROGRESS is the one that was just scrolled in 5/5b, so using
+  // it here would assert that a strip does not inherit its OWN remembered offset, which is the
+  // opposite of the contract and would fail against correct code.
+  await page.evaluate(() => { switchTab('train'); setFitnessSubtab('builder'); });
   await settle(page);
   const otherSubnav = await page.evaluate(() => document.querySelector('#app .subnav-wrap > .subnav').scrollLeft);
-  console.log("a different sub-nav (Progress) on first render:", otherSubnav);
-  if (otherSubnav !== 0) throw new Error(`Expected an unrelated sub-nav to start at 0, not inherit Exercise Setup's scroll offset — got ${otherSubnav}`);
+  console.log("a different sub-nav (Builder) on first render:", otherSubnav);
+  if (otherSubnav !== 0) throw new Error(`Expected an unrelated sub-nav to start at 0, not inherit PROGRESS's scroll offset — got ${otherSubnav}`);
 
   // A sub-nav that fits shows no affordances. Built from subNav() directly with two short buttons
   // rather than pointing at some real screen's sub-nav: this previously used Schedule Setup as

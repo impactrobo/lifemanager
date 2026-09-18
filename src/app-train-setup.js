@@ -637,14 +637,18 @@ function pasteDayWorkoutPlan(day) {
     doPaste();
   }
 }
-function renderExercisePlanTab() {
+// `opts.scope === false` drops the "Adding to which phase" picker: COMPOSE asks that question once,
+// above both plans, so repeating it here would be a second control for the same choice -- and a
+// second control that could disagree with the first, which is the bug COMPOSE exists to remove.
+function renderExercisePlanTab(opts) {
+  const showScope = !(opts && opts.scope === false);
   const clipboardLabel = VIEW.exPlanClipboard
     ? `${MEAL_PLAN_DAY_LABELS[VIEW.exPlanClipboard.day]} (${VIEW.exPlanClipboard.entries.length} workout${VIEW.exPlanClipboard.entries.length === 1 ? '' : 's'})`
     : null;
   const hasProgram = programWorkouts('C25K').length > 0 || programWorkouts('C2Triathlon').length > 0;
   return `
     <div style="font-size:11px; color:var(--text-dim); margin:18px 0 14px;">Assign saved workouts to each day of the rotation. Copy a day's plan to reuse it elsewhere.</div>
-    ${renderPlannerScope()}
+    ${showScope ? renderPlannerScope() : ''}
     ${hasProgram ? `<button class="btn btn-sm btn-block" style="margin-bottom:14px;" onclick="openAutoFillPicker()">AUTO-FILL C25K / C2TRIATHLON</button>` : ''}
     ${UI.autofillPickerOpen ? renderAutoFillPicker() : ''}
     ${clipboardLabel ? `<div class="panel" style="margin-bottom:14px; font-size:11px; color:var(--text-dim);">Clipboard: ${escapeHtml(clipboardLabel)}</div>` : ''}

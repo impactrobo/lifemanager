@@ -241,7 +241,10 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
       // Every phase carries BOTH bodies: a stretch of time has a way you train AND a way you eat,
       // so the old "an exercise block has no calorie target" split is gone by design.
       calorieInputs += document.querySelectorAll('.phase-cal').length;
-      if (/PLAN/.test(document.getElementById('app').innerText)) hasPlanRow = true;
+      // document, not #app: since 2026-09-18 the phase editor is hoisted out of #app onto
+      // #overlayRoot, because every aesthetic makes #app a stacking context and a modal inside one
+      // paints under the bars. See _hoistOverlays() and test_overlay_layering.js.
+      if (/PLAN/.test(document.body.innerText)) hasPlanRow = true;
     }
     return { cards, calorieInputs, hasPlanRow };
   });

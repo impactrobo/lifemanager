@@ -60,7 +60,7 @@ const { settle, pinClock } = require('./helpers.js');
   if (backToExercise.titles !== 1) throw new Error('The strip should splice into the grid screen, not add a second header: ' + backToExercise.titles);
 
   // ---- 3. The targets landed above the week they govern ----
-  await page.evaluate(() => { setFitnessSubtab('phases'); setPhasesSubtab('meals'); });
+  await page.evaluate(() => { setFitnessSubtab('phases'); setPhasesSubtab('meals'); selectComposePhase(currentPhase().phase.id); /* COMPOSE: pick the phase first, then its plan renders */ });
   await settle(page);
   const targets = await page.evaluate(() => {
     const body = document.getElementById('app').innerText;

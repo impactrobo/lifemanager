@@ -298,6 +298,38 @@ Newest first. Keep this reasonably current so a fresh session can see what alrea
 without re-reading the whole diff history. Roughly grouped: this project spent early Sept 2026
 on an architecture split + a large wave of Maximalist aesthetics.
 
+- **PHASES becomes SCHEDULE / COMPOSE / ARCHIVED (2026-09-18).** Asked for as *"NEW goes to
+  SCHEDULE, then both WORKOUT PLAN and MEAL PLAN should be sub nav chips under a new tab: COMPOSE…
+  you must first select a given PHASE, then the WORKOUT PLAN and MEAL PLAN chips light up (from
+  grey)."*
+  - **It fixes a real defect, not just the layout.** WORKOUT PLAN and MEAL PLAN were peers at the
+    subtab level, and each carried its OWN "Adding to which phase" dropdown backed by its own state
+    (`VIEW.plannerDate` / `VIEW.mealPlannerDate`). Two independent answers to one question: you
+    could be laying out Phase 2's workouts and Phase 3's meals at the same time with nothing on
+    screen saying so. COMPOSE asks once and drives both.
+  - The picker is **tappable phase cards** (the user's pick over a dropdown), folding to a one-line
+    summary once chosen. The two chips are **genuinely `disabled`**, not merely dimmed — a
+    disabled-looking control that still works teaches you the greying means nothing.
+  - Each chip renders its **existing workflow unchanged**, via a new `opts.scope === false` that
+    drops the now-redundant per-tab dropdown. `renderPlannerScope()` / `renderMealPlannerScope()`
+    still exist and still work; nothing in the UI passes `scope: true` any more, and
+    `test_exercise_goals.js` is currently their only caller.
+  - **Key stays `'goal'` for SCHEDULE** — it rides in saved nav snapshots, and renaming it would
+    land old ones on the fallback. `'workouts'` and `'meals'` alias to COMPOSE *with the chip they
+    meant already chosen*, so an old deep link reaches what it pointed at.
+  - The shelf is **named rather than silently omitted**: a shelved phase has no dates, and a plan is
+    resolved by the day it is in force on, so there is no week to plan onto yet.
+  - `tests/test_compose.js`; three mutations verified to fail, including the one that matters most —
+    pointing only the workout planner at the selection, which is the old split restored. A CSS trap
+    was caught on the way: `.phase-state-*` sets only `border-left-color`, so `.compose-selected`'s
+    `border-left` shorthand declared further down the file silently beat it and the summary lost its
+    state colour. The rule moved above them; the test now asserts the computed colour.
+  - Six tests needed their premises restated. Four just needed a phase picked first. Two were real:
+    `test_exercise_goals.js` read the phase editor's text out of `#app`, which is no longer where
+    the modal lives, and `test_ui_polish.js` tested sub-nav scroll affordances against *"PHASES'
+    four tabs overflow a 390px phone"* — three tabs don't. It now uses PROGRESS' five at 360px, and
+    asserts the overflow precondition rather than assuming it.
+
 - **A left-open phase editor no longer follows you back to PHASES (2026-09-18).** Reported as
   *"going into PHASES from outside, you can't scroll the screen until you tap a text box or input…
   focus issue?"* — not a focus issue. Nothing was wrong with the scroll: the phase editor was still

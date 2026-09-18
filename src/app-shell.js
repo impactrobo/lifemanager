@@ -144,6 +144,12 @@ let VIEW = {
   mealPlanExpanded: {},
   // (phaseOpen moved to UI on 2026-09-18 -- it is an open MODAL, not per-screen presentation.
   //  See defaultTransientUi().)
+  // COMPOSE: which phase you are filling in, and which of its two plans is showing. Per-screen
+  // presentation, so it belongs here and survives a trip to another section -- coming back to a
+  // half-built week and having to re-pick the phase would be the friction COMPOSE removes. Null
+  // means nothing picked yet, which is the state where both plan chips are grey.
+  composePhaseId: null,
+  composeTab: 'workouts',
   // Which exercise blocks are folded shut on a session screen, keyed 'workoutId:entryKey'. Per view
   // and never saved -- this is "what's on my screen right now", no more a fact about the workout
   // than a scroll position is. See exBlockCollapsed() in app-train-log.js.

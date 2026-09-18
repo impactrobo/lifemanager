@@ -28,7 +28,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // 1. No meals assigned -> no items, GENERATE disabled
   // MEAL PLAN lives under PHASES now, not SETUP -- assigning a meal to a weekday is planning, and
   // the plan it writes into belongs to a weight phase.
-  await page.evaluate(() => { switchTab('train'); setFitnessSubtab('phases'); setPhasesSubtab('meals'); });
+  await page.evaluate(() => { switchTab('train'); setFitnessSubtab('phases'); setPhasesSubtab('meals'); selectComposePhase(currentPhase().phase.id); /* COMPOSE: pick the phase first, then its plan renders */ });
   await settle(page);
   const emptyItems = await page.evaluate(() => generateShoppingListItems());
   console.log('items with nothing planned:', emptyItems);

@@ -488,4 +488,20 @@ is the OTHER overlays and the OTHER search boxes, not just the two that were bro
       nothing you expected to stay open now shuts on you when you switch subtabs and come back.
       Half-finished forms on BODY and the Workout Builder are the ones worth trying.
 
+## PHASES: SCHEDULE / COMPOSE / ARCHIVED (2026-09-18)
+- [ ] The sub-nav reads **SCHEDULE / COMPOSE / ARCHIVED**. SCHEDULE is the old NEW tab, unchanged.
+- [ ] COMPOSE with nothing picked: the phases are tappable cards and both chips are grey **and
+      unresponsive**. Tap one anyway to confirm nothing happens.
+- [ ] Tap a phase → chips light, the phase stays named at the top with its state colour bar.
+      **WORKOUT PLAN** and **MEAL PLAN** should each be exactly the screen you already know, minus
+      the "Adding to which phase" dropdown (COMPOSE asks that once now).
+- [ ] The real check: pick an **upcoming** phase, add a workout to a day, then switch to MEAL PLAN
+      and add a meal. Go to SCHEDULE, open that phase, and confirm **both** landed on it — not on
+      whatever phase today falls in. That mix-up was possible before and is what this change closes.
+- [ ] **CHANGE** returns you to the picker.
+- [ ] Anything on the shelf gets a note under the cards saying it can't be planned onto yet. Is that
+      the right call, or would you rather be able to compose a phase before scheduling it?
+- [ ] Your existing plans are all still there — nothing about how a plan is stored changed, only
+      which screen asks which phase you mean.
+
 ## Add future items below as new features ship
