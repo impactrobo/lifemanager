@@ -85,9 +85,14 @@ function openEntry(id, opts) {
   const from = VIEW.entryOpenId;
   if (from && from !== id && !(opts && opts.replace)) {
     commitEntryDraft();          // don't lose what was typed in the entry being left
+    // The note being left is only a place you can go BACK to if there is something in it. Notes
+    // now opens onto a blank one every visit, so tapping a link from that landing note would
+    // otherwise push a record that purgeEmptyEntries() is about to remove — Back would then be
+    // pointing at an entry that no longer exists. Sweep it instead of stacking it.
+    const leaving = liveEntryById(from);
+    if (leaving && !entryIsBlank(leaving)) entryBackStack().push(from);
+    else purgeEmptyEntries(id);
     saveState();
-    if (!Array.isArray(VIEW.entryBackStack)) VIEW.entryBackStack = [];
-    VIEW.entryBackStack.push(from);
   }
   ensureTab('notes');            // before the VIEW writes below: switchTab() clears transient UI
   VIEW.entryOpenId = id;
@@ -110,19 +115,35 @@ function goBackEntry() {
   }
   closeEntry();
 }
+// Put a fresh, empty note in the editor. The state half only — no navigation, no render — because
+// two callers need it: NEW on the tab bar, and switchTab() landing on Notes, which does its own.
+//
 // A new entry is saved to STATE immediately rather than living as a draft. An unsaved buffer is a
 // thing that can be lost by a stray tap; an empty entry that gets abandoned is cleaned up on
-// close (see closeEntry), which is recoverable and obvious.
-function newQuickEntry() {
-  const e = blankEntry('quick');
-  allEntries().push(e);
-  invalidateEntryIndex();
-  ensureTab('notes');
-  VIEW.entryOpenId = e.id;
+// close (see closeEntry) and on the way out of the section, which is recoverable and obvious.
+function openBlankEntry() {
+  // Park what is in the textarea BEFORE asking whether the open note is blank. The record only
+  // learns what was typed at commit time, so without this, pressing NEW on a note you had just
+  // started writing reads it as empty, reuses it, and the text goes with the re-render.
+  commitEntryDraft();
+  // If a blank one is ALREADY open, reuse it. newQuickEntry() calls ensureTab() first, so arriving
+  // at Notes from elsewhere has already made one by the time NEW is pressed — without this, that
+  // path stacks a second and orphans the first. It also makes NEW a no-op on an untouched note,
+  // which is the right answer: you are already looking at a new note.
+  const open = openEntryRecord();
+  const id = (open && entryIsBlank(open)) ? open.id : startBlankEntry();
+  VIEW.entryOpenId = id;
   VIEW.entryMode = 'edit';
   VIEW.entryBackStack = [];   // a note you started fresh isn't "behind" anything
+  VIEW.entryPreview = null; VIEW.entryTagQuery = ''; VIEW.entryFieldOpen = {};
+  VIEW.hubPicker = null; VIEW.convert = null; VIEW.ingMatch = null;
   clearEntryDraft();
   NAV.notesSubtab = 'view';
+  return id;
+}
+function newQuickEntry() {
+  ensureTab('notes');
+  openBlankEntry();
   saveState();
   render();
 }
@@ -225,13 +246,12 @@ function createAndLinkEntry(title, fromId) {
   render();
 }
 function closeEntry() {
-  const e = commitEntryDraft();
+  commitEntryDraft();
   // An entry with nothing in it was a false start — remove it rather than leaving blank cards in
-  // the list. Anything with text, a photo, a tag or a link stays, saved.
-  if (e && !(e.title || '').trim() && !(e.body || '').trim() &&
-      !(e.photos || []).length && !entryTags(e).length && !entryLinkRows(e).length) {
-    STATE.entries = allEntries().filter(x => x.id !== e.id);
-  }
+  // the list. Anything with text, a photo, a tag, a link, a hub member or a filled field stays,
+  // saved. Swept across the whole collection, not just the one being closed: Notes now opens onto
+  // a fresh blank entry each visit, so an abandoned one can be several navigations back.
+  purgeEmptyEntries();
   VIEW.entryOpenId = null;
   VIEW.entryMode = 'view';
   VIEW.entryBackStack = [];

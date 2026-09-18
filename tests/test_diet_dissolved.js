@@ -16,17 +16,18 @@ const { settle, pinClock } = require('./helpers.js');
   await page.goto('file://' + path.resolve(__dirname, '..', 'index.html').replace(/\\/g, '/'));
   await settle(page);
 
-  // ---- 1. The bar lost DIET and gained D&E ----
+  // ---- 1. The bar lost DIET and gained DAILY ----
   await page.evaluate(() => { switchTab('train'); });
   await settle(page);
   const bar = await page.evaluate(() => [...document.querySelectorAll('#tabbar button')].map(b => b.textContent.trim()));
   console.log('bar:', bar);
-  // A button LABELLED exactly DIET is the retired tab. The workouts button now reads "DIET &
-  // EXERCISE" over two lines, which contains the word — so the check is on the whole label, not a
-  // substring of it.
+  // The retired DIET tab must not be back. What replaced it is DAILY (renamed from "DIET &
+  // EXERCISE" on 2026-09-18): the merged screen is named by WHEN rather than by its two subjects,
+  // and the subjects are named by the EXERCISE / MEALS strip inside it, checked next. So the
+  // contract here is not a word in the label — it is that one button reaches the merged screen and
+  // the merged screen carries both logs.
   if (bar.some(b => b === 'DIET')) throw new Error('The DIET tab should be gone: ' + bar);
-  const de = bar.find(b => /EXERCISE/.test(b));
-  if (!de || !/DIET/.test(de)) throw new Error('WORKOUTS should name both logs now that both are on it: ' + bar);
+  if (!bar.includes('DAILY')) throw new Error('The merged exercise+meals screen is reached from DAILY: ' + bar);
 
   // ---- 2. D&E holds both logs, and only switching the strip moves between them ----
   const strip = await page.evaluate(() => [...document.querySelectorAll('.subnav button')].map(b => b.textContent.trim()));
@@ -107,8 +108,8 @@ const { settle, pinClock } = require('./helpers.js');
   if (!stale.picker) throw new Error('...actually rendering the log, not a blank screen');
   // Exactly one button lit, and it is the one holding both logs — the bar and the screen agreeing
   // about where you are is the whole point of the redirect.
-  if (stale.lit.length !== 1 || !/EXERCISE/.test(stale.lit[0])) {
-    throw new Error('...with the D&E button lit on the bar, so the bar and screen agree: ' + JSON.stringify(stale.lit));
+  if (stale.lit.length !== 1 || stale.lit[0] !== 'DAILY') {
+    throw new Error('...with the DAILY button lit on the bar, so the bar and screen agree: ' + JSON.stringify(stale.lit));
   }
 
   // ---- 5. Nothing is left calling the retired renderers ----

@@ -144,6 +144,7 @@ synthetic snapshot — yours is the one fixture the sandbox never had.
       from five, then six. Confirmed to fit on device, which closes the ROADMAP overrun item. The
       exercise tab reads DIET & EXERCISE over two lines rather than the D&E initialism, and BODY was
       renamed PROGRESS once WEIGHT and MEASUREMENTS merged into a BODY *sub*tab beneath it.
+      *(That first button was renamed **DAILY** on 2026-09-18 — see the section at the bottom.)*
 - [x] Your **supplement regimen** is intact under BUILDER → DIET → SUPPLEMENTS — same items, doses,
       stacks and slots. The daily tick is still on Home.
 - [x] Your **calorie and macro targets** show up in PHASES → MEAL PLAN under TARGETS TO MEET, with
@@ -411,5 +412,27 @@ Both scales were already logged on Home; now the day's figures reach BODY and CO
       you change fibre — that's the question this was built for.
 - [ ] Fill in **yesterday** from the sheet (open it from a past entry) and confirm the readings file
       under that day, not today.
+
+## Notes opens on a blank note; DAILY (2026-09-18)
+The sandbox can prove the note is created and swept. What it can't judge is whether landing in a
+text field every time is right **on a phone** — the iOS keyboard may spring up on arrival, which is
+either exactly what you wanted or an ambush when you only meant to look something up.
+- [ ] Tap NOTES. You land in an empty note with the cursor ready, and **NEW is lit** on the bottom
+      bar — that was the reported bug.
+- [ ] Does the keyboard come up on its own? Say whether that's welcome or whether arriving should
+      wait for you to tap the body first.
+- [ ] Leave without typing (tap another section, or VIEW ALL). Go back to VIEW ALL: **no new
+      "Untitled" card**. Do this several times — the count must not creep.
+- [ ] Type one line, navigate away without pressing anything, come back via VIEW ALL: it's there,
+      with what you typed.
+- [ ] Force-quit the app while sitting in an empty note, reopen: no blank card in the list.
+- [ ] From the landing note, tap a `[[link]]` or a link chip to another note. Press back — you
+      should return to the **list**, not to an empty note.
+- [ ] Press NEW while already in an untouched empty note: nothing happens (you're already in one).
+      Press NEW with something typed: a fresh note opens and **the typed one is kept**.
+- [ ] Check the note list for anything blank that predates this build — old empty notes are swept on
+      first launch, so this is really "confirm nothing you wanted went with them".
+- [ ] The exercise tab now reads **DAILY** on one line, not DIET & EXERCISE over two. Four buttons,
+      even weights. Confirm it still reads as the today screen and not as something vaguer.
 
 ## Add future items below as new features ship

@@ -19,6 +19,13 @@ document.addEventListener('wheel', function(e) {
 }, { passive: false });
 
 migrateState();
+// Any blank note left behind by a hard close — the sweeps in closeEntry() and switchTab() cover
+// every way you can LEAVE Notes, but not killing the app while sitting in one.
+purgeEmptyEntries();
+// Booting straight into Notes (Settings > Default Page) has to land on the same new blank note that
+// arriving via switchTab() does. NAV.currentTab was set by initialTab() during script evaluation,
+// so this branch is the only place that path passes through.
+if (NAV.currentTab === 'notes') openBlankEntry();
 ensureRecurringReminderOccurrences(); // tops up every recurring reminder series on each app open
 applyAesthetic();
 document.getElementById('settingsBtn').innerHTML = icon('settings');

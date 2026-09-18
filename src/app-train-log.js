@@ -107,7 +107,8 @@ function renderTrainSection(type, list, dateStr, openFn) {
   }).join('');
   return `<div class="workout-grid">${cells}</div>`;
 }
-// D&E -- Diet and Exercise. The tab is the LOG: what you did today, on both fronts. Meals arrived
+// DAILY (labelled "DIET & EXERCISE" until 2026-09-18). The tab is the LOG: what you did today, on
+// both fronts -- which is what the name now says, leaving the two subjects to the strip. Meals arrived
 // here when DIET dissolved, because logging a meal and logging a session are the same act at the
 // same moment of the day, and the only reason they sat on separate tabs is that one of them used to
 // share a tab with the targets it's measured against. Those went to PHASES / MEAL PLAN, where

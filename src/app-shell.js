@@ -333,20 +333,24 @@ function switchTab(tab) {
   // markup sitting there while the bottom bar loses its section buttons. Looks like the app froze.
   // Shipped exactly that way on 2026-09-14, caught from a phone screenshot.
   if (MERGED_TABS[tab]) tab = MERGED_TABS[tab];
+  // LEAVING Notes throws away a note you never wrote anything in. Notes opens on a blank entry
+  // every visit (see below), so without this a glance at the section leaves one behind every time.
+  // Here rather than in closeEntry() because navigating away is the path that doesn't go through it.
+  if (NAV.currentTab === 'notes') { commitEntryDraft(); purgeEmptyEntries(); saveState(); }
   pushNavHistory();
   resetTransientUi();
   NAV.currentTab = tab;
   if (tab === 'train') { NAV.trainView = GRID_VIEW(); NAV.fitnessSubtab = 'workouts'; }
   if (tab === 'notes') {
-    // A fresh visit to Notes (e.g. via the bottom tab bar) lands on the list, not on whatever
-    // entry was open before you navigated away. openEntry() sets this again on its way in, so
-    // arriving BY opening an entry still works.
-    VIEW.entryOpenId = null;
-    VIEW.entryMode = 'view';
-    VIEW.entryDraftTitle = null; VIEW.entryDraftBody = null; VIEW.entryTagQuery = '';
-    VIEW.entryBackStack = []; VIEW.entryAutocomplete = null; VIEW.entryPreview = null;
-    VIEW.hubPicker = null; VIEW.convert = null; VIEW.entryFieldOpen = {}; VIEW.ingMatch = null;
-    NAV.notesSubtab = 'view';
+    // A fresh visit to Notes lands on a NEW, BLANK ENTRY, ready to type — not on the list, and not
+    // on whatever was open before you navigated away. Requested 2026-09-18, and it is the right
+    // default for the section whose whole premise is that writing something down should cost
+    // nothing: the list is where you go to FIND something, which is the rarer errand.
+    //
+    // Safe to create on arrival because an entry with nothing in it is never kept — closeEntry()
+    // drops it, and the purgeEmptyEntries() above catches the case where you simply navigate away.
+    // Without that second half, every glance at Notes would leave a blank note behind.
+    openBlankEntry();
   }
   if (tab === 'schedule') {
     NAV.scheduleSubtab = 'calendar';
@@ -628,10 +632,12 @@ const SECTION_BARS = {
     nav: 'fitnessSubtab', set: 'setFitnessSubtab',
     alias: { goal: 'phases', setup: 'builder', longevity: 'builder', diet: 'workouts' },
     buttons: [
-      // Two lines rather than the initialism: it fits now the bar is four, and "D&E" reads as a
-      // code until you already know it. `.tabbar button` is white-space: nowrap, so the break is an
-      // explicit <br> rather than a hope.
-      { key: 'workouts', icon: 'exercise', label: 'DIET &amp;<br>EXERCISE' },
+      // DAILY, not "DIET & EXERCISE" (renamed 2026-09-18). The old label named the screen's two
+      // subjects, which made it the longest button on a four-button bar and forced a <br> the other
+      // three don't need. It names WHEN instead of WHAT: this is the today screen — today's
+      // workout, today's meals — and its three neighbours are all things you set up once and
+      // revisit. That is the distinction worth carrying in the bar.
+      { key: 'workouts', icon: 'exercise', label: 'DAILY' },
       // PHASES sets the goal and maps workouts and meals onto time; BUILDER constructs the things
       // those plans point at. Split by what you are DOING, not by subject.
       { key: 'phases',   icon: 'planner',  label: 'PHASES' },
@@ -664,10 +670,18 @@ const SECTION_BARS = {
     set: 'setNotesSubtab',
     buttons: [
       // Notes is ONE screen that an open entry takes over, so what counts as "current" lives in
-      // VIEW rather than in a NAV subtab -- which is why this needs its own active rule.
-      { key: 'view', icon: 'magnify', label: 'VIEW ALL', active: () => !VIEW.entryOpenId },
-      // An action, not a destination: it makes a note and opens it, so it is never "where you are".
-      { key: 'new',  icon: 'pencil',  label: 'NEW',      active: () => false },
+      // VIEW rather than in a NAV subtab -- which is why this needs its own active rule. Both rules
+      // ask openEntryRecord(), the same question renderNotes() asks, rather than reading
+      // VIEW.entryOpenId directly: the id can outlive its entry (deleted elsewhere, or swept by
+      // purgeEmptyEntries() on the way out and then restored by Back), and then the raw id says
+      // "editor" while the screen shows the list.
+      { key: 'view', icon: 'magnify', label: 'VIEW ALL', active: () => !openEntryRecord() },
+      // NEW used to be `active: () => false` on the grounds that it is an action rather than a
+      // place. That was already thin, and once Notes started LANDING on the editor it left the bar
+      // with nothing lit at all on arrival — reported 2026-09-18 as "NEW doesn't light up". An open
+      // entry IS where you are, so it lights; the two rules are exact opposites, which is the
+      // invariant test_tabbar_registry.js checks (exactly one lit, never zero).
+      { key: 'new',  icon: 'pencil',  label: 'NEW',      active: () => !!openEntryRecord() },
     ],
   },
   hobbies: {
@@ -752,7 +766,7 @@ function _doRender() {
     renderAestheticOptions(); renderAccentSwatches();
   } else if (NAV.currentTab === 'notes') {
     app.innerHTML = renderNotes();
-    if (VIEW.entryOpenId) { renderEntryPhotoRow(); renderEntryIngredientRows(); }  // both are patched in, not returned as markup
+    if (openEntryRecord()) { renderEntryPhotoRow(); renderEntryIngredientRows(); }  // both are patched in, not returned as markup
   } else if (NAV.currentTab === 'budget') {
     if (NAV.budgetSubtab === 'recurring') app.innerHTML = renderBudgetRecurring();
     else if (NAV.budgetSubtab === 'goals') app.innerHTML = renderBudgetGoals();

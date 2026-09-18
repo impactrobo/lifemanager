@@ -68,12 +68,23 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // 3. Page scroll indicator: with no scrollable overflow it stays invisible; once real content
   //    makes the page scrollable and an actual scroll event fires, it becomes visible then
   //    auto-hides again shortly after scrolling stops.
+  //    Measured on Notes' LIST, not its editor: since 2026-09-18 arriving at Notes opens a blank
+  //    entry, and the editor's body textarea is tall enough to make the page scroll on its own —
+  //    which would test the indicator against a screen that genuinely overflows. closeEntry() drops
+  //    the untouched note and leaves the short empty list this check has always relied on, and the
+  //    precondition is asserted rather than assumed so a future tall screen fails loudly here.
+  await page.evaluate(() => closeEntry());
+  await settle(page);
   const noScrollVisible = await page.evaluate(() => {
     updatePageScrollIndicator(true);
-    return document.getElementById('pageScrollIndicator').classList.contains('visible');
+    return {
+      overflows: document.documentElement.scrollHeight > window.innerHeight + 1,
+      visible: document.getElementById('pageScrollIndicator').classList.contains('visible'),
+    };
   });
-  console.log('page scroll indicator visible with no scrollable overflow:', noScrollVisible);
-  if (noScrollVisible) throw new Error('Expected the page scroll indicator to stay hidden when nothing overflows');
+  console.log('page scroll indicator with no scrollable overflow:', noScrollVisible);
+  if (noScrollVisible.overflows) throw new Error('This check needs a screen that does NOT overflow to mean anything');
+  if (noScrollVisible.visible) throw new Error('Expected the page scroll indicator to stay hidden when nothing overflows');
 
   await page.evaluate(() => {
     const spacer = document.createElement('div');

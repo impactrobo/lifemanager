@@ -298,6 +298,41 @@ Newest first. Keep this reasonably current so a fresh session can see what alrea
 without re-reading the whole diff history. Roughly grouped: this project spent early Sept 2026
 on an architecture split + a large wave of Maximalist aesthetics.
 
+- **Notes opens on a blank note, and DIET & EXERCISE becomes DAILY (2026-09-18).** Two small
+  navigation changes asked for together: *"Notes should always start on NEW (which doesn't light
+  up for some reason)"*.
+  - **Notes lands on the editor, not the list.** Arriving at the section — by tab, or by booting
+    into it from Settings → Default Page — creates a fresh empty entry and opens it in edit mode.
+    The list is where you go to FIND something, which is the rarer errand; the section's whole
+    premise is that writing something down should cost nothing.
+  - **The sweep is what makes that safe.** The app now creates a record nobody asked for on every
+    visit, so every way OUT of the editor removes it again when nothing was written: closing the
+    entry, tapping VIEW ALL, navigating to another section, following a link out of it, and — the
+    one no exit path can cover — killing the app mid-note, swept at the next boot. Miss one and
+    the list silently fills with "Untitled" cards, which is worse than the friction removed.
+  - `entryIsBlank()` is the single definition of "nothing in it", in `app-entries.js` beside
+    `startBlankEntry()` and `purgeEmptyEntries()`. The check it replaced was written inline in
+    `closeEntry()` and **had already drifted**: it knew about text, photos, tags and links, but not
+    hub members or template fields, so a hub you had added three notes to and then left by the
+    back arrow counted as empty.
+  - **A blank note is never a Back destination.** `openEntry()` used to push whatever you were
+    leaving; following a link out of the landing note would have put a record on the back stack
+    that the sweep was about to delete. It pushes only non-blank entries now, and sweeps the rest.
+  - **NEW lights up.** It was `active: () => false` on the grounds that it is an action rather than
+    a place. That was already thin, and once Notes landed on the editor it left the bar with
+    NOTHING lit — the reported bug. An open entry IS where you are. Both Notes rules now ask
+    `openEntryRecord()`, the same question `renderNotes()` asks, rather than reading
+    `VIEW.entryOpenId`: the id can outlive its entry, and then the bar says "editor" while the
+    screen shows the list.
+  - **DIET & EXERCISE → DAILY.** The old label named the screen's two subjects, which made it the
+    longest button on a four-button bar and forced a `<br>` the other three don't need. It names
+    WHEN instead of WHAT — this is the today screen, and its three neighbours are all things you
+    set up once and revisit. The two subjects are still named, by the EXERCISE / MEALS strip inside.
+  - `tests/test_notes_landing.js` pins all of it; four mutations (NEW never lights, no sweep on
+    leaving, no sweep at boot, blank-check before the draft is committed) were each verified to
+    fail it. The last of those is a real bug the test found while being written: pressing NEW on a
+    half-typed note read the *record* as empty, reused it, and the text went with the re-render.
+
 - **The bottom bar becomes a registry (2026-09-17).** `renderTabbar()` was a ~90-line chain of
   `if (NAV.currentTab === 'x')` with each section's buttons written out by hand, so every
   navigation change meant editing control flow to express what is really a list — three times now.

@@ -119,6 +119,36 @@ function touchEntry(e) {
   return e;
 }
 
+// ---- Blank entries: made freely, kept only if you wrote something ----
+// Notes opens straight onto a new empty note (see switchTab), which means the app creates records
+// nobody asked for, every visit. That is only tolerable because a blank one is never kept: the two
+// ways out of the editor -- closeEntry() and navigating to another section -- both sweep. So these
+// three are one mechanism, and entryIsBlank() is deliberately the single definition of "nothing in
+// it" rather than a condition spelled out at each exit. The earlier version of that check lived
+// inline in closeEntry() and had already drifted: it missed hub members and template fields, so a
+// hub you added three notes to and then left by the back arrow counted as empty.
+function startBlankEntry() {
+  const e = blankEntry('quick');
+  allEntries().push(e);
+  invalidateEntryIndex();
+  return e.id;
+}
+function entryIsBlank(e) {
+  if (!e) return false;
+  if ((e.title || '').trim() || (e.body || '').trim()) return false;
+  if ((e.photos || []).length || entryTags(e).length || entryLinkRows(e).length) return false;
+  if (hubItems(e).length) return false;
+  // A template field counts only when it holds something. Converting to a typed entry seeds the
+  // keys empty, so `fields` being non-empty is not by itself evidence that anything was written.
+  return !Object.values(e.fields || {}).some(v => Array.isArray(v) ? v.length : String(v == null ? '' : v).trim());
+}
+// `exceptId` is the entry you are still in — swept on the way out, not while you are sitting in it.
+function purgeEmptyEntries(exceptId) {
+  const before = allEntries().length;
+  STATE.entries = allEntries().filter(e => e.id === exceptId || e.deleted || !entryIsBlank(e));
+  if (STATE.entries.length !== before) invalidateEntryIndex();
+}
+
 // A displayable name. The spec makes title optional on every type, so the body's first non-empty
 // line stands in -- which is what makes a Quick note genuinely quick: type and save, and it still
 // has something to be called in a list, a link chip and a search result.
