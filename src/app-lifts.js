@@ -1048,6 +1048,88 @@ const MUSCLE_LU = {
 function muscleLU(muscle) { return MUSCLE_LU[muscle] || null; }
 function liftLU(liftId) { const l = liftById(liftId); return l ? muscleLU(l.muscle) : null; }
 
+// ---- Push / pull / legs ----
+//
+// The same derivation as MUSCLE_LU above, for the same reason: a split worth filtering by, taken
+// from the muscle rather than stored beside it, so the two can never disagree and nothing has to be
+// classified twice. The conventional PPL reading is used -- side delts press, rear delts row, and
+// the deadlift rides with Back onto pull.
+//
+// Abs and Neck are 'other' EXPLICITLY. That is a real answer -- genuinely neither push, pull nor
+// legs, the same judgement that gave Abs its own 'core' above -- and it is a different thing from a
+// muscle this table has never heard of, which returns null. Muscle names are free text, so a custom
+// lift can carry one; those land in their own trailing UNSORTED group rather than being quietly
+// filed under OTHER, because only one of the two is something you can do anything about.
+const MUSCLE_PPL = {
+  Chest: 'push', Triceps: 'push', 'F Delts': 'push', 'S Delts': 'push',
+  Back: 'pull', Biceps: 'pull', 'R Delts': 'pull', Traps: 'pull', Forearms: 'pull',
+  Quads: 'legs', Hams: 'legs', Glutes: 'legs', Calves: 'legs',
+  Abs: 'other', Neck: 'other',
+};
+function musclePPL(muscle) { return MUSCLE_PPL[muscle] || null; }
+function liftPPL(liftId) { const l = liftById(liftId); return l ? musclePPL(l.muscle) : null; }
+
+// ---- The ways a list of lifts can be cut ----
+//
+// ONE registry, read by the group-by strip, the group headings and the filter chips alike. That is
+// the point of it being data: the filter's options ARE the groups, so "filter by muscle" and "group
+// by push/pull" can never end up as two controls describing the list differently. Adding a fourth
+// way to slice the list is an entry here, not a fourth place to keep in step.
+//
+// `order` is the order the groups appear in, and any key it doesn't name still gets its own group
+// (a custom muscle) rather than disappearing -- see groupLiftsBy().
+const LIFT_GROUP_DIMS = {
+  muscle: {
+    label: 'Muscle',
+    of: (l) => l.muscle || null,
+    order: () => Object.keys(MUSCLE_COLORS),
+    groupLabel: (key) => String(key).toUpperCase(),
+    color: (key) => muscleColor(key),
+  },
+  lu: {
+    label: 'Upper / Lower / Core',
+    of: (l) => muscleLU(l.muscle),
+    order: () => ['upper', 'lower', 'core'],
+    groupLabel: (key) => (key === 'core' ? 'CORE' : String(key).toUpperCase() + ' BODY'),
+    color: () => null,
+  },
+  ppl: {
+    label: 'Push / Pull / Legs',
+    of: (l) => musclePPL(l.muscle),
+    order: () => ['push', 'pull', 'legs', 'other'],
+    groupLabel: (key) => String(key).toUpperCase(),
+    color: () => null,
+  },
+};
+// The group-by choices in select order. 'none' is not a dimension -- it is the absence of one, and
+// groupLiftsBy() returns a single unlabelled group for it -- so it lives here rather than in the
+// registry above, where every entry has to be able to answer `of()`.
+const LIFT_GROUP_CHOICES = ['muscle', 'lu', 'ppl', 'none'];
+function liftGroupLabel(dim) { return dim === 'none' ? 'Nothing (flat list)' : (LIFT_GROUP_DIMS[dim] || {}).label || dim; }
+
+// Buckets `lifts` by `dim`, in the dimension's own order. Returns [{ key, label, color, lifts }];
+// a null label means "one group, no heading" (dim 'none', or an unrecognised one).
+function groupLiftsBy(lifts, dim) {
+  const spec = LIFT_GROUP_DIMS[dim];
+  if (!spec) return [{ key: null, label: null, color: null, lifts: lifts.slice() }];
+  const buckets = new Map();
+  lifts.forEach(l => {
+    const key = spec.of(l);
+    const k = key == null ? '' : key;              // '' is the UNSORTED bucket
+    if (!buckets.has(k)) buckets.set(k, []);
+    buckets.get(k).push(l);
+  });
+  const known = spec.order().filter(k => buckets.has(k));
+  // A muscle the shipped palette never heard of keeps its own group, alphabetically after the known
+  // ones. Only a lift with NO muscle at all is unsorted, and that group sits last.
+  const custom = [...buckets.keys()].filter(k => k && known.indexOf(k) < 0).sort();
+  const out = known.concat(custom).map(k => ({
+    key: k, label: spec.groupLabel(k), color: spec.color(k), lifts: buckets.get(k),
+  }));
+  if (buckets.has('')) out.push({ key: '', label: 'UNSORTED', color: null, lifts: buckets.get('') });
+  return out;
+}
+
 // ---- Migration: categories dissolve into lifts ----
 //
 // Each (category, tier) pair resolved to something you actually lift, and that is what becomes a

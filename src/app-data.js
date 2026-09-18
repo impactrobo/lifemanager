@@ -773,6 +773,11 @@ function defaultState() {
       // two are new, and exist because "hit your step target 5 of 7 days" needs a target to
       // be a sentence at all. Edited beside their own log fields, same as water's.
       stepsTargetDaily: 8000, sleepTargetHours: 7.5,
+      // How the Training Maxes list is cut: 'muscle' | 'lu' | 'ppl' | 'none' (see LIFT_GROUP_DIMS).
+      // A preference, so it is remembered. The FILTER on top of it deliberately is not -- see
+      // VIEW.tmFilter; coming back to a screen still filtered by something you set last week is how
+      // a lift goes missing, which is the same reason Notes keeps its filter transient.
+      tmGroupBy: 'muscle',
       // Debug clock: whole days added to "now" everywhere, via nowDate() in app-state.js. 0 is off.
       // Persisted on purpose -- jumping forward, closing the app and reopening it is exactly the
       // gesture being simulated, and a setting that silently reset on launch would test nothing.

@@ -165,6 +165,12 @@ let VIEW = {
   labEditing: null,                  // id of the panel the lab form is editing; null = adding a new one
   labExpanded: {},                   // markerKey -> true: that marker's full dated history is open
   selectedWeightMetric: 'weight',
+  // Which group the Training Maxes list is filtered to, as a group KEY ('Chest', 'push', 'upper'),
+  // or null for all. Transient on purpose while its DIMENSION (STATE.settings.tmGroupBy) is
+  // remembered: how you like the list organised is a preference, but arriving at the screen still
+  // filtered to Calves from last week is how a lift goes missing. Same split Notes draws between
+  // its sort and its filter.
+  tmFilter: null,
   // Notes. The SORT is not here — the spec asks for it to be remembered across launches, so it
   // lives in STATE.settings.notesSort. Filter and search deliberately are transient: returning to
   // a section still filtered by something you set last week is how notes go missing.

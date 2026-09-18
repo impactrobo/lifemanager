@@ -298,6 +298,37 @@ Newest first. Keep this reasonably current so a fresh session can see what alrea
 without re-reading the whole diff history. Roughly grouped: this project spent early Sept 2026
 on an architecture split + a large wave of Maximalist aesthetics.
 
+- **Training Maxes can be grouped and filtered (2026-09-18).** Asked for as *"ensure we can filter
+  by muscle... we have UPPER / LOWER / CORE for some, but also can set PUSH / PULL / LEGS / OTHER
+  definitions for filtering as well. This can be a setting under rounding for how to sort"*.
+  - **PUSH / PULL / LEGS is DERIVED from the muscle**, exactly as UPPER / LOWER / CORE already was,
+    rather than stored beside it. Nothing is classified twice and the two can never disagree. The
+    conventional reading: side delts press, rear delts row, the deadlift rides with Back onto pull,
+    and a close-grip bench is a Triceps lift so it lands on push.
+  - Abs and Neck are `'other'` **explicitly** — a real answer, the same judgement that gave Abs its
+    own `'core'`. A muscle the table has never heard of returns `null` and lands in its own trailing
+    UNSORTED group instead, because only one of those two is something you can act on.
+  - **One registry, `LIFT_GROUP_DIMS`**, read by the group-by control, the headings and the filter
+    chips alike. The filter's options ARE the groups, which is what stops "filter by muscle" and
+    "group by push/pull" from becoming two controls that describe the list differently.
+  - **The dimension is a `<select>`, not a fourth pill strip.** The first build made it a `subNav`
+    and the screenshot settled it: the screen already sits under two identical-looking pill strips,
+    and a third that scrolls the list instead of navigating is exactly the complexity this session
+    was asked to reduce. A select reads as a control you set, and leaves pills on this screen
+    meaning one thing — filter.
+  - The dimension is remembered (`STATE.settings.tmGroupBy`); the **filter deliberately is not**,
+    the same split Notes draws, for the same reason: arriving at a screen still filtered from last
+    week is how a lift goes missing. Changing dimension clears the filter too — a muscle filter
+    names no group under push/pull.
+  - Chips appear only when the dimension actually splits the list, but the **control never hides**:
+    if it vanished whenever the current dimension produced one group, you could switch into that
+    dimension and have no way back out.
+  - `tests/test_lift_grouping.js`. Its first check is a *completeness* check — a derived
+    classification is only as good as its table, and a muscle added to the palette but missed in
+    `MUSCLE_PPL` wouldn't error, it would quietly drop its lifts into UNSORTED. Three mutations
+    verified to fail it, including the `--tc` cascade trap (a grey `--tc` beats the accent fallback,
+    so the *selected* chip renders as unselected — the exact bug styles.css logs against COMPARE).
+
 - **Notes opens on a blank note, and DIET & EXERCISE becomes DAILY (2026-09-18).** Two small
   navigation changes asked for together: *"Notes should always start on NEW (which doesn't light
   up for some reason)"*.

@@ -126,8 +126,91 @@ function renderTMSetup() {
     </div>
     ${UI.liftMaxPickerOpen ? renderLiftMaxPicker() : ''}
     ${tested.length
-      ? `<div class="stack">${tested.map(renderLiftMaxCard).join('')}</div>`
+      ? renderLiftMaxControls(tested) + renderLiftMaxGroups()
       : emptyState('No training maxes yet. Add a lift to record what you tested — T1 and T2 slots in the Workout Builder then read it.')}`;
+}
+
+// ---- Grouping and filtering the list ----
+//
+// Asked for as "ensure we can filter by muscle... PUSH / PULL / LEGS / OTHER definitions for
+// filtering as well... a setting under rounding for how to sort" (2026-09-18). Both halves are one
+// control: the strip picks the DIMENSION, and the chips under it are that dimension's groups. A
+// separate "group by X" setting and "filter by Y" chips could describe the list two different ways
+// at once, and on a phone two chip rows is most of the screen before you reach a lift.
+//
+// The dimension is a SELECT, not a fourth pill strip. This screen already sits under two of those
+// (WORKOUT / DIET / SUPPLEMENTS, then WORKOUT / ALL WORKOUTS / EXERCISES), and a third row of
+// identical-looking pills that scrolls the list instead of navigating is how a screen stops being
+// readable -- the first build of this was exactly that, and the screenshot settled it. A select is
+// unmistakably a control you set, it costs one line, and it leaves the pill vocabulary on this
+// screen meaning one thing: filter.
+//
+// It appears as soon as there is more than one lift to sort. The chips need a further condition --
+// the dimension has to actually split the list -- because a filter that can only give you back what
+// you are already looking at is noise. The select does NOT take that condition: if it vanished
+// whenever the current dimension produced one group, you could switch to it and have no way back.
+function tmGroupBy() {
+  const v = STATE.settings && STATE.settings.tmGroupBy;
+  return (v === 'none' || LIFT_GROUP_DIMS[v]) ? v : 'muscle';
+}
+function setTmGroupBy(dim) {
+  STATE.settings.tmGroupBy = (dim === 'none' || LIFT_GROUP_DIMS[dim]) ? dim : 'muscle';
+  // A muscle filter means nothing under PUSH / PULL, so changing the dimension clears it rather
+  // than leaving a chip lit that no longer names any group on screen.
+  VIEW.tmFilter = null;
+  saveState(); render();
+}
+// Selected by POSITION, not by name. A group key is a muscle name, and muscle names are free text
+// -- putting one inside an inline `onclick="setTmFilter('...')"` means an apostrophe in a custom
+// muscle silently breaks the handler. The index is always a number, and both the chips and this
+// resolve it against the same unfiltered grouping, so they cannot drift.
+function tmGroups() { return groupLiftsBy(liftsWithMaxes(), tmGroupBy()); }
+function setTmFilterAt(i) {
+  const g = tmGroups()[i];
+  if (!g) return;
+  VIEW.tmFilter = (VIEW.tmFilter === g.key) ? null : g.key;   // tapping the lit chip clears it
+  render();
+}
+function renderLiftMaxControls(tested) {
+  if (tested.length < 2) return '';
+  const dim = tmGroupBy();
+  const groups = tmGroups();
+  const picker = `<div style="display:flex; align-items:center; gap:8px; margin-bottom:2px;">
+    <span style="font-size:10px; letter-spacing:0.06em; color:var(--text-faint); font-weight:700; flex-shrink:0;">GROUP BY</span>
+    <select style="flex:1;" onchange="setTmGroupBy(this.value)">
+      ${LIFT_GROUP_CHOICES.map(d =>
+        `<option value="${d}" ${dim === d ? 'selected' : ''}>${liftGroupLabel(d)}</option>`).join('')}
+    </select>
+  </div>`;
+  // One group is not a choice -- and 'none' has no groups to offer at all.
+  if (dim === 'none' || groups.length < 2) return picker;
+  const active = VIEW.tmFilter;
+  return picker + `<div class="tag-pill-row">
+    ${groups.map((g, i) => {
+      const on = active === g.key;
+      // --tc is set ONLY for a group that has a colour of its own. Setting it to --text-dim for the
+      // others looks harmless and isn't: .tag-pill.active paints `background: var(--tc, --accent)`,
+      // so a --tc that exists but is grey makes the SELECTED chip grey, and selected then reads as
+      // unselected. styles.css logs that exact bug against COMPARE's metric picker.
+      const tc = g.color ? ` style="--tc:${g.color}"` : '';
+      // The count is the reason the chip is worth a tap: it says what is behind it before you commit.
+      return `<button class="tag-pill ${on ? 'active' : ''}"${tc}
+        onclick="setTmFilterAt(${i})">${escapeHtml(g.label)} ${g.lifts.length}</button>`;
+    }).join('')}
+  </div>`;
+}
+function renderLiftMaxGroups() {
+  let groups = tmGroups();
+  // A filter naming a group that no longer exists (the last lift in it was removed) shows
+  // everything rather than an empty screen with a lit chip explaining nothing.
+  const active = VIEW.tmFilter;
+  if (active != null && groups.some(g => g.key === active)) groups = groups.filter(g => g.key === active);
+  // Headings only when there is more than one group on screen. Filtered down to one, the heading
+  // repeats the chip you just lit directly above it.
+  const heads = groups.length > 1;
+  return groups.map(g => `
+    ${heads && g.label ? `<div class="subtle-label" style="margin:16px 0 8px;${g.color ? ` color:${g.color};` : ''}">${escapeHtml(g.label)}</div>` : ''}
+    <div class="stack">${g.lifts.map(renderLiftMaxCard).join('')}</div>`).join('');
 }
 
 // Picking a lift to test. Filtered to lifts that don't already have one, so the list shrinks as you
@@ -182,9 +265,12 @@ function renderLiftMaxCard(lift) {
         ${lift.muscle ? `<div style="width:12px; height:12px; border-radius:50%; background:${muscleColor(lift.muscle)}; border:1px solid rgba(0,0,0,0.2); flex-shrink:0;"></div>` : ''}
         <span style="font-family:var(--font-head); font-size:17px; font-weight:700;">${escapeHtml(lift.name)}</span>
       </div>
-      ${lu
+      ${lu && tmGroupBy() !== 'lu'
         // Derived from the muscle rather than a flag you set beside it -- the two could disagree
         // when both were stored, and only one of them is a fact about the movement.
+        //
+        // Hidden while the list is GROUPED by upper/lower: the heading above the card already says
+        // it, and repeating it on every card in the group is the label doing no work.
         ? `<span class="pill pill-${lu === 'lower' ? 'lower' : 'upper'}">${lu.toUpperCase()}${lu === 'core' ? '' : ' BODY'}</span>`
         : ''}
     </div>

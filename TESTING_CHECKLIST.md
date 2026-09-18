@@ -435,4 +435,21 @@ either exactly what you wanted or an ambush when you only meant to look somethin
 - [ ] The exercise tab now reads **DAILY** on one line, not DIET & EXERCISE over two. Four buttons,
       even weights. Confirm it still reads as the today screen and not as something vaguer.
 
+## Training Maxes: group & filter (2026-09-18)
+BUILDER → WORKOUT → EXERCISES. The sandbox can prove the buckets are right; what it can't judge is
+whether the split matches how *you* think about your own training.
+- [ ] The **GROUP BY** control sits under ROUNDING. Switch between Muscle / Upper·Lower·Core /
+      Push·Pull·Legs / Nothing and confirm the list reorganises each time and nothing disappears.
+- [ ] Tap a chip — say CHEST, or PUSH — and only that group shows, with the chip lit. Tap it again
+      to clear. The other chips stay put so you can move between groups without clearing first.
+- [ ] Does **PUSH / PULL / LEGS** agree with how you actually split your week? The one to check is
+      the deadlift — it's filed under Back, so it lands on **pull**. If you train it on leg day,
+      say so and it's a one-line change.
+- [ ] Anything landing in **OTHER** (abs, neck) or **UNSORTED** that surprises you. UNSORTED should
+      only ever hold a lift with a custom muscle the app doesn't know.
+- [ ] The choice of grouping should still be there next time you open the app; the **filter should
+      not** — you should arrive seeing everything. Confirm both.
+- [ ] With enough lifts to scroll, is grouping actually faster than the old flat list, or is the
+      chip row just more to read? This is the question the whole thing turns on.
+
 ## Add future items below as new features ship
