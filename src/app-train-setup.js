@@ -1458,7 +1458,14 @@ const MEASURE_FIELDS = [
   { key: 'other2', label: 'Other 2', unit: 'length' },
 ];
 
-function setFitnessSubtab(t) { NAV.fitnessSubtab = t; resetTrainViewForSubtab(t); render(); }
+// resetTransientUi() because moving between subtabs IS navigation -- DAILY, PHASES, BUILDER and
+// PROGRESS are four different screens, and a panel opened on one has no business following you to
+// the next. switchTab() has always done this; the subtab setters never did, which left BUILDER ->
+// PHASES able to re-render a phase editor left open earlier. Harmless while overlays rendered
+// inside the screen; since they are hoisted above everything it is a full-viewport sheet that eats
+// every touch, which is the "can't scroll PHASES" report. Train is the only section whose subtabs
+// host a modal, so this stays here rather than going into every setter on spec.
+function setFitnessSubtab(t) { resetTransientUi(); NAV.fitnessSubtab = t; resetTrainViewForSubtab(t); render(); }
 
 // BODY -- what Exercise's PROGRESS and Health's SPECS used to be between them.
 //

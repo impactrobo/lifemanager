@@ -1009,7 +1009,7 @@ function addPhase() {
   phaseShelf().push(phase);
   // Opens the one you just made: you added a phase in order to set it up, and leaving it folded
   // would make the first act after ADD PHASE be finding and tapping it.
-  VIEW.phaseOpen = phase.id;
+  UI.phaseOpen = phase.id;
   saveState();
   render();
 }
@@ -1043,7 +1043,7 @@ function beginPhaseNow(id) {
   }
   STATE.phaseShelf = phaseShelf().filter(p => p.id !== id);
   STATE.phases.push(phase);
-  VIEW.phaseOpen = PHASE_NONE_OPEN;
+  UI.phaseOpen = PHASE_NONE_OPEN;
   saveState();
   const entry = phaseTimeline().find(s => s.phase.id === id);
   const start = entry ? entry.startDate : todayStr();
@@ -1064,7 +1064,7 @@ function queuePhaseNext(id) {
   if (last && last.perpetual) endPerpetualPhaseAt(last, todayStr());
   STATE.phaseShelf = phaseShelf().filter(p => p.id !== id);
   STATE.phases.push(phase);
-  VIEW.phaseOpen = PHASE_NONE_OPEN;
+  UI.phaseOpen = PHASE_NONE_OPEN;
   saveState();
   const entry = phaseTimeline().find(s => s.phase.id === id);
   showToast(entry ? `“${phase.label}” queued for ${fmtGoalDate(entry.startDate)}` : `“${phase.label}” queued`);
@@ -1074,7 +1074,7 @@ function queuePhaseNext(id) {
 // change -- so this is closure, not committing: the same job DONE does for a scheduled phase.
 function savePhaseForLater(id) {
   if (!shelvedPhase(id)) return;
-  VIEW.phaseOpen = PHASE_NONE_OPEN;
+  UI.phaseOpen = PHASE_NONE_OPEN;
   render();
 }
 // A shelved phase rendered through the same editor as a scheduled one, by handing renderPhaseCard()
@@ -1362,7 +1362,7 @@ function deletePhase(id) {
   if (shelved) {
     showConfirm(`Delete “${shelved.label}”? It was never scheduled, so nothing else changes.`, () => {
       STATE.phaseShelf = phaseShelf().filter(x => x.id !== id);
-      VIEW.phaseOpen = PHASE_NONE_OPEN;
+      UI.phaseOpen = PHASE_NONE_OPEN;
       saveState(); render();
     });
     return;
@@ -1516,7 +1516,7 @@ function renderPhaseCard(entry) {
 }
 
 // The editor, as a modal over whatever list you came from. One phase at a time by construction --
-// there is one VIEW.phaseOpen -- and impossible to miss, which was the whole problem with the
+// there is one UI.phaseOpen -- and impossible to miss, which was the whole problem with the
 // inline version.
 function renderPhaseEditorModal() {
   const entry = openPhaseEntry();
@@ -1605,23 +1605,23 @@ function renderShelfActions(p) {
 // to fall back to the phase you were IN when nothing was chosen, which was right for an inline
 // card -- arriving landed you on the one you came for -- and is wrong for a popup, where it would
 // throw a dialog in your face every time you opened the screen.
-function phaseCardIsOpen(id) { return VIEW.phaseOpen === id; }
+function phaseCardIsOpen(id) { return UI.phaseOpen === id; }
 // Kept as a distinct value from null so closePhaseCard() reads as a deliberate "nothing open"
 // rather than "no choice yet". Nothing falls back to it any more, but the two still mean
 // different things to anyone reading VIEW.
 const PHASE_NONE_OPEN = '__none__';
 // The phase the modal is showing, wherever it lives -- or null when the editor is closed.
 function openPhaseEntry() {
-  const id = VIEW.phaseOpen;
+  const id = UI.phaseOpen;
   if (!id || id === PHASE_NONE_OPEN) return null;
   const scheduled = phaseTimeline().find(e => e.phase.id === id);
   if (scheduled) return scheduled;
   const shelved = shelvedPhase(id);
   return shelved ? shelfEntry(shelved) : null;
 }
-function openPhaseCard(id) { VIEW.phaseOpen = id; render(); }
+function openPhaseCard(id) { UI.phaseOpen = id; render(); }
 function closePhaseCard() {
-  VIEW.phaseOpen = PHASE_NONE_OPEN;
+  UI.phaseOpen = PHASE_NONE_OPEN;
   showToast('Saved');
   render();
 }

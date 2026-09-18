@@ -114,6 +114,15 @@ function defaultTransientUi() {
     builderStylePickerOpen: false,
     autofillPickerOpen: false,
     cloudSyncModalOpen: false,
+    // Which phase the editor has open, or null/PHASE_NONE_OPEN for none. Lived in VIEW until
+    // 2026-09-18, described there as "which phase card is EXPANDED" -- which it was, when the
+    // editor was an inline disclosure. It became a modal, and nothing moved it: VIEW deliberately
+    // survives navigation, so leaving PHASES with the editor open and coming back re-rendered it.
+    // Since overlays are hoisted to a layer above everything (see _hoistOverlays), that stale modal
+    // is a full-viewport sheet that swallows every touch -- reported as "going into PHASES from
+    // outside, you can't scroll the screen". An open modal is "what's open right now", which is
+    // exactly what this object is for; here it closes on every navigation by construction.
+    phaseOpen: null,
   };
 }
 let UI = defaultTransientUi();
@@ -133,10 +142,8 @@ let VIEW = {
   scheduleBuilderEditing: null,
   mealBuilderDraft: null,            // an in-progress meal; survives navigation on purpose
   mealPlanExpanded: {},
-  // Which phase card is expanded on the Phases screen. Per view and never stored. Null means no
-  // choice yet, which falls back to the phase you are IN; '__none__' is an explicit DONE, which
-  // has to be distinguishable or closing the current phase would reopen it. See phaseCardIsOpen().
-  phaseOpen: null,
+  // (phaseOpen moved to UI on 2026-09-18 -- it is an open MODAL, not per-screen presentation.
+  //  See defaultTransientUi().)
   // Which exercise blocks are folded shut on a session screen, keyed 'workoutId:entryKey'. Per view
   // and never saved -- this is "what's on my screen right now", no more a fact about the workout
   // than a scroll position is. See exBlockCollapsed() in app-train-log.js.

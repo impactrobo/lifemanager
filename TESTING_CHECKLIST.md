@@ -479,4 +479,13 @@ is the OTHER overlays and the OTHER search boxes, not just the two that were bro
 - [ ] A note with no title: the heading area is simply absent rather than an empty box. Does that
       read as intentional, or does it want a muted "Untitled"?
 
+## A left-open phase editor no longer follows you back (2026-09-18)
+- [ ] Open a phase, then leave **without** pressing DONE — tap another section, or another subtab
+      (BUILDER). Come back to PHASES: you get the phase **list**, and the page scrolls normally.
+- [ ] Same via the **Back** arrow in the top bar.
+- [ ] Pressing DONE still works as before, and still toasts "Saved".
+- [ ] Now that switching between DAILY / PHASES / BUILDER / PROGRESS closes open panels: check
+      nothing you expected to stay open now shuts on you when you switch subtabs and come back.
+      Half-finished forms on BODY and the Workout Builder are the ones worth trying.
+
 ## Add future items below as new features ship

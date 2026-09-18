@@ -146,13 +146,52 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     if (!r.found) throw new Error(`${o.name} did not open — the fixture is wrong, not the app`);
     if (r.insideApp) throw new Error(`${o.name} is still inside #app, where a stacking context buries it under the bars`);
     if (!r.inOverlayRoot) throw new Error(`${o.name} should have been hoisted to #overlayRoot`);
-    await page.evaluate(() => { closePhaseCard && VIEW.phaseOpen !== undefined && (VIEW.phaseOpen = PHASE_NONE_OPEN); UI.logPopup = null; LINK_PICKER = null; render(); });
+    await page.evaluate(() => { closePhaseCard && UI.phaseOpen !== undefined && (UI.phaseOpen = PHASE_NONE_OPEN); UI.logPopup = null; LINK_PICKER = null; render(); });
     await settle(page);
   }
   // ...and closing really does clear the host, rather than leaving an invisible layer over the app.
   const emptied = await page.evaluate(() => document.getElementById('overlayRoot').children.length);
   console.log('2. overlayRoot after closing everything:', emptied);
   if (emptied) throw new Error('Closing an overlay must empty #overlayRoot — a stale backdrop eats every tap');
+
+  // ---- 2b. An overlay must not SURVIVE navigation ----
+  // The follow-up report, 2026-09-18: "going into PHASES from outside, you can't scroll the screen
+  // until you tap a text box." Nothing was wrong with the scroll. The phase editor had been left
+  // open, its id lived in VIEW (which deliberately survives navigation, unlike UI), and returning
+  // to PHASES re-rendered it — a full-viewport fixed sheet swallowing every touch. Hoisting made a
+  // pre-existing bug catastrophic: the same stale modal used to be buried under the bars.
+  //
+  // So this asserts the property rather than the field: leave the screen, come back, and there is
+  // nothing floating over it. Both ways of leaving are checked — another SECTION (switchTab) and
+  // another SUBTAB of the same section (setFitnessSubtab), because only the first reset anything.
+  const leaveAndReturn = [
+    { name: 'another section', go: () => { switchTab('home'); }, back: () => { switchTab('train'); setFitnessSubtab('phases'); } },
+    { name: 'another subtab', go: () => { setFitnessSubtab('builder'); }, back: () => { setFitnessSubtab('phases'); } },
+    { name: 'Back button', go: () => { switchTab('home'); }, back: () => { goBack(); } },
+  ];
+  for (const t of leaveAndReturn) {
+    await page.evaluate(() => { switchTab('train'); setFitnessSubtab('phases'); openPhaseCard((STATE.phases || [])[0].id); });
+    await settle(page);
+    const opened = await page.evaluate(() => !!document.querySelector('.phase-modal'));
+    if (!opened) throw new Error('Setup: the editor should be open before leaving');
+    await page.evaluate(`(${t.go.toString()})()`);
+    await settle(page);
+    await page.evaluate(`(${t.back.toString()})()`);
+    await settle(page);
+    const r = await page.evaluate(() => {
+      const se = document.scrollingElement;
+      return {
+        stale: [...document.getElementById('overlayRoot').children].map(e => e.className),
+        // The symptom as described: a mid-screen tap lands on the sheet instead of the page.
+        atMid: (document.elementFromPoint(195, 400) || {}).className || null,
+        scrollable: se.scrollHeight > se.clientHeight,
+      };
+    });
+    console.log(`2b. left via ${t.name}, returned:`, JSON.stringify(r));
+    if (r.stale.length) {
+      throw new Error(`Leaving PHASES via ${t.name} left an overlay open; coming back re-renders it over the whole screen: ` + JSON.stringify(r.stale));
+    }
+  }
 
   // ---- 3. The reported case, in every aesthetic ----
   // This is the one that reproduces the report. Every aesthetic gives #app its own stacking context,
@@ -193,7 +232,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     throw new Error('The phase editor is buried under the bars in these aesthetics: ' + JSON.stringify(bad, null, 1));
   }
 
-  await page.evaluate(() => { VIEW.phaseOpen = PHASE_NONE_OPEN; setAesthetic('cyberpunk'); saveState(); });
+  await page.evaluate(() => { UI.phaseOpen = PHASE_NONE_OPEN; setAesthetic('cyberpunk'); saveState(); });
 
   if (errors.length) throw new Error(errors.join('\n'));
   console.log('test_overlay_layering.js: PASS');

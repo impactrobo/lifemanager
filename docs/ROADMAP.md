@@ -298,6 +298,28 @@ Newest first. Keep this reasonably current so a fresh session can see what alrea
 without re-reading the whole diff history. Roughly grouped: this project spent early Sept 2026
 on an architecture split + a large wave of Maximalist aesthetics.
 
+- **A left-open phase editor no longer follows you back to PHASES (2026-09-18).** Reported as
+  *"going into PHASES from outside, you can't scroll the screen until you tap a text box or input…
+  focus issue?"* — not a focus issue. Nothing was wrong with the scroll: the phase editor was still
+  open, and returning to PHASES re-rendered it as a full-viewport sheet that swallowed every touch.
+  - **`phaseOpen` was in the wrong state object.** The app keeps three: `NAV` (where am I), `UI`
+    (what's open right now, wiped on navigation) and `VIEW` (per-screen presentation, which
+    deliberately survives navigation so a half-built meal or a draft is still there when you come
+    back). `phaseOpen` sat in `VIEW`, commented as *"which phase card is expanded"* — true when the
+    editor was an inline disclosure. It became a modal and nothing moved it. An open modal is
+    textbook `UI`; there it closes on every navigation by construction.
+  - **The hoist made a pre-existing bug catastrophic.** The same stale modal has been re-rendering
+    on return for as long as the editor has been a modal — it was simply buried under the bars
+    before, so it looked like clutter rather than a dead screen.
+  - **Second gap, independent of the first:** `setFitnessSubtab()` never called `resetTransientUi()`,
+    so BUILDER → PHASES leaked the editor even once `phaseOpen` moved. Moving between subtabs *is*
+    navigation — DAILY / PHASES / BUILDER / PROGRESS are four screens. Train is the only section
+    whose subtabs host a modal, so the reset went there rather than into every setter on spec.
+  - The new check in `tests/test_overlay_layering.js` asserts the **property, not the field**: open
+    an overlay, leave, come back, and nothing is floating over the screen — via another section, via
+    another subtab, and via Back. The two mutations fail on *different* legs of that, which is what
+    confirmed the two gaps were genuinely independent rather than one bug seen twice.
+
 - **Reading a note is no longer one tap from editing it (2026-09-18).** Reported: *"tapping to say
   check off a TODO box then immediately enters edit mode instead of simply ticking the box. Let's
   have neither the title nor text tap immediately go to edit. Add a specific pencil icon above on

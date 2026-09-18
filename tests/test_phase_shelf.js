@@ -27,7 +27,7 @@ const { settle, pinClock } = require('./helpers.js');
     STATE.phases = []; STATE.phaseShelf = []; STATE.phaseOrigin = null; STATE.logs = {};
     ensurePerpetualPhase();
     switchTab('train'); setFitnessSubtab('phases'); setPhasesSubtab('goal');
-    VIEW.phaseOpen = null;
+    UI.phaseOpen = null;
     render();
   });
 
@@ -44,7 +44,7 @@ const { settle, pinClock } = require('./helpers.js');
     shelf: phaseShelf().length,
     // The thing that must NOT have happened: the phase you're in is still the placeholder.
     stillPlaceholder: !!(currentPhase() || {}).perpetual,
-    opened: VIEW.phaseOpen === phaseShelf()[0].id,
+    opened: UI.phaseOpen === phaseShelf()[0].id,
     buttons: [...document.querySelectorAll('.phase-shelf-actions button')].map(b => b.textContent.trim()),
     chip: (document.querySelector('.phase-chip-shelf') || {}).textContent,
   }));
@@ -77,7 +77,7 @@ const { settle, pinClock } = require('./helpers.js');
   // ---- 3. SAVE FOR LATER keeps it, and it survives a reload ----
   await page.evaluate(() => { savePhaseForLater(phaseShelf()[0].id); saveState(); });
   await settle(page);
-  const later = await page.evaluate(() => ({ shelf: phaseShelf().length, open: VIEW.phaseOpen }));
+  const later = await page.evaluate(() => ({ shelf: phaseShelf().length, open: UI.phaseOpen }));
   if (later.shelf !== 1) throw new Error('SAVE FOR LATER keeps it on the shelf');
   if (later.open !== '__none__') throw new Error('...and folds the card, same as DONE does');
   await page.reload();
@@ -150,7 +150,7 @@ const { settle, pinClock } = require('./helpers.js');
   // phase mutator) looked the phase up in STATE.phases ONLY, so on a shelved phase it silently did
   // nothing — which is why the rate field could never be enabled: it waits for a direction that
   // could not be set.
-  await page.evaluate(() => { VIEW.phaseOpen = null; render(); });
+  await page.evaluate(() => { UI.phaseOpen = null; render(); });
   await settle(page);
   const onArrival = await page.evaluate(() => !!document.querySelector('.phase-modal'));
   if (onArrival) throw new Error('Arriving at PHASES must not throw the editor open — it only opens when you ask for a phase');
