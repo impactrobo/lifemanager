@@ -100,6 +100,9 @@ function defaultTransientUi() {
     // The AM/PM quick-log sheet: { group: 'am'|'pm', focus: <field id> } or null. Lives in UI so
     // navigating away closes it, same as every other transient panel.
     logPopup: null,
+    // FINANCIAL's one add-container: null, 'income' or 'charge'. Which DIRECTION you are logging,
+    // not which store it lands in -- the two stores stay separate, only the form is shared.
+    budgetIncidentalForm: null,
     customFoodFormOpen: false,
     customFoodEditId: null,
     shoppingListFormOpen: false,
@@ -333,11 +336,43 @@ function applyNavSnapshot(prev) {
   // Never restore into a stale open workout log -- those have their own in-context back button.
   if (NAV.currentTab === 'train') NAV.trainView = GRID_VIEW();
 }
-function pushNavHistory() {
-  NAV_HISTORY.push(navSnapshot());
-  if (NAV_HISTORY.length > 50) NAV_HISTORY.shift();
-  NAV_FORWARD = []; // any new navigation branches away from whatever redo path existed
+// History records EVERY navigation, not just section switches (2026-09-18).
+//
+// It used to be pushed by hand, from switchTab() and two openers, and nowhere else. Subtab moves
+// therefore left no trace: go DAILY -> PHASES -> BUILDER, press Back, and you were thrown to
+// whatever section you were in before Wellness, skipping the three moves you actually made.
+// Reported as "I normally want to go back to another SubNav within the section, hit the back arrow,
+// then fly back to the Home Screen".
+//
+// Fixed by DERIVING it rather than adding pushNavHistory() to eleven subtab setters -- which is the
+// same list-in-two-places problem this codebase keeps designing out, and would have missed the
+// twelfth. _trackNavHistory() runs once per render, compares the nav snapshot to the last one it
+// saw, and records the difference. Anything that changes a NAV key is history, whoever changed it.
+let NAV_LAST_SNAPSHOT = null;
+let NAV_SUPPRESS_HISTORY = false;   // set while Back/Forward is applying a snapshot
+function navSnapshotsEqual(a, b) {
+  if (!a || !b) return false;
+  return NAV_SNAPSHOT_KEYS.every(k => a[k] === b[k]);
 }
+function _trackNavHistory() {
+  const now = navSnapshot();
+  if (NAV_LAST_SNAPSHOT === null) { NAV_LAST_SNAPSHOT = now; return; }   // first render is not a move
+  if (navSnapshotsEqual(NAV_LAST_SNAPSHOT, now)) return;                 // a re-render, not a move
+  if (NAV_SUPPRESS_HISTORY) {
+    // Back/Forward moved us: the stacks already say where we were, so recording it would push the
+    // place we just came back FROM and make Back walk in circles.
+    NAV_SUPPRESS_HISTORY = false;
+  } else {
+    NAV_HISTORY.push(NAV_LAST_SNAPSHOT);
+    if (NAV_HISTORY.length > 50) NAV_HISTORY.shift();
+    NAV_FORWARD = []; // any new navigation branches away from whatever redo path existed
+  }
+  NAV_LAST_SNAPSHOT = now;
+}
+// Kept as a no-op shim: it is called from openTodayWorkout()/openTodayPractice(), which set NAV
+// keys directly, and those calls now happen automatically. Left rather than removed so a future
+// caller written from memory does no harm.
+function pushNavHistory() { /* history is derived per render -- see _trackNavHistory() */ }
 // Closes every transient panel/mode. Called at NAVIGATION time (switchTab(), applyNavSnapshot()
 // for Back/Forward, and the direct NAV.currentTab assignments in openSetup()/openTodayWorkout()) --
 // not inside _doRender(), because render() is rAF-deferred and would close a form that
@@ -356,7 +391,6 @@ function switchTab(tab) {
   // every visit (see below), so without this a glance at the section leaves one behind every time.
   // Here rather than in closeEntry() because navigating away is the path that doesn't go through it.
   if (NAV.currentTab === 'notes') { commitEntryDraft(); purgeEmptyEntries(); saveState(); }
-  pushNavHistory();
   resetTransientUi();
   NAV.currentTab = tab;
   if (tab === 'train') { NAV.trainView = GRID_VIEW(); NAV.fitnessSubtab = 'workouts'; }
@@ -413,6 +447,7 @@ function goBack() {
   const prev = NAV_HISTORY.pop();
   if (!prev) { NAV.currentTab = 'home'; render(); return; }
   NAV_FORWARD.push(navSnapshot());
+  NAV_SUPPRESS_HISTORY = true;   // this move IS the history; don't record it as a new one
   applyNavSnapshot(prev);
   render();
 }
@@ -420,6 +455,7 @@ function goForward() {
   const next = NAV_FORWARD.pop();
   if (!next) return;
   NAV_HISTORY.push(navSnapshot());
+  NAV_SUPPRESS_HISTORY = true;
   applyNavSnapshot(next);
   render();
 }
@@ -694,13 +730,17 @@ const SECTION_BARS = {
       // VIEW.entryOpenId directly: the id can outlive its entry (deleted elsewhere, or swept by
       // purgeEmptyEntries() on the way out and then restored by Back), and then the raw id says
       // "editor" while the screen shows the list.
-      { key: 'view', icon: 'magnify', label: 'VIEW ALL', active: () => !openEntryRecord() },
+      // NEW sits FIRST (2026-09-18), which puts Notes in step with every other section: the bar
+      // reads left-to-right from where you land to where you go looking. Notes lands on a new note,
+      // so NEW is the left-hand button; VIEW ALL is the errand you take second.
+      //
       // NEW used to be `active: () => false` on the grounds that it is an action rather than a
       // place. That was already thin, and once Notes started LANDING on the editor it left the bar
       // with nothing lit at all on arrival — reported 2026-09-18 as "NEW doesn't light up". An open
       // entry IS where you are, so it lights; the two rules are exact opposites, which is the
       // invariant test_tabbar_registry.js checks (exactly one lit, never zero).
       { key: 'new',  icon: 'pencil',  label: 'NEW',      active: () => !!openEntryRecord() },
+      { key: 'view', icon: 'magnify', label: 'VIEW ALL', active: () => !openEntryRecord() },
     ],
   },
   hobbies: {
@@ -998,6 +1038,7 @@ function _restoreOverlayScroll() {
 }
 
 function _doRender() {
+  _trackNavHistory();     // every NAV change is a step Back can return to, whoever made it
   _captureSubnavScroll(); // read the outgoing DOM's scroll positions before innerHTML below destroys it
   _captureOverlayScroll(); // ...and the overlays', before _hoistOverlays() empties their host
   syncDebugBar();         // lives outside #app, so nothing below would ever touch it

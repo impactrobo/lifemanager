@@ -109,14 +109,25 @@ const SUBTAB_DESTINATIONS = {
   // ---- 3. ensureTab() is a no-op when you're already there ----
   // switchTab() pushes Back history and wipes transient UI. An in-screen action (the pencil on a
   // note card) must not register as a navigation, or Back starts undoing edits instead of moves.
-  const inPlace = await page.evaluate(() => {
-    switchTab('notes');
-    const before = NAV_HISTORY.length;
-    ensureTab('notes');
-    const same = NAV_HISTORY.length;
-    ensureTab('budget');
-    return { pushedWhenAlreadyThere: same - before, pushedWhenMoving: NAV_HISTORY.length - same, movedTo: NAV.currentTab };
-  });
+  // Settled between each step, because history is DERIVED per render since 2026-09-18 rather than
+  // pushed by switchTab() itself: _trackNavHistory() compares the nav snapshot to the last one it
+  // saw. Reading NAV_HISTORY.length in the same tick as the call therefore reads the length from
+  // before the move. That deferral is deliberate and worth more than it costs — several NAV keys
+  // changing in one tick (goToSection() does switchTab then a subtab setter) is ONE navigation and
+  // should be one Back step, which is exactly what comparing snapshots gives.
+  await page.evaluate(() => switchTab('notes'));
+  await settle(page);
+  const before = await page.evaluate(() => NAV_HISTORY.length);
+  await page.evaluate(() => ensureTab('notes'));
+  await settle(page);
+  const same = await page.evaluate(() => NAV_HISTORY.length);
+  await page.evaluate(() => ensureTab('budget'));
+  await settle(page);
+  const inPlace = await page.evaluate((prev) => ({
+    pushedWhenAlreadyThere: prev.same - prev.before,
+    pushedWhenMoving: NAV_HISTORY.length - prev.same,
+    movedTo: NAV.currentTab,
+  }), { before, same });
   console.log('ensureTab history entries:', inPlace);
   if (inPlace.pushedWhenAlreadyThere !== 0) throw new Error('Re-entering the tab you are on must not add a Back entry');
   if (inPlace.pushedWhenMoving !== 1 || inPlace.movedTo !== 'budget') throw new Error('A real tab change must still push Back history');

@@ -155,7 +155,7 @@ async function checkParticleModule(page, key) {
   const canvasId = await page.evaluate(sel => document.querySelector(sel).id, FX_CANVAS);
   console.log(`particle module loaded, canvas #${canvasId}`);
 
-  await page.evaluate(() => switchTab('budget'));
+  await page.evaluate(() => { switchTab('budget'); openBudgetIncidental('charge'); }); // FINANCIAL's inputs live behind ADD CHARGE since 2026-09-18
   await settle(page);
 
   // --- 3. A cold control draws nothing; a hot one draws particles. ---
@@ -182,7 +182,7 @@ async function checkParticleModule(page, key) {
   await page.evaluate(() => setAesthetic('cyberpunk'));
   await settle(page);
   if (await page.$(FX_CANVAS)) throw new Error(`${key}: destroy() left the canvas behind`);
-  await page.evaluate(() => switchTab('budget'));
+  await page.evaluate(() => { switchTab('budget'); openBudgetIncidental('charge'); }); // FINANCIAL's inputs live behind ADD CHARGE since 2026-09-18
   await settle(page);
   await tapCenter(page, HOT_SELECTOR); // must be inert now
   await settle(page);
@@ -248,7 +248,7 @@ async function checkAmbientModule(page, key, baseProps) {
   if (!own.length) throw new Error(`${key}: fx module installed neither a canvas nor any property`);
   console.log(`ambient module loaded, writing ${own.join(' ')}`);
 
-  await page.evaluate(() => switchTab('budget'));
+  await page.evaluate(() => { switchTab('budget'); openBudgetIncidental('charge'); }); // FINANCIAL's inputs live behind ADD CHARGE since 2026-09-18
   await settle(page);
 
   // --- 3 & 4. Input moves the values, and then the loop stops on its own. ---

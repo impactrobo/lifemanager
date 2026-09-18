@@ -380,27 +380,76 @@ function renderSavingsPlanSection() {
 }
 // One-off, non-recurring income logged as it happens (a bonus, a gift, freelance income for the
 // month) — distinct from recurringIncome's steady named sources above.
-function renderBudgetIncomeForm() {
+// ---- One incidental, either direction ----
+//
+// Money arriving and money leaving were two panels with two forms, stacked at opposite ends of the
+// screen. They are the same act -- something happened this month that isn't recurring -- so they
+// are one container now (2026-09-18): two buttons choose the DIRECTION, and the form underneath is
+// whichever one that direction needs.
+//
+// The two STORES stay separate (STATE.budget.incomeLog and .incidentals). Merging them would be a
+// migration on real money for a screen-layout reason, and the bar already reads both. What merges
+// is the list you read them in -- see renderBudgetLedger().
+function openBudgetIncidental(kind) { UI.budgetIncidentalForm = kind; render(); }
+function closeBudgetIncidental() { UI.budgetIncidentalForm = null; render(); }
+function saveBudgetIncidental() {
+  const kind = UI.budgetIncidentalForm;
+  // The writers return false and leave the form alone when there is nothing to save, so a mistyped
+  // amount does not silently close the form and lose the rest of what was typed.
+  const ok = kind === 'income' ? addBudgetIncome() : addBudgetIncidental();
+  if (ok) UI.budgetIncidentalForm = null;
+  render();
+}
+function renderBudgetIncidentalContainer() {
+  const kind = UI.budgetIncidentalForm;
+  if (!kind) {
+    return `<div class="panel">
+      <div class="field-row" style="margin-bottom:0;">
+        <button class="btn btn-block btn-good" onclick="openBudgetIncidental('income')">+ ADD INCOME</button>
+        <button class="btn btn-block" onclick="openBudgetIncidental('charge')">+ ADD CHARGE</button>
+      </div>
+      <div style="font-size:11px; color:var(--text-faint); margin-top:8px;">Anything this month that isn't one of your recurring lines.</div>
+    </div>`;
+  }
+  return `<div class="panel">
+    <div class="subtle-label" style="margin-bottom:8px; color:${kind === 'income' ? 'var(--good)' : 'var(--text-dim)'};">
+      ${kind === 'income' ? 'INCOME' : 'CHARGE'}</div>
+    ${kind === 'income' ? renderBudgetIncomeFields() : renderBudgetChargeFields()}
+    <div class="row" style="gap:8px; margin-top:10px;">
+      <button class="btn btn-primary" style="flex:1;" onclick="saveBudgetIncidental()">SAVE INCIDENTAL</button>
+      <button class="btn btn-ghost" onclick="closeBudgetIncidental()">CANCEL</button>
+    </div>
+  </div>`;
+}
+function renderBudgetIncomeFields() {
   return `
     <div class="field-row">
       <label class="field"><span class="lbl">Amount</span><input type="number" step="0.01" inputmode="decimal" id="budgetIncomeAmount" placeholder="0.00"></label>
       <label class="field"><span class="lbl">Source</span><input type="text" id="budgetIncomeSource" placeholder="e.g. Freelance, bonus, gift"></label>
-    </div>
-    <button class="btn btn-primary btn-sm btn-block" onclick="addBudgetIncome()">+ ADD INCOME</button>`;
+    </div>`;
 }
+function renderBudgetChargeFields() {
+  return `
+    <div class="field-row">
+      <label class="field"><span class="lbl">Amount</span><input type="number" step="0.01" inputmode="decimal" id="budgetIncAmount" placeholder="0.00"></label>
+      <label class="field"><span class="lbl">Category</span><select id="budgetIncCategory">${budgetCategoryOptions('Other')}</select></label>
+    </div>
+    <label class="field" style="margin-bottom:0;"><span class="lbl">Note (optional)</span><input type="text" id="budgetIncNote" placeholder="What was it for?"></label>`;
+}
+// Returns whether it saved, so the container knows whether to close. Does NOT render -- its caller
+// does, once, after deciding.
 function addBudgetIncome() {
   const amtEl = document.getElementById('budgetIncomeAmount');
-  const amt = Number(amtEl.value);
-  if (!amt || amt <= 0) { showToast('Enter an amount first'); return; }
+  const amt = Number(amtEl && amtEl.value);
+  if (!amt || amt <= 0) { showToast('Enter an amount first'); return false; }
   const sourceEl = document.getElementById('budgetIncomeSource');
-  const source = sourceEl.value.trim();
+  const source = sourceEl ? sourceEl.value.trim() : '';
   const key = budgetMonthKey();
   if (!STATE.budget.incomeLog[key]) STATE.budget.incomeLog[key] = [];
   STATE.budget.incomeLog[key].push({ id: uid(), date: todayStr(), amount: amt, source: source || 'Additional income' });
   saveState();
-  amtEl.value = ''; sourceEl.value = '';
   showToast('Income added');
-  render();
+  return true;
 }
 function deleteBudgetIncome(key, id) {
   showConfirm('Delete this income entry?', () => {
@@ -411,7 +460,10 @@ function deleteBudgetIncome(key, id) {
 function renderBudgetIncomeCard(e, key) {
   return `<div class="entry-card">
     <div class="ehead">
-      <div><span class="edate">${fmtMoney(e.amount)}</span> <span style="font-size:12px; color:var(--text-dim);">${escapeHtml(e.source || '')}</span></div>
+      ${/* The leading + and the good colour are the only things separating an income row from a
+            charge row now that both share one ledger. Direction is the single most important thing
+            about a money row, so it is carried by colour AND by a glyph, not by colour alone. */ ''}
+      <div><span class="edate" style="color:var(--good);">+${fmtMoney(e.amount)}</span> <span style="font-size:12px; color:var(--text-dim);">${escapeHtml(e.source || '')}</span></div>
       <button class="icon-btn" onclick="deleteBudgetIncome('${key}','${e.id}')">${icon('close')}</button>
     </div>
     <div class="estats"><span>${e.date}</span></div>
@@ -419,29 +471,29 @@ function renderBudgetIncomeCard(e, key) {
 }
 
 // ---- Incidentals (logged as they happen) ----
-function renderBudgetIncidentalForm() {
-  return `
-    <div class="field-row">
-      <label class="field"><span class="lbl">Amount</span><input type="number" step="0.01" inputmode="decimal" id="budgetIncAmount" placeholder="0.00"></label>
-      <label class="field"><span class="lbl">Category</span><select id="budgetIncCategory">${budgetCategoryOptions('Other')}</select></label>
-    </div>
-    <label class="field"><span class="lbl">Note (optional)</span><input type="text" id="budgetIncNote" placeholder="What was it for?"></label>
-    <button class="btn btn-primary btn-sm btn-block" onclick="addBudgetIncidental()">+ ADD INCIDENTAL</button>`;
-}
 function addBudgetIncidental() {
   const amtEl = document.getElementById('budgetIncAmount');
-  const amt = Number(amtEl.value);
-  if (!amt || amt <= 0) { showToast('Enter an amount first'); return; }
+  const amt = Number(amtEl && amtEl.value);
+  if (!amt || amt <= 0) { showToast('Enter an amount first'); return false; }
   const category = inputVal('budgetIncCategory') || 'Other';
   const noteEl = document.getElementById('budgetIncNote');
-  const note = noteEl.value.trim();
+  const note = noteEl ? noteEl.value.trim() : '';
   const key = budgetMonthKey();
   if (!STATE.budget.incidentals[key]) STATE.budget.incidentals[key] = [];
   STATE.budget.incidentals[key].push({ id: uid(), date: todayStr(), amount: amt, category, note });
   saveState();
-  amtEl.value = ''; noteEl.value = '';
   showToast('Incidental logged');
-  render();
+  return true;
+}
+// Both directions, newest first, in one list. Two stores, one ledger: what you want to see is what
+// happened this month, not which array it landed in.
+function renderBudgetLedger(key) {
+  const rows = budgetIncomeEntriesForMonth(key).map(e => ({ kind: 'income', e }))
+    .concat(budgetIncidentalsForMonth(key).map(e => ({ kind: 'charge', e })))
+    .sort((a, b) => (b.e.date || '').localeCompare(a.e.date || ''));
+  if (!rows.length) return emptyState('Nothing logged yet — add income or a charge as it happens.');
+  return `<div class="entry-list">${rows.map(r =>
+    r.kind === 'income' ? renderBudgetIncomeCard(r.e, key) : renderBudgetIncidentalCard(r.e, key)).join('')}</div>`;
 }
 function deleteBudgetIncidental(key, id) {
   showConfirm('Delete this incidental?', () => {
@@ -709,13 +761,19 @@ function renderBudgetHome() {
   ensureBudgetMonth();
   const key = budgetMonthKey();
   const monthLabel = `${MONTH_NAMES[NAV.budgetMonth.month]} ${NAV.budgetMonth.year}`;
-  const incomeEntries = budgetIncomeEntriesForMonth(key).slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-  const incidentals = budgetIncidentalsForMonth(key).slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-  const recurringTotal = budgetRecurringTotal();
   const incidentalsTotal = budgetIncidentalsTotal(key);
-  const activeRecurring = STATE.budget.recurring.filter(r => r.active);
-  const activeIncome = STATE.budget.recurringIncome.filter(r => r.active);
+  // Both directions in the header, because the list below now holds both. Showing only the "out"
+  // total over a list containing income reads as a wrong sum rather than a partial one.
+  const extraIncomeTotal = budgetIncomeEntriesForMonth(key).reduce((n, e) => n + (Number(e.amount) || 0), 0);
 
+  // THIS MONTH'S FINANCIALS leads (2026-09-18). It is the answer the screen exists to give, and it
+  // used to sit third, under two forms — so opening FINANCIAL showed you a pair of empty inputs and
+  // made you scroll to find out how the month was going.
+  //
+  // The RECURRING INCOME and RECURRING CHARGES panels are gone from here. They restated totals the
+  // bar above already draws, and the bar draws them as PROPORTIONS, which is the useful form. The
+  // lists themselves live on the RECURRING subtab, which is one tap away and is where you would go
+  // to change one anyway.
   return `<div class="screen">
     <div class="week-selector" style="margin-bottom:14px;">
       <div class="cycle-label" style="font-size:20px;">${monthLabel}</div>
@@ -725,43 +783,20 @@ function renderBudgetHome() {
       </div>
     </div>
 
-    <div class="subtle-label" style="margin-bottom:8px;">ADDITIONAL INCOME</div>
-    <div class="panel">
-      ${renderBudgetIncomeForm()}
-      ${incomeEntries.length ? `<div class="entry-list" style="margin-top:10px;">${incomeEntries.map(e => renderBudgetIncomeCard(e, key)).join('')}</div>` : `<div style="font-size:11px; color:var(--text-faint); margin-top:8px;">Nothing extra logged this month — the bar below still uses your recurring income from the Recurring tab.</div>`}
-    </div>
-
-    <div class="subtle-label" style="margin:18px 0 8px;">THIS MONTH'S FINANCIALS</div>
+    <div class="subtle-label" style="margin-bottom:8px;">THIS MONTH'S FINANCIALS</div>
     <div class="panel">${renderBudgetBar(key)}</div>
 
     ${renderSavingsProgressSection(key)}
 
-    <div class="subtle-label" style="margin:18px 0 8px;">ADD AN INCIDENTAL</div>
-    <div class="panel">${renderBudgetIncidentalForm()}</div>
+    <div class="subtle-label" style="margin:18px 0 8px;">ADD INCIDENTAL</div>
+    ${renderBudgetIncidentalContainer()}
 
     <div class="row" style="margin:18px 0 8px;">
-      <div class="subtle-label" style="margin-bottom:0;">INCIDENTALS THIS MONTH</div>
-      <span class="mono" style="font-size:13px; font-weight:700;">${fmtMoney(incidentalsTotal)}</span>
+      <div class="subtle-label" style="margin-bottom:0;">THIS MONTH</div>
+      <span class="mono" style="font-size:13px; font-weight:700;">
+        ${extraIncomeTotal ? `<span style="color:var(--good);">+${fmtMoney(extraIncomeTotal)}</span> &middot; ` : ''}${fmtMoney(incidentalsTotal)} out</span>
     </div>
-    <div class="entry-list">${incidentals.length ? incidentals.map(e => renderBudgetIncidentalCard(e, key)).join('') : emptyState('Nothing logged yet — add incidentals as they happen.')}</div>
-
-    <div class="row" style="margin:18px 0 8px;">
-      <div class="subtle-label" style="margin-bottom:0;">RECURRING INCOME</div>
-      <span class="mono" style="font-size:13px; font-weight:700;">${fmtMoney(recurringIncomeMonthlyTotal())}/mo</span>
-    </div>
-    <div class="panel">
-      ${activeIncome.length ? activeIncome.map(r => `<div class="row" style="font-size:13px; padding:4px 0;"><span>${escapeHtml(r.name)} <span style="color:var(--text-faint); font-size:11px;">${(INCOME_FREQUENCIES[r.frequency]||INCOME_FREQUENCIES.monthly).label}</span></span><span class="mono">${fmtMoney(r.amount)}</span></div>`).join('') : `<div style="font-size:12px; color:var(--text-faint);">No recurring income sources yet.</div>`}
-      <button class="btn btn-ghost btn-sm btn-block" style="margin-top:8px;" onclick="setBudgetSubtab('recurring')">MANAGE RECURRING</button>
-    </div>
-
-    <div class="row" style="margin:18px 0 8px;">
-      <div class="subtle-label" style="margin-bottom:0;">RECURRING CHARGES</div>
-      <span class="mono" style="font-size:13px; font-weight:700;">${fmtMoney(recurringTotal)}/mo</span>
-    </div>
-    <div class="panel">
-      ${activeRecurring.length ? activeRecurring.map(r => `<div class="row" style="font-size:13px; padding:4px 0;"><span>${r.isSavings ? `<span class="savings-badge">${icon('recurDollar')} SAVINGS</span>` : budgetCategoryChip(r.category)}${escapeHtml(r.name)}</span><span class="mono">${fmtMoney(r.amount)}</span></div>`).join('') : `<div style="font-size:12px; color:var(--text-faint);">No recurring charges yet.</div>`}
-      <button class="btn btn-ghost btn-sm btn-block" style="margin-top:8px;" onclick="setBudgetSubtab('recurring')">MANAGE RECURRING</button>
-    </div>
+    ${renderBudgetLedger(key)}
   </div>`;
 }
 function renderBudgetRecurring() {

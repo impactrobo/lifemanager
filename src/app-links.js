@@ -291,5 +291,8 @@ function renderLinkChips(type, id) {
     </span>`).join('');
   // onclick guard: several cards (meals, workouts) are themselves clickable, so a chip tap must
   // not also fire the card's own open-editor handler.
-  return `<div class="link-row" onclick="event.stopPropagation()">${chips}<button class="link-add" onclick="openLinkPicker('${type}','${id}')">+ LINK</button></div>`;
+  // "+ LINK TO", not "+ LINK": the bare verb reads as a noun beside a row of link chips, so it
+  // looked like a label for what is already there rather than a button that adds another. The
+  // trailing preposition also sets up what the picker asks next -- link this to WHAT.
+  return `<div class="link-row" onclick="event.stopPropagation()">${chips}<button class="link-add" onclick="openLinkPicker('${type}','${id}')">+ LINK TO</button></div>`;
 }

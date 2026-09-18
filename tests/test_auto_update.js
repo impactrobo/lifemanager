@@ -60,7 +60,7 @@ const server = http.createServer((req, res) => {
 
   // --- 2. Deploy moves on while a field is focused -> reload is DEFERRED. ---
   buildStamp = 'TEST-BUILD-B';
-  await page.evaluate(() => switchTab('budget'));
+  await page.evaluate(() => { switchTab('budget'); openBudgetIncidental('charge'); }); // FINANCIAL's inputs live behind ADD CHARGE since 2026-09-18
   await settle(page);
   const activeTag = await page.evaluate(() => {
     const inp = Array.from(document.querySelectorAll('#app input')).find(el => el.offsetParent !== null);
