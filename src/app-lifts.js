@@ -336,12 +336,50 @@ function assignLiftRef(ref, liftId) {
 // the extra tap. Rendered inline where it's used rather than as a modal, so the thing you're naming
 // stays on screen beside it.
 function openLiftPicker(token, currentLiftId) {
-  UI.liftPicker = { token, muscle: (liftById(currentLiftId) || {}).muscle || null, query: '' };
+  // currentLiftId is kept on the picker, not just passed to the markup, so setLiftPickerQuery()
+  // below can regenerate the list on its own without a re-render handing it back.
+  UI.liftPicker = { token, currentLiftId: currentLiftId || null, muscle: (liftById(currentLiftId) || {}).muscle || null, query: '' };
   render();
 }
 function closeLiftPicker() { UI.liftPicker = null; render(); }
 function setLiftPickerMuscle(m) { if (UI.liftPicker) { UI.liftPicker.muscle = m || null; render(); } }
-function setLiftPickerQuery(q) { if (UI.liftPicker) { UI.liftPicker.query = q; render(); } }
+// Patch the list ONLY -- a render() from a keystroke replaces #app wholesale, destroying the input
+// being typed into and dropping the caret (and, on a phone, the keyboard) after every letter. Same
+// fix as setLiftMaxQuery, setLinkPickerQuery and setHubPickerQuery. Muscle and close still render:
+// they are single deliberate taps, and the input is not focused for either.
+function setLiftPickerQuery(q) {
+  if (!UI.liftPicker) return;
+  UI.liftPicker.query = q;
+  const box = document.getElementById('liftPickerBody');
+  if (box) box.innerHTML = liftPickerBodyHtml();
+}
+// Everything between the search box and "NOT IN THE LIST?": the muscle chips (which typing hides,
+// because a query already spans every muscle) and the results. Both change on every keystroke, so
+// both have to be inside the patched region -- patching only the list would leave the chips behind.
+function liftPickerBodyHtml() {
+  const p = UI.liftPicker;
+  if (!p) return '';
+  const q = (p.query || '').trim();
+  const list = q ? allLifts().filter(l => liftNameWords(l.name).join(' ').indexOf(liftNameWords(q).join(' ')) >= 0)
+                 : (p.muscle ? liftsByMuscle(p.muscle) : []);
+  const chips = q ? '' : `
+    <div class="lift-muscles">
+      ${MUSCLE_GROUPS.map(m => `
+        <button class="btn btn-sm ${p.muscle === m ? 'btn-primary' : ''}" onclick="setLiftPickerMuscle('${m}')">${m}</button>`).join('')}
+    </div>`;
+  const rows = list.length ? `
+    <div class="lift-list">
+      ${list.map(l => `
+        <button class="lift-row ${l.id === p.currentLiftId ? 'lift-row-current' : ''}" onclick="onPickLift('${p.token}','${l.id}')">
+          <span class="lift-row-name">${escapeHtml(l.name)}</span>
+          <span class="lift-row-short">${escapeHtml(l.short || '')}</span>
+        </button>`).join('')}
+    </div>`
+    : `<div style="font-size:11px; color:var(--text-faint); padding:6px 0;">
+         ${q ? 'No lift matches that. Add it below if it’s missing.' : 'Pick a muscle group to see its lifts.'}
+       </div>`;
+  return chips + rows;
+}
 
 // `token` identifies what's being named. The picker doesn't know or care what that is -- it routes
 // back through onPickLift(token, liftId), which parses the token and calls the right setter. That
@@ -357,11 +395,9 @@ function renderLiftPicker(token, currentLiftId) {
     </button>`;
   }
   const p = UI.liftPicker;
-  const q = (p.query || '').trim();
   // A search box spanning every muscle, for when you know the name and don't want two taps. It
-  // narrows the same list the muscle chips do; it never creates anything.
-  const list = q ? allLifts().filter(l => liftNameWords(l.name).join(' ').indexOf(liftNameWords(q).join(' ')) >= 0)
-                 : (p.muscle ? liftsByMuscle(p.muscle) : []);
+  // narrows the same list the muscle chips do; it never creates anything. The chips and the list
+  // both live in #liftPickerBody so a keystroke can replace them without touching the input.
   return `
     <div class="lift-picker">
       <div class="row" style="margin-bottom:8px;">
@@ -370,22 +406,7 @@ function renderLiftPicker(token, currentLiftId) {
       </div>
       <input type="text" placeholder="Search all lifts…" value="${escapeHtml(p.query || '')}"
              oninput="setLiftPickerQuery(this.value)" style="margin-bottom:8px;">
-      ${q ? '' : `
-        <div class="lift-muscles">
-          ${MUSCLE_GROUPS.map(m => `
-            <button class="btn btn-sm ${p.muscle === m ? 'btn-primary' : ''}" onclick="setLiftPickerMuscle('${m}')">${m}</button>`).join('')}
-        </div>`}
-      ${list.length ? `
-        <div class="lift-list">
-          ${list.map(l => `
-            <button class="lift-row ${l.id === currentLiftId ? 'lift-row-current' : ''}" onclick="onPickLift('${token}','${l.id}')">
-              <span class="lift-row-name">${escapeHtml(l.name)}</span>
-              <span class="lift-row-short">${escapeHtml(l.short || '')}</span>
-            </button>`).join('')}
-        </div>`
-        : `<div style="font-size:11px; color:var(--text-faint); padding:6px 0;">
-             ${q ? 'No lift matches that. Add it below if it’s missing.' : 'Pick a muscle group to see its lifts.'}
-           </div>`}
+      <div id="liftPickerBody">${liftPickerBodyHtml()}</div>
       <div class="lift-add">
         <div class="subtle-label" style="margin:10px 0 6px;">NOT IN THE LIST?</div>
         <div style="font-size:11px; color:var(--text-faint); margin-bottom:8px; line-height:1.5;">

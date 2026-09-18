@@ -217,23 +217,33 @@ function renderLiftMaxGroups() {
 // work rather than offering you the same movement twice.
 function openLiftMaxPicker() { UI.liftMaxPickerOpen = true; VIEW.liftMaxQuery = ''; render(); }
 function closeLiftMaxPicker() { UI.liftMaxPickerOpen = false; render(); }
-function setLiftMaxQuery(q) { VIEW.liftMaxQuery = q; render(); }
-function renderLiftMaxPicker() {
+// Patch the RESULTS ONLY -- never render() from a keystroke. render() replaces #app's innerHTML
+// wholesale, which destroys the very input being typed into and takes the caret with it; on a phone
+// that also dismisses the keyboard, so each letter has to be preceded by tapping the field again.
+// Reported 2026-09-18 ("every letter entered de-focuses the input"). Same fix and same reason as
+// setLinkPickerQuery, setHubPickerQuery, setIngPickQuery and onEntrySearchInput.
+function setLiftMaxQuery(q) {
+  VIEW.liftMaxQuery = q;
+  const box = document.getElementById('liftMaxResults');
+  if (box) box.innerHTML = liftMaxResultsHtml();
+}
+function liftMaxResultsHtml() {
   const q = (VIEW.liftMaxQuery || '').trim().toLowerCase();
   const matches = allLifts()
     .filter(l => !liftHasMax(l.id))
     .filter(l => !q || l.name.toLowerCase().includes(q) || (l.short || '').toLowerCase().includes(q))
     .slice(0, 40);
+  if (!matches.length) return `<div style="font-size:11px; color:var(--text-faint);">No match. Add it as a custom exercise in the Workout Builder first.</div>`;
+  return matches.map(l => `
+    <button class="btn btn-sm btn-block" style="text-align:left;" onclick="startLiftMax('${l.id}')">
+      ${escapeHtml(l.name)}${l.muscle ? ` <span style="color:var(--text-faint); font-size:10px;">${escapeHtml(l.muscle)}</span>` : ''}
+    </button>`).join('');
+}
+function renderLiftMaxPicker() {
   return `<div class="panel" style="margin-bottom:12px;">
     <input type="text" placeholder="Search lifts…" value="${escapeHtml(VIEW.liftMaxQuery || '')}"
            oninput="setLiftMaxQuery(this.value)" style="margin-bottom:8px;">
-    <div class="stack" style="max-height:260px; overflow-y:auto;">
-      ${matches.length ? matches.map(l => `
-        <button class="btn btn-sm btn-block" style="text-align:left;" onclick="startLiftMax('${l.id}')">
-          ${escapeHtml(l.name)}${l.muscle ? ` <span style="color:var(--text-faint); font-size:10px;">${escapeHtml(l.muscle)}</span>` : ''}
-        </button>`).join('')
-      : `<div style="font-size:11px; color:var(--text-faint);">No match. Add it as a custom exercise in the Workout Builder first.</div>`}
-    </div>
+    <div id="liftMaxResults" class="stack" style="max-height:260px; overflow-y:auto;">${liftMaxResultsHtml()}</div>
     <button class="btn btn-ghost btn-block" style="margin-top:8px;" onclick="closeLiftMaxPicker()">CANCEL</button>
   </div>`;
 }

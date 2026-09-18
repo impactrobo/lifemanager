@@ -452,4 +452,19 @@ whether the split matches how *you* think about your own training.
 - [ ] With enough lifts to scroll, is grouping actually faster than the old flat list, or is the
       chip row just more to read? This is the question the whole thing turns on.
 
+## Two field bugs fixed (2026-09-18)
+Both reported from the phone, both fixed as a class rather than one screen — so the thing to check
+is the OTHER overlays and the OTHER search boxes, not just the two that were broken.
+- [ ] **PHASES → tap a phase.** The editor's title is visible at the top, editable, and the DONE
+      button is reachable at the bottom. Neither is under a bar.
+- [ ] Try that in **two or three different aesthetics** — the cause was aesthetic-driven, so a fix
+      that only worked in one would look fine until you switched themes.
+- [ ] Other overlays, same question — nothing clipped under the top or bottom bar: the **AM/PM log
+      sheet** on Home, the **+ LINK** picker, the **bathroom sheet** on BODY, Notes' **hub picker**
+      and **Convert** sheet, and **Settings → Cloud Sync**.
+- [ ] **BUILDER → EXERCISES → + ADD A LIFT.** Type a whole word. The keyboard stays up, every letter
+      lands, and the list narrows as you go — no re-tapping the field between letters.
+- [ ] Same for the **exercise picker** in the Workout Builder (tap LIFT on an exercise), which had
+      the identical bug and wasn't reported. And the **Notes search**, which already worked.
+
 ## Add future items below as new features ship

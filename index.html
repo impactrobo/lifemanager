@@ -7,7 +7,7 @@
      app.js re-fetches this page on launch + on foreground and reloads if this value moved —
      that's what lets an installed iOS PWA self-update instead of getting stuck on a snapshot.
      Format is just a sortable stamp; the value only has to differ from the last deploy. -->
-<meta name="app-build" content="2026.09.18-30">
+<meta name="app-build" content="2026.09.18-31">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#15171a">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -46,6 +46,14 @@
 </div>
 
 <div id="app"></div>
+
+<!-- Where a screen's modals, sheets and backdrops end up. A screen still RETURNS them inline, as
+     part of its own markup; _doRender() moves them here immediately afterwards. They cannot stay
+     inside #app because every aesthetic gives it `position: relative; z-index: 1` so its own
+     backdrop pseudo-elements layer correctly — which makes #app a stacking context and traps
+     anything inside it below .topbar (20) and .tabbar (30), whatever z-index the overlay asks for.
+     See _hoistOverlays() in src/app-shell.js. -->
+<div id="overlayRoot"></div>
 
 <div class="tabbar hidden" id="tabbar"></div>
 <div id="tabbarScrollIndicator" class="scroll-indicator scroll-indicator-h"></div>

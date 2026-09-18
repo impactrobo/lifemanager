@@ -224,7 +224,10 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   });
   await settle(page);
   const card = await page.evaluate(() => {
-    const txt = document.getElementById('app').innerText;
+    // Read the whole document, not #app: since 2026-09-18 the editor is hoisted out of #app to
+    // #overlayRoot, because every aesthetic makes #app a stacking context and a modal inside one
+    // renders UNDER the top and tab bars. See _hoistOverlays() and test_overlay_layering.js.
+    const txt = document.body.innerText;
     return { hasControl: /Leading active rest/.test(txt), showsWeeks: /2 wk/.test(txt) };
   });
   console.log('block card:', card);

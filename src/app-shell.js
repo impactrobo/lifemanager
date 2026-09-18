@@ -718,6 +718,52 @@ function renderTabbar() {
     return `<button class="${cls}" onclick="${onclick}"><span class="ic">${icon(b.icon)}</span>${b.label}</button>`;
   }).join('');
 }
+// Move a screen's overlays out of #app and onto #overlayRoot, which is a plain child of <body>.
+//
+// WHY: all eleven aesthetics set `#app { position: relative; z-index: 1 }` so their own backdrop
+// pseudo-elements (bubbles, a spinning ring, doorways) layer correctly behind the content. That
+// makes #app a STACKING CONTEXT, and a stacking context is a ceiling: nothing inside it can paint
+// above a sibling of #app, no matter what z-index it asks for. .topbar (20) and .tabbar (30) are
+// exactly such siblings. So a `.modal-overlay` asking for z-index 100 from inside #app rendered
+// UNDER both bars -- reported 2026-09-18 against the Phase editor, whose title input sits in the
+// top 52px and was therefore invisible and untappable, with taps landing on the topbar instead.
+//
+// Raising #app is not the fix: the bars would then sit under ordinary page content. Lowering the
+// bars is not either -- CLAUDE.md says in as many words not to restyle .topbar to win a z-index
+// argument, and it would break the sticky header. The overlays simply do not belong inside the
+// screen, which is why every overlay declared in index.html (#confirmOverlay, #imageLightboxOverlay,
+// #restPickerOverlay) has always worked and none of the thirteen rendered into #app did.
+//
+// Named by CLASS rather than by position in the tree. The tidier rule -- "a screen renders exactly
+// one .screen element, so anything else at #app's top level is an overlay" -- is true of most of
+// them and false of the one that was actually reported: renderPhaseEditorModal() is emitted from
+// inside a tab's markup, several levels down. Depth is not the signal; being a full-viewport fixed
+// layer is.
+//
+// This is every class in styles.css that declares `position: fixed` with a z-index above .tabbar's
+// 30, minus the ones that already live in index.html at body level (.navi-box, .toast, the drag
+// ghosts, the scroll indicators). test_overlay_layering.js re-derives that set from the stylesheet
+// and fails if this list has fallen behind it, so the list cannot rot quietly.
+const OVERLAY_SELECTOR = [
+  '.modal-overlay',             // confirm, phase editor, cloud sync
+  '.home-popup-backdrop',       // AM/PM log sheet, Home's add-a-box popup
+  '.link-picker-backdrop', '.link-picker',   // link picker, bathroom sheet, convert, hub picker
+  '.entry-preview-backdrop', '.entry-preview', // the press-and-hold note peek
+].join(', ');
+function _hoistOverlays() {
+  const app = document.getElementById('app');
+  const root = document.getElementById('overlayRoot');
+  if (!app || !root) return;
+  root.textContent = '';
+  // querySelectorAll returns them in document order, so a backdrop still precedes its own panel and
+  // the paint order between the two is preserved.
+  Array.prototype.slice.call(app.querySelectorAll(OVERLAY_SELECTOR)).forEach(el => {
+    // An overlay nested inside another overlay travels with its parent -- moving it separately
+    // would tear a panel out of the backdrop that dismisses it.
+    if (!el.parentElement || !el.parentElement.closest(OVERLAY_SELECTOR)) root.appendChild(el);
+  });
+}
+
 function _doRender() {
   _captureSubnavScroll(); // read the outgoing DOM's scroll positions before innerHTML below destroys it
   syncDebugBar();         // lives outside #app, so nothing below would ever touch it
@@ -780,6 +826,9 @@ function _doRender() {
   }
   // The link picker is an overlay, appended after the screen's own markup so it sits above it.
   app.innerHTML += renderLinkPicker() + renderRecipeCustomFoodOverlay() + renderLogPopup();
+  // ...and then every overlay leaves #app entirely. Must come before the focus call below: moving a
+  // node after focusing something inside it drops the focus.
+  _hoistOverlays();
   // The sheet opens focused on whichever chip was tapped, which can only happen after the markup
   // above is in the DOM.
   if (UI.logPopup && UI.logPopup.focus) {

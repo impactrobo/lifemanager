@@ -298,6 +298,39 @@ Newest first. Keep this reasonably current so a fresh session can see what alrea
 without re-reading the whole diff history. Roughly grouped: this project spent early Sept 2026
 on an architecture split + a large wave of Maximalist aesthetics.
 
+- **Two field bugs: a modal under the header, and a search box that dropped focus (2026-09-18).**
+  Both reported from a phone, and both turned out to be a whole class rather than one screen.
+  - **The Phase editor opened UNDER the top bar** — its title input invisible and untappable (taps
+    landed on the wordmark), its DONE button under the tab bar. The cause is a two-part trap that
+    looks wrong in neither half: all eleven themed aesthetics set `#app { position: relative;
+    z-index: 1 }` so their own backdrop pseudo-elements (bubbles, a spinning ring, doorways) layer
+    behind the content — entirely reasonable — and that makes `#app` a **stacking context**, which
+    is a ceiling. Nothing inside it can paint above a SIBLING of `#app`, whatever z-index it asks
+    for, and `.topbar` (20) and `.tabbar` (30) are exactly such siblings. So `.modal-overlay`
+    asking for 100 lost to a bar at 20.
+  - **Thirteen overlays were rendered that way.** The Phase editor was simply the first that was
+    full-height with a control in the top 52px, which is why it was the one that got noticed. (The
+    Cloud Sync modal's `padding-top: 48px` looks a lot like someone working around this once.)
+  - The fix: `_hoistOverlays()` moves them to **`#overlayRoot`**, a plain child of `<body>` — which
+    is where every overlay declared in index.html already lived, and exactly why `#confirmOverlay`
+    and `#imageLightboxOverlay` never had the problem. Raising `#app` would put the bars under page
+    content; lowering the bars is what CLAUDE.md says in as many words not to do.
+  - The tidier rule — "a screen renders one `.screen`, so anything else at `#app`'s top level is an
+    overlay" — was tried first and is **false of the reported case**: the Phase editor is emitted
+    from inside a tab's markup, several levels down. Depth isn't the signal; being a full-viewport
+    fixed layer is.
+  - **Every letter typed into the Training Maxes lift search dropped focus**, so each one needed a
+    fresh tap on the field. `setLiftMaxQuery()` called `render()`, which replaces `#app.innerHTML`
+    and destroys the input being typed into. The app had already solved this four times — and
+    `setLiftPickerQuery()` had the same bug, unreported. Both now patch a results container by id.
+  - `tests/test_overlay_layering.js` derives the overlay set from styles.css rather than restating
+    it, and checks the Phase editor's title is genuinely hit-testable **in all 23 aesthetics**.
+    `tests/test_search_focus.js` pins the RULE — no `oninput` handler anywhere may call `render()` —
+    which is the only form a seventh search box can't slip past. Three mutations verified to fail.
+    One handler is allowed to contain `render()`: `saveLogField(field, value, quiet)` renders only
+    when `quiet` is falsy, and the check verifies the `true` at the call site rather than
+    exempting the name.
+
 - **Training Maxes can be grouped and filtered (2026-09-18).** Asked for as *"ensure we can filter
   by muscle... we have UPPER / LOWER / CORE for some, but also can set PUSH / PULL / LEGS / OTHER
   definitions for filtering as well. This can be a setting under rounding for how to sort"*.
