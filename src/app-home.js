@@ -1374,6 +1374,16 @@ function homeTileAccentStyle(color) {
   return `background: var(--surface); box-shadow: inset 4px 0 0 ${color};`;
 }
 function renderHomeSectionsGrid() {
+  // The tile row is gone from the READING view of Home (2026-09-18): the bottom bar carries the
+  // five sections now, so a row of the same five at the top of the screen said everything twice and
+  // pushed the day -- the thing you actually open Home to read -- below the fold. Asked for as
+  // "this kicks everything else on the HOME screen up for easier reading".
+  //
+  // It survives in EDIT mode, because that is where the tiles are still doing a job the bar cannot:
+  // the order and the hidden set they maintain are what HOME_SECTION_META's consumers read, and
+  // dragging a tile is how you change them. One line to bring the row back if the bar turns out to
+  // be the wrong trade.
+  if (!UI.homeEditMode) return '';
   const L = homeLayout();
   const tiles = L.sectionOrder.map(id => {
     const meta = HOME_SECTION_META[id];

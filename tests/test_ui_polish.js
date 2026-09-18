@@ -51,13 +51,13 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     activeIsHome: !document.querySelector('#tabbar button.active'),
   }));
   console.log('Home bottom bar:', homeBar);
-  // Home's bar is EMPTY now — CALENDAR and SETUP moved into the PRODUCTIVITY tile (2026-09-17), so
-  // the root screen stopped carrying two buttons for one section while every other section reached
-  // its subtabs from its own tile. An empty bar hides itself rather than rendering a blank strip.
-  // test_home_bar.js owns the full contract; this just keeps its neighbour honest.
-  if (homeBar.labels.length) throw new Error(`Home's bar should carry nothing, got ${JSON.stringify(homeBar.labels)}`);
-  if (!homeBar.hidden) throw new Error('...and an empty bar must hide itself rather than show as a blank strip');
-  if (!homeBar.activeIsHome) throw new Error("Home's own bar button should read as the active one");
+  // Home's bar is the five SECTIONS since 2026-09-18 — Home is where you pick one. It was empty
+  // before that, which was the tell that the app had no tab bar at all: the strip held the current
+  // section's subtabs, so crossing sections cost a trip Home. test_home_bar.js owns the full
+  // contract; this just keeps its neighbour honest about the bar showing at all.
+  if (homeBar.labels.length !== 5) throw new Error(`Home's bar carries the five sections, got ${JSON.stringify(homeBar.labels)}`);
+  if (homeBar.hidden) throw new Error('...so it is shown, not hidden');
+  if (!homeBar.activeIsHome) throw new Error('...and none of them is lit, because Home is not one of the five');
 
   await page.evaluate(() => switchTab('notes'));
   await settle(page);

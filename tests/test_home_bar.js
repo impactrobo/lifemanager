@@ -1,21 +1,22 @@
-// test_home_bar.js — Home's bar is empty (so hidden), and the section is a tile again as
-// PRODUCTIVITY.
+// test_home_bar.js — Home's bar is the five SECTIONS; every other screen's bar is its own subtabs.
 //
-// THE HISTORY MATTERS, because this file has now asserted both answers. Home originally had no bar
-// and you reached Calendar through the SCHEDULE tile — two taps. That was fixed by retiring the
-// tile and putting CALENDAR and SETUP on Home's bar directly. Which left the root screen's bar
-// carrying two buttons for ONE section, while every other section reached its subtabs from its own
-// tile. Asked for on 2026-09-17 as "keep the HOME page clean": the tile is back, renamed
-// PRODUCTIVITY, and its two subtabs live on ITS bar like everyone else's.
+// THE HISTORY MATTERS, because this file has now asserted three different answers, and the third
+// is a real change of model rather than another shuffle. Home originally had no bar and you reached
+// Calendar through the SCHEDULE tile — two taps. That was fixed by retiring the tile and putting
+// CALENDAR and SETUP on Home's bar. Which left the root screen's bar carrying two buttons for ONE
+// section, so on 2026-09-17 the tile came back as PRODUCTIVITY and Home's bar went empty again.
 //
-// So the bar is empty on Home — and an empty bar is HIDDEN rather than shown as a blank strip. That
-// is driven by what renderTabbar() produced, not by naming Home, so a future section with no
-// subtabs behaves the same way without anything learning about it.
+// Empty was the tell. A bar that vanishes on the most-visited screen is not a tab bar, and the app
+// had no tab bar at all: the bottom strip was the current section's SUBTABS, which meant crossing
+// sections cost a trip Home — wordmark, then a tile. On 2026-09-18 the sections moved onto Home's
+// bar. Inside a section the bar is still that section's subtabs, unchanged; the sections are one
+// swipe up from it (see test_section_nav.js).
 //
 // The part most likely to break quietly is still NOT the bar: it's that HOME_SECTION_META.schedule
 // has to carry the right colour, because LINKABLE_TYPES colours every reminder, habit and activity
-// link chip from it. `health` remains genuinely retired — a meta entry with no tile — and the two
-// retirements must not be conflated, which is the bug a first pass at this shipped.
+// link chip from it — and now the bar paints from it too. `health` remains genuinely retired — a
+// meta entry with no tile and no tab — and the two retirements must not be conflated, which is the
+// bug a first pass at this shipped.
 const { chromium } = require('playwright');
 const { settle } = require('./helpers');
 const path = require('path');
@@ -42,9 +43,23 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     active: (document.querySelector('#tabbar button.active') || {}).textContent,
   }));
   console.log('Home bar:', bar);
-  if (bar.labels.length) throw new Error(`Home's bar carries nothing now — CALENDAR and SETUP are PRODUCTIVITY's subtabs. Got ${JSON.stringify(bar.labels)}`);
-  // ...and an empty bar is hidden, not shown as a blank strip across the bottom of the root screen.
-  if (bar.revealed) throw new Error('A bar with no buttons must hide itself rather than render empty');
+  // The five sections, in the order asked for on 2026-09-18, with PRODUCTIVITY truncated to PROD
+  // because five full labels clip below 390px.
+  if (bar.labels.join('/') !== 'PROD/WELLNESS/HOBBIES/FINANCIAL/NOTES') {
+    throw new Error(`Home's bar is the five sections, in order. Got ${JSON.stringify(bar.labels)}`);
+  }
+  if (!bar.revealed) throw new Error('...and it shows — Home is where you pick a section now');
+  // Nothing is lit: Home is not one of the five, so none of them is where you are.
+  if (bar.active) throw new Error('No section reads as active from Home itself, got ' + bar.active);
+  // Each carries its own identity colour, the same one its link chips and its Home tile use. A bar
+  // of five identical greys would make the colours decorative rather than the point.
+  const colours = await page.evaluate(() => Array.from(document.querySelectorAll('#tabbar .section-tab'))
+    .map(b => ({ tab: b.getAttribute('data-section'), sc: b.style.getPropertyValue('--sc').trim() })));
+  console.log('section colours:', JSON.stringify(colours));
+  const wrongColour = await page.evaluate((rows) =>
+    rows.filter(r => r.sc !== (HOME_SECTION_META[r.tab] || {}).color), colours);
+  if (wrongColour.length) throw new Error('Each tab paints from HOME_SECTION_META, not its own copy: ' + JSON.stringify(wrongColour));
+  if (new Set(colours.map(c => c.sc)).size !== colours.length) throw new Error('...and no two sections share one');
 
   // PRODUCTIVITY's OWN bar is where those two live, and it marks the active one. Each read is
   // settled first: render() is rAF-deferred, so reading the bar in the same evaluate() that
@@ -137,8 +152,26 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // Meal and workout chips staying DIFFERENT colours is the point of keeping both entries — one
   // tab now, but a meal and a workout are still different things to see at a glance.
   if (identity.mealChipColor === identity.workoutChipColor) throw new Error('meal and workout chips should stay visually distinct');
+  // The tile ROW left Home's reading view on 2026-09-18 — the bar carries the sections now, so a
+  // row of the same five at the top said everything twice and pushed the day below the fold. The
+  // tiles survive in EDIT mode, which is where they still do a job the bar cannot: their order and
+  // hidden set are what HOME_SECTION_META's consumers read, and dragging a tile is how you change
+  // them. So the count is asserted where the tiles now live, not where they used to.
+  if (identity.tilesOnHome !== 0) throw new Error(`Home's reading view carries no section tiles now, got ${identity.tilesOnHome}`);
+  const editTiles = await page.evaluate(() => {
+    switchTab('home'); UI.homeEditMode = true; render();
+    return null;
+  });
+  await settle(page);
+  const inEdit = await page.evaluate(() => {
+    const n = document.querySelectorAll('.home-tile').length;
+    UI.homeEditMode = false; render();
+    return n;
+  });
+  await settle(page);
+  console.log('section tiles in edit mode:', inEdit, editTiles === null ? '' : '');
   // Five: PRODUCTIVITY, WELLNESS, HOBBIES, NOTES, FINANCIAL. `health` is the only retired one left.
-  if (identity.tilesOnHome !== 5) throw new Error(`Expected 5 section tiles, got ${identity.tilesOnHome}`);
+  if (inEdit !== 5) throw new Error(`Edit mode still offers all five tiles to reorder, got ${inEdit}`);
 
   // ---- 4. Schedule is still reachable, and its bar matches Home's ----
   // Navigate, settle, THEN read: reading inside the same evaluate gets the pre-render tabbar, which

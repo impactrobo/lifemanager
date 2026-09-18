@@ -29,10 +29,21 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // anchors are left in place — and its OPEN CALENDAR button doesn't depend on the clock the way
   // the timeline's own contents do.
 
-  // 1. Home tiles render on load
+  // 1. The section tiles are EDIT-MODE ONLY now (2026-09-18). Home's bottom bar carries the five
+  // sections, so a row of the same five at the top of the reading view said everything twice and
+  // pushed the day below the fold. They remain in edit mode because that is where they still do a
+  // job the bar cannot — their order and hidden set are what every HOME_SECTION_META consumer
+  // reads, and dragging a tile is how you change them.
   const tileCount = await page.$$eval('.home-tile', els => els.length);
   console.log('home tiles on load:', tileCount);
-  if (tileCount === 0) throw new Error('Expected at least one .home-tile on Home, found 0');
+  if (tileCount !== 0) throw new Error(`Home's reading view carries no section tiles now, found ${tileCount}`);
+  await page.evaluate(() => { UI.homeEditMode = true; render(); });
+  await settle(page);
+  const editTiles = await page.$$eval('.home-tile', els => els.length);
+  console.log('home tiles in edit mode:', editTiles);
+  if (editTiles === 0) throw new Error('Edit mode still has to offer the tiles — it is the only way to reorder or unhide a section');
+  await page.evaluate(() => { UI.homeEditMode = false; render(); });
+  await settle(page);
 
   // 2. Edit mode toggles and shows per-tile hide ("x") buttons
   // THE WAY IN IS HIDDEN (2026-09-17, by request) — the mode itself is untouched. So this drives it
@@ -162,7 +173,11 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // should survive whatever comes next.
   // Counted off sectionOrder rather than hardcoded: SCHEDULE retired as a tile when Home started
   // rendering the schedule itself, and the number will move again.
-  await page.evaluate(() => { switchTab('home'); });
+  // In EDIT mode, because that is where the tiles live since 2026-09-18. The colours themselves did
+  // not move — the bottom bar paints the reading view's sections from the same HOME_SECTION_META
+  // entries (test_home_bar.js checks that end) — so this still pins the contract it always did:
+  // one colour per section, following the section id rather than its position.
+  await page.evaluate(() => { switchTab('home'); UI.homeEditMode = true; render(); });
   await settle(page);
   const tileColors = await page.evaluate(() => {
     const ids = STATE.settings.homeLayout.sectionOrder;

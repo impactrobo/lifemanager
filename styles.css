@@ -202,6 +202,67 @@ select { -webkit-appearance: none; appearance: none; background-image: linear-gr
 }
 .tabbar button .ic { font-size: 18px; line-height: 1; }
 .tabbar button.active { color: var(--accent); }
+
+/* ---- Section tabs: the five sections, stable on every screen ----
+   Each carries its own identity colour as a bar along its TOP edge, so the colour meets the content
+   rather than the screen edge. The bar is always painted and steps up in weight when active: the
+   colours ARE the sections (they follow each one onto its Home tile and into every link chip), and
+   a row of five greys you have to read would throw that away. */
+/* Deliberately NOT scoped to .tabbar: the same button is rendered in the swipe-up sheet, and a
+   .tabbar-scoped rule left the sheet's copies with no colour bar at all — the one thing that makes
+   them recognisable as the same control. */
+.section-tab { position: relative; padding-top: 10px; }
+.section-tab::before {
+  content: ''; position: absolute; top: 0; left: 6px; right: 6px; height: 2px;
+  background: var(--sc); opacity: 0.4; border-radius: 0 0 2px 2px;
+}
+.section-tab.active::before { height: 3px; opacity: 1; }
+/* The lit section is named in its OWN colour, not the global accent — five sections that all light
+   up the same pink would make the colour bars decorative rather than informative. */
+.section-tab.active { color: var(--sc); }
+/* The icon follows the label, the same way .tabbar's own rule does it — and by the same mechanism,
+   because ICONS hardcode fill="var(--accent)" on the PATHS, so a `fill` on the <svg> never reaches
+   them. Repeated here rather than relying on .tabbar's copy: these buttons also render in the
+   swipe-up sheet, which has no .tabbar ancestor. */
+.section-tab .ic svg [fill]:not([fill="none"]) { fill: currentColor; }
+.section-tab .ic svg [stroke]:not([stroke="none"]) { stroke: currentColor; }
+
+/* Inside a section the bar holds that section's subtabs and the sections are hidden behind a swipe.
+   This is the only hint that the gesture exists: a short grip above the strip, the same shape a
+   drag handle has on every bottom sheet, so it reads as "there is more up here" without costing a
+   button slot or a line of instruction. */
+.tabbar.has-section-sheet::before {
+  content: ''; position: absolute; top: 3px; left: 50%; transform: translateX(-50%);
+  width: 34px; height: 3px; border-radius: 3px; background: var(--border);
+}
+.tabbar.has-section-sheet { padding-top: 10px; }
+
+/* ---- The section sheet, and the hold-a-section menu ----
+   Both ride .home-popup-backdrop (bottom-anchored, z-index 100, hoisted out of #app like every
+   other overlay) and differ only in what they hold. */
+.section-sheet {
+  width: 100%; max-width: 520px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius) var(--radius) 0 0;
+  padding: 10px 16px calc(16px + env(safe-area-inset-bottom));
+  animation: section-sheet-up 0.18s ease-out;
+}
+@keyframes section-sheet-up { from { transform: translateY(12px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .section-sheet { animation: none; } }
+.section-sheet-grip {
+  width: 34px; height: 3px; border-radius: 3px; background: var(--border);
+  margin: 0 auto 12px;
+}
+.section-sheet-grid { display: flex; gap: 6px; }
+/* The sheet's own section buttons reuse .section-tab for the colour bar and the lit-in-its-own-
+   colour rule, but need the sizing the .tabbar gives its children, which they no longer inherit. */
+.section-sheet-tab {
+  flex: 1 1 auto; min-width: 0; white-space: nowrap;
+  background: none; border: none; color: var(--text-faint); padding: 10px 4px 8px;
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  font-size: 10px; font-weight: 600; font-family: var(--font-head); letter-spacing: 0.03em;
+}
+.section-sheet-tab .ic { font-size: 18px; line-height: 1; }
 /* CLOSE always reads as a dismiss/exit action, so it stays on --bad (red-family in every
    aesthetic by design convention) instead of the tabbar's usual faint/accent coloring — a fixed
    signal regardless of which aesthetic or accent color is active. */

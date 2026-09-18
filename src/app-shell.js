@@ -718,7 +718,64 @@ const SECTION_BARS = {
     buttons: [{ icon: 'close', label: 'CLOSE', onclick: 'goBack()', cls: 'tabbar-close' }],
   },
 };
+// ---------------- THE SECTIONS, AND WHEN THE BAR SHOWS THEM ----------------
+//
+// The bottom bar shows the five SECTIONS on Home, and the current section's SUBTABS everywhere else
+// (2026-09-18). Two bars in one strip, which sounds worse than it is: at any moment the bar answers
+// exactly one question, and which question depends on whether you have chosen a section yet.
+//
+// Home used to have no bar at all -- its own button had moved to the wordmark and CALENDAR/SETUP
+// into the PRODUCTIVITY tile -- so the app's most-visited screen was the one with no navigation at
+// its edges. Now Home is where you pick a section, and the bar is how you pick.
+//
+// Inside a section nothing changed: the bar is that section's subtabs, exactly as before. Crossing
+// to another section is deliberately NOT on screen there -- swipe up on the bar and the sections
+// come out (see the section sheet below). Hiding it is the point: once you are in Wellness, the
+// buttons worth spending the strip on are Wellness's.
+//
+// The order is the user's: PRODUCTIVITY, WELLNESS, HOBBIES, FINANCIAL, NOTES.
+//
+// `tab` is the NAV id, which is NOT the display name in two cases: 'schedule' is PRODUCTIVITY and
+// 'train' is WELLNESS. Renaming either id would orphan every stored link chip's colour, so the id
+// stays and only the label moved. HOME_SECTION_META is the source of the colour, the icon and the
+// canonical name; `label` here is only the truncation the bar needs -- PRODUCTIVITY does not fit
+// five-across, PROD does. Measured: this set fits at 360 and 390, and clips 3px at 320.
+const SECTION_TABS = [
+  { tab: 'schedule', label: 'PROD' },
+  { tab: 'train',    label: 'WELLNESS' },
+  { tab: 'hobbies',  label: 'HOBBIES' },
+  { tab: 'budget',   label: 'FINANCIAL' },
+  { tab: 'notes',    label: 'NOTES' },
+];
+// Where a section lands when you pick it with no subsection named. Notes is absent on purpose: its
+// landing screen is a NEW BLANK NOTE, which switchTab() is what creates, so it must go through
+// there rather than through a subtab setter.
+const SECTION_HOME_SUBTAB = {
+  train: 'workouts', schedule: 'calendar', budget: 'overview',
+};
+// Enter a section, optionally straight into one of its subtabs -- the hold-and-drag path, where you
+// pick WELLNESS / PHASES in one gesture instead of arriving on DAILY and then moving.
+function goToSection(tab, subtab) {
+  switchTab(tab);
+  const key = subtab || SECTION_HOME_SUBTAB[tab];
+  const sec = SECTION_BARS[tab];
+  if (!key || !sec || !sec.set) return;
+  const setter = /** @type {any} */ (window)[sec.set];
+  if (typeof setter === 'function') setter(key);
+}
+// One section's button, used by both the Home bar and the swipe-up sheet.
+function sectionTabButton(s, opts) {
+  const meta = HOME_SECTION_META[s.tab] || {};
+  const active = NAV.currentTab === s.tab;
+  const cls = ['section-tab', active ? 'active' : '', (opts && opts.cls) || ''].filter(Boolean).join(' ');
+  return `<button class="${cls}" style="--sc:${meta.color || 'var(--border)'}"
+    data-section="${s.tab}" onclick="${(opts && opts.onclick) || `goToSection('${s.tab}')`}"
+    aria-current="${active ? 'page' : 'false'}" title="${escapeHtml(meta.label || s.label)}"
+    ><span class="ic">${icon(meta.icon)}</span>${s.label}</button>`;
+}
 function renderTabbar() {
+  // Home: the sections. Anywhere else: this section's own subtabs, unchanged from before.
+  if (NAV.currentTab === 'home') return SECTION_TABS.map(s => sectionTabButton(s)).join('');
   const sec = SECTION_BARS[NAV.currentTab];
   if (!sec) return '';
   const buttons = typeof sec.buttons === 'function' ? sec.buttons() : sec.buttons;
@@ -731,6 +788,137 @@ function renderTabbar() {
     return `<button class="${cls}" onclick="${onclick}"><span class="ic">${icon(b.icon)}</span>${b.label}</button>`;
   }).join('');
 }
+// ---------------- THE SECTION SHEET (swipe up on the bar) ----------------
+//
+// Inside a section the bar is that section's subtabs, so crossing to another section has no button.
+// That is deliberate -- the strip is worth spending on where you are -- but it still has to be
+// reachable, and going Home first is the cost this whole change exists to remove. Swipe up on the
+// bar and the sections rise out of it.
+//
+// A gesture rather than a button because the bar has no slot to spare, and upward from the bottom
+// edge is the one direction that means "more" on a phone. It is not the only route: the wordmark
+// still goes Home, where the sections are plain buttons, so nothing is reachable ONLY by gesture.
+let SECTION_SHEET_OPEN = false;
+function openSectionSheet() { if (!SECTION_SHEET_OPEN) { SECTION_SHEET_OPEN = true; render(); } }
+function closeSectionSheet() { if (SECTION_SHEET_OPEN) { SECTION_SHEET_OPEN = false; render(); } }
+function goToSectionFromSheet(tab) { SECTION_SHEET_OPEN = false; goToSection(tab); }
+function renderSectionSheet() {
+  if (!SECTION_SHEET_OPEN || NAV.currentTab === 'home') return '';
+  return `
+    <div class="home-popup-backdrop section-sheet-backdrop" onclick="if(event.target===this)closeSectionSheet()">
+      <div class="section-sheet">
+        <div class="section-sheet-grip" aria-hidden="true"></div>
+        <div class="subtle-label" style="margin-bottom:10px;">GO TO</div>
+        <div class="section-sheet-grid">
+          ${SECTION_TABS.map(s => sectionTabButton(s, {
+            cls: 'section-sheet-tab',
+            onclick: `goToSectionFromSheet('${s.tab}')`,
+          })).join('')}
+        </div>
+        <button class="btn btn-ghost btn-block" style="margin-top:12px;" onclick="switchTab('home')">HOME</button>
+      </div>
+    </div>`;
+}
+// Wires the bar's own gestures, idempotently (.onpointerdown, not addEventListener) because
+// _doRender() runs on every render and the bar element persists across all of them.
+//
+//   * swipe UP on the bar, anywhere inside a section -> the section sheet
+//   * press and HOLD a section button on Home -> its subtabs, drag onto one and release to land
+//     there directly, so WELLNESS / PHASES is one gesture rather than two taps
+//
+// SECTION_HOLD_MS matches the note-preview hold already in the app, so the app has ONE idea of how
+// long a long-press is rather than two that feel subtly different.
+const SECTION_HOLD_MS = 450;
+const SECTION_SWIPE_PX = 28;
+let _sectionGesture = null;
+let _sectionSuppressClick = false;
+function attachTabbarGestures() {
+  const bar = document.getElementById('tabbar');
+  if (!bar) return;
+  bar.onpointerdown = (e) => {
+    _sectionSuppressClick = false;   // a new press starts clean, whatever the last one did
+    const btn = /** @type {any} */ (e.target).closest ? /** @type {any} */ (e.target).closest('button') : null;
+    _sectionGesture = {
+      y: e.clientY, x: e.clientX, btn, section: btn && btn.getAttribute('data-section'),
+      swiped: false, held: false,
+      timer: null,
+    };
+    // Hold only means something on Home, where the buttons ARE sections.
+    if (_sectionGesture.section && NAV.currentTab === 'home') {
+      _sectionGesture.timer = setTimeout(() => {
+        if (!_sectionGesture || _sectionGesture.swiped) return;
+        _sectionGesture.held = true;
+        openSectionHoldMenu(_sectionGesture.section);
+      }, SECTION_HOLD_MS);
+    }
+  };
+  bar.onpointermove = (e) => {
+    if (!_sectionGesture) return;
+    const dy = _sectionGesture.y - e.clientY;
+    if (Math.abs(e.clientX - _sectionGesture.x) > 10 || dy > 10) {
+      clearTimeout(_sectionGesture.timer);   // a moving finger is not a hold
+    }
+    if (!_sectionGesture.swiped && dy > SECTION_SWIPE_PX && NAV.currentTab !== 'home') {
+      _sectionGesture.swiped = true;
+      openSectionSheet();
+    }
+  };
+  const end = () => {
+    if (!_sectionGesture) return;
+    clearTimeout(_sectionGesture.timer);
+    // A gesture that became the sheet must not ALSO fire the button it started on. The flag
+    // outlives the gesture object because the click arrives after pointerup.
+    if (_sectionGesture.swiped || _sectionGesture.held) _sectionSuppressClick = true;
+    _sectionGesture = null;
+  };
+  bar.onpointerup = end;
+  bar.onpointercancel = end;
+  // CAPTURE phase, and addEventListener rather than .onclick, because the buttons carry inline
+  // onclick= handlers: those run in the TARGET phase, so a bubble-phase listener on the bar sees
+  // the click only after the navigation has already happened. The first version of this was
+  // .onclick and was therefore dead code that looked like protection -- caught by mutating the
+  // condition to `true` and watching the tap navigate anyway.
+  //
+  // Wired once, not per render, since addEventListener has no idempotent form and #tabbar is the
+  // same element for the life of the page.
+  if (!/** @type {any} */ (bar)._sectionGesturesWired) {
+    bar.addEventListener('click', (e) => {
+      if (!_sectionSuppressClick) return;
+      _sectionSuppressClick = false;
+      e.preventDefault(); e.stopPropagation();
+    }, true);
+    /** @type {any} */ (bar)._sectionGesturesWired = true;
+  }
+}
+// Holding a section on Home offers its subtabs, so you can land on PHASES without passing through
+// DAILY. Rendered as a sheet rather than a hover menu because a finger cannot hover.
+let SECTION_HOLD_MENU = null;
+function openSectionHoldMenu(tab) { SECTION_HOLD_MENU = tab; render(); }
+function closeSectionHoldMenu() { SECTION_HOLD_MENU = null; render(); }
+function goToHeldSection(tab, subtab) { SECTION_HOLD_MENU = null; goToSection(tab, subtab); }
+function renderSectionHoldMenu() {
+  if (!SECTION_HOLD_MENU) return '';
+  const tab = SECTION_HOLD_MENU;
+  const meta = HOME_SECTION_META[tab] || {};
+  const sec = SECTION_BARS[tab];
+  const buttons = sec ? (typeof sec.buttons === 'function' ? sec.buttons() : sec.buttons) : [];
+  // Only real destinations: an action button (Settings' CLOSE, Hobbies' SKILLS) is not somewhere to
+  // land from Home.
+  const dests = buttons.filter(b => b.key);
+  if (!dests.length) { return ''; }
+  return `
+    <div class="home-popup-backdrop section-sheet-backdrop" onclick="if(event.target===this)closeSectionHoldMenu()">
+      <div class="section-sheet" style="--sc:${meta.color || 'var(--border)'}">
+        <div class="section-sheet-grip" aria-hidden="true"></div>
+        <div class="subtle-label" style="margin-bottom:10px; color:${meta.color || 'var(--text-faint)'};">${escapeHtml(meta.label || tab)}</div>
+        <div class="stack">
+          ${dests.map(b => `<button class="btn btn-block" style="text-align:left;"
+            onclick="goToHeldSection('${tab}','${b.key}')"><span class="ic" style="margin-right:8px;">${icon(b.icon)}</span>${b.label}</button>`).join('')}
+        </div>
+      </div>
+    </div>`;
+}
+
 // Move a screen's overlays out of #app and onto #overlayRoot, which is a plain child of <body>.
 //
 // WHY: all eleven aesthetics set `#app { position: relative; z-index: 1 }` so their own backdrop
@@ -761,6 +949,9 @@ const OVERLAY_SELECTOR = [
   '.modal-overlay',             // confirm, phase editor, cloud sync
   '.home-popup-backdrop',       // AM/PM log sheet, Home's add-a-box popup
   '.link-picker-backdrop', '.link-picker',   // link picker, bathroom sheet, convert, hub picker
+  // (the section sheet and the hold-a-section menu are NOT listed: both ride .home-popup-backdrop
+  //  above, deliberately, so they inherit its hoisting and its bottom-anchored layout for free. A
+  //  second entry naming them would be config no mutation could ever catch as wrong.)
   '.entry-preview-backdrop', '.entry-preview', // the press-and-hold note peek
 ].join(', ');
 function _hoistOverlays() {
@@ -868,7 +1059,8 @@ function _doRender() {
     else app.innerHTML = renderBudgetHome();
   }
   // The link picker is an overlay, appended after the screen's own markup so it sits above it.
-  app.innerHTML += renderLinkPicker() + renderRecipeCustomFoodOverlay() + renderLogPopup();
+  app.innerHTML += renderLinkPicker() + renderRecipeCustomFoodOverlay() + renderLogPopup()
+    + renderSectionSheet() + renderSectionHoldMenu();
   // ...and then every overlay leaves #app entirely. Must come before the focus call below: moving a
   // node after focusing something inside it drops the focus.
   _hoistOverlays();
@@ -886,11 +1078,12 @@ function _doRender() {
   const tabbarHtml = renderTabbar();
   tabbarEl.innerHTML = tabbarHtml;
   // index.html ships the bar as .hidden so an empty one never flashes before the first render.
-  // A screen whose bar has NOTHING on it keeps it hidden rather than showing an empty strip —
-  // which is Home again, now that CALENDAR and SETUP have moved into the PRODUCTIVITY tile. Driven
-  // by what renderTabbar() actually produced rather than by naming Home here, so a future section
-  // with no subtabs gets the same treatment without this line knowing about it.
+  // Home always fills it now (the five sections), and a section with no subtabs of its own still
+  // hides rather than painting a blank strip.
   tabbarEl.classList.toggle('hidden', !tabbarHtml.trim());
+  // On Home the bar IS the sections, so there is nothing to swipe up for.
+  tabbarEl.classList.toggle('has-section-sheet', NAV.currentTab !== 'home');
+  attachTabbarGestures();
   document.getElementById('backBtn').classList.toggle('disabled', NAV_HISTORY.length === 0);
   // Forward is always shown alongside Back now (not hidden even on first launch) — just dimmed
   // and inert whenever its own stack is empty, same treatment as Back.

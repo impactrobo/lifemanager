@@ -127,10 +127,11 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   console.log('agenda removal:', JSON.stringify({ ...gone, barText: undefined }));
   if (gone.fn !== 'undefined') throw new Error('renderAgenda should no longer exist, got ' + gone.fn);
   if (/AGENDA/.test(gone.barText)) throw new Error('The bottom bar should no longer offer AGENDA');
-  // Two on PRODUCTIVITY (HOME moved to the wordmark long ago, so it is CALENDAR + SETUP), and none
-  // on Home — which is why an empty bar hides itself rather than showing as a blank strip.
+  // Two on PRODUCTIVITY (HOME moved to the wordmark long ago, so it is CALENDAR + SETUP), and five
+  // on Home — the sections, which Home's bar has carried since 2026-09-18. What matters here is
+  // only that AGENDA is on neither.
   if (gone.scheduleBar !== 2) throw new Error('PRODUCTIVITY carries CALENDAR and SETUP: ' + JSON.stringify(gone));
-  if (gone.homeBar !== 0) throw new Error("Home's bar carries nothing now: " + JSON.stringify(gone));
+  if (gone.homeBar !== 5) throw new Error("Home's bar carries the five sections: " + JSON.stringify({ ...gone, barText: undefined }));
   // NAV.scheduleSubtab rides in nav snapshots and has now outlived two of its own values ('today',
   // then 'agenda'), so an unknown one must render the calendar rather than nothing at all.
   if (!gone.staleRenders || !gone.staleIsCalendar) throw new Error('A stale subtab value must fall back to the calendar, not render an empty screen');
