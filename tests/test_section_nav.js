@@ -188,16 +188,22 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // ---- 5. Nothing is gesture-only ----
   await page.evaluate(() => goToSection('train'));
   await settle(page);
-  await page.click('.topbar .brand');
+  // The house button, not the wordmark: Home moved off the title on 2026-09-19, because a logo
+  // that navigates is a secret button and easy to press by accident while reading.
+  const houseShown = await page.evaluate(() => !document.getElementById('homeBtn').classList.contains('hidden'));
+  if (!houseShown) throw new Error('The house button should be on screen inside a section');
+  await page.click('#homeBtn');
   await settle(page);
-  const viaWordmark = await page.evaluate(() => ({
+  const viaHouse = await page.evaluate(() => ({
     tab: NAV.currentTab,
     sections: [...document.querySelectorAll('#tabbar .section-tab')].length,
+    houseHidden: document.getElementById('homeBtn').classList.contains('hidden'),
   }));
-  console.log('5. wordmark from inside a section:', JSON.stringify(viaWordmark));
-  if (viaWordmark.tab !== 'home' || viaWordmark.sections !== 5) {
-    throw new Error('The wordmark still reaches Home, where the sections are plain buttons: ' + JSON.stringify(viaWordmark));
+  console.log('5. house button from inside a section:', JSON.stringify(viaHouse));
+  if (viaHouse.tab !== 'home' || viaHouse.sections !== 5) {
+    throw new Error('The house reaches Home, where the sections are plain buttons: ' + JSON.stringify(viaHouse));
   }
+  if (!viaHouse.houseHidden) throw new Error('...and hides once you are there, rather than doing nothing');
 
   // ---- 6. NOTES still opens a new note, both ways in ----
   await page.evaluate(() => { STATE.entries = []; invalidateEntryIndex(); goToSection('notes'); });

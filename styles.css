@@ -107,6 +107,16 @@ input, select, textarea { font-family: var(--font-body); }
 .topbar .settings-btn { }
 .topbar .nav-btns-right { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); display: flex; gap: 6px; }
 .topbar .nav-btns { position: absolute; left: 16px; top: 50%; transform: translateY(-50%); display: flex; gap: 6px; }
+/* ---- Handedness: which thumb reaches the header ----
+   Both groups are already absolutely positioned against opposite edges, so swapping them is two
+   declarations rather than a re-layout. Set from STATE.settings.handed onto <body> (see
+   applyHandedness in app-shell.js); the default, unstamped state is right-handed, so nothing
+   changes for anyone who never opens the setting.
+
+   Deliberately only the HEADER for now — the bottom bar is thumb-reachable either way, and the
+   in-screen controls are a much bigger sweep. See the ROADMAP entry. */
+body[data-handed="left"] .topbar .nav-btns-right { right: auto; left: 16px; }
+body[data-handed="left"] .topbar .nav-btns { left: auto; right: 16px; }
 .unit-toggle {
   display: flex; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden;
 }
@@ -193,7 +203,19 @@ select { -webkit-appearance: none; appearance: none; background-image: linear-gr
      overflow-x:auto below turns that overflow into a scrollable strip instead of tabs
      silently clipping off-screen and becoming unreachable. */
   overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch;
+  /* The bar carries a press-and-hold (jump straight to a subsection) and a swipe (the section
+     sheet). Without these, holding a button selects its label and leaves the selection stuck to
+     your finger, and iOS raises its own copy/share callout over the top. Reported 2026-09-19.
+     `touch-action: pan-x` keeps the strip's own horizontal scroll while telling the browser not to
+     interpret a vertical drag as a page scroll -- which is what makes the upward swipe reach the
+     handler at all. */
+  user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+  touch-action: pan-x;
 }
+/* One height, both states. The grip that hints at the swipe used to add 4px of padding only on the
+   screens that have it, so the bar grew as you left Home -- a strip that changes height under your
+   thumb as you navigate. The padding is unconditional now and the grip draws inside it. */
+.tabbar { padding-top: 10px; }
 .tabbar button {
   flex: 1 1 auto; min-width: 58px; white-space: nowrap;
   background: none; border: none; color: var(--text-faint); padding: 8px 4px;
@@ -235,7 +257,6 @@ select { -webkit-appearance: none; appearance: none; background-image: linear-gr
   content: ''; position: absolute; top: 3px; left: 50%; transform: translateX(-50%);
   width: 34px; height: 3px; border-radius: 3px; background: var(--border);
 }
-.tabbar.has-section-sheet { padding-top: 10px; }
 
 /* ---- The section sheet, and the hold-a-section menu ----
    Both ride .home-popup-backdrop (bottom-anchored, z-index 100, hoisted out of #app like every
@@ -2843,6 +2864,24 @@ button.brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 4
   letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-dim);
 }
 .disclose-value { margin-left: auto; font-size: 13px; font-weight: 700; color: var(--text); }
+/* `.disclose-row` — a disclosure that has to LOOK openable, for lists where the closed header is
+   the only thing on screen and a bare caret is easy to read as decoration. Gives the row a surface,
+   a border and real padding so it reads as a thing you press; the plain .disclose stays for
+   headers that already sit inside an obviously-interactive panel. */
+.disclose-row {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 10px 12px; margin-top: 8px;
+}
+.disclose-row:hover { border-color: var(--accent-dim); }
+.disclose-row .disclose-caret { font-size: 13px; transition: transform 0.15s; }
+.disclose-row[aria-expanded="true"] .disclose-caret { color: var(--accent); }
+/* The count, sitting between the label and the total: the thing that says there IS detail behind
+   this, and how much. A caret alone says you can open it; this says whether it's worth it. */
+.disclose-count {
+  font-family: var(--font-mono); font-size: 10px; font-weight: 700;
+  color: var(--text-faint); letter-spacing: 0.04em; margin-left: auto;
+}
+.disclose-row .disclose-value { margin-left: 10px; }
 
 /* ---- A phase on the shelf: built, not placed (see phaseShelf() in app-phases.js) ----
    Dashed rather than a colour of its own: the other three states are positions in time, and this

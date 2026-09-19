@@ -768,6 +768,10 @@ function defaultState() {
     settings: {
       accentByAesthetic: {}, noteTagNames: {}, customNoteTags: [], noteTagsMigrated: false, productivityTile: true, aesthetic: 'cyberpunk',
       restTimer: defaultRestTimerSettings(), mealUnitSystem: 'metric', defaultPage: 'home',
+      // 'right' | 'left' — which side of the HEADER the buttons sit on. Right is the default, and
+      // the unstamped state, so nobody who never opens the setting sees a change. See
+      // applyHandedness() in app-shell.js; a fuller version would reach further than the header.
+      handed: 'right',
       waterTargetMl: 2000, waterServingMl: 250, waterUnit: 'ml', defaultReminderTime: '09:00',
       // Daily targets the weekly review counts DAYS HIT against. Water already had one; these
       // two are new, and exist because "hit your step target 5 of 7 days" needs a target to

@@ -155,16 +155,18 @@ function deleteSavingsGoal(id) {
 // (category "Savings") for the current budget month, same $ amount, same date — a linked
 // recurring charge's own monthly completion already flows through the reserved-slice math, so
 // this only ever applies to the ad-hoc/manual side.
+// Returns whether it saved, so the form stays open on a bad amount rather than closing and losing
+// the note typed alongside it.
 function addGoalContribution(id) {
   const amtEl = document.getElementById('goalContribAmount_' + id);
-  const amt = Number(amtEl.value);
-  if (!amt || amt <= 0) { showToast('Enter an amount first'); return; }
+  const amt = Number(amtEl && amtEl.value);
+  if (!amt || amt <= 0) { showToast('Enter an amount first'); return false; }
   const noteEl = document.getElementById('goalContribNote_' + id);
   const note = noteEl ? noteEl.value.trim() : '';
   const countEl = document.getElementById('goalContribCountBudget_' + id);
   const countAgainstBudget = countEl ? countEl.checked : false;
   const g = STATE.budget.goals.find(x => x.id === id);
-  if (!g) return;
+  if (!g) return false;
   g.contributions.push({ id: uid(), date: todayStr(), amount: amt, note, source: 'manual', countedAgainstBudget: countAgainstBudget });
   if (countAgainstBudget) {
     const key = budgetMonthKey();
@@ -172,9 +174,8 @@ function addGoalContribution(id) {
     STATE.budget.incidentals[key].push({ id: uid(), date: todayStr(), amount: amt, category: 'Savings', note: `${g.name} contribution` });
   }
   saveState();
-  amtEl.value = ''; if (noteEl) noteEl.value = ''; if (countEl) countEl.checked = false;
   showToast(countAgainstBudget ? "Contribution logged — counted against this month's budget" : 'Contribution logged');
-  render();
+  return true;
 }
 function deleteGoalContribution(goalId, contribId) {
   showConfirm('Delete this contribution?', () => {
@@ -226,6 +227,32 @@ function renderGoalFormControls() {
       <button class="btn btn-ghost" onclick="closeGoalForm()">CANCEL</button>
     </div>`;
 }
+// Keyed by goal id rather than a bare boolean: one goal's contribution form being open must not
+// open every other goal's too.
+function renderGoalContribControls(g) {
+  if (UI.goalContribFormFor !== g.id) {
+    return `<button class="btn btn-block" onclick="openGoalContribForm('${g.id}')"><span class="ic" style="margin-right:6px;">${icon('pencil')}</span>+ ADD CONTRIBUTION</button>`;
+  }
+  return `
+    <div class="field-row">
+      <label class="field"><span class="lbl">Amount ($)</span><input type="number" step="0.01" inputmode="decimal" id="goalContribAmount_${g.id}" placeholder="0.00"></label>
+      <label class="field"><span class="lbl">Note (optional)</span><input type="text" id="goalContribNote_${g.id}" placeholder="Birthday money, sold old one..."></label>
+    </div>
+    <label style="display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text-dim); cursor:pointer; margin-bottom:10px;">
+      <input type="checkbox" id="goalContribCountBudget_${g.id}">
+      Also count against this month's budget (logs as an Incidental too)
+    </label>
+    <div class="row" style="gap:8px;">
+      <button class="btn btn-primary" style="flex:1;" onclick="saveGoalContribution('${g.id}')">SAVE CONTRIBUTION</button>
+      <button class="btn btn-ghost" onclick="closeGoalContribForm()">CANCEL</button>
+    </div>`;
+}
+function openGoalContribForm(id) { UI.goalContribFormFor = id; render(); }
+function closeGoalContribForm() { UI.goalContribFormFor = null; render(); }
+function saveGoalContribution(id) {
+  if (addGoalContribution(id)) UI.goalContribFormFor = null;
+  render();
+}
 function openGoalForm() { UI.goalFormOpen = true; render(); }
 function closeGoalForm() { UI.goalFormOpen = false; render(); }
 function saveSavingsGoal() {
@@ -267,18 +294,12 @@ function renderGoalCard(g) {
         <input type="checkbox" ${g.resetsAnnually?'checked':''} onchange="updateGoalField('${g.id}','resetsAnnually',this.checked)">
         Resets every calendar year
       </label>
-      <div class="subtle-label" style="margin-bottom:8px;">LOG A CONTRIBUTION</div>
-      <div class="field-row">
-        <label class="field"><span class="lbl">Amount ($)</span><input type="number" step="0.01" inputmode="decimal" id="goalContribAmount_${g.id}" placeholder="0.00"></label>
-        <label class="field"><span class="lbl">Note (optional)</span><input type="text" id="goalContribNote_${g.id}" placeholder="Birthday money, sold old one..."></label>
-      </div>
-      <label style="display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text-dim); cursor:pointer; margin-bottom:10px;">
-        <input type="checkbox" id="goalContribCountBudget_${g.id}">
-        Also count against this month's budget (logs as an Incidental too)
-      </label>
-      <button class="btn btn-primary btn-sm btn-block" style="margin-bottom:14px;" onclick="addGoalContribution('${g.id}')">+ ADD CONTRIBUTION</button>
+      ${/* The adder sits UNDER the CONTRIBUTIONS header and above the list, same shape as ADD GOAL:
+            a button at rest, the form only once you ask for it. The header names the section; the
+            button is the first thing in it. */ ''}
       <div class="subtle-label" style="margin-bottom:8px;">${g.resetsAnnually ? `${nowDate().getFullYear()} ` : ''}CONTRIBUTIONS</div>
-      <div class="entry-list">${contribs.length ? contribs.map(c => renderGoalContributionCard(g.id, c)).join('') : emptyState('Nothing logged yet.')}</div>
+      ${renderGoalContribControls(g)}
+      <div class="entry-list" style="margin-top:10px;">${contribs.length ? contribs.map(c => renderGoalContributionCard(g.id, c)).join('') : `<div style="font-size:11px; color:var(--text-faint);">Nothing logged yet.</div>`}</div>
     ` : ''}
     ${renderLinkChips('goal', g.id)}
   </div>`;
@@ -316,19 +337,19 @@ function budgetTotalIncome(key) {
 }
 
 // ---- Recurring income sources (config-style: always-editable rows, like recurring charges) ----
+// Returns whether it saved; saveIncomeSource() closes the form only on true.
 function addRecurringIncome() {
   const nameEl = document.getElementById('incName');
-  const name = nameEl.value.trim();
+  const name = nameEl ? nameEl.value.trim() : '';
   const amountEl = document.getElementById('incAmount');
-  const amount = Number(amountEl.value);
-  if (!name) { showToast('Give it a name'); return; }
-  if (!amount || amount <= 0) { showToast('Enter an amount first'); return; }
+  const amount = Number(amountEl && amountEl.value);
+  if (!name) { showToast('Give it a name'); return false; }
+  if (!amount || amount <= 0) { showToast('Enter an amount first'); return false; }
   const frequency = inputVal('incFrequency') || 'monthly';
   STATE.budget.recurringIncome.push({ id: uid(), name, amount, frequency, active: true });
   saveState();
-  nameEl.value = ''; amountEl.value = '';
   showToast('Income source added');
-  render();
+  return true;
 }
 function updateRecurringIncomeField(id, field, value) {
   const r = STATE.budget.recurringIncome.find(x => x.id === id);
@@ -352,21 +373,73 @@ function deleteRecurringIncome(id) {
     saveState(); render();
   });
 }
+// An income source at REST is a readout: name, amount, frequency, and nothing you can type into.
+// Editing is a mode you enter from the pencil (2026-09-18) -- the same call made for Notes, and for
+// the same reason: a row of live inputs invites an accidental edit to a number the budget bar is
+// computed from, and reads as unfinished rather than as data.
+//
+// The one exception is ACTIVE, which stays a live checkbox in both modes. Turning a source off for
+// a month is the thing you do most often here and it is instantly reversible, so putting it behind
+// the pencil would cost two taps to save nothing. Explicitly asked for.
 function renderRecurringIncomeRow(r) {
-  return `<div class="entry-card" style="${r.active ? '' : 'opacity:0.5;'}">
+  const editing = UI.incomeSourceEditing === r.id;
+  const freq = (INCOME_FREQUENCIES[r.frequency] || INCOME_FREQUENCIES.monthly).label;
+  const activeToggle = `
+    <label style="display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text-dim); cursor:pointer;">
+      <input type="checkbox" ${r.active ? 'checked' : ''} onchange="toggleRecurringIncomeActive('${r.id}', this.checked)">
+      Active — counts toward this month's income
+    </label>`;
+  if (!editing) {
+    return `<div class="entry-card" style="${r.active ? '' : 'opacity:0.5;'}">
+      <div class="ehead">
+        <div style="min-width:0;">
+          <div style="font-size:14px; font-weight:700;">${escapeHtml(r.name)}</div>
+          <div style="font-size:12px; color:var(--text-dim); margin-top:2px;">
+            <span class="mono">${fmtMoney(r.amount)}</span> &middot; ${escapeHtml(freq)}</div>
+        </div>
+        <button class="icon-btn" onclick="editIncomeSource('${r.id}')" title="Edit this source" aria-label="Edit this source">${icon('pencil')}</button>
+      </div>
+      ${activeToggle}
+    </div>`;
+  }
+  return `<div class="entry-card" style="border-color:var(--accent);">
     <div class="ehead">
       <input type="text" value="${escapeHtml(r.name)}" placeholder="e.g. Paycheck" style="font-weight:700; font-size:14px; border:none; background:transparent; padding:0; color:var(--text); font-family:var(--font-body);" onchange="updateRecurringIncomeField('${r.id}','name',this.value)">
-      <button class="icon-btn" onclick="deleteRecurringIncome('${r.id}')">${icon('close')}</button>
+      <button class="icon-btn" style="color:var(--bad);" onclick="deleteRecurringIncome('${r.id}')" title="Delete this source">${icon('close')}</button>
     </div>
     <div class="field-row">
       <label class="field"><span class="lbl">Amount</span><input type="number" step="0.01" inputmode="decimal" value="${r.amount || ''}" onchange="updateRecurringIncomeField('${r.id}','amount',this.value)"></label>
       <label class="field"><span class="lbl">Frequency</span><select onchange="updateRecurringIncomeField('${r.id}','frequency',this.value)">${incomeFrequencyOptions(r.frequency)}</select></label>
     </div>
-    <label style="display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text-dim); cursor:pointer;">
-      <input type="checkbox" ${r.active ? 'checked' : ''} onchange="toggleRecurringIncomeActive('${r.id}', this.checked)">
-      Active — counts toward this month's income
-    </label>
+    ${activeToggle}
+    ${/* DONE rather than SAVE: every field here commits on change, so there is nothing held back
+          waiting for a button. Calling it SAVE would imply there is. */ ''}
+    <button class="btn btn-ghost btn-sm btn-block" style="margin-top:10px;" onclick="closeIncomeSourceEdit()">DONE</button>
   </div>`;
+}
+function editIncomeSource(id) { UI.incomeSourceEditing = id; render(); }
+function closeIncomeSourceEdit() { UI.incomeSourceEditing = null; render(); }
+// The adder, matching ADD GOAL and ADD CONTRIBUTION: a button at rest, the form on request.
+function renderIncomeSourceControls() {
+  if (!UI.incomeSourceFormOpen) {
+    return `<button class="btn btn-block" onclick="openIncomeSourceForm()"><span class="ic" style="margin-right:6px;">${icon('pencil')}</span>+ ADD SOURCE</button>`;
+  }
+  return `
+    <div class="field-row">
+      <label class="field"><span class="lbl">Name</span><input type="text" id="incName" placeholder="e.g. Paycheck"></label>
+      <label class="field"><span class="lbl">Amount</span><input type="number" step="0.01" inputmode="decimal" id="incAmount" placeholder="0.00"></label>
+    </div>
+    <label class="field"><span class="lbl">Frequency</span><select id="incFrequency">${incomeFrequencyOptions('monthly')}</select></label>
+    <div class="row" style="gap:8px;">
+      <button class="btn btn-primary" style="flex:1;" onclick="saveIncomeSource()">SAVE SOURCE</button>
+      <button class="btn btn-ghost" onclick="closeIncomeSourceForm()">CANCEL</button>
+    </div>`;
+}
+function openIncomeSourceForm() { UI.incomeSourceFormOpen = true; render(); }
+function closeIncomeSourceForm() { UI.incomeSourceFormOpen = false; render(); }
+function saveIncomeSource() {
+  if (addRecurringIncome()) UI.incomeSourceFormOpen = false;
+  render();
 }
 
 // ---- Savings & Investment planning: enter either a flat $ amount or a % of recurring income --
@@ -525,9 +598,13 @@ function renderBudgetLedgerGroup(kind, key) {
   const total = rows.reduce((n, e) => n + (Number(e.amount) || 0), 0);
   return `
     <div style="margin-top:12px;">
-      <button class="disclose" onclick="toggleBudgetLedger('${kind}')" aria-expanded="${!!open}">
+      ${/* .disclose-row, not the plain .disclose: these two headers ARE the section when closed, so
+            they have to look pressable rather than like a label with a small mark beside them. The
+            count is what says there is detail behind the caret at all. */ ''}
+      <button class="disclose disclose-row" onclick="toggleBudgetLedger('${kind}')" aria-expanded="${!!open}">
         <span class="disclose-caret">${open ? '&#9662;' : '&#9656;'}</span>
         <span class="disclose-label"${income ? ' style="color:var(--good);"' : ''}>${income ? 'INCOME' : 'CHARGES'}</span>
+        <span class="disclose-count">${rows.length ? `${rows.length} ${rows.length === 1 ? 'ENTRY' : 'ENTRIES'}` : 'NONE'}</span>
         <span class="disclose-value mono"${income ? ' style="color:var(--good);"' : ''}>${income ? '+' : ''}${fmtMoney(total)}</span>
       </button>
       ${open ? `<div class="entry-list" style="margin-top:10px;">${rows.length
@@ -552,20 +629,20 @@ function renderBudgetIncidentalCard(e, key) {
 }
 
 // ---- Recurring charges (config-style: always-editable rows, like the rest of Setup) ----
+// Returns whether it saved; saveRecurringCharge() closes the form only on true.
 function addRecurringCharge() {
   const nameEl = document.getElementById('recName');
-  const name = nameEl.value.trim();
+  const name = nameEl ? nameEl.value.trim() : '';
   const amountEl = document.getElementById('recAmount');
-  const amount = Number(amountEl.value);
-  if (!name) { showToast('Give it a name'); return; }
-  if (!amount || amount <= 0) { showToast('Enter an amount first'); return; }
+  const amount = Number(amountEl && amountEl.value);
+  if (!name) { showToast('Give it a name'); return false; }
+  if (!amount || amount <= 0) { showToast('Enter an amount first'); return false; }
   const category = inputVal('recCategory') || 'Other';
   const isSavings = inputChecked('recIsSavings');
   STATE.budget.recurring.push({ id: uid(), name, amount, category, active: true, isSavings, dueDay: null, reminderRecurrenceId: null });
   saveState();
-  nameEl.value = ''; amountEl.value = ''; document.getElementById('recIsSavings').checked = false;
   showToast('Recurring charge added');
-  render();
+  return true;
 }
 function updateRecurringField(id, field, value) {
   const r = STATE.budget.recurring.find(x => x.id === id);
@@ -686,27 +763,76 @@ function deleteRecurringCharge(id) {
     saveState(); queueReminderPushSync(); render();
   });
 }
+// Same two modes as an income source, for the same reasons -- and because these two sit on one
+// screen, so one of them staying a wall of live inputs would just look unfinished. ACTIVE stays
+// live in both modes here too; the savings flag and the due date are settings you set once, so they
+// live behind the pencil.
 function renderRecurringRow(r) {
-  return `<div class="entry-card" ${entityAttr('charge', r.id)} style="${r.active ? '' : 'opacity:0.5;'} ${r.isSavings ? 'border-color:var(--savings);' : ''}">
+  const editing = UI.recurringChargeEditing === r.id;
+  const activeToggle = `
+    <label style="display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text-dim); cursor:pointer;">
+      <input type="checkbox" ${r.active ? 'checked' : ''} onchange="toggleRecurringActive('${r.id}', this.checked)">
+      Active — counts toward the reserved slice of this month's bar
+    </label>`;
+  if (!editing) {
+    return `<div class="entry-card" ${entityAttr('charge', r.id)} style="${r.active ? '' : 'opacity:0.5;'} ${r.isSavings ? 'border-color:var(--savings);' : ''}">
+      <div class="ehead">
+        <div style="min-width:0;">
+          <div style="font-size:14px; font-weight:700;">${r.isSavings ? `<span class="savings-badge">${icon('recurDollar')} SAVINGS</span>` : ''}${escapeHtml(r.name)}</div>
+          <div style="font-size:12px; color:var(--text-dim); margin-top:2px;">
+            <span class="mono">${fmtMoney(r.amount)}</span>${r.category ? ` &middot; ${escapeHtml(r.category)}` : ''}</div>
+        </div>
+        <button class="icon-btn" onclick="editRecurringCharge('${r.id}')" title="Edit this charge" aria-label="Edit this charge">${icon('pencil')}</button>
+      </div>
+      ${activeToggle}
+      ${renderLinkChips('charge', r.id)}
+    </div>`;
+  }
+  return `<div class="entry-card" ${entityAttr('charge', r.id)} style="border-color:var(--accent);">
     <div class="ehead">
       <div>${r.isSavings ? `<span class="savings-badge">${icon('recurDollar')} SAVINGS</span>` : ''}<input type="text" value="${escapeHtml(r.name)}" placeholder="e.g. Rent" style="font-weight:700; font-size:14px; border:none; background:transparent; padding:0; color:var(--text); font-family:var(--font-body);" onchange="updateRecurringField('${r.id}','name',this.value)"></div>
-      <button class="icon-btn" onclick="deleteRecurringCharge('${r.id}')">${icon('close')}</button>
+      <button class="icon-btn" style="color:var(--bad);" onclick="deleteRecurringCharge('${r.id}')" title="Delete this charge">${icon('close')}</button>
     </div>
     <div class="field-row">
       <label class="field"><span class="lbl">Amount</span><input type="number" step="0.01" inputmode="decimal" value="${r.amount || ''}" onchange="updateRecurringField('${r.id}','amount',this.value)"></label>
       <label class="field"><span class="lbl">Category</span><select onchange="updateRecurringField('${r.id}','category',this.value)">${budgetCategoryOptions(r.category)}</select></label>
     </div>
-    <label style="display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text-dim); cursor:pointer;">
-      <input type="checkbox" ${r.active ? 'checked' : ''} onchange="toggleRecurringActive('${r.id}', this.checked)">
-      Active — counts toward the reserved slice of this month's bar
-    </label>
+    ${activeToggle}
     <label style="display:flex; align-items:center; gap:8px; font-size:12px; color:var(--savings); cursor:pointer; margin-top:6px;">
       <input type="checkbox" ${r.isSavings ? 'checked' : ''} onchange="toggleRecurringSavings('${r.id}', this.checked)">
       Savings / Investment — money you're paying yourself, not spending
     </label>
     ${renderChargeDueSection(r)}
     ${renderLinkChips('charge', r.id)}
+    <button class="btn btn-ghost btn-sm btn-block" style="margin-top:10px;" onclick="closeRecurringChargeEdit()">DONE</button>
   </div>`;
+}
+function editRecurringCharge(id) { UI.recurringChargeEditing = id; render(); }
+function closeRecurringChargeEdit() { UI.recurringChargeEditing = null; render(); }
+function renderRecurringChargeControls() {
+  if (!UI.recurringChargeFormOpen) {
+    return `<button class="btn btn-block" onclick="openRecurringChargeForm()"><span class="ic" style="margin-right:6px;">${icon('pencil')}</span>+ ADD CHARGE</button>`;
+  }
+  return `
+    <div class="field-row">
+      <label class="field"><span class="lbl">Name</span><input type="text" id="recName" placeholder="e.g. Rent"></label>
+      <label class="field"><span class="lbl">Amount</span><input type="number" step="0.01" inputmode="decimal" id="recAmount" placeholder="0.00"></label>
+    </div>
+    <label class="field"><span class="lbl">Category</span><select id="recCategory">${budgetCategoryOptions('Housing')}</select></label>
+    <label style="display:flex; align-items:center; gap:8px; font-size:12px; color:var(--savings); cursor:pointer; margin-bottom:10px;">
+      <input type="checkbox" id="recIsSavings">
+      Savings / Investment — money you're paying yourself, not spending
+    </label>
+    <div class="row" style="gap:8px;">
+      <button class="btn btn-primary" style="flex:1;" onclick="saveRecurringCharge()">SAVE CHARGE</button>
+      <button class="btn btn-ghost" onclick="closeRecurringChargeForm()">CANCEL</button>
+    </div>`;
+}
+function openRecurringChargeForm() { UI.recurringChargeFormOpen = true; render(); }
+function closeRecurringChargeForm() { UI.recurringChargeFormOpen = false; render(); }
+function saveRecurringCharge() {
+  if (addRecurringCharge()) UI.recurringChargeFormOpen = false;
+  render();
 }
 // The due day + optional reminder, split out from renderRecurringRow() since it's the one part of
 // the card with its own internal show/hide logic (the remind-me toggle and its lead-time field
@@ -847,42 +973,31 @@ function renderBudgetRecurring() {
     <div class="section-title">Recurring</div>
     <div style="font-size:12px; color:var(--text-dim); margin:6px 0 14px;">Everything steady, month to month — income sources, savings/investment targets, and the bills and subscriptions that reserve a slice of your budget bar automatically.</div>
 
-    <div class="subtle-label" style="margin-bottom:8px;">ADD AN INCOME SOURCE</div>
-    <div class="panel">
-      <div class="field-row">
-        <label class="field"><span class="lbl">Name</span><input type="text" id="incName" placeholder="e.g. Paycheck"></label>
-        <label class="field"><span class="lbl">Amount</span><input type="number" step="0.01" inputmode="decimal" id="incAmount" placeholder="0.00"></label>
-      </div>
-      <label class="field"><span class="lbl">Frequency</span><select id="incFrequency">${incomeFrequencyOptions('monthly')}</select></label>
-      <button class="btn btn-primary btn-sm btn-block" onclick="addRecurringIncome()">+ ADD SOURCE</button>
-    </div>
-
-    <div class="row" style="margin:18px 0 8px;">
-      <div class="subtle-label" style="margin-bottom:0;">RECURRING INCOME</div>
+    ${/* One section, like INCIDENTALS: the adder on top, the sources under it. It was an ADD form
+          panel and a separate RECURRING INCOME list, which split one subject across two headings. */ ''}
+    <div class="row" style="margin-bottom:8px;">
+      <div class="subtle-label" style="margin-bottom:0;">INCOME SOURCES</div>
       <span class="mono" style="font-size:13px; font-weight:700;">${fmtMoney(incomeTotal)}/mo</span>
     </div>
-    <div class="entry-list">${incomeList.length ? incomeList.map(renderRecurringIncomeRow).join('') : emptyState('No recurring income sources yet — add a paycheck or other steady source above.')}</div>
+    <div class="panel">
+      ${renderIncomeSourceControls()}
+      <div class="entry-list" style="margin-top:12px;">${incomeList.length
+        ? incomeList.map(renderRecurringIncomeRow).join('')
+        : `<div style="font-size:11px; color:var(--text-faint);">No recurring income sources yet — add a paycheck or other steady source above.</div>`}</div>
+    </div>
 
     ${renderSavingsPlanSection()}
 
-    <div class="subtle-label" style="margin:18px 0 8px;">ADD A RECURRING CHARGE</div>
-    <div class="panel">
-      <div class="field-row">
-        <label class="field"><span class="lbl">Name</span><input type="text" id="recName" placeholder="e.g. Rent"></label>
-        <label class="field"><span class="lbl">Amount</span><input type="number" step="0.01" inputmode="decimal" id="recAmount" placeholder="0.00"></label>
-      </div>
-      <label class="field"><span class="lbl">Category</span><select id="recCategory">${budgetCategoryOptions('Housing')}</select></label>
-      <label style="display:flex; align-items:center; gap:8px; font-size:12px; color:var(--savings); cursor:pointer; margin-bottom:10px;">
-        <input type="checkbox" id="recIsSavings">
-        Savings / Investment — money you're paying yourself, not spending
-      </label>
-      <button class="btn btn-primary btn-sm btn-block" onclick="addRecurringCharge()">+ ADD CHARGE</button>
-    </div>
 
     <div class="row" style="margin:18px 0 8px;">
-      <div class="subtle-label" style="margin-bottom:0;">YOUR RECURRING CHARGES</div>
+      <div class="subtle-label" style="margin-bottom:0;">RECURRING CHARGES</div>
       <span class="mono" style="font-size:13px; font-weight:700;">${fmtMoney(total)}/mo</span>
     </div>
-    <div class="entry-list">${list.length ? list.map(renderRecurringRow).join('') : emptyState('No recurring charges yet — add your rent, bills and subscriptions above.')}</div>
+    <div class="panel">
+      ${renderRecurringChargeControls()}
+      <div class="entry-list" style="margin-top:12px;">${list.length
+        ? list.map(renderRecurringRow).join('')
+        : `<div style="font-size:11px; color:var(--text-faint);">No recurring charges yet — add your rent, bills and subscriptions above.</div>`}</div>
+    </div>
   </div>`;
 }

@@ -103,6 +103,14 @@ function defaultTransientUi() {
     // FINANCIAL's one add-container: null, 'income' or 'charge'. Which DIRECTION you are logging,
     // not which store it lands in -- the two stores stay separate, only the form is shared.
     budgetIncidentalForm: null,
+    // Which of FINANCIAL's two ledgers are expanded, and which add-form / row-editor is open.
+    // All transient: navigating away closes them, and none is a fact about the data.
+    budgetLedgerOpen: { income: false, charge: false },
+    goalContribFormFor: null,     // the goal whose contribution form is open, by id
+    incomeSourceFormOpen: false,
+    incomeSourceEditing: null,    // the income source being edited, by id
+    recurringChargeFormOpen: false,
+    recurringChargeEditing: null, // the recurring charge being edited, by id
     customFoodFormOpen: false,
     customFoodEditId: null,
     shoppingListFormOpen: false,
@@ -813,6 +821,23 @@ function sectionTabButton(s, opts) {
     aria-current="${active ? 'page' : 'false'}" title="${escapeHtml(meta.label || s.label)}"
     ><span class="ic">${icon(meta.icon)}</span>${s.label}</button>`;
 }
+// ---- Handedness ----
+// Which side of the header the buttons sit on. Stamped on <body> so the swap is pure CSS (see
+// styles.css), and applied at boot plus whenever the setting changes -- not from render(), because
+// the topbar lives outside #app and a render never touches it.
+//
+// Only the HEADER moves today. The bottom bar is reachable with either thumb, and the in-screen
+// controls are a much larger sweep -- see the ROADMAP entry for what a fuller version would cover.
+function handedness() { return (STATE.settings && STATE.settings.handed) === 'left' ? 'left' : 'right'; }
+function applyHandedness() {
+  document.body.setAttribute('data-handed', handedness());
+}
+function setHandedness(side) {
+  STATE.settings.handed = side === 'left' ? 'left' : 'right';
+  saveState();
+  applyHandedness();
+  render();
+}
 function renderTabbar() {
   // Home: the sections. Anywhere else: this section's own subtabs, unchanged from before.
   if (NAV.currentTab === 'home') return SECTION_TABS.map(s => sectionTabButton(s)).join('');
@@ -1133,6 +1158,8 @@ function _doRender() {
   // it lives in the persistent topbar (not the per-section bottom bar) precisely so it stays
   // reachable from anywhere, the same way it always has been.
   document.getElementById('settingsBtn').classList.toggle('hidden', NAV.currentTab === 'setup');
+  // The house: everywhere except Home itself, where it would be a button that does nothing.
+  document.getElementById('homeBtn').classList.toggle('hidden', NAV.currentTab === 'home');
   // Edit layout only makes sense on Home — hidden everywhere else, highlighted while active.
   // HIDDEN FOR NOW (2026-09-17), by request. The edit mode itself is untouched and still works --
   // toggleHomeEditMode(), the drag handlers, hideHomeBox() and the add-back popup are all intact,

@@ -1536,6 +1536,20 @@ function renderHomeSetup() {
         </select>
       </label>
     </div>
+    ${/* Handedness. Only the header moves today — the bottom bar is reachable either way and the
+          in-screen controls are a much bigger sweep, so this is deliberately a first step rather
+          than a half-finished one. See docs/ROADMAP.md. */ ''}
+    <div class="subtle-label" style="margin:18px 0 10px;">HANDED</div>
+    <div class="panel">
+      <div class="row" style="margin-bottom:0;">
+        <span class="lbl" style="margin-bottom:0;">Header buttons</span>
+        <div class="unit-toggle">
+          <button class="${handedness() === 'left' ? 'active' : ''}" onclick="setHandedness('left')">LEFTY</button>
+          <button class="${handedness() === 'right' ? 'active' : ''}" onclick="setHandedness('right')">RIGHTY</button>
+        </div>
+      </div>
+      <div style="font-size:11px; color:var(--text-faint); margin-top:8px;">Swaps Back/Forward with Home/Settings, so the pair you use most sits under your thumb. Only the top bar for now.</div>
+    </div>
     <div class="subtle-label" style="margin:18px 0 10px;">UNITS</div>
     <div class="panel">
       <div class="row" style="margin-bottom:0;">

@@ -28,17 +28,17 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   await settle(page);
 
   // 1. Give the month a real income figure so percentages aren't all zero
-  await page.fill('#incName', 'Savings Progress Test Income');
+  await page.evaluate(() => openIncomeSourceForm()); await settle(page); /* the form lives behind + ADD SOURCE since 2026-09-18 */ await page.fill('#incName', 'Savings Progress Test Income');
   await page.fill('#incAmount', '4000');
   await page.selectOption('#incFrequency', 'monthly');
-  await page.evaluate(() => addRecurringIncome());
+  await page.evaluate(() => saveIncomeSource());
   await settle(page);
 
   // 2. Add a recurring charge flagged isSavings via the real form
-  await page.fill('#recName', 'Test Index Fund');
+  await page.evaluate(() => openRecurringChargeForm()); await settle(page); /* behind + ADD CHARGE since 2026-09-18 */ await page.fill('#recName', 'Test Index Fund');
   await page.fill('#recAmount', '400');
   await page.check('#recIsSavings');
-  await page.evaluate(() => addRecurringCharge());
+  await page.evaluate(() => saveRecurringCharge());
   await settle(page);
 
   const charge = await page.evaluate(() => STATE.budget.recurring.find(r => r.name === 'Test Index Fund'));

@@ -38,12 +38,18 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // 2. Log manual contributions via the real form, confirm progress math
   await page.evaluate((id) => toggleGoalExpanded(id), goal.id);
   await settle(page);
+  // The contribution form lives behind + ADD CONTRIBUTION since 2026-09-18, so it has to be opened
+  // before there is anything to fill — and again for the second one, since saving closes it.
+  await page.evaluate((id) => openGoalContribForm(id), goal.id);
+  await settle(page);
   await page.fill(`#goalContribAmount_${goal.id}`, '150');
   await page.fill(`#goalContribNote_${goal.id}`, 'Birthday money');
-  await page.evaluate((id) => addGoalContribution(id), goal.id);
+  await page.evaluate((id) => saveGoalContribution(id), goal.id);
+  await settle(page);
+  await page.evaluate((id) => openGoalContribForm(id), goal.id);
   await settle(page);
   await page.fill(`#goalContribAmount_${goal.id}`, '50');
-  await page.evaluate((id) => addGoalContribution(id), goal.id);
+  await page.evaluate((id) => saveGoalContribution(id), goal.id);
   await settle(page);
   const progress = await page.evaluate((id) => goalProgress(STATE.budget.goals.find(g => g.id === id)), goal.id);
   console.log('progress after 2 manual contributions (150+50):', progress);
@@ -54,8 +60,10 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (notComplete) throw new Error('Expected the goal to not be complete yet');
 
   // 3. Complete it — progress hits/exceeds target
+  await page.evaluate((id) => openGoalContribForm(id), goal.id);
+  await settle(page);
   await page.fill(`#goalContribAmount_${goal.id}`, '300');
-  await page.evaluate((id) => addGoalContribution(id), goal.id);
+  await page.evaluate((id) => saveGoalContribution(id), goal.id);
   await settle(page);
   const isComplete = await page.evaluate((id) => goalIsComplete(STATE.budget.goals.find(g => g.id === id)), goal.id);
   console.log('complete after reaching target:', isComplete);
@@ -81,6 +89,8 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   const chargeSetup = await page.evaluate(() => {
     switchTab('budget'); setBudgetSubtab('recurring');
   });
+  await settle(page);
+  await page.evaluate(() => openRecurringChargeForm());   // behind + ADD CHARGE since 2026-09-18
   await settle(page);
   await page.fill('#recName', 'Roth IRA Auto-Invest');
   await page.fill('#recAmount', '500');

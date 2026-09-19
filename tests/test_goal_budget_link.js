@@ -39,8 +39,11 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   await settle(page);
 
   const incidentalsBefore = await page.evaluate((k) => (STATE.budget.incidentals[k] || []).length, key);
+  // Behind + ADD CONTRIBUTION since 2026-09-18, and saving closes it, so each one opens first.
+  await page.evaluate((id) => openGoalContribForm(id), goal.id);
+  await settle(page);
   await page.fill(`#goalContribAmount_${goal.id}`, '100');
-  await page.evaluate((id) => addGoalContribution(id), goal.id);
+  await page.evaluate((id) => saveGoalContribution(id), goal.id);
   await settle(page);
   const incidentalsAfterUnchecked = await page.evaluate((k) => (STATE.budget.incidentals[k] || []).length, key);
   console.log('incidentals before/after an UNCHECKED contribution:', incidentalsBefore, '/', incidentalsAfterUnchecked);
@@ -53,9 +56,11 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (!notInBudgetShown) throw new Error('Expected a "Not in budget" indicator to render for the unchecked contribution');
 
   // 2. Log a second contribution WITH the checkbox checked -> a matching Savings incidental appears
+  await page.evaluate((id) => openGoalContribForm(id), goal.id);
+  await settle(page);
   await page.fill(`#goalContribAmount_${goal.id}`, '75');
   await page.check(`#goalContribCountBudget_${goal.id}`);
-  await page.evaluate((id) => addGoalContribution(id), goal.id);
+  await page.evaluate((id) => saveGoalContribution(id), goal.id);
   await settle(page);
   const afterChecked = await page.evaluate((k) => STATE.budget.incidentals[k] || [], key);
   console.log('incidentals after a CHECKED contribution:', afterChecked);
@@ -69,9 +74,24 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   const inBudgetShown = await page.evaluate(() => document.body.textContent.includes('IN BUDGET'));
   if (!inBudgetShown) throw new Error('Expected an "IN BUDGET" indicator to render for the checked contribution');
 
-  // 3. The checkbox resets after submitting (doesn't silently stay checked for the next contribution)
-  const checkboxStillChecked = await page.evaluate((id) => { const el = document.getElementById('goalContribCountBudget_' + id); return el ? el.checked : null; }, goal.id);
-  if (checkboxStillChecked !== false) throw new Error(`Expected the checkbox to reset to unchecked after submitting, got ${checkboxStillChecked}`);
+  // 3. The "count against budget" checkbox never carries over to the next contribution.
+  // This used to be checked by clearing the box by hand after a save and asserting it went false.
+  // Since 2026-09-18 the form is BUILT ON OPEN and destroyed on save, so the guarantee is
+  // structural instead: there is no box at all between contributions, and the next one starts from
+  // markup rather than from whatever the last one left behind. Both facts are asserted, because
+  // "it's gone" alone would also pass if the form simply never came back.
+  const gone = await page.evaluate((id) => !document.getElementById('goalContribCountBudget_' + id), goal.id);
+  if (!gone) throw new Error('After saving, the contribution form should be closed entirely');
+  await page.evaluate((id) => openGoalContribForm(id), goal.id);
+  await settle(page);
+  const reopened = await page.evaluate((id) => {
+    const el = document.getElementById('goalContribCountBudget_' + id);
+    return el ? el.checked : null;
+  }, goal.id);
+  console.log('count-against-budget box on a freshly opened form:', reopened);
+  if (reopened !== false) throw new Error(`A reopened form starts unchecked, got ${reopened}`);
+  await page.evaluate(() => closeGoalContribForm());
+  await settle(page);
 
   // 4. The goal's own progress includes BOTH contributions regardless of the budget checkbox
   const progress = await page.evaluate((id) => goalProgress(STATE.budget.goals.find(g => g.id === id)), goal.id);
