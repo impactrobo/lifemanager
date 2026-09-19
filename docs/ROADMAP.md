@@ -318,6 +318,27 @@ Newest first. Keep this reasonably current so a fresh session can see what alrea
 without re-reading the whole diff history. Roughly grouped: this project spent early Sept 2026
 on an architecture split + a large wave of Maximalist aesthetics.
 
+- **The debug clock is a popup on the header (2026-09-19).** Asked for as *"is it possible to make
+  the debug clock a popup, and create a dummy button to the left of the HOME button"*, mid device
+  testing. It was a block at the bottom of Settings, which is the wrong home for it: the gesture it
+  exists to serve is *shift the clock, then look at **this** screen* — the day timeline, the week
+  review, a phase boundary — and walking out to Settings and back lost the screen being tested.
+  - A **clock button** (`icon('timer')`) sits left of the house in the header, on every screen
+    including Home, where the house hides itself. It is a dev affordance rather than a feature; the
+    one line in `index.html` is the whole of it, so removing it makes the popup Settings-only again.
+  - The controls are **unchanged and unduplicated**. `renderDebugClockControls()` is the single
+    copy; `renderDebugClockPopup()` wraps it and Settings keeps a readout plus a door to the same
+    popup. `test_debug_clock_popup.js` counts the copies, because two would drift.
+  - The popup is appended by `_doRender()` alongside the section sheet and the log popup, so it
+    works from anywhere rather than only from the screen that built it, and rides `.modal-overlay`
+    so `_hoistOverlays()` lifts it clear of `#app`'s stacking context for free.
+  - **`.sheet-modal-*` shares the phase editor's rules** rather than restating them — same pinned
+    head and foot, same `env(safe-area-inset-*)` padding that rescued the phase editor from under
+    the top bar. A forked second copy would have reintroduced that bug on whichever sheet fell
+    behind, so the test asserts the selectors are still shared. It differs in one rule only:
+    content-height rather than full-viewport, since the clock's controls stop a third of the way down.
+  - `UI.debugClockOpen` (transient, so navigating closes it) — **but navigating never clears the
+    shift itself**, which would silently undo a data-affecting setting the banner still claims is on.
 - **FINANCIAL gets sub-navs, like the WELLNESS screens (2026-09-19).** Asked for as *"start making
   tabs in the FINANCIAL sections… Goal is to have as much as possible in one screen."*
   - **RECURRING** is `INCOME / CHARGES / SAVE & INVEST` instead of four stacked sections, which was

@@ -1326,43 +1326,58 @@ function debugJumpWeekday(targetDow) {
 }
 
 // ---------------- THE DEBUG PANEL ----------------
-// Settings, at the bottom, under its own heading. Two things it must never be: hidden behind a
-// gesture nobody can find, or invisible once engaged.
+// A POPUP, opened by the clock button in the header, reachable from every screen (2026-09-19).
+// It used to be a block at the bottom of Settings, which is the wrong place for the thing: the
+// commonest gesture is "shift the clock, then look at THIS screen" -- the day timeline, the week
+// review, a phase boundary -- and walking out to Settings and back lost the screen you were
+// testing. The controls below are unchanged; only the way in is.
+//
+// Settings keeps an entry (renderDebugClockSetting) so the documented path still works, but it
+// opens this same popup rather than holding a second copy of the controls.
 //
 // THE BANNER IS THE POINT. A shifted clock does not fake anything -- a session logged while it is
 // on is written to the shifted date for real, in the same save as everything else. That's what makes
 // it useful and also what makes it dangerous, so while the offset is non-zero the app says so on
 // every screen. See #debugBar in index.html.
-function renderDebugClockSetting() {
+
+// The one readout both surfaces show. Returned as parts rather than markup because Settings wants
+// it on one row and the popup wants it above the controls.
+function debugClockReadout() {
   const off = debugDayOffset();
   const moff = debugMinuteOffset();
-  const on = debugClockActive();
-  const today = todayStr();
   const d = nowDate();
-  const dow = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][d.getDay()];
   const pad = (n) => String(n).padStart(2, '0');
-  const clock = pad(d.getHours()) + ':' + pad(d.getMinutes());
-  const day = (n, label) =>
-    `<button class="btn btn-sm" style="flex:1; min-width:52px;" onclick="setDebugDayOffset(${off + n})">${label}</button>`;
-  const min = (n, label) =>
-    `<button class="btn btn-sm" style="flex:1; min-width:52px;" onclick="setDebugMinuteOffset(${moff + n})">${label}</button>`;
   const shifted = [];
   if (off) shifted.push((off > 0 ? '+' : '') + off + ' day' + (Math.abs(off) === 1 ? '' : 's'));
   if (moff) shifted.push((moff > 0 ? '+' : '') + (Math.abs(moff) % 60 === 0 ? (moff / 60) + 'h' : moff + 'm'));
+  return {
+    off, moff,
+    on: debugClockActive(),
+    today: todayStr(),
+    dow: ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][d.getDay()],
+    clock: pad(d.getHours()) + ':' + pad(d.getMinutes()),
+    shifted: shifted.join(' and '),
+  };
+}
+
+function renderDebugClockControls() {
+  const r = debugClockReadout();
+  const day = (n, label) =>
+    `<button class="btn btn-sm" style="flex:1; min-width:52px;" onclick="setDebugDayOffset(${r.off + n})">${label}</button>`;
+  const min = (n, label) =>
+    `<button class="btn btn-sm" style="flex:1; min-width:52px;" onclick="setDebugMinuteOffset(${r.moff + n})">${label}</button>`;
   return `
-    <div class="subtle-label" style="margin:22px 0 10px;">DEBUG CLOCK</div>
-    <div class="panel">
       <div style="font-size:11px; color:var(--text-dim); margin-bottom:10px;">
         Moves the whole app's idea of now — the date for weeks, phases and archives, the time for
         whether an activity has passed or which half of the day you're logging into. The clock keeps
         running from wherever you put it.
         <b style="color:var(--text)">Anything you log while it's on is really written to the shifted date.</b>
       </div>
-      <div class="row" style="margin-bottom:${on ? '4px' : '10px'};">
+      <div class="row" style="margin-bottom:${r.on ? '4px' : '10px'};">
         <span class="lbl" style="margin-bottom:0;">App now</span>
-        <span class="mono" style="font-weight:700; color:${on ? 'var(--bad)' : 'var(--text)'};">${today} · ${dow} · ${clock}</span>
+        <span class="mono" style="font-weight:700; color:${r.on ? 'var(--bad)' : 'var(--text)'};">${r.today} · ${r.dow} · ${r.clock}</span>
       </div>
-      ${on ? `<div style="font-size:11px; color:var(--text-faint); margin-bottom:10px;">Really ${realTodayStr()} — shifted ${shifted.join(' and ')}.</div>` : ''}
+      ${r.on ? `<div style="font-size:11px; color:var(--text-faint); margin-bottom:10px;">Really ${realTodayStr()} — shifted ${r.shifted}.</div>` : ''}
 
       <div class="subtle-label" style="margin:0 0 6px;">DATE</div>
       <div class="field-row" style="gap:6px; margin-bottom:8px;">
@@ -1370,11 +1385,11 @@ function renderDebugClockSetting() {
       </div>
       <div class="field-row" style="gap:6px; margin-bottom:8px;">
         <button class="btn btn-sm" style="flex:1;" onclick="debugJumpWeekday(1)">NEXT MONDAY</button>
-        <button class="btn btn-sm" style="flex:1;" onclick="setDebugDayOffset(${off - 7 * 4})">−4 WEEKS</button>
+        <button class="btn btn-sm" style="flex:1;" onclick="setDebugDayOffset(${r.off - 7 * 4})">−4 WEEKS</button>
       </div>
       <label class="field" style="margin-bottom:12px;">
         <span class="lbl">Jump to a date</span>
-        <input type="date" value="${today}" onchange="setDebugDate(this.value)">
+        <input type="date" value="${r.today}" onchange="setDebugDate(this.value)">
       </label>
 
       <div class="subtle-label" style="margin:0 0 6px;">TIME OF DAY</div>
@@ -1383,13 +1398,58 @@ function renderDebugClockSetting() {
       </div>
       <label class="field" style="margin-bottom:12px;">
         <span class="lbl">Set the time</span>
-        <input type="time" value="${clock}" onchange="setDebugTime(this.value)">
+        <input type="time" value="${r.clock}" onchange="setDebugTime(this.value)">
       </label>
 
-      <button class="btn btn-block btn-sm ${on ? 'btn-danger' : ''}" ${on ? '' : 'disabled'}
+      <button class="btn btn-block btn-sm ${r.on ? 'btn-danger' : ''}" ${r.on ? '' : 'disabled'}
               onclick="setDebugDayOffset(0); setDebugMinuteOffset(0);">
-        ${on ? 'BACK TO THE REAL DATE &amp; TIME' : 'CLOCK IS REAL'}
-      </button>
+        ${r.on ? 'BACK TO THE REAL DATE &amp; TIME' : 'CLOCK IS REAL'}
+      </button>`;
+}
+
+// Appended to every screen by _doRender(), the same way the section sheet and the log popup are, so
+// the header button works from anywhere rather than only from the screen that happened to build it.
+// Rides .modal-overlay, so _hoistOverlays() lifts it clear of #app's stacking context for free.
+function renderDebugClockPopup() {
+  if (!UI.debugClockOpen) return '';
+  const r = debugClockReadout();
+  return `
+    <div class="modal-overlay sheet-modal" onclick="if(event.target===this)closeDebugClock()">
+      <div class="sheet-modal-box">
+        <div class="sheet-modal-head">
+          <div class="sheet-modal-title">Debug clock${r.on ? ' · shifted' : ''}</div>
+          <button class="icon-btn" onclick="closeDebugClock()" title="Close" aria-label="Close">${icon('close')}</button>
+        </div>
+        <div class="sheet-modal-body">${renderDebugClockControls()}</div>
+        <div class="sheet-modal-foot">
+          <button class="btn btn-block btn-sm" onclick="closeDebugClock()">DONE</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function openDebugClock() { UI.debugClockOpen = true; render(); }
+function closeDebugClock() { UI.debugClockOpen = false; render(); }
+function toggleDebugClockPopup() { UI.debugClockOpen = !UI.debugClockOpen; render(); }
+
+// Settings' entry. Not a second copy of the controls -- just the readout (so Settings can still say
+// what the clock is doing) and a door to the popup above.
+function renderDebugClockSetting() {
+  const r = debugClockReadout();
+  return `
+    <div class="subtle-label" style="margin:22px 0 10px;">DEBUG CLOCK</div>
+    <div class="panel">
+      <div style="font-size:11px; color:var(--text-dim); margin-bottom:10px;">
+        Moves the whole app's idea of now.
+        <b style="color:var(--text)">Anything you log while it's on is really written to the shifted date.</b>
+        It lives on the clock button in the header now, reachable from any screen.
+      </div>
+      <div class="row" style="margin-bottom:${r.on ? '4px' : '10px'};">
+        <span class="lbl" style="margin-bottom:0;">App now</span>
+        <span class="mono" style="font-weight:700; color:${r.on ? 'var(--bad)' : 'var(--text)'};">${r.today} · ${r.dow} · ${r.clock}</span>
+      </div>
+      ${r.on ? `<div style="font-size:11px; color:var(--text-faint); margin-bottom:10px;">Really ${realTodayStr()} — shifted ${r.shifted}.</div>` : ''}
+      <button class="btn btn-block btn-sm" onclick="openDebugClock()">OPEN THE CLOCK</button>
     </div>`;
 }
 // Painted straight onto the element in index.html rather than returned as markup, because it has to

@@ -146,7 +146,9 @@ synthetic snapshot — yours is the one fixture the sandbox never had.
       renamed PROGRESS once WEIGHT and MEASUREMENTS merged into a BODY *sub*tab beneath it.
       *(That first button was renamed **DAILY** on 2026-09-18 — see the section at the bottom.)*
 - [x] Your **supplement regimen** is intact under BUILDER → DIET → SUPPLEMENTS — same items, doses,
-      stacks and slots. The daily tick is still on Home.
+      stacks and slots. *(This line used to claim "the daily tick is still on Home." It never was —
+      the tick sits on the builder screen itself, four taps deep. That's the gap the supplements-
+      into-anchors work closes; see the section at the bottom.)*
 - [x] Your **calorie and macro targets** show up in PHASES → MEAL PLAN under TARGETS TO MEET, with
       the right phase named as their source.
 - [ ] TDEE now sits in its **own panel above** the calorie/macro targets, opened with a disclosure
@@ -544,5 +546,25 @@ hand, which is the whole question here.
 - [ ] Open a charge from a **link chip** somewhere (a note or a goal) and confirm it lands on the
       tab that actually contains it, not just on the RECURRING screen.
 - [ ] Your existing budget data should be untouched — only which screen shows what moved.
+
+## The debug clock is a popup (2026-09-19)
+Moved out of Settings and onto a clock button in the header, left of the house. The reason is the
+gesture: shift the clock, then look at *this* screen — walking out to Settings and back lost the
+screen you were testing. The controls themselves are unchanged. The sheet shares the phase editor's
+layout rather than carrying its own copy, so the safe-area fix that rescued the phase editor from
+under the top bar applies here by construction.
+- [ ] The **clock button** is left of the house on every screen, Home included (unlike the house,
+      it is never a no-op). Three buttons on the right now — does that crowd the wordmark?
+- [ ] Tap it from a section: the popup opens **over the screen you were on**, title readable at the
+      top, DONE reachable at the bottom, neither under a bar.
+- [ ] Shift the date, then DONE — you land back where you started, not in Settings. This is the
+      whole point of the change; if it doesn't feel faster, say so.
+- [ ] The popup **stays open** while you make several moves (+1d then +1h), and the red banner
+      appears the moment the shift is non-zero.
+- [ ] Navigate to another section with it open: the popup closes but **the shift stays on**. A
+      navigation quietly cancelling a data-affecting setting would be much worse than a stuck popup.
+- [ ] Settings → DEBUG CLOCK is a readout plus **OPEN THE CLOCK**, opening the same popup. Confirm
+      there is no second set of controls anywhere.
+- [ ] Try it in two or three aesthetics, as with the phase editor — same class of bug, same check.
 
 ## Add future items below as new features ship

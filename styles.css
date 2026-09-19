@@ -2935,8 +2935,19 @@ button.brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 4
    Taller and wider than .modal-box: this holds a real form (weeks, goal, rate, rotation, deload,
    meal mode), not a one-line confirm. The head and foot are pinned so the label and the
    DONE / QUEUE NEXT action stay put while the body scrolls. */
-.phase-modal { align-items: stretch; padding: 0; }
-.phase-modal-box {
+/* .sheet-modal-* rides every one of these rules rather than restating them: it is the same
+   full-height sheet with a pinned head and foot, wanted by overlays that have nothing to do with
+   phases (the debug clock). Two copies of this layout would drift, and the safe-area padding below
+   is exactly what stopped the head being trapped under the topbar -- a divergent second copy would
+   reintroduce that bug on whichever sheet fell behind. The only rule NOT shared is the state accent
+   at the bottom of this block, which really is phase-specific. */
+.phase-modal, .sheet-modal { align-items: stretch; padding: 0; }
+/* The phase editor fills the viewport because it genuinely has that much in it. A .sheet-modal may
+   not -- the debug clock's controls stop about a third of the way down -- so it is content-height
+   and anchored to the TOP, which is also what makes the head's safe-area padding above correct
+   rather than decorative. The wide-screen rule below still centres it. */
+.sheet-modal { align-items: flex-start; }
+.phase-modal-box, .sheet-modal-box {
   background: var(--surface); border: 1px solid var(--border);
   border-radius: 0; margin: 0; width: 100%; max-width: 620px;
   margin-left: auto; margin-right: auto;
@@ -2944,20 +2955,25 @@ button.brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 4
   max-height: 100dvh;
 }
 @media (min-width: 560px) {
-  .phase-modal { align-items: center; padding: 24px; }
-  .phase-modal-box { border-radius: var(--radius); max-height: calc(100dvh - 48px); }
+  .phase-modal, .sheet-modal { align-items: center; padding: 24px; }
+  .phase-modal-box, .sheet-modal-box { border-radius: var(--radius); max-height: calc(100dvh - 48px); }
 }
-.phase-modal-head {
+.phase-modal-head, .sheet-modal-head {
   display: flex; align-items: center; gap: 8px; flex: none;
   padding: calc(12px + env(safe-area-inset-top)) 14px 10px;
   border-bottom: 1px solid var(--border-soft);
+}
+.sheet-modal-head .sheet-modal-title {
+  flex: 1; min-width: 0;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--text-dim);
 }
 .phase-modal-head .phase-label { flex: 1; min-width: 0; }
 /* `overscroll-behavior: contain` so a drag that reaches the end of the modal STOPS there instead of
    chaining into the page behind it. Without it, flicking inside a full-screen sheet scrolls the
    list underneath — which reads as the modal randomly refusing to move. */
-.phase-modal-body { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 14px; -webkit-overflow-scrolling: touch; }
-.phase-modal-foot {
+.phase-modal-body, .sheet-modal-body { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 14px; -webkit-overflow-scrolling: touch; }
+.phase-modal-foot, .sheet-modal-foot {
   flex: none; padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
   border-top: 1px solid var(--border-soft); background: var(--surface);
 }

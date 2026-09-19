@@ -7,7 +7,7 @@
      app.js re-fetches this page on launch + on foreground and reloads if this value moved —
      that's what lets an installed iOS PWA self-update instead of getting stuck on a snapshot.
      Format is just a sortable stamp; the value only has to differ from the last deploy. -->
-<meta name="app-build" content="2026.09.19-45">
+<meta name="app-build" content="2026.09.19-46">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#15171a">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -42,6 +42,12 @@
   <div class="brand"><span>L</span>IFE<span>M</span>an<span>.EXE</span></div>
   <div class="nav-btns-right">
     <button class="icon-btn hidden" onclick="toggleHomeEditMode()" title="Edit layout" id="homeEditBtn"></button>
+    <!-- The debug clock, left of the house (2026-09-19). A dev affordance rather than a feature,
+         but it earns header space while the app is being tested on a device: the gesture is "shift
+         the clock, then look at THIS screen", and reaching it through Settings lost the screen you
+         were testing. Shown everywhere, Home included — unlike the house, it is never a no-op.
+         Delete this one line and the popup is Settings-only again. -->
+    <button class="icon-btn" onclick="toggleDebugClockPopup()" title="Debug clock" aria-label="Debug clock" id="debugClockBtn"></button>
     <!-- Hidden ON Home, where it would do nothing. -->
     <button class="icon-btn hidden" onclick="switchTab('home')" title="Home" aria-label="Home" id="homeBtn"></button>
     <button class="icon-btn settings-btn" onclick="openSetup('home')" title="Settings" id="settingsBtn"></button>

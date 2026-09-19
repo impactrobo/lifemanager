@@ -30,6 +30,7 @@ if (NAV.currentTab === 'notes') openBlankEntry();
 document.getElementById('settingsBtn').innerHTML = icon('settings');
 document.getElementById('homeBtn').innerHTML = icon('home');
 document.getElementById('homeEditBtn').innerHTML = icon('pencil');
+document.getElementById('debugClockBtn').innerHTML = icon('timer');
 document.getElementById('backBtn').innerHTML = icon('back');
 document.getElementById('forwardBtn').innerHTML = icon('forward');
 document.getElementById('restTimerFab').innerHTML = icon('timer');

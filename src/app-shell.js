@@ -83,6 +83,10 @@ function defaultTransientUi() {
     // is built. See renderPhaseSavedChip() -- there is no SAVE button because everything already
     // commits on change; what was missing is the confirmation.
     phaseSaved: null,
+    // The debug clock popup. Transient, so it belongs here and not in VIEW: navigating away closes
+    // it, the same rule every other open overlay follows. Shifting the clock itself only calls
+    // render(), not resetTransientUi(), so the popup survives its own buttons.
+    debugClockOpen: false,
     landmarksOpen: false,   // the MEV/MAV/MRV editor under Set Volume on WORKOUTS
     homeEditMode: false,
     homeAddPopup: null,                // 'sections' | 'boxes' | null
@@ -1131,7 +1135,7 @@ function _doRender() {
   }
   // The link picker is an overlay, appended after the screen's own markup so it sits above it.
   app.innerHTML += renderLinkPicker() + renderRecipeCustomFoodOverlay() + renderLogPopup()
-    + renderSectionSheet() + renderSectionHoldMenu();
+    + renderSectionSheet() + renderSectionHoldMenu() + renderDebugClockPopup();
   // ...and then every overlay leaves #app entirely. Must come before the focus call below: moving a
   // node after focusing something inside it drops the focus.
   _hoistOverlays();
