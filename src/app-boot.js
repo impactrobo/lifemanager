@@ -18,19 +18,17 @@ document.addEventListener('wheel', function(e) {
   }
 }, { passive: false });
 
-migrateState();
-// Any blank note left behind by a hard close — the sweeps in closeEntry() and switchTab() cover
-// every way you can LEAVE Notes, but not killing the app while sitting in one.
-purgeEmptyEntries();
+// Migrations, the blank-note sweep, the reminder top-up, aesthetic and handedness — shared with the
+// cloud-pull and backup-import paths so the three cannot drift apart. See adoptState() in
+// src/app-state.js.
+adoptState();
 // Booting straight into Notes (Settings > Default Page) has to land on the same new blank note that
 // arriving via switchTab() does. NAV.currentTab was set by initialTab() during script evaluation,
-// so this branch is the only place that path passes through.
+// so this branch is the only place that path passes through. Boot-only: it is about ARRIVING, not
+// about adopting the state, which is why it is not in adoptState().
 if (NAV.currentTab === 'notes') openBlankEntry();
-ensureRecurringReminderOccurrences(); // tops up every recurring reminder series on each app open
-applyAesthetic();
 document.getElementById('settingsBtn').innerHTML = icon('settings');
 document.getElementById('homeBtn').innerHTML = icon('home');
-applyHandedness();
 document.getElementById('homeEditBtn').innerHTML = icon('pencil');
 document.getElementById('backBtn').innerHTML = icon('back');
 document.getElementById('forwardBtn').innerHTML = icon('forward');

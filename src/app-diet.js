@@ -1488,7 +1488,7 @@ function importData(evt) {
       // now that renders only recompute, so the import has to do it properly itself.
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
       STATE = loadState();
-      migrateState();
+      adoptState();   // the same door boot and a cloud pull use — see adoptState() in app-state.js
       saveState();
       showToast('Backup restored');
       render();

@@ -346,7 +346,7 @@ function renderEntryInline(escaped) {
       if (!target) return `<span class="entry-link entry-link-missing">Missing note</span>`;
       if (target.deleted) return `<span class="entry-link entry-link-dead">Deleted note</span>`;
       // data-entry-link is what the long-press preview handler looks for (app-notes.js).
-      return `<a class="entry-link" data-entry-link="${escapeHtml(id)}" style="color:${entryTypeColor(target.type)}" href="#" onclick="onEntryLinkClick(event,'${escapeHtml(id)}'); return false;">${escapeHtml(entryTitleOf(target))}</a>`;
+      return `<a class="entry-link" data-entry-link="${escapeHtml(id)}" style="color:${entryTypeColor(target.type)}" href="#" onclick="onEntryLinkClick(event,${jsArg(id)}); return false;">${escapeHtml(entryTitleOf(target))}</a>`;
     })
     .replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/g, (m, pre, url) =>
       `${pre}<a class="entry-url" href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`)

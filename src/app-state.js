@@ -9,6 +9,28 @@
 // and must stay last.
 let STATE = loadState();
 
+// Everything that has to happen when STATE becomes the state — whichever door it came through.
+//
+// There are three: boot, a cloud pull, and importing a backup. Each did its own subset, and the
+// subsets had drifted (2026-09-19). Boot migrated, swept blank notes, topped up recurring reminder
+// series and applied the aesthetic and handedness; a cloud pull only migrated. So pulling from a
+// device where you had changed aesthetic or handedness left the old look until the next relaunch,
+// and a pulled reminder series was not topped up until then either.
+//
+// The fix is the shape, not the three patches: one function, called by all three, so the next thing
+// that belongs here gets added once. That matters more than the specific gaps it closed — the
+// handedness setting was added to boot alone two days before this, and would have drifted again.
+//
+// NOT included, because they are about arriving rather than adopting: which tab you land on, and
+// Notes' blank landing note. Those stay in app-boot.js.
+function adoptState() {
+  migrateState();                        // backfills for anything written by an older build
+  purgeEmptyEntries();                   // a blank note left by a hard close on any device
+  ensureRecurringReminderOccurrences();  // tops up every recurring series to the horizon
+  applyAesthetic();                      // also applies the accent — see applyAesthetic()
+  applyHandedness();                     // stamps data-handed on <body>
+}
+
 // NOTE: neither `STATE` nor `loadState()`'s return is annotated `AppState` yet — `loadState()`
 // is a messy field-by-field `Object.assign` merge and a strict annotation lights up ~80 legacy
 // call sites. The authoritative shape check is on `defaultState()` below, where every field

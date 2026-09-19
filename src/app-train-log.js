@@ -1426,6 +1426,28 @@ function escapeHtml(s) {
   if (s === null || s === undefined) return '';
   return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 }
+// A runtime string as a JS ARGUMENT inside an inline onclick="..." attribute.
+//
+// escapeHtml() is the wrong tool there and the failure is silent. An attribute value is HTML-decoded
+// BEFORE the JS is parsed, so escapeHtml's `&#39;` turns back into an apostrophe and lands inside
+// the JS string literal that was supposed to contain it:
+//
+//     onclick="removeOpenEntryTag('${escapeHtml(t)}')"   with t = rock'n'roll
+//   → onclick="removeOpenEntryTag('rock&#39;n&#39;roll')"
+//   → the parser hands JS:  removeOpenEntryTag('rock'n'roll')   ← SyntaxError, button does nothing
+//
+// That was live: a tag with an apostrophe could not be removed, and the only symptom was a console
+// error nobody sees on a phone (2026-09-19).
+//
+// JSON.stringify produces the quotes and the escaping, so this is used WITHOUT quotes around it:
+//
+//     onclick="removeOpenEntryTag(${jsArg(t)})"
+//
+// The escapeHtml pass afterwards is still needed — it protects the attribute delimiter — but it now
+// runs over a string that is already a valid JS literal, so decoding restores exactly that literal.
+function jsArg(s) {
+  return escapeHtml(JSON.stringify(s === null || s === undefined ? '' : String(s)));
+}
 function attachWorkoutLogHandlers(_workoutId) { /* using inline onclick/onchange, nothing extra needed */ }
 // Setup is no longer one shared screen — each section with configurable parameters gets its
 // own distinct page here, picked by NAV.setupContext (see openSetup()). Only that section's own

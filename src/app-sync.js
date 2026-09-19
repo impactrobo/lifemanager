@@ -149,7 +149,7 @@ function pullThenSync() {
         // and migrateState()'s backfills, not a shallow assign.
         localStorage.setItem(STORAGE_KEY, remote.data);
         STATE = loadState();
-        migrateState();
+        adoptState();   // the same door boot and import use — see adoptState() in app-state.js
         localStorage.setItem(STORAGE_KEY, JSON.stringify(STATE)); // skip saveState() here — avoid re-triggering a push of what we just pulled
         showToast('Synced — pulled your other device\'s newer data');
         render();

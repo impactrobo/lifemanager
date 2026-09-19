@@ -1325,7 +1325,9 @@ function renderEntryTagBox(e) {
   return `
     <div class="entry-tag-row">
       ${tags.map(t => `<span class="entry-tag is-editable">#${escapeHtml(t)}
-        <button type="button" onclick="removeOpenEntryTag('${escapeHtml(t)}')" aria-label="Remove tag ${escapeHtml(t)}">×</button></span>`).join('')}
+        ${/* jsArg, not escapeHtml: a tag is free text and can hold an apostrophe, which escapeHtml
+              turns back into one before the JS is parsed. See jsArg() in app-train-log.js. */ ''}
+        <button type="button" onclick="removeOpenEntryTag(${jsArg(t)})" aria-label="Remove tag ${escapeHtml(t)}">×</button></span>`).join('')}
       ${tags.length ? '' : '<span class="entry-empty-line">No tags yet.</span>'}
     </div>
     <label class="field" style="margin:8px 0 0;">
@@ -1333,7 +1335,7 @@ function renderEntryTagBox(e) {
         oninput="onEntryTagInput(this.value)" onkeydown="onEntryTagKeydown(event)">
     </label>
     ${suggestions.length ? `<div class="entry-tag-row" style="margin-top:8px;">
-      ${suggestions.map(s => `<button type="button" class="entry-tag is-suggestion" onclick="addOpenEntryTag('${escapeHtml(s.tag)}')">#${escapeHtml(s.tag)} <b>${s.count}</b></button>`).join('')}
+      ${suggestions.map(s => `<button type="button" class="entry-tag is-suggestion" onclick="addOpenEntryTag(${jsArg(s.tag)})">#${escapeHtml(s.tag)} <b>${s.count}</b></button>`).join('')}
     </div>` : ''}`;
 }
 // Patches only the tag box — a full render() here would tear down the title and body the person is

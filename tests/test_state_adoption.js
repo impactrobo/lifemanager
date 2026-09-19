@@ -1,13 +1,25 @@
 // test_state_adoption.js — every route that replaces STATE wholesale must adopt it the same way
-// boot does: loadState()'s per-key merge, then migrateState()'s backfills.
+// boot does.
 //
 // There are three such routes -- boot, importing a backup, and a cloud pull of newer remote data --
-// and until now only boot did it properly. The other two ran a bare
-// `Object.assign(defaultState(), data)`, a *shallow* merge: an older save's `life` object replaced
-// the default wholesale and took every field added since with it, with nothing to backfill them.
-// Visiting Training Maxes happened to repair it, because renderTMSetup() called the entire save
-// migration on every render; splitting that into recomputeTMs() removed the crutch and made the
-// real bug visible.
+// and they have now drifted apart TWICE, in the same shape both times: one route gained a step and
+// the others didn't.
+//
+// First (the original subject of this file): only boot ran loadState()'s per-key merge and
+// migrateState()'s backfills. The other two ran a bare `Object.assign(defaultState(), data)`, a
+// *shallow* merge -- an older save's `life` object replaced the default wholesale and took every
+// field added since with it, with nothing to backfill them. Visiting Training Maxes happened to
+// repair it, because renderTMSetup() called the entire save migration on every render; splitting
+// that into recomputeTMs() removed the crutch and made the real bug visible.
+//
+// Second (2026-09-19, found by a codebase pass): boot had since grown a blank-note sweep, a
+// recurring-reminder top-up, and the aesthetic/handedness application. A cloud pull still only
+// migrated. So pulling from a device where you had changed aesthetic or handedness left the old
+// look until the next relaunch. The handedness call had been added to boot alone two days earlier
+// -- which is the tell that patching the routes one at a time does not hold.
+//
+// Both fixes are now the same fix: adoptState() in app-state.js is the single door, and section 5
+// guards the wiring rather than trusting it.
 const { chromium } = require('playwright');
 const { settle, appSource } = require('./helpers');
 const path = require('path');
@@ -58,7 +70,7 @@ const EXPECT = [
   const booted = await page.evaluate(({ save, expect }) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(save));
     STATE = loadState();
-    migrateState();
+    adoptState();   // what app-boot.js calls
     const get = p => p.split('.').reduce((o, k) => (o == null ? o : o[k]), STATE);
     const kind = v => Array.isArray(v) ? 'array' : (v === null ? 'null' : typeof v);
     return {
@@ -100,7 +112,7 @@ const EXPECT = [
     // Mirrors the pull branch in syncFromCloud() exactly.
     localStorage.setItem(STORAGE_KEY, remote.data);
     STATE = loadState();
-    migrateState();
+    adoptState();
     localStorage.setItem(STORAGE_KEY, JSON.stringify(STATE));
     const get = p => p.split('.').reduce((o, k) => (o == null ? o : o[k]), STATE);
     const kind = v => Array.isArray(v) ? 'array' : (v === null ? 'null' : typeof v);
@@ -119,6 +131,59 @@ const EXPECT = [
     const lines = shallow.map(m => src.slice(0, m.index).split('\n').length);
     throw new Error(`Replacing STATE with a shallow assign skips loadState()'s per-key merge and migrateState()'s backfills -- found at lines ${lines.join(', ')}`);
   }
+
+  // ---- 5. Adoption is more than migrations now (2026-09-19) ----
+  // The second drift. Boot had grown a blank-note sweep, a recurring-reminder top-up and the
+  // aesthetic/handedness application; a pull had not. Driven through the REAL import handler rather
+  // than a replay, so it exercises the wiring and not just adoptState() — the file-picker path is
+  // the one route of the three that a test can invoke for real.
+  await page.goto(APP_PATH);
+  await settle(page);
+  const OTHER_DEVICE = JSON.parse(JSON.stringify(ANTIQUE_SAVE));
+  OTHER_DEVICE.settings = { aesthetic: 'frutigeraero', handed: 'left' };
+  OTHER_DEVICE.entries = [{ id: 'orphan', type: 'quick', title: '', body: '', fields: {}, tags: [], favorite: false,
+    links: [], photos: [], createdAt: Date.now(), updatedAt: Date.now(), deleted: false }];
+  const startedAs = await page.evaluate(() => ({
+    aesthetic: document.documentElement.getAttribute('data-aesthetic'),
+    handed: document.body.getAttribute('data-handed'),
+  }));
+  if (startedAs.aesthetic === 'frutigeraero' || startedAs.handed === 'left') {
+    throw new Error('This check needs to START somewhere else, or "it adopted" passes by coincidence');
+  }
+  await page.evaluate(() => { const i = document.createElement('input'); i.type = 'file'; i.id = '__impProbe2'; i.onchange = importData; document.body.appendChild(i); });
+  await page.setInputFiles('#__impProbe2', { name: 'other-device.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(OTHER_DEVICE)) });
+  await page.waitForFunction(() => STATE.settings && STATE.settings.aesthetic === 'frutigeraero', null, { timeout: 3000 });
+  await settle(page);
+  const adopted = await page.evaluate(() => ({
+    aesthetic: document.documentElement.getAttribute('data-aesthetic'),
+    handed: document.body.getAttribute('data-handed'),
+    orphanSwept: !entryById('orphan'),
+  }));
+  console.log('presentation adopted:', JSON.stringify(adopted), '(from', JSON.stringify(startedAs) + ')');
+  if (adopted.aesthetic !== 'frutigeraero') throw new Error(`Adoption must apply the incoming aesthetic, got ${adopted.aesthetic}`);
+  if (adopted.handed !== 'left') throw new Error(`Adoption must apply the incoming handedness, got ${adopted.handed}`);
+  if (!adopted.orphanSwept) throw new Error('Adoption must sweep a blank note the other device left behind');
+
+  // ---- 6. The wiring, guarded rather than trusted ----
+  // Sections 1 and 3 REPLAY the boot and pull paths (both are wrapped in callbacks a test cannot
+  // invoke), so they prove what adoptState does and would not notice a route quietly going back to
+  // migrateState() alone. This is the check that would: nothing outside app-state.js may migrate on
+  // its own, which is exactly how the three drifted, twice.
+  const fs = require('fs');
+  const srcDir = path.resolve(__dirname, '..', 'src');
+  const strays = [];
+  fs.readdirSync(srcDir).filter(f => f.endsWith('.js') && f !== 'app-state.js').forEach(f => {
+    fs.readFileSync(path.join(srcDir, f), 'utf8').split('\n').forEach((line, i) => {
+      if (/^\s*migrateState\(\);/.test(line)) strays.push(`${f}:${i + 1}`);
+    });
+  });
+  console.log('direct migrateState() calls outside adoptState():', strays.length ? strays.join(', ') : 'none');
+  if (strays.length) {
+    throw new Error('Adopting state means calling adoptState(), not migrateState() alone — that is '
+      + 'exactly how these routes drifted apart, twice: ' + strays.join(', '));
+  }
+  const bootSrc = fs.readFileSync(path.join(srcDir, 'app-boot.js'), 'utf8');
+  if (!/\badoptState\(\)/.test(bootSrc)) throw new Error('app-boot.js must adopt through adoptState() too');
 
   await browser.close();
   if (errors.length > 0) { console.log('ERRORS:', errors); process.exit(1); }
