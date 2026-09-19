@@ -505,4 +505,44 @@ is the OTHER overlays and the OTHER search boxes, not just the two that were bro
 - [ ] Your existing plans are all still there — nothing about how a plan is stored changed, only
       which screen asks which phase you mean.
 
+## Navigation: sections on the bar, hold to cross (2026-09-18/19)
+The sandbox can prove every path works. What it can't judge is whether the hold feels right in the
+hand, which is the whole question here.
+- [ ] **Home**: the bar is PROD / WELLNESS / HOBBIES / FINANCIAL / NOTES, each with its colour along
+      the top edge. Tap one — you land in it, and the bar becomes its subtabs.
+- [ ] **Hold a section on Home** → its subtabs; pick one and you land there directly. Is 450ms the
+      right wait, or does it feel sticky?
+- [ ] **Hold any button inside a section** → Home plus the five sections. Same question.
+- [ ] Holding must NOT select the label or leave a selection stuck to your finger, and must not also
+      press the button you were holding. Both were reported; both should be gone.
+- [ ] The bar should be the **same height** on Home and inside a section. It grew 4px before.
+- [ ] Swiping up on the bar should do **nothing** now. Confirm it never fires by accident coming in
+      and out of the app — that was the main complaint.
+- [ ] The **house button** next to the gear goes Home and disappears once you're there. The wordmark
+      no longer navigates — check that doesn't feel like a loss.
+- [ ] Settings → **HANDED** → LEFTY. The header's two button groups swap. Live with it for a bit and
+      say whether it wants to reach further than the header.
+- [ ] **Back** now walks subnavs: DAILY → PHASES → BUILDER, then Back three times should retrace
+      those, and only then leave for Home.
+- [ ] Do you ever use **FORWARD**? I'd drop it; it's a browser habit, not an app one.
+
+## FINANCIAL rebuilt (2026-09-18/19)
+- [ ] **OVERVIEW**: the bar is on top, then INCIDENTALS / SAVINGS / GOALS. Add an income and a
+      charge; both land in the right dropdown with the right totals on the closed headers.
+- [ ] Fund a goal from **OVERVIEW → GOALS** without leaving the month. Confirm it shows up in the
+      goal's contributions and, if you ticked the box, as an incidental too.
+- [ ] **RECURRING**: the three totals up top are always all three; tapping one jumps to its tab.
+      Does that read better than the paragraph that was there?
+- [ ] Add a savings line under **SAVE & INVEST** — no "is this savings?" checkbox, categories are
+      Savings / Investing only. Then edit it and use **MOVE TO RECURRING CHARGES** to confirm a
+      mis-filed line can still get out.
+- [ ] **YEARLY** on an income source: check the /mo total divides by twelve.
+- [ ] Income sources and charges are **readouts** with a pencil — but the ACTIVE checkbox still
+      works without entering edit mode. That's the one that matters day to day.
+- [ ] Every add form: hit SAVE with an empty amount. The form should **stay open** with what you
+      typed still in it.
+- [ ] Open a charge from a **link chip** somewhere (a note or a goal) and confirm it lands on the
+      tab that actually contains it, not just on the RECURRING screen.
+- [ ] Your existing budget data should be untouched — only which screen shows what moved.
+
 ## Add future items below as new features ship

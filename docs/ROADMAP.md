@@ -106,11 +106,31 @@ before starting any of these.
     personalities bake into strings that can't be tested offline. (The hosting constraint is real
     too — see the Claude-assisted lab entry entry below for why a Worker proxy is the only route.)
 
-- **Health & Wellness's bottom tabbar overruns on a real device (reported 2026-09-15, not fixed).**
-  Was WORKOUTS/GOAL/BODY/DIET/LONGEVITY/SETUP — six subtabs plus HOME, seven buttons — when
-  reported. Longevity's retirement (see Recently Shipped) took it to **six buttons**
-  (WORKOUTS/GOAL/BODY/DIET/SETUP + HOME), which may or may not still overrun on the real device this
-  was seen on; unconfirmed until it's checked there again.
+- **LEFTY / RIGHTY: only the header moves so far (2026-09-19).** Asked for with *"make a note to
+  build more on this later"*, so this is that note. Settings → HANDED swaps the header's two button
+  groups (Back/Forward ↔ Home/Settings). Both were already absolutely positioned against opposite
+  edges, so the flip is two CSS declarations off a `data-handed` attribute on `<body>`; the default
+  is right-handed and unstamped, so nobody who never opens the setting sees a change.
+  - What a fuller version would reach, roughly in order of how much it would actually help:
+    - **Sheets and modals** — the phase editor's close X, the Convert sheet, the rest picker. These
+      are the next most thumb-hostile controls after the header.
+    - **Row-level actions** — the pencil and delete on income sources, charges, goals, notes. They
+      sit hard right on every card in the app.
+    - **The FAB** (Notes' new-note button), which is bottom-right by convention.
+    - **Swipe directions**, if any are ever added back — a left-handed swipe-to-delete wants the
+      opposite origin.
+  - Deliberately NOT: the bottom bar (reachable with either thumb) or chart axes and reading order
+    (handedness is about reach, not about which way you read).
+  - The honest open question is whether this is worth carrying at all versus one global mirror, and
+    the only way to answer it is to live with the header version for a while first.
+
+- **~~Health & Wellness's bottom tabbar overruns on a real device~~ — RESOLVED, see Recently
+  Shipped (2026-09-17/19).** Kept as a record of how it was closed, because the measurement habit it
+  forced is the useful part. The bar went WORKOUTS/GOAL/BODY/DIET/LONGEVITY/SETUP + HOME (seven) →
+  four (DAILY/PHASES/BUILDER/PROGRESS), and Home's bar is now the five sections. Both are
+  *measured* rather than assumed: five section labels clip below 390px, which is why PRODUCTIVITY
+  reads PROD. The original analysis below still describes the mechanism accurately, and the
+  scroll-chevron affordance it proposed was never needed once the button count came down.
   - `.tabbar` (`styles.css`) already has `overflow-x:auto` and `min-width:58px` per button — a
     comment on it even predicts this exact case ("once a section has enough sub-tabs to exceed the
     viewport (e.g. Health & Diet's 7)"). But unlike `.subnav` (the in-screen sub-tab strips), it has
@@ -297,6 +317,109 @@ before starting any of these.
 Newest first. Keep this reasonably current so a fresh session can see what already exists
 without re-reading the whole diff history. Roughly grouped: this project spent early Sept 2026
 on an architecture split + a large wave of Maximalist aesthetics.
+
+- **FINANCIAL gets sub-navs, like the WELLNESS screens (2026-09-19).** Asked for as *"start making
+  tabs in the FINANCIAL sections… Goal is to have as much as possible in one screen."*
+  - **RECURRING** is `INCOME / CHARGES / SAVE & INVEST` instead of four stacked sections, which was
+    a long scroll of things you weren't looking at.
+  - **The three totals sit ABOVE the strip and are always all three.** That is what makes tabbing
+    cost nothing: you can still read what every section holds without visiting it, so the strip only
+    decides what you EDIT. They also replaced the explanatory paragraph that used to sit there, and
+    each is a shortcut to its own tab.
+  - The savings planning calculator stays WITH the savings lines rather than floating above all
+    three tabs — it is a target for that section and reads as one there.
+  - **OVERVIEW** is `INCIDENTALS / SAVINGS / GOALS`. The bar does NOT move into a tab: it is the
+    answer the screen exists to give. GOALS renders the same cards as the GOALS subtab minus ADD
+    GOAL, so a goal can be funded without leaving the month you are looking at.
+  - **One real bug came with it, caught by a test rather than by review:** opening a charge from a
+    link chip landed on RECURRING but not on the charge, because a savings line lives under SAVE &
+    INVEST and a bill under CHARGES. `test_navigate_to.js` asserts the ENTITY is on screen rather
+    than just the section, which is the only reason it surfaced.
+
+- **The money screens learn one editing grammar (2026-09-18 → 19).** Six passes over two days, all
+  converging on the same shape: **a button at rest, a form on request, a readout by default, and
+  editing behind a pencil.**
+  - **One container per subject.** INCIDENTALS holds its add buttons AND its entries; INCOME
+    SOURCES, RECURRING CHARGES and RECURRING SAVINGS each hold their adder and their list. They used
+    to be an ADD panel and a separate list with a heading between them, which split one subject
+    across two headings.
+  - **Rows are readouts; the pencil is the way in.** Income sources and recurring charges were walls
+    of live inputs — an accidental edit to a number the budget bar computes from, and a row that
+    read as unfinished rather than as data. **ACTIVE stays a live checkbox in both modes**, because
+    turning a line off for a month is the frequent, instantly-reversible act; putting it behind the
+    pencil would cost two taps to save nothing.
+  - **Two dropdowns, not one merged list.** INCOME and CHARGES each sit behind their own caret using
+    `.disclose-row`, with the total on the closed header — the shape exists so you read the answer
+    without opening anything. A merged list put money in and money out in one column and asked you
+    to notice a `+`.
+  - **Savings stops pretending to be a charge.** Recurring savings moved out of RECURRING CHARGES
+    into their own section, then to the bottom of the screen, so it reads in the order the money
+    moves: what comes in, what has to go out, what is left going to you. Their add form drops the
+    "Savings / Investment" checkbox (you answered that by adding it there) and narrows its
+    categories to Savings / Investing. A savings ROW keeps an escape hatch — **MOVE TO RECURRING
+    CHARGES**, which says where it goes rather than asking what it is.
+  - **Every writer returns whether it saved**, so a bad amount leaves the form open with what was
+    typed still in it rather than closing and losing it.
+  - `YEARLY` added to the recurring frequencies. An annual bonus previously had to be divided by
+    twelve by hand and called monthly.
+  - Goals got the same pencil and DONE, and **expanding a goal and editing it became two states** —
+    what it HOLDS versus what it IS. Delete moved into edit mode with it: a red X beside a row you
+    are only reading is a mis-tap waiting to happen, and it sat exactly where the pencil now is.
+
+- **The bottom bar becomes the sections, and Home stops being a waypoint (2026-09-18 → 19).**
+  - Home's bar being EMPTY was the tell that the app had no tab bar at all: the strip held the
+    current section's SUBTABS, so crossing sections cost a trip Home — wordmark, then a tile. The
+    five sections live on Home's bar now, in the order asked for, each carrying its own identity
+    colour as a bar along its top edge. Inside a section the bar is still that section's subtabs,
+    unchanged.
+  - `PRODUCTIVITY` truncates to `PROD`. Measured: five full labels clip below 390px; the shipped set
+    fits at 360 and 390 and clips 3px at 320.
+  - **The section tile row left Home's reading view** — the bar says the same five things, so the
+    row said everything twice and pushed the day below the fold. The tiles survive in EDIT mode,
+    where they still do a job the bar cannot: their order and hidden set are what every
+    `HOME_SECTION_META` consumer reads.
+  - **Reaching the sections from inside one was a SWIPE UP for a day, and it was wrong twice over.**
+    An upward drag on a bottom strip is also how you scroll and how iOS reaches its own app
+    switcher, so it fired by accident going in and out of the app and never felt reliable when you
+    did mean it. One gesture now — **hold** — on either kind of bar: on Home it offers that
+    section's subtabs, anywhere else it offers Home and the five sections.
+  - **Home moved off the wordmark to a house button** beside the gear. A logo that navigates is a
+    secret button: nothing about a title says "press me", and it is easy to hit while reading.
+  - Two device-reported bar fixes: it **grew 4px leaving Home** (the swipe grip added padding only
+    where the grip existed — a strip that changes height under your thumb as you navigate), and
+    **holding a button selected its label** and left the selection stuck to your finger.
+  - `tests/test_section_nav.js` now pins that a swipe does **nothing** — the regression worth
+    guarding, because reinstating the gesture would be an easy "improvement" to make by mistake.
+
+- **Back returns to the last PLACE, not the last SECTION (2026-09-18).** Reported as *"I normally
+  want to go back to another SubNav within the section, hit the back arrow, then fly back to the
+  Home Screen."*
+  - `pushNavHistory()` was called by hand from `switchTab()` and two openers and nowhere else, so
+    subtab moves left no trace: DAILY → PHASES → BUILDER then Back threw you out of the section,
+    skipping all three moves you actually made.
+  - Fixed by **deriving** history rather than pushing it: `_trackNavHistory()` runs once per render
+    and records any change to the nav snapshot, whoever caused it — instead of adding a push to
+    eleven subtab setters, which is the list-in-two-places problem this codebase keeps designing out
+    and would have missed the twelfth.
+  - **The deferral that introduces is a feature.** Several NAV keys changing in one tick is ONE
+    navigation and should be ONE Back step, which is exactly what `goToSection()` does.
+  - Open question, raised and not acted on: **FORWARD probably should go.** Native apps have a
+    contextual back inside a navigation stack, not a global browser-style pair, and almost none have
+    a forward. Back is worth keeping now that it records the moves you actually make.
+
+- **An overlay keeps its scroll position across a re-render (2026-09-18).** Reported as *"even on a
+  fresh open, navigating into PHASES and editing or making NEW still has strange scroll issues."*
+  - Every control in the phase editor commits on change, so every change re-renders — and a render
+    rebuilds the overlay from markup, giving it a brand-new scroll container starting at 0. Scroll
+    down to a field, change it, and you are thrown back to the top. Measured: `scrollTop 118 → 0` on
+    a single field change.
+  - The same problem `_captureSubnavScroll()` already solved for the sub-nav strips, one layer up,
+    so it got the same treatment. Keyed by class name; the memory clears the moment no overlay is
+    open, so opening a different phase starts at the top rather than inheriting the last one's
+    offset.
+  - Also `overscroll-behavior: contain` on the scrollable overlay regions. Without it a flick that
+    reaches the end of a full-screen sheet chains into the page behind it — the other half of
+    "strange scroll issues", and the half a desktop browser never shows you.
 
 - **PHASES becomes SCHEDULE / COMPOSE / ARCHIVED (2026-09-18).** Asked for as *"NEW goes to
   SCHEDULE, then both WORKOUT PLAN and MEAL PLAN should be sub nav chips under a new tab: COMPOSE…
