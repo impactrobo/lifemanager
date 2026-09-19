@@ -318,6 +318,29 @@ Newest first. Keep this reasonably current so a fresh session can see what alrea
 without re-reading the whole diff history. Roughly grouped: this project spent early Sept 2026
 on an architecture split + a large wave of Maximalist aesthetics.
 
+- **The service worker was silently breaking every POST (2026-09-19).** Reported from the phone as
+  *"Could not enable reminder notifications: FetchEvent.respondWith received an error: Returned
+  response is null"*, with a reasonable guess attached — that it needed sign-in so Firebase could
+  hold the reminders. It didn't: reminders go to the Cloudflare Worker, which was up the whole time
+  (its CORS preflight answered 200 during the diagnosis), and sign-in is not on that path at all.
+  - The fetch handler re-issued **every** request through `fetch(event.request)`, POSTs included,
+    and fell back to `caches.match()`. That resolves **undefined** on a miss, and a cross-origin
+    POST is never in the cache — so `respondWith(undefined)`, which is exactly the reported error.
+    The service worker was relabelling someone else's failure as its own, in a message that named
+    the wrong file.
+  - **Non-GET requests are no longer intercepted at all.** Not calling `respondWith()` hands them
+    back to the browser untouched, which is what a POST wants — it is never cacheable, and
+    `cache.put()` rejects on one outright (a floating unhandled rejection on every successful POST
+    as well). This also covers Cloud Sync, which POSTs down the same path.
+  - **An offline cache miss now answers a real `503`** rather than undefined, so the failure a
+    caller sees is honest and about the network instead of about service worker plumbing.
+  - Why the POST's own fetch rejected is moot now, but the likeliest cause is WebKit refusing to
+    replay an already-consumed request body when a worker re-issues it — which would fail every
+    time rather than flakily, matching the report.
+  - `tests/test_sw_fetch.js` runs the real `sw.js` in a fake worker scope (registering one from
+    `file://` isn't possible) and reproduces the reported error on the reverted code; 3/3 mutations
+    caught. Offline cache-hit behaviour is pinned in the same file, since that was the thing the
+    fix could plausibly have cost.
 - **The debug clock is a popup on the header (2026-09-19).** Asked for as *"is it possible to make
   the debug clock a popup, and create a dummy button to the left of the HOME button"*, mid device
   testing. It was a block at the bottom of Settings, which is the wrong home for it: the gesture it

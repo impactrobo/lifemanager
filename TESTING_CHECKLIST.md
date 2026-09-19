@@ -567,4 +567,27 @@ under the top bar applies here by construction.
       there is no second set of controls anywhere.
 - [ ] Try it in two or three aesthetics, as with the phase editor — same class of bug, same check.
 
+## The service worker was breaking reminder sign-up (2026-09-19)
+Reported from the phone: ENABLE REMINDER NOTIFICATIONS failed with *"FetchEvent.respondWith
+received an error: Returned response is null."* Nothing was wrong with the backend (its CORS
+preflight answered 200 while the report was being written) and nothing was wrong with sign-in —
+reminders go to the Cloudflare Worker and never touch Firebase. The service worker's fetch handler
+re-issued the POST itself, that fetch rejected, and the fallback resolved `caches.match()`, which
+yields **undefined** on a miss. `respondWith(undefined)` IS that error message. It now leaves
+non-GET requests alone entirely, and an offline cache miss answers a real 503 instead of undefined.
+- [ ] **ENABLE REMINDER NOTIFICATIONS now succeeds** (grant permission, no error toast). This is
+      the fix; everything below is making sure it didn't cost anything.
+- [ ] If it still fails, **the message should now be a real one** — naming the backend, a status
+      code, or the network — rather than anything about `FetchEvent` or `respondWith`. Send me
+      whatever it says; that message is now trustworthy.
+- [ ] **Airplane mode, cold-launch the installed app.** It must still load fully from cache. The
+      offline path was touched, so the previously-verified offline launch needs re-confirming.
+- [ ] With the app open and offline, move around a few screens — no blank panels or missing charts
+      where a cached file used to appear.
+- [ ] **Cloud Sync still works** (Sync Now, signed in). Its requests are POSTs too, so they now
+      take the same untouched path the reminder POST does.
+- [ ] Then carry on with the four unchecked items under **Reminder push notifications** near the
+      top — tapping a notification, editing a reminder, airplane mode across a due time, and
+      DISABLE. Those were blocked behind this bug.
+
 ## Add future items below as new features ship

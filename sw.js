@@ -74,16 +74,42 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
+  // GET ONLY. Not calling respondWith() hands the request straight back to the browser, which is
+  // what everything else wants: a POST is never cacheable (cache.put() rejects on one outright)
+  // and there is nothing useful this handler can do for it.
+  //
+  // Reported 2026-09-19 from the phone, turning reminder notifications back on: "Could not enable
+  // reminder notifications: FetchEvent.respondWith received an error: Returned response is null."
+  // The POST to the reminder Worker came through here, its fetch() rejected, and the catch below
+  // resolved caches.match() -> undefined, because a cross-origin POST is never in the cache.
+  // respondWith(undefined) IS that error. So the message named this file while the real failure
+  // was somewhere else entirely -- the worst kind of error, one that points at the wrong place.
+  // (The Worker itself was up the whole time; its CORS preflight answered 200.)
+  //
+  // Why the POST's own fetch() rejected is now moot -- it no longer passes through here -- but the
+  // likeliest cause is WebKit refusing to replay an already-consumed request body when a service
+  // worker re-issues `fetch(event.request)` for a POST. That would fail every single time rather
+  // than flakily, which matches the report.
+  if (event.request.method !== 'GET') return;
   // Network-first for the HTML itself, so you get updates when online;
   // falls back to the cached copy when offline.
   event.respondWith(
     fetch(event.request)
       .then((response) => {
         const copy = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+        // Best-effort: a rejected cache write must never take the live response down with it.
+        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy)).catch(() => {});
         return response;
       })
-      .catch(() => caches.match(event.request))
+      .catch(() =>
+        // caches.match() resolves UNDEFINED on a miss, and respondWith(undefined) is exactly the
+        // "Returned response is null" error above. Offline with nothing cached is an ordinary
+        // situation, so it answers with a real Response and the caller gets an honest failure it
+        // can report -- rather than an error about service worker plumbing.
+        caches.match(event.request).then((hit) => hit || new Response('', {
+          status: 503, statusText: 'Offline and not cached',
+        }))
+      )
   );
 });
 
