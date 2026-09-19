@@ -103,11 +103,6 @@ function rememberIngredientMatch(name, foodId) {
   if (!key || !foodId) return;
   ingredientMap()[key] = foodId;
 }
-function forgetIngredientMatch(name) {
-  const key = normaliseFoodName(name);
-  if (key) delete ingredientMap()[key];
-}
-
 // ---- Matching ----
 // Saved mapping first, then an exact name, then every-word-matches. The order is the spec's, and
 // it matters: a mapping is something you already confirmed, so it must outrank a clever guess.

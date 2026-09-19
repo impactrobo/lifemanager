@@ -456,12 +456,6 @@ const AESTHETIC_ACCENTS = {
     },
   },
 };
-function prefersDarkTheme() {
-  const explicit = document.documentElement.dataset.theme;
-  if (explicit === 'light') return false;
-  if (explicit === 'dark') return true;
-  return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
-}
 // Aesthetics: whole-app looks layered on top of the accent-color system. Every aesthetic has its
 // own curated accent palette in AESTHETIC_ACCENTS above, plus a fixed backdrop, font stack and
 // corner radius via a `:root[data-aesthetic]` CSS block, deliberately ignoring the device's

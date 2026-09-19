@@ -309,20 +309,6 @@ function hasWeekdayPlan(weekday, dateStr) {
   const d = dateStr || todayStr();
   return !!(plannedWorkoutsOn(d).some(e => e.refId) || plannedMealsOn(d).some(e => e.mealId));
 }
-function renderPeriodicRow(a) {
-  const last = STATE.life.periodicLog[a.id];
-  const days = daysSince(last);
-  const due = days >= a.cadenceDays;
-  return `<div class="panel" ${due ? 'style="border-color:var(--accent-dim); background:var(--accent-soft);"' : ''}>
-    <div class="row">
-      <div>
-        <div style="font-size:13px; font-weight:600;">${escapeHtml(a.label)}</div>
-        <div style="font-size:11px; color:var(--text-dim); margin-top:2px;">${a.cadenceLabel}${last ? ` &middot; last done ${last} (${days}d ago)` : ' &middot; never logged'}</div>
-      </div>
-      <button class="btn btn-sm ${due?'btn-primary':''}" onclick="markPeriodicDone('${a.id}')">MARK DONE</button>
-    </div>
-  </div>`;
-}
 // dateStr optional, defaults to today — the Home "RIGHT NOW" card always toggles today's own log
 // (calls this with just an id, same as always); the merged Calendar Day view passes the actual
 // date being viewed explicitly, so marking an anchor done on a past/future day writes into that

@@ -460,8 +460,6 @@ function exercisePlanInEffect(dateStr) {
   };
 }
 // The plan alone, for the many callers that only want to read a weekday out of it.
-function activeExercisePlan(dateStr) { return exercisePlanInEffect(dateStr).plan; }
-
 // A deep copy, because a phase's plan must not alias the one it was seeded from -- sharing the
 // object would make editing the new block silently rewrite the old one, which is the exact failure
 // this whole feature exists to prevent.
@@ -1605,7 +1603,6 @@ function renderShelfActions(p) {
 // to fall back to the phase you were IN when nothing was chosen, which was right for an inline
 // card -- arriving landed you on the one you came for -- and is wrong for a popup, where it would
 // throw a dialog in your face every time you opened the screen.
-function phaseCardIsOpen(id) { return UI.phaseOpen === id; }
 // Kept as a distinct value from null so closePhaseCard() reads as a deliberate "nothing open"
 // rather than "no choice yet". Nothing falls back to it any more, but the two still mean
 // different things to anyone reading VIEW.

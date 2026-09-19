@@ -553,7 +553,6 @@ function getTodayWeightEntry(create) {
 // single tap from a day card should do on your behalf. The starter pre-fills from the plan.
 function openTodayPractice(skillId) {
   if (!skillById(skillId)) return;
-  pushNavHistory();
   resetTransientUi();
   NAV.currentTab = 'hobbies';
   NAV.skillId = skillId;
@@ -563,7 +562,6 @@ function openTodayPractice(skillId) {
 function openTodayWorkout(workoutId) {
   const w = getWorkout(workoutId);
   if (!w) return;
-  pushNavHistory();
   resetTransientUi(); // leaves Home directly, bypassing switchTab()
   NAV.currentTab = 'train';
   NAV.fitnessSubtab = 'workouts';
@@ -845,7 +843,6 @@ const BRISTOL_TYPES = [
 // A muted brown ramp, darkest at the constipated end. Deliberately NOT a red/green health gradient:
 // colouring 6 the same as 1 because both are "bad" would be the app grading you.
 const BRISTOL_COLORS = ['#6B4A2F', '#7C5836', '#8C6740', '#94714A', '#A08159', '#AD9370', '#BCA98D'];
-function bristolType(n) { return BRISTOL_TYPES.find(t => t.n === Number(n)) || null; }
 function bristolHex(v) { return BRISTOL_COLORS[(v || 1) - 1] || BRISTOL_COLORS[0]; }
 function bristolValue() { return scaleValue('stool'); }
 function bristolReadingsToday() { return scaleReadingsOn('stool', todayStr()).map(r => Number(r.value)); }
@@ -855,7 +852,6 @@ function bristolPriorDay() { return scalePriorDay('stool', false); }
 
 // ---- Hydration colour, on top of the above ----
 function waterColorLog() { return scaleLog('waterColor'); }
-function waterColorDateOf(r) { return scaleDateOf(r); }
 function waterColorReadingsOn(dateStr) { return scaleReadingsOn('waterColor', dateStr); }
 function waterColorValue() { return scaleValue('waterColor'); }
 function waterColorPriorDay() { return scalePriorDay('waterColor', true); }
@@ -1282,18 +1278,9 @@ function toggleHomeEditMode() {
   render();
 }
 function homeLayout() { return STATE.settings.homeLayout; }
-function hideHomeSection(id) {
-  const L = homeLayout();
-  L.sectionOrder = L.sectionOrder.filter(x => x !== id);
-  if (!L.sectionHidden.includes(id)) L.sectionHidden.push(id);
-  saveState(); render();
-}
-function showHomeSection(id) {
-  const L = homeLayout();
-  L.sectionHidden = L.sectionHidden.filter(x => x !== id);
-  if (!L.sectionOrder.includes(id)) L.sectionOrder.push(id);
-  saveState(); render();
-}
+// (hideHomeSection / showHomeSection retired 2026-09-19 with the section tiles — see
+//  renderHomeBoxes(). HOME_SECTION_META itself stays: the bottom bar and every link chip in the
+//  app colour themselves from it.)
 function hideHomeBox(id) {
   const L = homeLayout();
   L.boxOrder = L.boxOrder.filter(x => x !== id);
@@ -1312,9 +1299,12 @@ function showHomeBox(id) {
 // "before" it can never actually put anything after it, so without this, nothing could ever land
 // in the true last slot (see onHomeDragMove(), which decides insertAfter from which side of the
 // target the pointer is actually over).
+// `listKey` is always 'boxes' now that the section tiles are gone, but it stays in the signature:
+// reorderHomeList('boxes', ...) is what every call site and the drag handler already say, and a
+// list key is what this function is actually about.
 function reorderHomeList(listKey, draggedId, targetId, insertAfter) {
   const L = homeLayout();
-  const arr = listKey === 'sections' ? L.sectionOrder : L.boxOrder;
+  const arr = L.boxOrder;
   if (draggedId === targetId) return;
   const from = arr.indexOf(draggedId);
   if (from === -1) return;
@@ -1330,82 +1320,43 @@ function closeHomeAddPopup() { UI.homeAddPopup = null; render(); }
 function renderHomeAddPopup() {
   if (!UI.homeAddPopup) return '';
   const L = homeLayout();
-  const isSections = UI.homeAddPopup === 'sections';
-  const hiddenIds = isSections ? L.sectionHidden : L.boxHidden;
-  const meta = isSections ? HOME_SECTION_META : HOME_BOX_META;
-  const rows = hiddenIds.length ? hiddenIds.map(id => `
+  const meta = HOME_BOX_META;
+  const rows = L.boxHidden.length ? L.boxHidden.map(id => `
     <label class="home-popup-row">
-      <input type="checkbox" onchange="${isSections ? 'showHomeSection' : 'showHomeBox'}('${id}')">
-      ${isSections && meta[id] ? `<i style="display:inline-block; width:9px; height:9px; border-radius:50%; background:${meta[id].color}; margin-right:6px; vertical-align:middle;"></i>` : ''}
+      <input type="checkbox" onchange="showHomeBox('${id}')">
       <span>${escapeHtml(meta[id] ? meta[id].label : id)}</span>
     </label>`).join('') : `<div style="font-size:12px; color:var(--text-faint); padding:10px 0;">Nothing hidden — everything's already showing.</div>`;
   return `
     <div class="home-popup-backdrop" onclick="closeHomeAddPopup()">
       <div class="panel home-popup" onclick="event.stopPropagation()">
         <div class="row" style="margin-bottom:6px;">
-          <div class="subtle-label" style="margin-bottom:0;">ADD BACK ${isSections ? 'SECTIONS' : 'BOXES'}</div>
+          <div class="subtle-label" style="margin-bottom:0;">ADD BACK BOXES</div>
           <button class="icon-btn" onclick="closeHomeAddPopup()">${icon('close')}</button>
         </div>
         ${rows}
       </div>
     </div>`;
 }
-// A section tile carries its own colour as a thick bar down its LEFT edge. The tile itself stays
-// neutral, which is the point: the colour is a label, not a wash.
+// ---- The section tiles are gone (2026-09-19) ----
 //
-// Left rather than bottom because that is already how every other colour-coded container in the
-// app is marked — note cards, ingredient rows, phase cards, the Navi quote, section notes all put
-// their colour on the left edge. One convention, applied everywhere, is worth more than whichever
-// edge reads marginally better in isolation.
+// They left Home's reading view on 2026-09-18, when the bottom bar took the five sections: a row of
+// the same five at the top said everything twice. They survived one more day in EDIT mode on the
+// argument that their order and hidden set still drove something — and that turned out to be false.
+// SECTION_TABS is a fixed list; the bar never reads sectionOrder or sectionHidden. So edit mode was
+// a control panel for a view that no longer exists, and reordering tiles there changed nothing you
+// could see anywhere.
 //
-// Fourth revision of the same idea, and the previous three are why this one is a flat bar. First
-// tinted the whole tile; second put a radial glow behind the icon; third spread that glow to the
-// tile's edges as a vignette. Every one of them was a soft gradient over the whole footprint, and
-// soft gradients at tile size read as smudges rather than as colour-coding — you could tell a tile
-// had *some* colour without being able to say which, especially for the darker sections. A solid
-// bar answers "which section is this" at a glance, which was the whole job.
+// Edit mode itself stays, for the BOXES — YOUR DAY, LOG·AM, LOG·PM, YOUR WEEK, TODAY'S REMINDERS.
+// Ordering and hiding those is real: Home is a dashboard and which part of it you meet first is a
+// genuine preference, with nothing in the bottom bar duplicating it.
 //
-// An INSET box-shadow rather than a border-left: `.workout-cell` is `aspect-ratio: 1` with
-// `box-sizing: border-box`, so a 4px border would eat 4px out of the content box, and the icon +
-// label already fill that budget (see CLAUDE.md on tiles overrunning their grid track — it has
-// happened twice). A shadow paints inside the same box and costs the layout nothing. It also
-// follows the tile's border-radius, so the bar's ends curve with the corners.
-function homeTileAccentStyle(color) {
-  return `background: var(--surface); box-shadow: inset 4px 0 0 ${color};`;
-}
-function renderHomeSectionsGrid() {
-  // The tile row is gone from the READING view of Home (2026-09-18): the bottom bar carries the
-  // five sections now, so a row of the same five at the top of the screen said everything twice and
-  // pushed the day -- the thing you actually open Home to read -- below the fold. Asked for as
-  // "this kicks everything else on the HOME screen up for easier reading".
-  //
-  // It survives in EDIT mode, because that is where the tiles are still doing a job the bar cannot:
-  // the order and the hidden set they maintain are what HOME_SECTION_META's consumers read, and
-  // dragging a tile is how you change them. One line to bring the row back if the bar turns out to
-  // be the wrong trade.
-  if (!UI.homeEditMode) return '';
-  const L = homeLayout();
-  const tiles = L.sectionOrder.map(id => {
-    const meta = HOME_SECTION_META[id];
-    if (!meta) return '';
-    if (!UI.homeEditMode) {
-      return `<div class="workout-cell home-tile" style="${homeTileAccentStyle(meta.color)}" onclick="goHomeSection('${id}')">
-        <div style="font-size:36px;">${icon(meta.icon)}</div>
-        <div class="wname">${meta.label}</div>
-      </div>`;
-    }
-    return `<div class="workout-cell home-tile home-edit-item" style="${homeTileAccentStyle(meta.color)}" data-home-drag-list="sections" data-home-drag-id="${id}" onpointerdown="startHomeDrag('sections','${id}',event,this)">
-      <button class="home-edit-x" onclick="event.stopPropagation(); hideHomeSection('${id}')" title="Hide">${icon('close')}</button>
-      <div style="font-size:36px;">${icon(meta.icon)}</div>
-      <div class="wname">${meta.label}</div>
-    </div>`;
-  }).join('');
-  return `
-    <div style="position:relative; ${UI.homeEditMode ? 'margin-bottom:22px;' : ''}">
-      <div class="workout-grid home-tile-row">${tiles}</div>
-      ${UI.homeEditMode ? `<button class="home-add-btn" onclick="openHomeAddPopup('sections')" title="Add back a hidden section">+</button>` : ''}
-    </div>`;
-}
+// HOME_SECTION_META stays too, and is not a leftover: the bottom bar paints each tab's colour and
+// icon from it, and LINKABLE_TYPES colours every reminder, habit, meal and workout link chip from
+// it. Only the tiles went.
+//
+// `sectionOrder` / `sectionHidden` are left in saved layouts rather than migrated out. They are two
+// small arrays nothing reads, and a migration that rewrites everyone's stored settings to delete
+// two unused keys is more risk than the tidiness is worth.
 // Home's view of today: the same timeline and the same untimed band the Calendar Day view
 // renders, not a parallel summary of them. This replaces three separate boxes -- RIGHT NOW,
 // TODAY'S WORKOUTS and HABITS -- which were three renderings of one dayModel() call that could,
@@ -1557,7 +1508,6 @@ function renderHome() {
   return `<div class="screen">
     <div class="section-title" style="margin-bottom:2px;">Home</div>
     <div class="home-date-line" style="font-size:13px; color:var(--text-dim); margin-bottom:16px;">${dateStr}</div>
-    ${renderHomeSectionsGrid()}
     ${renderHomeBoxesSection()}
     ${renderHomeAddPopup()}
   </div>`;

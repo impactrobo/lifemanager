@@ -213,10 +213,6 @@ function deletePeriodic(id) {
 // broke), so a habit's own identity on the multi-habit calendar is carried by shape instead.
 const HABIT_COLOR_PALETTE = ['#FF9191', '#92FECD', '#FFD961', '#CAAFFF', '#819FFF', '#B2FF5D'];
 const HABIT_SHAPES = ['circle', 'square', 'triangle', 'diamond'];
-function habitColorFor(id) {
-  const idx = STATE.life.habits.findIndex(h => h.id === id);
-  return HABIT_COLOR_PALETTE[(idx < 0 ? 0 : idx) % HABIT_COLOR_PALETTE.length];
-}
 function habitShapeFor(id) {
   const idx = STATE.life.habits.findIndex(h => h.id === id);
   return HABIT_SHAPES[(idx < 0 ? 0 : idx) % HABIT_SHAPES.length];

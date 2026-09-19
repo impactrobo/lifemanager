@@ -29,19 +29,27 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // anchors are left in place — and its OPEN CALENDAR button doesn't depend on the clock the way
   // the timeline's own contents do.
 
-  // 1. The section tiles are EDIT-MODE ONLY now (2026-09-18). Home's bottom bar carries the five
-  // sections, so a row of the same five at the top of the reading view said everything twice and
-  // pushed the day below the fold. They remain in edit mode because that is where they still do a
-  // job the bar cannot — their order and hidden set are what every HOME_SECTION_META consumer
-  // reads, and dragging a tile is how you change them.
+  // 1. The section tiles are GONE (2026-09-19), in both modes.
+  //
+  // They left the reading view on 2026-09-18 when the bottom bar took the five sections, and
+  // survived a day in edit mode on the argument that their order and hidden set still drove
+  // something. That was false: SECTION_TABS is a fixed list and the bar never reads sectionOrder or
+  // sectionHidden, so edit mode was a control panel for a view that no longer existed.
+  //
+  // Edit mode itself stays for the BOXES, which is checked below — that ordering is real, and
+  // nothing in the bottom bar duplicates it.
   const tileCount = await page.$$eval('.home-tile', els => els.length);
   console.log('home tiles on load:', tileCount);
-  if (tileCount !== 0) throw new Error(`Home's reading view carries no section tiles now, found ${tileCount}`);
+  if (tileCount !== 0) throw new Error(`Home carries no section tiles now, found ${tileCount}`);
   await page.evaluate(() => { UI.homeEditMode = true; render(); });
   await settle(page);
-  const editTiles = await page.$$eval('.home-tile', els => els.length);
-  console.log('home tiles in edit mode:', editTiles);
-  if (editTiles === 0) throw new Error('Edit mode still has to offer the tiles — it is the only way to reorder or unhide a section');
+  const inEdit = await page.evaluate(() => ({
+    tiles: document.querySelectorAll('.home-tile').length,
+    boxes: document.querySelectorAll('.home-edit-box').length,
+  }));
+  console.log('edit mode:', JSON.stringify(inEdit));
+  if (inEdit.tiles !== 0) throw new Error(`Edit mode carries no section tiles either, found ${inEdit.tiles}`);
+  if (inEdit.boxes === 0) throw new Error('...but it must still offer the BOXES — that is what edit mode is for now');
   await page.evaluate(() => { UI.homeEditMode = false; render(); });
   await settle(page);
 
@@ -140,30 +148,35 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (tabAfterNormalClick !== 'schedule') throw new Error(`Expected normal (non-edit-mode) tap to navigate to Schedule, got NAV.currentTab="${tabAfterNormalClick}"`);
   await page.evaluate(() => { switchTab('home'); toggleHomeEditMode(); }); // back to Home, back into edit mode for the rest of the test
 
-  // 3. Hide the first section, confirm tile count drops by 1 and it persists to STATE
-  const beforeIds = await page.evaluate(() => STATE.settings.homeLayout.sectionOrder.slice());
+  // 3. Hide the first BOX, and confirm it leaves the order and joins the hidden set.
+  //
+  // This used to hide a SECTION. Sections stopped being hideable on 2026-09-19 — the bottom bar
+  // carries a fixed five and never read sectionOrder — so the checks moved to the list that is
+  // still hideable rather than being deleted: what they actually pin is that hiding writes through
+  // to STATE and survives a relaunch, which matters more for boxes than it ever did for tiles.
+  const beforeIds = await page.evaluate(() => STATE.settings.homeLayout.boxOrder.slice());
   const targetId = beforeIds[0];
-  await page.evaluate((id) => hideHomeSection(id), targetId);
+  await page.evaluate((id) => hideHomeBox(id), targetId);
   await settle(page);
 
-  const afterOrder = await page.evaluate(() => STATE.settings.homeLayout.sectionOrder);
-  const afterHidden = await page.evaluate(() => STATE.settings.homeLayout.sectionHidden);
-  console.log('sectionOrder after hide:', afterOrder, '| sectionHidden:', afterHidden);
-  if (afterOrder.includes(targetId)) throw new Error(`Expected '${targetId}' removed from sectionOrder after hideHomeSection`);
-  if (!afterHidden.includes(targetId)) throw new Error(`Expected '${targetId}' present in sectionHidden after hideHomeSection`);
+  const afterOrder = await page.evaluate(() => STATE.settings.homeLayout.boxOrder);
+  const afterHidden = await page.evaluate(() => STATE.settings.homeLayout.boxHidden);
+  console.log('boxOrder after hide:', afterOrder, '| boxHidden:', afterHidden);
+  if (afterOrder.includes(targetId)) throw new Error(`Expected '${targetId}' removed from boxOrder after hideHomeBox`);
+  if (!afterHidden.includes(targetId)) throw new Error(`Expected '${targetId}' present in boxHidden after hideHomeBox`);
 
   // 4. Reload the page (simulating app relaunch) and confirm the hide persisted via localStorage
   await page.reload();
   await settle(page);
-  const persistedHidden = await page.evaluate(() => STATE.settings.homeLayout.sectionHidden);
-  console.log('sectionHidden after reload:', persistedHidden);
-  if (!persistedHidden.includes(targetId)) throw new Error('Expected hidden section to survive a reload (persisted to localStorage)');
+  const persistedHidden = await page.evaluate(() => STATE.settings.homeLayout.boxHidden);
+  console.log('boxHidden after reload:', persistedHidden);
+  if (!persistedHidden.includes(targetId)) throw new Error('Expected a hidden box to survive a reload (persisted to localStorage)');
 
   // 5. Show it back (cleanup) and confirm it returns
-  await page.evaluate((id) => showHomeSection(id), targetId);
+  await page.evaluate((id) => showHomeBox(id), targetId);
   await settle(page);
-  const restoredOrder = await page.evaluate(() => STATE.settings.homeLayout.sectionOrder);
-  if (!restoredOrder.includes(targetId)) throw new Error(`Expected '${targetId}' restored to sectionOrder after showHomeSection`);
+  const restoredOrder = await page.evaluate(() => STATE.settings.homeLayout.boxOrder);
+  if (!restoredOrder.includes(targetId)) throw new Error(`Expected '${targetId}' restored to boxOrder after showHomeBox`);
 
   // 6. Each section tile gets its own fixed color (not shared/generic), painted as a thick bar
   // along its bottom edge (homeTileAccentStyle()) — checked via the raw `style` attribute text
@@ -173,57 +186,26 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // should survive whatever comes next.
   // Counted off sectionOrder rather than hardcoded: SCHEDULE retired as a tile when Home started
   // rendering the schedule itself, and the number will move again.
-  // In EDIT mode, because that is where the tiles live since 2026-09-18. The colours themselves did
-  // not move — the bottom bar paints the reading view's sections from the same HOME_SECTION_META
-  // entries (test_home_bar.js checks that end) — so this still pins the contract it always did:
-  // one colour per section, following the section id rather than its position.
-  await page.evaluate(() => { switchTab('home'); UI.homeEditMode = true; render(); });
+  // The colour contract did not go with the tiles — it moved to the bottom bar, which paints each
+  // tab from the same HOME_SECTION_META entries. test_home_bar.js owns it now (one colour per
+  // section, no two alike, read from the meta rather than a second copy), so it is not restated
+  // here; restating it in two files is how the two ends drift.
+  //
+  // 7. Reordering, now that BOXES are the only reorderable list.
+  //
+  // The insertAfter contract is the part worth keeping and has nothing to do with sections:
+  // dropping "before" a target could never land an item in the true LAST slot, because nothing
+  // exists after the last item to drop before. insertAfter=true on the current last item is what
+  // onHomeDragMove() sends when the pointer is past that item's far edge, and it must actually
+  // produce the real last position.
+  await page.evaluate(() => { switchTab('home'); STATE.settings.homeLayout = defaultHomeLayout(); saveState(); });
   await settle(page);
-  const tileColors = await page.evaluate(() => {
-    const ids = STATE.settings.homeLayout.sectionOrder;
-    return ids.map(id => {
-      const tile = [...document.querySelectorAll('.home-tile')].find(t => t.textContent.includes(HOME_SECTION_META[id].label));
-      return { id, expected: HOME_SECTION_META[id].color, tileStyle: tile ? tile.getAttribute('style') : null };
-    });
-  });
-  console.log('tile accent colors:', tileColors);
-  const uniqueColors = new Set(tileColors.map(t => t.expected));
-  if (!tileColors.length) throw new Error('Expected Home to render some section tiles');
-  if (uniqueColors.size !== tileColors.length) {
-    throw new Error(`Expected all ${tileColors.length} sections to have distinct colors, got ${uniqueColors.size} unique: ${JSON.stringify([...uniqueColors])}`);
-  }
-  for (const t of tileColors) {
-    if (!t.tileStyle || !t.tileStyle.includes(t.expected)) throw new Error(`Expected tile "${t.id}" to embed its color ${t.expected}, got style="${t.tileStyle}"`);
-  }
-
-  // 7. The color follows the section id through a reorder, not the position — drag "budget" to
-  // the front and confirm its vignette is still its own, not whatever the tile previously sitting
-  // first had. The incumbent is read off the live order rather than named: it used to be SCHEDULE,
-  // which stopped being a tile when Home started rendering the schedule itself.
-  const incumbentId = tileColors[0].id;
-  if (incumbentId === 'budget') throw new Error('This check needs budget to start somewhere other than first');
-  await page.evaluate((first) => reorderHomeList('sections', 'budget', first), incumbentId);
-  await settle(page);
-  const budgetStyleAfter = await page.evaluate(() => {
-    const tile = [...document.querySelectorAll('.home-tile')].find(t => t.textContent.includes(HOME_SECTION_META.budget.label));
-    return tile ? tile.getAttribute('style') : null;
-  });
-  console.log(`budget tile style after reordering ahead of "${incumbentId}":`, budgetStyleAfter);
-  const budgetColor = tileColors.find(t => t.id === 'budget').expected;
-  const incumbentColor = tileColors[0].expected;
-  if (!budgetStyleAfter || !budgetStyleAfter.includes(budgetColor)) throw new Error(`Expected budget's tile to keep its own color ${budgetColor} after moving to the front, got "${budgetStyleAfter}"`);
-  if (budgetStyleAfter.includes(incumbentColor)) throw new Error(`Expected budget's tile to NOT pick up "${incumbentId}"'s old position color`);
-
-  // 8. reorderHomeList()'s insertAfter fix: dropping "before" a target could never actually land
-  // an item in the true last slot (nothing exists after the last item to drop "before" into) —
-  // insertAfter=true on the current last item is what onHomeDragMove() now sends when the pointer
-  // is past that item's far edge, and it must actually produce the real last position.
-  await page.evaluate(() => { STATE.settings.homeLayout = defaultHomeLayout(); saveState(); });
-  const orderBefore = await page.evaluate(() => STATE.settings.homeLayout.sectionOrder.slice());
+  const orderBefore = await page.evaluate(() => STATE.settings.homeLayout.boxOrder.slice());
   const firstId = orderBefore[0], lastId = orderBefore[orderBefore.length - 1];
-  await page.evaluate((args) => reorderHomeList('sections', args.firstId, args.lastId, true), { firstId, lastId });
-  const orderAfterInsertAfter = await page.evaluate(() => STATE.settings.homeLayout.sectionOrder);
-  console.log('order before/after moving the first item onto the last with insertAfter=true:', orderBefore, '/', orderAfterInsertAfter);
+  if (orderBefore.length < 3) throw new Error('This check needs at least three boxes to be meaningful');
+  await page.evaluate((args) => reorderHomeList('boxes', args.firstId, args.lastId, true), { firstId, lastId });
+  const orderAfterInsertAfter = await page.evaluate(() => STATE.settings.homeLayout.boxOrder);
+  console.log('box order before/after moving the first onto the last with insertAfter=true:', orderBefore, '/', orderAfterInsertAfter);
   if (orderAfterInsertAfter[orderAfterInsertAfter.length - 1] !== firstId) {
     throw new Error(`Expected "${firstId}" to land in the true last slot, got order ${JSON.stringify(orderAfterInsertAfter)}`);
   }
@@ -234,9 +216,9 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // insertAfter=false (or omitted) on the same drop still inserts *before* the target, unaffected
   // — confirms the fix is additive, not a change to the existing default behavior.
   await page.evaluate(() => { STATE.settings.homeLayout = defaultHomeLayout(); saveState(); });
-  await page.evaluate((args) => reorderHomeList('sections', args.firstId, args.lastId), { firstId, lastId });
-  const orderAfterBefore = await page.evaluate(() => STATE.settings.homeLayout.sectionOrder);
-  console.log('order after the same move without insertAfter:', orderAfterBefore);
+  await page.evaluate((args) => reorderHomeList('boxes', args.firstId, args.lastId), { firstId, lastId });
+  const orderAfterBefore = await page.evaluate(() => STATE.settings.homeLayout.boxOrder);
+  console.log('box order after the same move without insertAfter:', orderAfterBefore);
   if (orderAfterBefore[orderAfterBefore.length - 1] !== lastId) {
     throw new Error(`Expected the target to remain last when insertAfter is unset, got order ${JSON.stringify(orderAfterBefore)}`);
   }

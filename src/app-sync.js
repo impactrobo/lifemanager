@@ -392,7 +392,6 @@ function resetUI() {
     UI.tdeeCalcOpen = false;
     UI.builderStylePickerOpen = false;
     UI.autofillPickerOpen = false;
-    UI.noteTagPaletteOpen = null;
     VIEW.mealPlanExpanded = {};
     VIEW.exPlanExpanded = {};
     saveState();

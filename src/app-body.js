@@ -578,18 +578,6 @@ function deleteMeasurement(id) {
 // Fitness merge put each log directly under its own chart instead (see renderBody()), so the
 // wrapper had nothing left to wrap and went away.
 function weightEntryOn(dateStr) { return STATE.weightLog.find(e => e.date === dateStr) || null; }
-function weightEntryById(id) { return STATE.weightLog.find(e => e.id === id) || null; }
-// The weight half only — same reasoning as deleteMeasurement() above.
-function deleteWeightEntry(id) {
-  const w = weightEntryById(id);
-  if (!w) return;
-  showConfirm('Delete this entry?', () => {
-    STATE.weightLog = STATE.weightLog.filter(e => e.id !== id);
-    if (UI.bodyEditDate === w.date && !bodyHasEntryOn(w.date)) closeBodyForm(); else render();
-    saveState();
-    drawWeightChart();
-  });
-}
 // Trailing N-day rolling average, one output value per input entry (same index/order) — averages
 // every logged value within [that entry's date - (windowDays-1), that entry's date] inclusive, so
 // a gap in logging just means fewer points feed that particular average rather than breaking the

@@ -49,12 +49,6 @@ function anchorTextFor(anchor, dateStr) {
   };
 }
 
-function setAnchorRotation(id, steps, startDate) {
-  const a = STATE.life.anchors.find(x => x.id === id);
-  if (!a) return;
-  a.rotation = { start: startDate || todayStr(), steps: steps.map(s => ({ title: s.title, detail: s.detail || '' })) };
-  saveState(); render();
-}
 function clearAnchorRotation(id) {
   const a = STATE.life.anchors.find(x => x.id === id);
   if (!a || !a.rotation) return;

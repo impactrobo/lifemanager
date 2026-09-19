@@ -1425,11 +1425,6 @@ function updateT3Name(id, idx, val) {
   w.t3[idx].enabled = !!val;
   saveState(); render();
 }
-function updateT3TargetReps(id, idx, val) {
-  const w = getWorkout(id);
-  w.t3[idx].targetReps = val === '' ? null : Number(val);
-  saveState(); render();
-}
 function updateT3Muscle(id, idx, val) {
   const w = getWorkout(id);
   w.t3[idx].muscle = val || null;
@@ -1507,4 +1502,9 @@ function renderBody() {
     ${body}
   </div>`;
 }
-function setBodySubtab(t) { NAV.bodySubtab = t; render(); }
+// resetTransientUi() for the same reason setFitnessSubtab() does it: BODY / LABS / SET VOLUME /
+// COMPARE / PR LOG are five different screens, and a panel opened on one has no business following
+// you to the next. Concretely, the bathroom sheet survived a trip to LABS and reappeared on the way
+// back — the same shape as the phase editor that followed you back to PHASES (2026-09-18), and the
+// same fix.
+function setBodySubtab(t) { resetTransientUi(); NAV.bodySubtab = t; render(); }

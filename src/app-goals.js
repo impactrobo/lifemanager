@@ -41,7 +41,6 @@ const GOAL_MINICUT_MAX_WEEKS = 6;
 const GOAL_RATE_WINDOW_DAYS = 28;
 const GOAL_RATE_MIN_DAYS = 14;
 
-function goalsOfKind(kind) { return (STATE.goals || []).filter(g => g.kind === kind); }
 // At most ONE of each kind is ever un-archived, so these are finds rather than sorts: the UI refuses
 // to create or reactivate a second of the same kind while one is running.
 //
@@ -50,13 +49,6 @@ function goalsOfKind(kind) { return (STATE.goals || []).filter(g => g.kind === k
 // goals would be promising something the body can't deliver -- "Hypertrophy" and "VO2 Max" in
 // parallel is a claim, not a plan. Blended intent belongs in the phase label instead: a block called
 // "GPP + Cut" is an honest description of a real trade-off.
-function activeGoalOfKind(kind) { return goalsOfKind(kind).find(g => !g.archived) || null; }
-
-function weightGoals() { return goalsOfKind('weight'); }
-function activeWeightGoal() { return activeGoalOfKind('weight'); }
-function exerciseGoals() { return goalsOfKind('exercise'); }
-function activeExerciseGoal() { return activeGoalOfKind('exercise'); }
-
 // fmtGoalDate() omits the year, which is right for a reminder a few days out and wrong here: a
 // projection can easily land in a different year, and a bare “Jun 6” then reads as this coming
 // June rather than next. The year appears only when it differs, so the common case stays short.

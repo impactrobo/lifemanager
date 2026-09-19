@@ -280,7 +280,6 @@ function openWorkoutLog(workoutId, dateStr) {
   openSession((w && w.t1) ? 'log' : 'rpLog', workoutId, dateStr);
 }
 function openCardioLog(cardioId, dateStr) { openSession('cardioLog', cardioId, dateStr); }
-function openRpWorkoutLog(workoutId, dateStr) { openSession('rpLog', workoutId, dateStr); }
 function backToGrid() {
   NAV.trainView = GRID_VIEW();
   render();

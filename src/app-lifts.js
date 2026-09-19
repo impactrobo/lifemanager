@@ -473,55 +473,6 @@ function onPickLift(token, liftId) {
   render();
 }
 
-// ---- The review screen ----
-//
-// Never runs on its own. An existing exercise whose name doesn't match a library lift EXACTLY is
-// offered as a new lift, with near-matches beside it as suggestions -- "Bench Press: did you mean
-// Barbell Bench Press? Dumbbell Bench Press?" A wrong automatic merge fuses two lifts' histories
-// permanently; a wrong suggestion costs a glance.
-function renderLiftReview() {
-  const refs = unlinkedLiftRefs();
-  const customCount = Array.isArray(STATE.lifts) ? STATE.lifts.length : 0;
-  return `
-    <div style="font-size:11px; color:var(--text-dim); margin:14px 0; line-height:1.6;">
-      A lift is pure identity — a name and a muscle — and it outlives any plan that uses it. That's
-      the point: a block's exercise ids change every time you start a new one, so a target or a PR
-      can't hang off them. <b style="color:var(--text)">${LIFT_LIBRARY.length}</b> lifts ship in the
-      library${customCount ? `, plus <b style="color:var(--text)">${customCount}</b> you added` : ''}.
-    </div>
-    ${refs.length ? `
-      <div class="subtle-label" style="margin:18px 0 8px;">STILL NAMED BY FREE TEXT (${refs.length})</div>
-      <div style="font-size:11px; color:var(--text-faint); margin-bottom:10px; line-height:1.6;">
-        <b style="color:var(--text)">Nothing here is linked automatically</b> unless the name matches a
-        library lift exactly. A wrong merge would fuse two lifts' histories permanently.
-      </div>
-      <div class="stack">
-        ${refs.map(r => {
-          const token = `review:${r.kind}:${r.id}:${r.workoutId || ''}`;
-          const exact = liftByExactName(r.name);
-          const sugg = exact ? [] : liftSuggestions(r.name, 3);
-          return `
-            <div class="panel">
-              <div class="ehead">
-                <div style="font-weight:700; font-size:14px;">${escapeHtml(r.name)}</div>
-                ${r.muscle ? `<span class="lift-muscle-chip" style="background:${muscleColor(r.muscle) || 'var(--surface2)'};">${r.muscle}</span>` : ''}
-              </div>
-              <div style="font-size:11px; color:var(--text-faint); margin-bottom:8px;">${escapeHtml(r.label)}</div>
-              ${exact
-                ? `<button class="btn btn-sm btn-good btn-block" onclick="onPickLift('${token}','${exact.id}')">LINK TO ${escapeHtml(exact.name)}</button>
-                   <div style="font-size:11px; color:var(--text-faint); margin-top:5px;">Exact name match — not a guess.</div>`
-                : `${sugg.length ? `
-                     <div style="font-size:11px; color:var(--text-faint); margin-bottom:6px;">Did you mean…</div>
-                     <div class="stack" style="margin-bottom:8px;">
-                       ${sugg.map(l => `<button class="btn btn-sm btn-block" onclick="onPickLift('${token}','${l.id}')">${escapeHtml(l.name)}</button>`).join('')}
-                     </div>` : ''}
-                   ${renderLiftPicker(token, null)}`}
-            </div>`;
-        }).join('')}
-      </div>`
-      : emptyState('Every exercise is linked to a lift. Nothing to review.')}`;
-}
-
 // ---- bestForLift(): the resolver targets and the PR log both needed ----
 //
 // "Exercise PR log" sat on the backlog unbuilt, and it is this feature seen from the other side: a
@@ -643,8 +594,6 @@ const EX_TARGET_TYPES = [
 ];
 function exTargetType(key) { return EX_TARGET_TYPES.find(t => t.key === key) || EX_TARGET_TYPES[0]; }
 
-function exerciseTargets(goalId) { return (STATE.exTargets || []).filter(t => t.goalId === goalId); }
-
 // Where a target stands: current, target, gap. Deliberately NO projection -- weight loss is roughly
 // linear against a deficit, which is what makes projecting it defensible, but strength and cardio
 // move in steps and stalls. A straight line through them would be confidently wrong most of the
@@ -727,112 +676,6 @@ function fmtMinutes(mins) {
   const m = Math.floor(Math.abs(mins));
   const s = Math.round((Math.abs(mins) - m) * 60);
   return `${m}:${String(s).padStart(2, '0')}`;
-}
-
-// ---- Mutations ----
-function addExerciseTarget(goalId) {
-  if (!Array.isArray(STATE.exTargets)) STATE.exTargets = [];
-  STATE.exTargets.push({
-    id: uid(), goalId, kind: '1rm',
-    liftId: null, weightLb: null, reps: 5,
-    distance: null, minutes: null, unit: 'mi',
-    createdAt: Date.now(),
-  });
-  saveState();
-  render();
-}
-function updateExTargetField(id, field, value) {
-  const t = (STATE.exTargets || []).find(x => x.id === id);
-  if (!t) return;
-  if (field === 'kind') { if (EX_TARGET_TYPES.some(x => x.key === value)) t.kind = value; }
-  else if (field === 'weight') { const n = Number(value); t.weightLb = n > 0 ? displayToLb(n) : null; }
-  else if (field === 'reps') { const n = Math.round(Number(value)); t.reps = n > 0 ? n : 1; }
-  else if (field === 'distance') { const n = Number(value); t.distance = n > 0 ? n : null; }
-  else if (field === 'minutes') { const n = Number(value); t.minutes = n > 0 ? n : null; }
-  else if (field === 'unit') { t.unit = value || 'mi'; }
-  saveState();
-  render();
-}
-function deleteExerciseTarget(id) {
-  STATE.exTargets = (STATE.exTargets || []).filter(x => x.id !== id);
-  saveState();
-  render();
-}
-
-// ---- Screen ----
-function renderExerciseTargets(goal) {
-  const targets = exerciseTargets(goal.id);
-  return `
-    <div class="row" style="margin:22px 0 8px;">
-      <div class="subtle-label" style="margin-bottom:0;">TARGETS</div>
-      <button class="btn btn-sm" onclick="addExerciseTarget('${goal.id}')">+ ADD TARGET</button>
-    </div>
-    ${targets.length
-      ? `<div class="stack">${targets.map(t => renderExTargetCard(t, goal)).join('')}</div>`
-      : emptyState('No targets yet. A training goal’s progress IS its targets — a lift and a number, or a distance and a time.')}`;
-}
-
-function renderExTargetCard(t, goal) {
-  const p = exTargetProgress(t, goal);
-  const type = p.type;
-  const lift = liftById(t.liftId);
-  const needsLift = type.needs.indexOf('lift') >= 0;
-  return `
-    <div class="panel ex-target ${p.reached ? 'ex-target-hit' : ''}">
-      <div class="ehead">
-        <select style="flex:1; font-weight:600;" onchange="updateExTargetField('${t.id}','kind',this.value)">
-          ${EX_TARGET_TYPES.map(x => `<option value="${x.key}"${x.key === t.kind ? ' selected' : ''}>${x.label}</option>`).join('')}
-        </select>
-        <button class="icon-btn" style="color:var(--bad);" onclick="deleteExerciseTarget('${t.id}')">${icon('close')}</button>
-      </div>
-
-      ${needsLift ? renderLiftLink(`extarget:${t.id}`, t.liftId) : ''}
-      <div class="ex-target-fields">
-        ${type.needs.indexOf('weight') >= 0 ? `
-          <label class="field"><span class="lbl">Weight (${weightUnitLabel()})</span>
-            <input type="number" step="0.5" min="0" inputmode="decimal" value="${t.weightLb != null ? fmt(lbToDisplay(t.weightLb), 1) : ''}"
-                   onchange="updateExTargetField('${t.id}','weight',this.value)"></label>` : ''}
-        ${type.needs.indexOf('reps') >= 0 ? `
-          <label class="field"><span class="lbl">Reps</span>
-            <input type="number" step="1" min="1" value="${t.reps || ''}"
-                   onchange="updateExTargetField('${t.id}','reps',this.value)"></label>` : ''}
-        ${type.needs.indexOf('distance') >= 0 ? `
-          <label class="field"><span class="lbl">Distance</span>
-            <input type="number" step="0.1" min="0" inputmode="decimal" value="${t.distance ?? ''}"
-                   onchange="updateExTargetField('${t.id}','distance',this.value)"></label>` : ''}
-        ${type.needs.indexOf('minutes') >= 0 ? `
-          <label class="field"><span class="lbl">Minutes</span>
-            <input type="number" step="0.1" min="0" inputmode="decimal" value="${t.minutes ?? ''}"
-                   onchange="updateExTargetField('${t.id}','minutes',this.value)"></label>` : ''}
-      </div>
-
-      ${needsLift && !lift
-        ? `<div class="phase-cal-note">Pick a lift and this starts reading your logs for it.</div>`
-        : `
-        <div class="goal-bar" title="${fmt(p.pct, 0)}%">
-          <div class="goal-bar-fill" style="width:${fmt(p.pct, 0)}%; ${p.reached ? 'background:var(--good);' : ''}"></div>
-        </div>
-        <div class="goal-rows">
-          <div class="goal-row">
-            <span class="goal-row-k">Target</span>
-            <span class="goal-row-v mono">${p.targetLabel}</span>
-            <span class="goal-row-x">${type.cumulative ? `since ${fmtGoalDate(goal.startDate)}` : 'best since the goal started'}</span>
-          </div>
-          <div class="goal-row">
-            <span class="goal-row-k">${type.cumulative ? 'So far' : 'Best'}</span>
-            <span class="goal-row-v mono ${p.reached ? 'ex-target-hit-text' : ''}">${p.currentLabel}</span>
-            <span class="goal-row-x">${p.reached
-              ? 'reached'
-              : p.gapLabel || (type.cumulative ? '' : 'no qualifying set yet')}</span>
-          </div>
-          ${p.lifetime ? `
-            <div class="goal-row">
-              <span class="goal-row-k">Lifetime</span>
-              <span class="goal-row-v mono" style="color:var(--text-dim);">${p.lifetime}</span>
-              <span class="goal-row-x">before this goal — context, not progress</span>
-            </div>` : ''}
-        </div>`}
-    </div>`;
 }
 
 // ---- The PR log ----

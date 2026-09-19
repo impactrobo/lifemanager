@@ -382,10 +382,9 @@ function _trackNavHistory() {
   }
   NAV_LAST_SNAPSHOT = now;
 }
-// Kept as a no-op shim: it is called from openTodayWorkout()/openTodayPractice(), which set NAV
-// keys directly, and those calls now happen automatically. Left rather than removed so a future
-// caller written from memory does no harm.
-function pushNavHistory() { /* history is derived per render -- see _trackNavHistory() */ }
+// (pushNavHistory() is gone — 2026-09-19. It survived one day as a no-op shim "so a future caller
+//  written from memory does no harm", which is backwards: a function that exists and does nothing
+//  is exactly what lets a wrong mental model persist. Setting any NAV key is now the whole API.)
 // Closes every transient panel/mode. Called at NAVIGATION time (switchTab(), applyNavSnapshot()
 // for Back/Forward, and the direct NAV.currentTab assignments in openSetup()/openTodayWorkout()) --
 // not inside _doRender(), because render() is rAF-deferred and would close a form that
@@ -444,7 +443,6 @@ function goHomeSection(tab) {
 // the same way as any of that section's other subtabs (Diet<->Longevity, Write<->View All) — see
 // renderTabbar() and each section's own setXSubtab() setter.
 function openSetup(context) {
-  pushNavHistory();
   NAV.setupContext = context;
   resetTransientUi(); // sets the tab directly, bypassing switchTab()
   NAV.currentTab = 'setup';

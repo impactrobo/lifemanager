@@ -152,16 +152,16 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // Meal and workout chips staying DIFFERENT colours is the point of keeping both entries — one
   // tab now, but a meal and a workout are still different things to see at a glance.
   if (identity.mealChipColor === identity.workoutChipColor) throw new Error('meal and workout chips should stay visually distinct');
-  // The tile ROW left Home's reading view on 2026-09-18 — the bar carries the sections now, so a
-  // row of the same five at the top said everything twice and pushed the day below the fold. The
-  // tiles survive in EDIT mode, which is where they still do a job the bar cannot: their order and
-  // hidden set are what HOME_SECTION_META's consumers read, and dragging a tile is how you change
-  // them. So the count is asserted where the tiles now live, not where they used to.
-  if (identity.tilesOnHome !== 0) throw new Error(`Home's reading view carries no section tiles now, got ${identity.tilesOnHome}`);
-  const editTiles = await page.evaluate(() => {
-    switchTab('home'); UI.homeEditMode = true; render();
-    return null;
-  });
+  // The section tiles are gone entirely (2026-09-19), in both modes. The row left the reading view
+  // on 2026-09-18 when the bar took the sections; it survived a day in edit mode on the argument
+  // that its order and hidden set still drove something, and that was simply false — SECTION_TABS
+  // is a fixed list and the bar has never read sectionOrder. Edit mode was a control panel for a
+  // view that no longer existed.
+  //
+  // HOME_SECTION_META, checked above, is what actually survived and is doing MORE work than before:
+  // the bar's colours and icons come from it as well as every link chip's.
+  if (identity.tilesOnHome !== 0) throw new Error(`Home carries no section tiles now, got ${identity.tilesOnHome}`);
+  await page.evaluate(() => { switchTab('home'); UI.homeEditMode = true; render(); });
   await settle(page);
   const inEdit = await page.evaluate(() => {
     const n = document.querySelectorAll('.home-tile').length;
@@ -169,9 +169,8 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     return n;
   });
   await settle(page);
-  console.log('section tiles in edit mode:', inEdit, editTiles === null ? '' : '');
-  // Five: PRODUCTIVITY, WELLNESS, HOBBIES, NOTES, FINANCIAL. `health` is the only retired one left.
-  if (inEdit !== 5) throw new Error(`Edit mode still offers all five tiles to reorder, got ${inEdit}`);
+  console.log('section tiles in edit mode:', inEdit);
+  if (inEdit !== 0) throw new Error(`Edit mode carries no section tiles either, got ${inEdit}`);
 
   // ---- 4. Schedule is still reachable, and its bar matches Home's ----
   // Navigate, settle, THEN read: reading inside the same evaluate gets the pre-render tabbar, which
