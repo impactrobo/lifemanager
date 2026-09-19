@@ -28,11 +28,11 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   const snapshot = await page.evaluate((k) => JSON.parse(JSON.stringify(STATE.budget.incidentals[k] || [])), key);
 
   // 1. Add a goal, log a contribution WITHOUT the checkbox — no incidental, no budget effect
-  await page.evaluate(() => { switchTab('budget'); setBudgetSubtab('goals'); });
+  await page.evaluate(() => { switchTab('budget'); setBudgetSubtab('goals'); openGoalForm(); }); // the form lives behind + ADD GOAL since 2026-09-18
   await settle(page);
   await page.fill('#goalName', 'Test Console');
   await page.fill('#goalTarget', '500');
-  await page.evaluate(() => addSavingsGoal());
+  await page.evaluate(() => saveSavingsGoal());
   await settle(page);
   const goal = await page.evaluate(() => STATE.budget.goals.find(g => g.name === 'Test Console'));
   await page.evaluate((id) => toggleGoalExpanded(id), goal.id);

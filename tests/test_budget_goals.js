@@ -25,11 +25,11 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   await settle(page);
 
   // 1. Add a goal via the real form
-  await page.evaluate(() => { switchTab('budget'); setBudgetSubtab('goals'); });
+  await page.evaluate(() => { switchTab('budget'); setBudgetSubtab('goals'); openGoalForm(); }); // the form lives behind + ADD GOAL since 2026-09-18
   await settle(page);
   await page.fill('#goalName', 'PS5');
   await page.fill('#goalTarget', '500');
-  await page.evaluate(() => addSavingsGoal());
+  await page.evaluate(() => saveSavingsGoal());
   await settle(page);
   const goal = await page.evaluate(() => STATE.budget.goals.find(g => g.name === 'PS5'));
   console.log('added goal:', goal);

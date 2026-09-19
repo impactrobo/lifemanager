@@ -119,19 +119,20 @@ function goalPct(goal) {
 function goalIsComplete(goal) {
   return goal.targetAmount > 0 && goalProgress(goal) >= goal.targetAmount;
 }
+// Returns whether it saved, so saveSavingsGoal() knows whether to close the form. Does not render:
+// its caller does that once, after deciding.
 function addSavingsGoal() {
   const nameEl = document.getElementById('goalName');
-  const name = nameEl.value.trim();
+  const name = nameEl ? nameEl.value.trim() : '';
   const amountEl = document.getElementById('goalTarget');
-  const amount = Number(amountEl.value);
-  if (!name) { showToast('Give it a name'); return; }
-  if (!amount || amount <= 0) { showToast('Enter a target amount'); return; }
+  const amount = Number(amountEl && amountEl.value);
+  if (!name) { showToast('Give it a name'); return false; }
+  if (!amount || amount <= 0) { showToast('Enter a target amount'); return false; }
   const resetsAnnually = inputChecked('goalResetsAnnually');
   STATE.budget.goals.push({ id: uid(), name, targetAmount: amount, resetsAnnually, recurringChargeId: null, contributions: [], archived: false, createdAt: Date.now() });
   saveState();
-  nameEl.value = ''; amountEl.value = ''; document.getElementById('goalResetsAnnually').checked = false;
   showToast('Goal added');
-  render();
+  return true;
 }
 function updateGoalField(id, field, value) {
   const g = STATE.budget.goals.find(x => x.id === id);
@@ -195,24 +196,42 @@ function renderBudgetGoals() {
     <div class="section-title">Goals</div>
     <div style="font-size:12px; color:var(--text-dim); margin:6px 0 14px;">Named savings/investment targets with a running balance — a Roth IRA's annual cap, a down payment, a game console. Fund one by logging contributions here directly, or linking it to an isSavings recurring charge so checking off that month's box on the Recurring tab feeds it automatically.</div>
 
-    <div class="subtle-label" style="margin-bottom:8px;">NEW GOAL</div>
+    <div class="subtle-label" style="margin-bottom:8px;">GOALS</div>
     <div class="panel">
-      <div class="field-row">
-        <label class="field"><span class="lbl">Name</span><input type="text" id="goalName" placeholder="e.g. Roth IRA, PS5, Down Payment"></label>
-        <label class="field"><span class="lbl">Target ($)</span><input type="number" step="0.01" inputmode="decimal" id="goalTarget" placeholder="0.00"></label>
+      ${renderGoalFormControls()}
+      <div class="stack" style="margin-top:12px;">
+        ${goals.length ? goals.map(renderGoalCard).join('') : `<div style="font-size:11px; color:var(--text-faint);">No goals yet — add one above.</div>`}
       </div>
-      <label style="display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text-dim); cursor:pointer; margin-bottom:10px;">
-        <input type="checkbox" id="goalResetsAnnually">
-        Resets every calendar year — for an annual cap (IRA/Roth-style) rather than a one-time target
-      </label>
-      <button class="btn btn-primary btn-sm btn-block" onclick="addSavingsGoal()">+ ADD GOAL</button>
-    </div>
-
-    <div class="subtle-label" style="margin:18px 0 8px;">YOUR GOALS</div>
-    <div class="stack">
-      ${goals.length ? goals.map(renderGoalCard).join('') : emptyState('No goals yet — add one above.')}
     </div>
   </div>`;
+}
+// Same shape as FINANCIAL's incidentals (2026-09-18): the button is the resting state and the form
+// only exists once you have said you want it. A permanently-open form is three empty fields you
+// scroll past every visit to reach the thing you actually came to read.
+function renderGoalFormControls() {
+  if (!UI.goalFormOpen) {
+    return `<button class="btn btn-block" onclick="openGoalForm()"><span class="ic" style="margin-right:6px;">${icon('pencil')}</span>+ ADD GOAL</button>`;
+  }
+  return `
+    <div class="field-row">
+      <label class="field"><span class="lbl">Name</span><input type="text" id="goalName" placeholder="e.g. Roth IRA, PS5, Down Payment"></label>
+      <label class="field"><span class="lbl">Target ($)</span><input type="number" step="0.01" inputmode="decimal" id="goalTarget" placeholder="0.00"></label>
+    </div>
+    <label style="display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text-dim); cursor:pointer; margin-bottom:10px;">
+      <input type="checkbox" id="goalResetsAnnually">
+      Resets every calendar year — for an annual cap (IRA/Roth-style) rather than a one-time target
+    </label>
+    <div class="row" style="gap:8px;">
+      <button class="btn btn-primary" style="flex:1;" onclick="saveSavingsGoal()">SAVE GOAL</button>
+      <button class="btn btn-ghost" onclick="closeGoalForm()">CANCEL</button>
+    </div>`;
+}
+function openGoalForm() { UI.goalFormOpen = true; render(); }
+function closeGoalForm() { UI.goalFormOpen = false; render(); }
+function saveSavingsGoal() {
+  // Closes only on success, so a missing name leaves what was typed where it was.
+  if (addSavingsGoal()) UI.goalFormOpen = false;
+  render();
 }
 function renderGoalCard(g) {
   const progress = goalProgress(g);
@@ -400,26 +419,27 @@ function saveBudgetIncidental() {
   if (ok) UI.budgetIncidentalForm = null;
   render();
 }
-function renderBudgetIncidentalContainer() {
+// Adding and reading are ONE container (2026-09-18): the buttons, then the two ledgers they feed.
+// They were a panel and a loose list with a heading between them, which read as two unrelated
+// things when they are the same subject -- what happened this month outside your recurring lines.
+// Returns the controls only; renderBudgetHome() wraps these and the ledgers in the single panel.
+function renderBudgetIncidentalControls() {
   const kind = UI.budgetIncidentalForm;
   if (!kind) {
-    return `<div class="panel">
+    return `
       <div class="field-row" style="margin-bottom:0;">
         <button class="btn btn-block btn-good" onclick="openBudgetIncidental('income')">+ ADD INCOME</button>
         <button class="btn btn-block" onclick="openBudgetIncidental('charge')">+ ADD CHARGE</button>
-      </div>
-      <div style="font-size:11px; color:var(--text-faint); margin-top:8px;">Anything this month that isn't one of your recurring lines.</div>
-    </div>`;
+      </div>`;
   }
-  return `<div class="panel">
+  return `
     <div class="subtle-label" style="margin-bottom:8px; color:${kind === 'income' ? 'var(--good)' : 'var(--text-dim)'};">
       ${kind === 'income' ? 'INCOME' : 'CHARGE'}</div>
     ${kind === 'income' ? renderBudgetIncomeFields() : renderBudgetChargeFields()}
     <div class="row" style="gap:8px; margin-top:10px;">
       <button class="btn btn-primary" style="flex:1;" onclick="saveBudgetIncidental()">SAVE INCIDENTAL</button>
       <button class="btn btn-ghost" onclick="closeBudgetIncidental()">CANCEL</button>
-    </div>
-  </div>`;
+    </div>`;
 }
 function renderBudgetIncomeFields() {
   return `
@@ -485,15 +505,35 @@ function addBudgetIncidental() {
   showToast('Incidental logged');
   return true;
 }
-// Both directions, newest first, in one list. Two stores, one ledger: what you want to see is what
-// happened this month, not which array it landed in.
-function renderBudgetLedger(key) {
-  const rows = budgetIncomeEntriesForMonth(key).map(e => ({ kind: 'income', e }))
-    .concat(budgetIncidentalsForMonth(key).map(e => ({ kind: 'charge', e })))
-    .sort((a, b) => (b.e.date || '').localeCompare(a.e.date || ''));
-  if (!rows.length) return emptyState('Nothing logged yet — add income or a charge as it happens.');
-  return `<div class="entry-list">${rows.map(r =>
-    r.kind === 'income' ? renderBudgetIncomeCard(r.e, key) : renderBudgetIncidentalCard(r.e, key)).join('')}</div>`;
+// One ledger per DIRECTION, each behind its own caret. The totals sit on the closed headers, which
+// is the whole point of the .disclose shape -- you read the answer without opening anything, and
+// open only the side you want to itemise. A single merged list was tried first and put money in and
+// money out in one column, where a row's direction was carried by a `+` you had to notice.
+//
+// Closed by default, both of them: the month's two numbers are the thing you came to see, and the
+// rows behind them are the follow-up question.
+function toggleBudgetLedger(kind) {
+  const open = UI.budgetLedgerOpen || (UI.budgetLedgerOpen = { income: false, charge: false });
+  open[kind] = !open[kind];
+  render();
+}
+function renderBudgetLedgerGroup(kind, key) {
+  const open = (UI.budgetLedgerOpen || {})[kind];
+  const income = kind === 'income';
+  const rows = (income ? budgetIncomeEntriesForMonth(key) : budgetIncidentalsForMonth(key))
+    .slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  const total = rows.reduce((n, e) => n + (Number(e.amount) || 0), 0);
+  return `
+    <div style="margin-top:12px;">
+      <button class="disclose" onclick="toggleBudgetLedger('${kind}')" aria-expanded="${!!open}">
+        <span class="disclose-caret">${open ? '&#9662;' : '&#9656;'}</span>
+        <span class="disclose-label"${income ? ' style="color:var(--good);"' : ''}>${income ? 'INCOME' : 'CHARGES'}</span>
+        <span class="disclose-value mono"${income ? ' style="color:var(--good);"' : ''}>${income ? '+' : ''}${fmtMoney(total)}</span>
+      </button>
+      ${open ? `<div class="entry-list" style="margin-top:10px;">${rows.length
+        ? rows.map(e => income ? renderBudgetIncomeCard(e, key) : renderBudgetIncidentalCard(e, key)).join('')
+        : `<div style="font-size:11px; color:var(--text-faint);">Nothing logged this month.</div>`}</div>` : ''}
+    </div>`;
 }
 function deleteBudgetIncidental(key, id) {
   showConfirm('Delete this incidental?', () => {
@@ -788,15 +828,14 @@ function renderBudgetHome() {
 
     ${renderSavingsProgressSection(key)}
 
-    <div class="subtle-label" style="margin:18px 0 8px;">ADD INCIDENTAL</div>
-    ${renderBudgetIncidentalContainer()}
-
-    <div class="row" style="margin:18px 0 8px;">
-      <div class="subtle-label" style="margin-bottom:0;">THIS MONTH</div>
-      <span class="mono" style="font-size:13px; font-weight:700;">
-        ${extraIncomeTotal ? `<span style="color:var(--good);">+${fmtMoney(extraIncomeTotal)}</span> &middot; ` : ''}${fmtMoney(incidentalsTotal)} out</span>
+    <div class="subtle-label" style="margin:18px 0 8px;">INCIDENTALS</div>
+    <div class="panel">
+      ${renderBudgetIncidentalControls()}
+      ${/* One container, but two jobs inside it: add above the line, read below it. */ ''}
+      <div class="divider" style="margin:14px 0 2px;"></div>
+      ${renderBudgetLedgerGroup('income', key)}
+      ${renderBudgetLedgerGroup('charge', key)}
     </div>
-    ${renderBudgetLedger(key)}
   </div>`;
 }
 function renderBudgetRecurring() {
