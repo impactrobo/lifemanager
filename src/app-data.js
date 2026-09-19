@@ -534,10 +534,15 @@ function defaultBudgetState() {
 // Weekly/bi-weekly amounts convert to a monthly-equivalent for budgeting math (52 weeks or 26
 // bi-weekly periods per year, divided into 12 months) — matches how the industry usually
 // annualizes/monthly-izes an irregular-cadence paycheck.
+// perMonth is what every total multiplies by, so a frequency is defined once here and the budget
+// bar, the /mo readouts and the savings-plan percentage all follow. Yearly added 2026-09-19 — an
+// annual bonus or a once-a-year invoice was previously only expressible by dividing it by twelve
+// by hand and calling it monthly.
 const INCOME_FREQUENCIES = {
   weekly:   { label: 'Weekly',    perMonth: 52 / 12 },
   biweekly: { label: 'Bi-Weekly', perMonth: 26 / 12 },
   monthly:  { label: 'Monthly',   perMonth: 1 },
+  yearly:   { label: 'Yearly',    perMonth: 1 / 12 },
 };
 function incomeFrequencyOptions(selected) {
   return Object.keys(INCOME_FREQUENCIES).map(k => `<option value="${k}" ${k === selected ? 'selected' : ''}>${INCOME_FREQUENCIES[k].label}</option>`).join('');

@@ -1,23 +1,26 @@
-// test_section_nav.js — Home's bar is the sections; inside a section they're one swipe away.
+// test_section_nav.js — Home's bar is the sections; everywhere else they're one HOLD away.
 //
 // Asked for 2026-09-18: "Only on the HOME screen will we see the 5 main sections on the bottom…
 // Once you select a section (or subsection ie WELLNESS / PHASES with a hold / drag selection), we
-// retain the current structure. Any nav to a separate section should be hidden to start. User
-// should swipe up within the bottom nav bar and then those sections pop up."
+// retain the current structure. Any nav to a separate section should be hidden to start."
 //
 // What it replaces: the bottom bar held the current section's subtabs and NOTHING on Home, so the
-// app had no tab bar at all and crossing sections cost a trip Home — wordmark, then a tile. The bar
-// answers a different question depending on whether you have chosen a section yet.
+// app had no tab bar at all and crossing sections cost a trip Home. The bar answers a different
+// question depending on whether you have chosen a section yet.
+//
+// Reaching the sections from inside one was a SWIPE UP for a day, and that was wrong twice over
+// (2026-09-19): an upward drag on a bottom strip is also how you scroll and how iOS reaches its own
+// switcher, so it fired by accident going in and out of the app, and never felt reliable when you
+// did mean it. One gesture now — hold — on either kind of bar.
 //
 // What's pinned:
 //   1. Home's bar is the five sections in order; every other screen's is that section's subtabs,
-//      exactly as before.
-//   2. A real upward swipe on the bar opens the section sheet — and only inside a section, because
-//      on Home the sections are already there.
-//   3. The swipe does not also fire the button it started on. This is the whole risk of putting a
-//      gesture on a row of buttons.
+//      exactly as before. Same height on both, and neither selects its own labels.
+//   2. A swipe does NOTHING; a hold opens the sections menu.
+//   3. The hold does not also fire the button it was on — the whole risk of putting a gesture on a
+//      row of buttons — and the guard for that does not leak into ordinary taps.
 //   4. Holding a section on Home offers its subtabs, and choosing one lands there directly.
-//   5. Nothing is reachable ONLY by gesture: the wordmark still goes Home, where the sections are
+//   5. Nothing is reachable ONLY by gesture: the house button goes Home, where the sections are
 //      plain buttons.
 //   6. NOTES still lands on a new blank note, from the bar and from the sheet.
 const { chromium } = require('playwright');
@@ -42,20 +45,29 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
   const bar = () => page.evaluate(() => ({
     labels: [...document.querySelectorAll('#tabbar button')].map(b => b.textContent.trim()),
-    grip: document.getElementById('tabbar').classList.contains('has-section-sheet'),
+    // One height everywhere: the bar used to grow 4px leaving Home, because the swipe grip added
+    // padding only where the grip existed. The grip went with the swipe; the height stayed.
+    height: Math.round(document.getElementById('tabbar').getBoundingClientRect().height),
+    // Holding a button must not select its label and leave the selection stuck to your finger.
+    noSelect: getComputedStyle(document.getElementById('tabbar')).userSelect === 'none',
   }));
+  // Press and hold a button on the bar, by label.
+  const holdButton = async (label) => {
+    const box = await page.evaluate((t) => {
+      const b = [...document.querySelectorAll('#tabbar button')].find(x => x.textContent.trim() === t);
+      const r = b.getBoundingClientRect();
+      return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+    }, label);
+    await page.mouse.move(box.x, box.y);
+    await page.mouse.down();
+    await page.waitForTimeout(600);          // past SECTION_HOLD_MS
+    await page.mouse.up();
+    await settle(page);
+  };
   const barBox = () => page.evaluate(() => {
     const r = document.getElementById('tabbar').getBoundingClientRect();
     return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
   });
-  const swipeUp = async (dy) => {
-    const b = await barBox();
-    await page.mouse.move(b.x, b.y);
-    await page.mouse.down();
-    await page.mouse.move(b.x, b.y - dy, { steps: 6 });
-    await page.mouse.up();
-    await settle(page);
-  };
 
   // ---- 1. Two bars, one strip ----
   await page.evaluate(() => switchTab('home'));
@@ -65,7 +77,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (home.labels.join('/') !== 'PROD/WELLNESS/HOBBIES/FINANCIAL/NOTES') {
     throw new Error('Home carries the five sections in order, got ' + JSON.stringify(home.labels));
   }
-  if (home.grip) throw new Error('No swipe affordance on Home — the sections are already the bar');
+  if (!home.noSelect) throw new Error('The bar carries a hold gesture, so it must not select its own labels');
 
   await page.evaluate(() => goToSection('train'));
   await settle(page);
@@ -74,23 +86,34 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (inSection.labels.join('/') !== 'DAILY/PHASES/BUILDER/PROGRESS') {
     throw new Error("Inside a section the bar is that section's subtabs, unchanged: " + JSON.stringify(inSection.labels));
   }
-  if (!inSection.grip) throw new Error('...with the grip that says the sections are up there');
-
-  // ---- 2. The swipe ----
-  // A short drag must NOT open it: the bar is a row of buttons, and every tap wobbles a little.
-  await swipeUp(6);
-  if (await page.evaluate(() => !!document.querySelector('.section-sheet'))) {
-    throw new Error('A 6px wobble is a tap, not a swipe — the sheet must not open on it');
+  if (inSection.height !== home.height) {
+    throw new Error(`The bar must be the same height on both — it grew leaving Home before. ${home.height} vs ${inSection.height}`);
   }
-  await swipeUp(50);
+
+  // ---- 2. The hold ----
+  // This was a SWIPE first, and it was wrong twice over (2026-09-19): an upward drag on a bottom
+  // strip is also how you scroll and how iOS reaches its own switcher, so it fired by accident on
+  // the way in and out of the app, and never felt reliable when you did mean it. A swipe must now
+  // do nothing at all — that regression is the one worth pinning, because reinstating the gesture
+  // would be an easy "improvement" to make by mistake.
+  const box = await barBox();
+  await page.mouse.move(box.x, box.y);
+  await page.mouse.down();
+  await page.mouse.move(box.x, box.y - 60, { steps: 6 });
+  await page.mouse.up();
+  await settle(page);
+  if (await page.evaluate(() => !!document.querySelector('.section-sheet'))) {
+    throw new Error('Swiping the bar must do nothing — the gesture is a hold now');
+  }
+  await holdButton('PHASES');
   const opened = await page.evaluate(() => ({
     open: !!document.querySelector('.section-sheet'),
     hoisted: !!document.querySelector('#overlayRoot .section-sheet'),
     sections: [...document.querySelectorAll('.section-sheet .section-tab')].map(b => b.textContent.trim()),
     lit: [...document.querySelectorAll('.section-sheet .section-tab.active')].map(b => b.textContent.trim()),
   }));
-  console.log('2. after a real swipe:', JSON.stringify(opened));
-  if (!opened.open) throw new Error('Swiping up on the bar opens the section sheet');
+  console.log('2. after a real hold:', JSON.stringify(opened));
+  if (!opened.open) throw new Error('Holding the bar opens the section sheet');
   // Hoisted like every other overlay, or it renders under the bars in all eleven themed aesthetics.
   if (!opened.hoisted) throw new Error('...and it has to leave #app, or it paints under the bars');
   if (opened.sections.join('/') !== 'PROD/WELLNESS/HOBBIES/FINANCIAL/NOTES') {
@@ -98,25 +121,16 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   }
   if (opened.lit.join(',') !== 'WELLNESS') throw new Error('...with the section you are in lit: ' + JSON.stringify(opened.lit));
 
-  // ---- 3. The swipe must not also press the button it started on ----
-  // The gesture begins on a subtab button. If the click still fires, swiping up from PHASES both
-  // opens the sheet and navigates you to Phases behind it.
+  // ---- 3. The hold must not also press the button it was on ----
+  // A hold begins as a press on a subtab button. If the click still fires, holding PHASES both
+  // opens the menu AND navigates you to Phases behind it.
   await page.evaluate(() => { closeSectionSheet(); setFitnessSubtab('workouts'); });
   await settle(page);
   const before = await page.evaluate(() => NAV.fitnessSubtab);
-  const phasesBtn = await page.evaluate(() => {
-    const b = [...document.querySelectorAll('#tabbar button')].find(x => x.textContent.trim() === 'PHASES');
-    const r = b.getBoundingClientRect();
-    return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
-  });
-  await page.mouse.move(phasesBtn.x, phasesBtn.y);
-  await page.mouse.down();
-  await page.mouse.move(phasesBtn.x, phasesBtn.y - 55, { steps: 6 });
-  await page.mouse.up();
-  await settle(page);
+  await holdButton('PHASES');
   const after = await page.evaluate(() => ({ sub: NAV.fitnessSubtab, sheet: !!document.querySelector('.section-sheet') }));
-  console.log('3. swipe started on PHASES:', before, '->', JSON.stringify(after));
-  if (!after.sheet) throw new Error('The swipe should still open the sheet when it starts on a button');
+  console.log('3. held PHASES:', before, '->', JSON.stringify(after));
+  if (!after.sheet) throw new Error('Holding a subtab button opens the sections menu');
   if (after.sub !== before) throw new Error(`...without also pressing that button: went ${before} -> ${after.sub}`);
   // Worth being honest about what the check above can and cannot see: a browser does not fire click
   // when the pointer goes up outside the element it went down on, so a 55px swipe navigates nowhere

@@ -249,18 +249,19 @@ select { -webkit-appearance: none; appearance: none; background-image: linear-gr
 .section-tab .ic svg [fill]:not([fill="none"]) { fill: currentColor; }
 .section-tab .ic svg [stroke]:not([stroke="none"]) { stroke: currentColor; }
 
-/* Inside a section the bar holds that section's subtabs and the sections are hidden behind a swipe.
-   This is the only hint that the gesture exists: a short grip above the strip, the same shape a
-   drag handle has on every bottom sheet, so it reads as "there is more up here" without costing a
-   button slot or a line of instruction. */
-.tabbar.has-section-sheet::before {
-  content: ''; position: absolute; top: 3px; left: 50%; transform: translateX(-50%);
-  width: 34px; height: 3px; border-radius: 3px; background: var(--border);
-}
+/* (The grip that used to sit here went with the swipe on 2026-09-19 — a drag handle promises a
+   drag, and the gesture is a hold now.) */
 
 /* ---- The section sheet, and the hold-a-section menu ----
    Both ride .home-popup-backdrop (bottom-anchored, z-index 100, hoisted out of #app like every
    other overlay) and differ only in what they hold. */
+/* The sheet inherits nothing from .tabbar — it is hoisted to #overlayRoot — so it needs its own
+   selection guard. Without it, the finger that held the bar is still down when the sheet appears
+   under it, and the drag that follows selects whichever label it lands on. Reported 2026-09-19. */
+.section-sheet, .section-sheet-backdrop {
+  user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
 .section-sheet {
   width: 100%; max-width: 520px;
   background: var(--surface); border: 1px solid var(--border);

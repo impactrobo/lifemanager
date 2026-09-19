@@ -109,7 +109,7 @@ function defaultTransientUi() {
     goalContribFormFor: null,     // the goal whose contribution form is open, by id
     incomeSourceFormOpen: false,
     incomeSourceEditing: null,    // the income source being edited, by id
-    recurringChargeFormOpen: false,
+    recurringChargeFormOpen: null,   // null | 'charge' | 'savings' -- which list's add-form is open
     recurringChargeEditing: null, // the recurring charge being edited, by id
     customFoodFormOpen: false,
     customFoodEditId: null,
@@ -860,9 +860,13 @@ function renderTabbar() {
 // reachable, and going Home first is the cost this whole change exists to remove. Swipe up on the
 // bar and the sections rise out of it.
 //
-// A gesture rather than a button because the bar has no slot to spare, and upward from the bottom
-// edge is the one direction that means "more" on a phone. It is not the only route: the wordmark
-// still goes Home, where the sections are plain buttons, so nothing is reachable ONLY by gesture.
+// Opened by HOLDING any button on the bar. It was a swipe-up at first and that was wrong twice
+// over (reported 2026-09-19): an upward drag on a bottom strip is also how you scroll and how iOS
+// reaches its own app switcher, so it fired by accident coming in and out of the app, and it never
+// felt reliable when you did mean it. One gesture now, not two -- hold, on either kind of bar.
+//
+// It is not the only route: the house button in the header goes Home, where the sections are plain
+// buttons, so nothing is reachable ONLY by gesture.
 let SECTION_SHEET_OPEN = false;
 function openSectionSheet() { if (!SECTION_SHEET_OPEN) { SECTION_SHEET_OPEN = true; render(); } }
 function closeSectionSheet() { if (SECTION_SHEET_OPEN) { SECTION_SHEET_OPEN = false; render(); } }
@@ -894,7 +898,6 @@ function renderSectionSheet() {
 // SECTION_HOLD_MS matches the note-preview hold already in the app, so the app has ONE idea of how
 // long a long-press is rather than two that feel subtly different.
 const SECTION_HOLD_MS = 450;
-const SECTION_SWIPE_PX = 28;
 let _sectionGesture = null;
 let _sectionSuppressClick = false;
 function attachTabbarGestures() {
@@ -903,37 +906,36 @@ function attachTabbarGestures() {
   bar.onpointerdown = (e) => {
     _sectionSuppressClick = false;   // a new press starts clean, whatever the last one did
     const btn = /** @type {any} */ (e.target).closest ? /** @type {any} */ (e.target).closest('button') : null;
+    if (!btn) { _sectionGesture = null; return; }
     _sectionGesture = {
-      y: e.clientY, x: e.clientX, btn, section: btn && btn.getAttribute('data-section'),
-      swiped: false, held: false,
-      timer: null,
+      y: e.clientY, x: e.clientX, btn, section: btn.getAttribute('data-section'),
+      held: false, timer: null,
     };
-    // Hold only means something on Home, where the buttons ARE sections.
-    if (_sectionGesture.section && NAV.currentTab === 'home') {
-      _sectionGesture.timer = setTimeout(() => {
-        if (!_sectionGesture || _sectionGesture.swiped) return;
-        _sectionGesture.held = true;
-        openSectionHoldMenu(_sectionGesture.section);
-      }, SECTION_HOLD_MS);
-    }
+    _sectionGesture.timer = setTimeout(() => {
+      if (!_sectionGesture) return;
+      _sectionGesture.held = true;
+      // On Home the buttons ARE sections, so holding one offers that section's own subtabs -- the
+      // point is landing on WELLNESS / PHASES in a single gesture. Anywhere else the buttons are
+      // subtabs of where you already are, and the thing worth reaching is somewhere else entirely,
+      // so every button offers the same menu: Home, and the five sections.
+      if (_sectionGesture.section && NAV.currentTab === 'home') openSectionHoldMenu(_sectionGesture.section);
+      else openSectionSheet();
+    }, SECTION_HOLD_MS);
   };
   bar.onpointermove = (e) => {
     if (!_sectionGesture) return;
-    const dy = _sectionGesture.y - e.clientY;
-    if (Math.abs(e.clientX - _sectionGesture.x) > 10 || dy > 10) {
-      clearTimeout(_sectionGesture.timer);   // a moving finger is not a hold
-    }
-    if (!_sectionGesture.swiped && dy > SECTION_SWIPE_PX && NAV.currentTab !== 'home') {
-      _sectionGesture.swiped = true;
-      openSectionSheet();
+    // A moving finger is not a hold. Generous on the vertical axis because a thumb on a bottom
+    // strip drifts, and the whole point of dropping the swipe was to stop reading drift as intent.
+    if (Math.abs(e.clientX - _sectionGesture.x) > 12 || Math.abs(e.clientY - _sectionGesture.y) > 12) {
+      clearTimeout(_sectionGesture.timer);
     }
   };
   const end = () => {
     if (!_sectionGesture) return;
     clearTimeout(_sectionGesture.timer);
-    // A gesture that became the sheet must not ALSO fire the button it started on. The flag
-    // outlives the gesture object because the click arrives after pointerup.
-    if (_sectionGesture.swiped || _sectionGesture.held) _sectionSuppressClick = true;
+    // A hold that opened a menu must not ALSO fire the button it started on. The flag outlives the
+    // gesture object because the click arrives after pointerup.
+    if (_sectionGesture.held) _sectionSuppressClick = true;
     _sectionGesture = null;
   };
   bar.onpointerup = end;
@@ -1147,8 +1149,6 @@ function _doRender() {
   // Home always fills it now (the five sections), and a section with no subtabs of its own still
   // hides rather than painting a blank strip.
   tabbarEl.classList.toggle('hidden', !tabbarHtml.trim());
-  // On Home the bar IS the sections, so there is nothing to swipe up for.
-  tabbarEl.classList.toggle('has-section-sheet', NAV.currentTab !== 'home');
   attachTabbarGestures();
   document.getElementById('backBtn').classList.toggle('disabled', NAV_HISTORY.length === 0);
   // Forward is always shown alongside Back now (not hidden even on first launch) — just dimmed

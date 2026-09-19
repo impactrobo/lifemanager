@@ -809,29 +809,33 @@ function renderRecurringRow(r) {
 }
 function editRecurringCharge(id) { UI.recurringChargeEditing = id; render(); }
 function closeRecurringChargeEdit() { UI.recurringChargeEditing = null; render(); }
-function renderRecurringChargeControls() {
-  if (!UI.recurringChargeFormOpen) {
-    return `<button class="btn btn-block" onclick="openRecurringChargeForm()"><span class="ic" style="margin-right:6px;">${icon('pencil')}</span>+ ADD CHARGE</button>`;
+// `kind` is which LIST the button sits under: 'savings' pre-ticks the savings flag and 'charge'
+// leaves it clear, so the thing you add lands in the section you asked from. The flag itself stays
+// editable in the form either way -- the button sets the default, it doesn't lock the answer.
+function renderRecurringChargeControls(kind) {
+  const savings = kind === 'savings';
+  if (UI.recurringChargeFormOpen !== (savings ? 'savings' : 'charge')) {
+    return `<button class="btn btn-block" onclick="openRecurringChargeForm('${savings ? 'savings' : 'charge'}')"><span class="ic" style="margin-right:6px;">${icon('pencil')}</span>+ ADD ${savings ? 'SAVINGS' : 'CHARGE'}</button>`;
   }
   return `
     <div class="field-row">
-      <label class="field"><span class="lbl">Name</span><input type="text" id="recName" placeholder="e.g. Rent"></label>
+      <label class="field"><span class="lbl">Name</span><input type="text" id="recName" placeholder="${savings ? 'e.g. Roth IRA' : 'e.g. Rent'}"></label>
       <label class="field"><span class="lbl">Amount</span><input type="number" step="0.01" inputmode="decimal" id="recAmount" placeholder="0.00"></label>
     </div>
-    <label class="field"><span class="lbl">Category</span><select id="recCategory">${budgetCategoryOptions('Housing')}</select></label>
+    <label class="field"><span class="lbl">Category</span><select id="recCategory">${budgetCategoryOptions(savings ? 'Savings' : 'Housing')}</select></label>
     <label style="display:flex; align-items:center; gap:8px; font-size:12px; color:var(--savings); cursor:pointer; margin-bottom:10px;">
-      <input type="checkbox" id="recIsSavings">
+      <input type="checkbox" id="recIsSavings" ${savings ? 'checked' : ''}>
       Savings / Investment — money you're paying yourself, not spending
     </label>
     <div class="row" style="gap:8px;">
-      <button class="btn btn-primary" style="flex:1;" onclick="saveRecurringCharge()">SAVE CHARGE</button>
+      <button class="btn btn-primary" style="flex:1;" onclick="saveRecurringCharge()">SAVE ${savings ? 'SAVINGS' : 'CHARGE'}</button>
       <button class="btn btn-ghost" onclick="closeRecurringChargeForm()">CANCEL</button>
     </div>`;
 }
-function openRecurringChargeForm() { UI.recurringChargeFormOpen = true; render(); }
-function closeRecurringChargeForm() { UI.recurringChargeFormOpen = false; render(); }
+function openRecurringChargeForm(kind) { UI.recurringChargeFormOpen = kind === 'savings' ? 'savings' : 'charge'; render(); }
+function closeRecurringChargeForm() { UI.recurringChargeFormOpen = null; render(); }
 function saveRecurringCharge() {
-  if (addRecurringCharge()) UI.recurringChargeFormOpen = false;
+  if (addRecurringCharge()) UI.recurringChargeFormOpen = null;
   render();
 }
 // The due day + optional reminder, split out from renderRecurringRow() since it's the one part of
@@ -967,8 +971,14 @@ function renderBudgetHome() {
 function renderBudgetRecurring() {
   const incomeList = STATE.budget.recurringIncome;
   const incomeTotal = recurringIncomeMonthlyTotal();
-  const list = STATE.budget.recurring;
-  const total = budgetRecurringTotal();
+  // A savings-flagged charge is NOT listed under RECURRING CHARGES (2026-09-19). It was, and it
+  // read as a bill with a badge on it -- while the savings section right above already exists and
+  // says what it is far more plainly. Same records, same store, same isSavings flag; only which
+  // list shows them moved. The totals were always split this way (budgetRecurringExpenseTotal vs
+  // budgetRecurringSavingsTotal), so the bar's maths is untouched.
+  const list = STATE.budget.recurring.filter(r => !r.isSavings);
+  const savingsList = STATE.budget.recurring.filter(r => r.isSavings);
+  const total = budgetRecurringExpenseTotal();
   return `<div class="screen">
     <div class="section-title">Recurring</div>
     <div style="font-size:12px; color:var(--text-dim); margin:6px 0 14px;">Everything steady, month to month — income sources, savings/investment targets, and the bills and subscriptions that reserve a slice of your budget bar automatically.</div>
@@ -988,6 +998,19 @@ function renderBudgetRecurring() {
 
     ${renderSavingsPlanSection()}
 
+    ${/* The savings charges themselves, under the planning figure they are working toward — which
+          is the section that already says "savings", so the badge on each row stops being the only
+          thing distinguishing them from rent. */ ''}
+    <div class="row" style="margin:18px 0 8px;">
+      <div class="subtle-label" style="margin-bottom:0;">RECURRING SAVINGS</div>
+      <span class="mono" style="font-size:13px; font-weight:700; color:var(--savings);">${fmtMoney(budgetRecurringSavingsTotal())}/mo</span>
+    </div>
+    <div class="panel">
+      ${renderRecurringChargeControls('savings')}
+      <div class="entry-list" style="margin-top:12px;">${savingsList.length
+        ? savingsList.map(renderRecurringRow).join('')
+        : `<div style="font-size:11px; color:var(--text-faint);">Nothing recurring into savings yet — money you pay yourself every month goes here.</div>`}</div>
+    </div>
 
     <div class="row" style="margin:18px 0 8px;">
       <div class="subtle-label" style="margin-bottom:0;">RECURRING CHARGES</div>
