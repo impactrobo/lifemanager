@@ -162,6 +162,10 @@ let VIEW = {
   // means nothing picked yet, which is the state where both plan chips are grey.
   composePhaseId: null,
   composeTab: 'workouts',
+  // FINANCIAL's two sub-navs. Per-screen presentation: which tab you were reading is not "where you
+  // are" — the bottom bar answers that — and not a fact about the data.
+  budgetRecurringTab: 'income',
+  budgetOverviewTab: 'incidentals',
   // Which exercise blocks are folded shut on a session screen, keyed 'workoutId:entryKey'. Per view
   // and never saved -- this is "what's on my screen right now", no more a fact about the workout
   // than a scroll position is. See exBlockCollapsed() in app-train-log.js.

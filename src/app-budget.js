@@ -25,6 +25,19 @@ function budgetGoToMonth(delta) {
   render();
 }
 function setBudgetSubtab(t) { NAV.budgetSubtab = t; render(); }
+// FINANCIAL's own sub-navs, matching what the WELLNESS screens have always done. Per-screen
+// presentation, so they live in VIEW: which tab you were reading is not "where you are" (the bottom
+// bar answers that) and not a fact about the data.
+const BUDGET_RECURRING_TABS = [['income', 'INCOME'], ['charges', 'CHARGES'], ['savings', 'SAVE & INVEST']];
+const BUDGET_OVERVIEW_TABS = [['incidentals', 'INCIDENTALS'], ['savings', 'SAVINGS'], ['goals', 'GOALS']];
+function budgetRecurringTab() {
+  return BUDGET_RECURRING_TABS.some(([k]) => k === VIEW.budgetRecurringTab) ? VIEW.budgetRecurringTab : 'income';
+}
+function setBudgetRecurringTab(t) { VIEW.budgetRecurringTab = t; render(); }
+function budgetOverviewTab() {
+  return BUDGET_OVERVIEW_TABS.some(([k]) => k === VIEW.budgetOverviewTab) ? VIEW.budgetOverviewTab : 'incidentals';
+}
+function setBudgetOverviewTab(t) { VIEW.budgetOverviewTab = t; render(); }
 
 function budgetIncomeEntriesForMonth(key) { return STATE.budget.incomeLog[key] || []; }
 function budgetIncidentalsForMonth(key) { return STATE.budget.incidentals[key] || []; }
@@ -966,6 +979,7 @@ function renderBudgetHome() {
   // Both directions in the header, because the list below now holds both. Showing only the "out"
   // total over a list containing income reads as a wrong sum rather than a partial one.
   const extraIncomeTotal = budgetIncomeEntriesForMonth(key).reduce((n, e) => n + (Number(e.amount) || 0), 0);
+  const overviewTab = budgetOverviewTab();
 
   // THIS MONTH'S FINANCIALS leads (2026-09-18). It is the answer the screen exists to give, and it
   // used to sit third, under two forms — so opening FINANCIAL showed you a pair of empty inputs and
@@ -984,19 +998,35 @@ function renderBudgetHome() {
       </div>
     </div>
 
+    ${/* The bar does NOT move into a tab. It is the answer the screen exists to give, so it stays
+          above the strip and the strip decides what you do UNDER it. */ ''}
     <div class="subtle-label" style="margin-bottom:8px;">THIS MONTH'S FINANCIALS</div>
     <div class="panel">${renderBudgetBar(key)}</div>
 
-    ${renderSavingsProgressSection(key)}
+    ${subNav(BUDGET_OVERVIEW_TABS.map(([key2, label]) =>
+      `<button class="${overviewTab === key2 ? 'active' : ''}" onclick="setBudgetOverviewTab('${key2}')">${label}</button>`).join(''))}
 
-    <div class="subtle-label" style="margin:18px 0 8px;">INCIDENTALS</div>
-    <div class="panel">
-      ${renderBudgetIncidentalControls()}
-      ${/* One container, but two jobs inside it: add above the line, read below it. */ ''}
-      <div class="divider" style="margin:14px 0 2px;"></div>
-      ${renderBudgetLedgerGroup('income', key)}
-      ${renderBudgetLedgerGroup('charge', key)}
-    </div>
+    ${overviewTab === 'incidentals' ? `
+      <div class="panel" style="margin-top:14px;">
+        ${renderBudgetIncidentalControls()}
+        ${/* One container, but two jobs inside it: add above the line, read below it. */ ''}
+        <div class="divider" style="margin:14px 0 2px;"></div>
+        ${renderBudgetLedgerGroup('income', key)}
+        ${renderBudgetLedgerGroup('charge', key)}
+      </div>` : ''}
+
+    ${overviewTab === 'savings' ? (renderSavingsProgressSection(key)
+      || `<div style="margin-top:14px;">${emptyState('No recurring savings yet — add one under RECURRING → SAVE &amp; INVEST and the monthly progress shows up here.')}</div>`) : ''}
+
+    ${/* GOALS here so a goal can be funded without leaving the month you are looking at. The same
+          cards as the GOALS subtab, minus ADD GOAL: this is where you act on the goals you have,
+          that is where you decide which goals exist. */ ''}
+    ${overviewTab === 'goals' ? `
+      <div style="margin-top:14px;" class="stack">
+        ${STATE.budget.goals.length
+          ? STATE.budget.goals.map(renderGoalCard).join('')
+          : emptyState('No goals yet — add one under GOALS, then fund it from here.')}
+      </div>` : ''}
   </div>`;
 }
 function renderBudgetRecurring() {
@@ -1010,49 +1040,56 @@ function renderBudgetRecurring() {
   const list = STATE.budget.recurring.filter(r => !r.isSavings);
   const savingsList = STATE.budget.recurring.filter(r => r.isSavings);
   const total = budgetRecurringExpenseTotal();
+  // Three tabs rather than four stacked sections (2026-09-19). They were all on one page and it was
+  // a long scroll of things you were not looking at; the WELLNESS screens have used a sub-nav for
+  // this since the start. Asked for as "have as much as possible in one screen".
+  //
+  // The totals sit ABOVE the strip and are always all three, which is the part that makes tabbing
+  // cost nothing: you can still read what every section holds without visiting it, so the strip
+  // only decides what you EDIT. That also replaces the explanatory paragraph that used to sit here
+  // -- three live numbers say what the screen is for better than two lines of prose.
+  const tab = budgetRecurringTab();
+  const savingsTotal = budgetRecurringSavingsTotal();
+  const totalRow = (label, value, color, key) => `
+    <button class="rec-total ${tab === key ? 'active' : ''}" onclick="setBudgetRecurringTab('${key}')">
+      <span class="rec-total-label">${label}</span>
+      <span class="mono rec-total-value"${color ? ` style="color:${color};"` : ''}>${fmtMoney(value)}</span>
+    </button>`;
   return `<div class="screen">
     <div class="section-title">Recurring</div>
-    <div style="font-size:12px; color:var(--text-dim); margin:6px 0 14px;">Everything steady, month to month — income sources, savings/investment targets, and the bills and subscriptions that reserve a slice of your budget bar automatically.</div>
+    <div class="rec-totals">
+      ${totalRow('IN', incomeTotal, 'var(--good)', 'income')}
+      ${totalRow('OUT', total, null, 'charges')}
+      ${totalRow('SAVED', savingsTotal, 'var(--savings)', 'savings')}
+    </div>
+    ${subNav(BUDGET_RECURRING_TABS.map(([key, label]) =>
+      `<button class="${tab === key ? 'active' : ''}" onclick="setBudgetRecurringTab('${key}')">${label}</button>`).join(''))}
 
-    ${/* One section, like INCIDENTALS: the adder on top, the sources under it. It was an ADD form
-          panel and a separate RECURRING INCOME list, which split one subject across two headings. */ ''}
-    <div class="row" style="margin-bottom:8px;">
-      <div class="subtle-label" style="margin-bottom:0;">INCOME SOURCES</div>
-      <span class="mono" style="font-size:13px; font-weight:700;">${fmtMoney(incomeTotal)}/mo</span>
-    </div>
-    <div class="panel">
-      ${renderIncomeSourceControls()}
-      <div class="entry-list" style="margin-top:12px;">${incomeList.length
-        ? incomeList.map(renderRecurringIncomeRow).join('')
-        : `<div style="font-size:11px; color:var(--text-faint);">No recurring income sources yet — add a paycheck or other steady source above.</div>`}</div>
-    </div>
+    ${tab === 'income' ? `
+      <div class="panel" style="margin-top:14px;">
+        ${renderIncomeSourceControls()}
+        <div class="entry-list" style="margin-top:12px;">${incomeList.length
+          ? incomeList.map(renderRecurringIncomeRow).join('')
+          : `<div style="font-size:11px; color:var(--text-faint);">No recurring income sources yet — add a paycheck or other steady source above.</div>`}</div>
+      </div>` : ''}
 
-    ${renderSavingsPlanSection()}
+    ${tab === 'charges' ? `
+      <div class="panel" style="margin-top:14px;">
+        ${renderRecurringChargeControls()}
+        <div class="entry-list" style="margin-top:12px;">${list.length
+          ? list.map(renderRecurringRow).join('')
+          : `<div style="font-size:11px; color:var(--text-faint);">No recurring charges yet — add your rent, bills and subscriptions above.</div>`}</div>
+      </div>` : ''}
 
-    <div class="row" style="margin:18px 0 8px;">
-      <div class="subtle-label" style="margin-bottom:0;">RECURRING CHARGES</div>
-      <span class="mono" style="font-size:13px; font-weight:700;">${fmtMoney(total)}/mo</span>
-    </div>
-    <div class="panel">
-      ${renderRecurringChargeControls()}
-      <div class="entry-list" style="margin-top:12px;">${list.length
-        ? list.map(renderRecurringRow).join('')
-        : `<div style="font-size:11px; color:var(--text-faint);">No recurring charges yet — add your rent, bills and subscriptions above.</div>`}</div>
-    </div>
-
-    ${/* Savings last (2026-09-19). The screen now reads in the order the money moves: what comes
-          in, what has to go out, and what is left going to you. It sat directly under the planning
-          figure at first, which put the most optional section in the middle of the two obligatory
-          ones. */ ''}
-    <div class="row" style="margin:18px 0 8px;">
-      <div class="subtle-label" style="margin-bottom:0;">RECURRING SAVINGS</div>
-      <span class="mono" style="font-size:13px; font-weight:700; color:var(--savings);">${fmtMoney(budgetRecurringSavingsTotal())}/mo</span>
-    </div>
-    <div class="panel">
-      ${renderRecurringChargeControls('savings')}
-      <div class="entry-list" style="margin-top:12px;">${savingsList.length
-        ? savingsList.map(renderRecurringRow).join('')
-        : `<div style="font-size:11px; color:var(--text-faint);">Nothing recurring into savings yet — money you pay yourself every month goes here.</div>`}</div>
-    </div>
+    ${tab === 'savings' ? `
+      ${/* The planning calculator stays with the savings lines rather than floating above all
+            three tabs: it is a target for THIS section and reads as one here. */ ''}
+      ${renderSavingsPlanSection()}
+      <div class="panel" style="margin-top:14px;">
+        ${renderRecurringChargeControls('savings')}
+        <div class="entry-list" style="margin-top:12px;">${savingsList.length
+          ? savingsList.map(renderRecurringRow).join('')
+          : `<div style="font-size:11px; color:var(--text-faint);">Nothing recurring into savings yet — money you pay yourself every month goes here.</div>`}</div>
+      </div>` : ''}
   </div>`;
 }

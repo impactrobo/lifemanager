@@ -90,7 +90,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     switchTab('budget'); setBudgetSubtab('recurring');
   });
   await settle(page);
-  await page.evaluate(() => openRecurringChargeForm());   // behind + ADD CHARGE since 2026-09-18
+  await page.evaluate(() => { setBudgetRecurringTab('charges'); openRecurringChargeForm(); });  // behind the CHARGES tab + ADD CHARGE
   await settle(page);
   await page.fill('#recName', 'Roth IRA Auto-Invest');
   await page.fill('#recAmount', '500');

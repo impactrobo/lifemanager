@@ -30,7 +30,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   console.log('recurringIncomeMonthlyTotal before adding anything:', before);
 
   // 2. Add a weekly income source via the actual form fields, like a real user would
-  await page.evaluate(() => openIncomeSourceForm()); await settle(page); /* the form lives behind + ADD SOURCE since 2026-09-18 */ await page.fill('#incName', 'Test Weekly Job');
+  await page.evaluate(() => { setBudgetRecurringTab('income'); openIncomeSourceForm(); }); await settle(page); await page.fill('#incName', 'Test Weekly Job');
   await page.fill('#incAmount', '500');
   await page.selectOption('#incFrequency', 'weekly');
   await page.evaluate(() => saveIncomeSource());

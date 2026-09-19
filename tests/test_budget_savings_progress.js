@@ -28,14 +28,14 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   await settle(page);
 
   // 1. Give the month a real income figure so percentages aren't all zero
-  await page.evaluate(() => openIncomeSourceForm()); await settle(page); /* the form lives behind + ADD SOURCE since 2026-09-18 */ await page.fill('#incName', 'Savings Progress Test Income');
+  await page.evaluate(() => { setBudgetRecurringTab('income'); openIncomeSourceForm(); }); await settle(page); await page.fill('#incName', 'Savings Progress Test Income');
   await page.fill('#incAmount', '4000');
   await page.selectOption('#incFrequency', 'monthly');
   await page.evaluate(() => saveIncomeSource());
   await settle(page);
 
   // 2. Add a recurring charge flagged isSavings via the real form
-  await page.evaluate(() => openRecurringChargeForm()); await settle(page); /* behind + ADD CHARGE since 2026-09-18 */ await page.fill('#recName', 'Test Index Fund');
+  await page.evaluate(() => { setBudgetRecurringTab('charges'); openRecurringChargeForm(); }); await settle(page); await page.fill('#recName', 'Test Index Fund');
   await page.fill('#recAmount', '400');
   await page.check('#recIsSavings');
   await page.evaluate(() => saveRecurringCharge());
@@ -54,8 +54,10 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (beforeCompleted !== 0) throw new Error(`Expected 0 completed before checkoff, got ${beforeCompleted}`);
   if (plannedTotal < 400) throw new Error(`Expected planned total to include the new $400 charge, got ${plannedTotal}`);
 
-  // 4. Go to the home/overview subtab where the SAVINGS PROGRESS panel + bar live
-  await page.evaluate(() => setBudgetSubtab('overview'));
+  // 4. Go to the overview subtab where the SAVINGS PROGRESS panel + bar live. The bar sits above
+  // OVERVIEW's own strip and is always on screen; the progress panel moved onto its SAVINGS tab
+  // when that strip arrived (2026-09-19), so this has to ask for it.
+  await page.evaluate(() => { setBudgetSubtab('overview'); setBudgetOverviewTab('savings'); });
   await settle(page);
 
   const beforeFillCount = await page.evaluate(() => document.querySelectorAll('.budget-bar-savings-fill').length);
@@ -93,7 +95,10 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // 7. Persists across reload
   await page.reload();
   await settle(page);
-  await page.evaluate(() => switchTab('budget'));
+  // The tab has to be re-selected: it lives in VIEW, which a reload resets by design — which tab
+  // you were reading is presentation, not data, and is exactly the kind of thing that should not
+  // survive a relaunch. The COMPLETIONS surviving is what this step is actually about.
+  await page.evaluate(() => { switchTab('budget'); setBudgetOverviewTab('savings'); });
   await settle(page);
   const persisted = await page.evaluate((k) => (STATE.budget.savingsCompletions[k] || []), key);
   console.log('savingsCompletions after reload:', persisted);

@@ -962,6 +962,23 @@ button.hit-mark { padding: 0; background: none; font: inherit; color: inherit; c
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
   border-left: 3px solid var(--border); padding: 12px 13px;
 }
+/* ---- FINANCIAL: the three recurring totals, above the tabs ----
+   Always all three, whichever tab is open, so tabbing costs you no information — the strip decides
+   what you EDIT, not what you can see. Each is also a shortcut to its own tab, because a number you
+   are reading is the most natural thing to press when you want to change it. */
+.rec-totals { display: flex; gap: 8px; margin: 14px 0 2px; }
+.rec-total {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px;
+  background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 8px 10px; text-align: left;
+}
+.rec-total.active { border-color: var(--accent); }
+.rec-total-label {
+  font-family: var(--font-head); font-size: 9px; font-weight: 800;
+  letter-spacing: 0.08em; color: var(--text-faint);
+}
+.rec-total-value { font-size: 13px; font-weight: 700; color: var(--text); }
+
 /* ---- COMPOSE: pick a phase, then fill in its week ----
    The two plan chips do not exist until a phase is chosen — they aren't greyed, they're absent.
    Nothing on the picker screen is inert, which is what keeps it calm.

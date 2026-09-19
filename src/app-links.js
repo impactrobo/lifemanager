@@ -71,7 +71,15 @@ const LINKABLE_TYPES = {
     all: () => STATE.budget.recurring,
     title: c => c.name || 'Untitled charge',
     subtitle: c => fmtMoney(c.amount),
-    open: () => { ensureTab('budget'); setBudgetSubtab('recurring'); },
+    // RECURRING is three tabs since 2026-09-19, so landing on the screen is no longer landing on
+    // the charge: a savings line lives under SAVE & INVEST and a bill under CHARGES. Opening one
+    // has to pick the tab that actually contains it, which is what test_navigate_to checks by
+    // asserting the entity is on screen rather than just the section.
+    open: (c) => {
+      ensureTab('budget');
+      setBudgetSubtab('recurring');
+      setBudgetRecurringTab(c && c.isSavings ? 'savings' : 'charges');
+    },
   },
   goal: {
     label: 'Goal', section: 'budget',
