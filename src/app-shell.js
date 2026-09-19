@@ -106,6 +106,7 @@ function defaultTransientUi() {
     // Which of FINANCIAL's two ledgers are expanded, and which add-form / row-editor is open.
     // All transient: navigating away closes them, and none is a fact about the data.
     budgetLedgerOpen: { income: false, charge: false },
+    goalEditing: null,          // the goal whose fields are being edited, by id
     goalContribFormFor: null,     // the goal whose contribution form is open, by id
     incomeSourceFormOpen: false,
     incomeSourceEditing: null,    // the income source being edited, by id

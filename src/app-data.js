@@ -549,6 +549,7 @@ function incomeFrequencyOptions(selected) {
 }
 const BUDGET_CATEGORIES = {
   Savings:       '#5FE0A8',
+  Investing:     '#3FBF8F',
   Housing:       '#8FD3FF',
   Utilities:     '#FFD966',
   Insurance:     '#B8B8FF',
@@ -565,6 +566,17 @@ const BUDGET_CATEGORIES = {
 function budgetCategoryColor(c) { return BUDGET_CATEGORIES[c] || BUDGET_CATEGORIES.Other; }
 function budgetCategoryOptions(selected) {
   return Object.keys(BUDGET_CATEGORIES).map(c => `<option value="${c}" ${c===selected?'selected':''}>${c}</option>`).join('');
+}
+// A recurring SAVINGS line answers a narrower question than a charge does -- money you pay yourself
+// is either put aside or put to work, and "Groceries" is not one of the answers. A subset of
+// BUDGET_CATEGORIES rather than a separate list, so the colour, the chip and every existing
+// category consumer keep working with no special case (2026-09-19).
+const SAVINGS_CATEGORIES = ['Savings', 'Investing'];
+function savingsCategoryOptions(selected) {
+  // An older line could be filed under anything; keep its current value selectable rather than
+  // silently re-filing it the moment its editor opens.
+  const keys = SAVINGS_CATEGORIES.concat(selected && SAVINGS_CATEGORIES.indexOf(selected) < 0 ? [selected] : []);
+  return keys.map(c => `<option value="${c}" ${c===selected?'selected':''}>${c}</option>`).join('');
 }
 function budgetCategoryChip(cat) {
   const c = cat && BUDGET_CATEGORIES[cat] ? cat : 'Other';
