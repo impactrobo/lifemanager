@@ -607,4 +607,23 @@ found nothing wrong, twice — which is exactly why it needed your eyes.
       changed at all beyond the extra height.
 - [ ] Midday, with rows above and below the NOW card: still reads correctly, nothing doubled up.
 
+## Notes editor: the stray `]]`, and converting a blank note (2026-09-20)
+Both reported while working this list. The `[[ ]]` button drops a **closed** pair in and parks the
+caret inside it; `entryTokenAtCaret()` only ever looks at text *before* the caret, so that closer
+was never part of the typed query and the replacement brought its own — `[[Title]]]]`. Typing `[[`
+by hand never showed it, which is why the report names the button. Separately, converting an empty
+note stopped on a review screen with nothing on it to review.
+- [ ] **The `[[ ]]` button, then pick a note.** Exactly one `]]`, and the link works when you save.
+      This is the report.
+- [ ] Type `[[` **by hand** in the middle of an existing sentence and pick a note — the words after
+      the caret must still be there. The fix consumes a closer *if there is one*, and the failure
+      mode of getting that wrong is eating two of your characters.
+- [ ] Use the button **mid-sentence** too, not just on an empty line.
+- [ ] **Convert a blank note** (named but nothing typed) to another type: it converts straight away
+      with a toast, no review screen. Take the **UNDO** and confirm it really goes back.
+- [ ] **Convert a note with content** — the review screen still appears, and nothing is written
+      until you confirm it. The shortcut must only skip a review that would have been empty.
+- [ ] A note whose lines all land in **UNSORTED** still gets reviewed. Unsorted is content, and it's
+      the pile worth looking at.
+
 ## Add future items below as new features ship

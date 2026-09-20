@@ -97,6 +97,15 @@ function planEntryConvert(e, toType) {
   });
   return { toType, buckets, unsorted };
 }
+// Is there anything for the review screen to show? Derived from the PLAN rather than from the
+// entry, so it can never disagree with what the screen would actually render: if every bucket and
+// the unsorted pile are empty, the review is a list of empty headings and a button.
+function convertPlanIsEmpty(plan) {
+  if (!plan) return true;
+  if ((plan.unsorted || []).length) return false;
+  const buckets = plan.buckets || {};
+  return !Object.keys(buckets).some(k => (buckets[k] || []).length);
+}
 // Every field a plan could put something in, for the review screen's MOVE / PLACE pickers. 'body'
 // and 'entries' are included where they mean something, because "put this in the intro" and "make
 // this a hub member" are both real destinations a person might want.

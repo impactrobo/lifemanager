@@ -357,6 +357,28 @@ Newest first. Keep this reasonably current so a fresh session can see what alrea
 without re-reading the whole diff history. Roughly grouped: this project spent early Sept 2026
 on an architecture split + a large wave of Maximalist aesthetics.
 
+- **Notes editor: a stray `]]`, and a review screen with nothing on it (2026-09-20).** Two reports
+  from the same pass through the testing checklist.
+  - *"there is the [[]] button to link, which works, but after selecting the note to link, you get
+    another ]] on the back end of the line."* `insertEntryToken()` drops a **closed** pair in and
+    parks the caret between the halves, so a phone keyboard doesn't have to produce four brackets.
+    But `entryTokenAtCaret()` only ever scans text BEFORE the caret — a `]]` to the right of it is
+    by definition not part of `ac.query` — so `acceptEntryAutocomplete()` sliced the remainder
+    starting at that leftover and then added a closer of its own. Typing `[[` by hand never showed
+    it, because then there is nothing to double up, which is exactly why the report names the
+    BUTTON. Now the replacement consumes a `]]` **if one is sitting there**; the conditional is the
+    point, since always skipping two characters eats the person's own text on the hand-typed path.
+  - *"converting between types with a blank note I don't think needs confirmation. The toast think
+    is enough."* Convert is pick-a-type then review-where-every-line-landed. On an empty note the
+    review was a column of empty headings above a CONVERT button — a confirmation of nothing.
+    `chooseConvertType()` now applies immediately when `convertPlanIsEmpty(plan)`, and the toast's
+    UNDO (which already restores a full snapshot) is the safety net. Emptiness is derived from the
+    PLAN, not the entry, so it can never disagree with what the screen would have rendered — and
+    the `unsorted` pile counts as content, which is the case that makes buckets-only checks wrong.
+  - `tests/test_entry_editor.js` drives the real textarea rather than the model, because the bug
+    only exists in the button → caret → accept path. 5/5 mutations caught — two of which initially
+    survived and were real gaps in the test, not the fix: nothing typed `[[` by hand with text
+    after the caret, and no plan landed wholly in `unsorted`.
 - **A panel's padding has to clear the edge it paints inside itself (2026-09-20).** Reported on
   Hedge: *"the scheduled item is hanging outside the bounds of the container"* — Home's day pane at
   9:50pm, with the NOW card as the last row.

@@ -723,8 +723,14 @@ function chooseConvertType(toType) {
   if (!e) return;
   c.toType = toType;
   c.plan = planEntryConvert(e, toType);
-  c.step = 'review';
   c.moving = null;
+  // An empty note has nothing to review: the screen would be a column of empty headings and a
+  // CONVERT button, asking you to confirm a placement of nothing. Convert on the spot and let the
+  // toast's UNDO be the safety net -- which is exactly what it is for, and what it already does
+  // for the reviewed path. Asked for 2026-09-20: "converting between types with a blank note I
+  // don't think needs confirmation. The toast thing is enough."
+  if (convertPlanIsEmpty(c.plan)) { applyConvert(); return; }
+  c.step = 'review';
   render();
 }
 function backToConvertType() {
@@ -1194,7 +1200,14 @@ function acceptEntryAutocomplete(index) {
   const title = chosen ? chosen.title : ac.query.trim();
   if (!title) return;
   const before = ta.value.slice(0, ac.start);
-  const after = ta.value.slice(ac.start + 2 + ac.query.length);
+  // Consume a "]]" the token already has. entryTokenAtCaret() only ever looks BEFORE the caret, so
+  // a closing pair to the RIGHT of it is not part of ac.query -- and the [[ ]] toolbar button drops
+  // in a CLOSED pair and parks the caret inside it. Without this the replacement brings its own
+  // closer and you get "[[Title]]]]", reported 2026-09-20 as "you get another ]] on the back end of
+  // the line". Typing "[[" by hand leaves nothing to consume, so this is a no-op on that path.
+  let afterAt = ac.start + 2 + ac.query.length;
+  if (ta.value.slice(afterAt, afterAt + 2) === ']]') afterAt += 2;
+  const after = ta.value.slice(afterAt);
   const insert = '[[' + title + ']]';
   ta.value = before + insert + after;
   const caret = before.length + insert.length;
