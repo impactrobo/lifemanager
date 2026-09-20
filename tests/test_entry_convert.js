@@ -302,13 +302,31 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (backStep !== 'type') throw new Error('Review must be able to go back to the type choice');
 
   // Template fields render, and an empty one is a "+ Add" rather than a blank box.
-  await page.evaluate(() => { closeConvert(); const e = liveEntryById('plain'); e.type = 'journal'; e.fields = { mood: 'flat' }; touchEntry(e); saveState(); openEntry('plain'); });
+  //
+  // Split across the two modes since 2026-09-20, when fields gained a read rendering: "+ Add mood"
+  // is an EDITING affordance, so it belongs behind the pencil with everything else you can type
+  // into. Read mode shows only what has been written — otherwise a converted note is a column of
+  // empty prompts under a note you were trying to read. Both halves are asserted, because the
+  // discoverability the "+ Add" buttons provide still has to exist SOMEWHERE.
+  await page.evaluate(() => { closeConvert(); const e = liveEntryById('plain'); e.type = 'journal'; e.fields = { mood: 'flat' }; touchEntry(e); saveState(); openEntry('plain'); setEntryMode('view'); });
+  await settle(page);
+  const read = await page.evaluate(() => ({
+    fields: document.querySelectorAll('.tmpl-field').length,
+    adds: document.querySelectorAll('.tmpl-add').length,
+    boxes: document.querySelectorAll('.tmpl-field textarea').length,
+  }));
+  console.log('template fields, read mode:', JSON.stringify(read));
+  if (read.fields !== 1) throw new Error(`Read mode shows only the filled field, got ${read.fields}`);
+  if (read.adds) throw new Error(`Read mode must not offer "+ Add"; it is an editing affordance (got ${read.adds})`);
+  if (read.boxes) throw new Error('Read mode must not render an edit box');
+
+  await page.evaluate(() => setEntryMode('edit'));
   await settle(page);
   const tmpl = await page.evaluate(() => ({
     filled: document.querySelectorAll('.tmpl-field').length,
     adds: Array.from(document.querySelectorAll('.tmpl-add')).map(b => b.textContent.trim()),
   }));
-  console.log('template fields:', JSON.stringify(tmpl));
+  console.log('template fields, edit mode:', JSON.stringify(tmpl));
   if (tmpl.filled !== 1) throw new Error(`Only the filled field renders as a field, got ${tmpl.filled}`);
   if (tmpl.adds.length !== 3) throw new Error(`The other three journal fields show as "+ Add", got ${JSON.stringify(tmpl.adds)}`);
   if (!tmpl.adds.every(t => /^\+ Add /.test(t))) throw new Error('Empty fields must never render as blank space');

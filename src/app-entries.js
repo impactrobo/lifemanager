@@ -45,25 +45,32 @@ const ENTRY_TYPES = {
 };
 // How each template field is written and shown. `lines` means one item per line and gets a
 // multi-line box; `text` is a single value; `select` is a fixed choice.
+// `list` is a READ-MODE hint: 'ordered' renders the lines as <ol>, 'bullet' as <ul>, absent leaves
+// them as prose paragraphs. It is per FIELD and not per `kind` on purpose — `steps`, `packing` and
+// `draft` are all `lines`, but a draft is prose and bulleting it would be wrong. Asked for
+// 2026-09-20 as "have Steps automatically be a numbered list, and as listed ingredients a bulleted
+// list"; it generalised because template fields had no read rendering at all.
 const ENTRY_FIELD_META = {
   mood:          { label: 'Mood',        kind: 'text' },
-  notes:         { label: 'Notes',       kind: 'lines' },
+  notes:         { label: 'Notes',       kind: 'lines' },                     // prose
   highlight:     { label: 'Highlight',   kind: 'text' },
-  gratitude:     { label: 'Gratitude',   kind: 'lines' },
+  gratitude:     { label: 'Gratitude',   kind: 'lines', list: 'bullet' },
   status:        { label: 'Status',      kind: 'select', options: ['idea', 'draft', 'done'] },
-  outline:       { label: 'Outline',     kind: 'lines' },
-  draft:         { label: 'Draft',       kind: 'lines' },
+  outline:       { label: 'Outline',     kind: 'lines', list: 'bullet' },
+  draft:         { label: 'Draft',       kind: 'lines' },                     // prose
   trip:          { label: 'Trip',        kind: 'text' },
-  places:        { label: 'Places',      kind: 'lines' },
-  todo:          { label: 'To do',       kind: 'lines' },
-  packing:       { label: 'Packing',     kind: 'lines' },
-  dayLog:        { label: 'Day log',     kind: 'lines' },
+  places:        { label: 'Places',      kind: 'lines', list: 'bullet' },
+  todo:          { label: 'To do',       kind: 'lines', list: 'bullet' },
+  packing:       { label: 'Packing',     kind: 'lines', list: 'bullet' },
+  dayLog:        { label: 'Day log',     kind: 'lines' },                     // prose
   servings:      { label: 'Servings',    kind: 'text' },
   time:          { label: 'Time',        kind: 'text' },
-  ingredientText:{ label: 'Ingredients, as written', kind: 'lines' },
-  steps:         { label: 'Steps',       kind: 'lines' },
+  ingredientText:{ label: 'Ingredients, as written', kind: 'lines', list: 'bullet' },
+  steps:         { label: 'Steps',       kind: 'lines', list: 'ordered' },
   source:        { label: 'Source',      kind: 'text' },
   rating:        { label: 'Rating',      kind: 'text' },
+  // Deliberately no list: unsorted is "nothing claimed this", and dressing it up as a tidy list
+  // works against the one thing it is for — looking wrong until you move the lines somewhere.
   unsorted:      { label: 'Unsorted',    kind: 'lines' },
 };
 function entryFieldMeta(key) { return ENTRY_FIELD_META[key] || { label: key, kind: 'lines' }; }
@@ -333,6 +340,33 @@ function toggleChecklistAt(text, nth) {
   }).join('\n');
 }
 
+// Give a template field's bare lines the marker its `list` hint asks for, so renderEntryMarkdown()
+// can do the rest. Nothing here renders: it normalises text into markdown and hands off, which is
+// what keeps fields and the note body going through ONE renderer rather than two that drift.
+//
+// The whole subtlety is leaving alone what is already marked. People have been typing "1." and "-"
+// into these boxes for as long as they have existed, and a field that adds its own marker on top
+// renders "1. 1. Preheat the oven". Same shape as the stray "]]" from the link button: consume what
+// is there rather than assume it isn't. Checklist lines are left alone too — someone who wrote
+// "- [ ] socks" wants a tickable box, not a bullet.
+//
+// The numbers written here are cosmetic: <ol> numbers its own items, so only matching
+// ENTRY_NUMBER_RE matters. A counter is used anyway so the intermediate text reads correctly if
+// anything ever logs or diffs it.
+function markEntryFieldLines(text, listKind) {
+  if (!listKind) return String(text || '');
+  let n = 0;
+  return String(text || '').split('\n').map(line => {
+    if (!line.trim()) return line;
+    // Already markdown that means something on its own — a checkbox, a list item, a heading or a
+    // quote. Prefixing any of these would either double the marker or destroy the block.
+    if (ENTRY_CHECK_RE.test(line) || ENTRY_BULLET_RE.test(line) || ENTRY_NUMBER_RE.test(line)) return line;
+    if (/^\s*(#{1,6}\s|>\s|```)/.test(line)) return line;
+    n += 1;
+    return listKind === 'ordered' ? `${n}. ${line.trim()}` : `- ${line.trim()}`;
+  }).join('\n');
+}
+
 // Inline rules, applied after escaping. Order matters: bold before italic (so ** isn't eaten as
 // two single asterisks), and links before both so formatting can't split a URL in half.
 function renderEntryInline(escaped) {
@@ -561,6 +595,25 @@ function entryTokenAtCaret(text, caret) {
   const since = before.slice(open + 2);
   if (since.includes(']]') || since.includes('\n')) return null;
   return { start: open, query: since };
+}
+// A COMPLETE "[[...]]" whose closing bracket ends exactly AT the caret, or null.
+//
+// This is what lets a finished link behave as one object under Backspace. Reported 2026-09-20:
+// backspacing a link "causes a bit of visual insanity as the view goes up and down constantly".
+// Deleting one "]" leaves "[[Title]", which entryTokenAtCaret() reads as an OPEN token — so the
+// suggestion list reappears, and repaintEntryAutocomplete() scrolls it into view on every
+// keystroke while the caret stays where it is. Chipping single characters off a link never
+// produced anything anyone wanted, so one Backspace selects the whole token and the next removes
+// it, which is also what was asked for: "the entire [[]] gets auto highlighted".
+function entryTokenEndingAt(text, caret) {
+  const s = String(text || '');
+  if (s.slice(caret - 2, caret) !== ']]') return null;
+  const open = s.lastIndexOf('[[', caret - 2);
+  if (open === -1) return null;
+  // Nothing nested or unterminated in between, or this isn't one token.
+  const inner = s.slice(open + 2, caret - 2);
+  if (inner.includes('[[') || inner.includes(']]') || inner.includes('\n')) return null;
+  return { start: open, end: caret };
 }
 
 // ---- Tokens: id on disk, title on screen ----

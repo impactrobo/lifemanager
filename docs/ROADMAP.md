@@ -357,6 +357,46 @@ Newest first. Keep this reasonably current so a fresh session can see what alrea
 without re-reading the whole diff history. Roughly grouped: this project spent early Sept 2026
 on an architecture split + a large wave of Maximalist aesthetics.
 
+- **Notes: template fields render when you READ them (2026-09-20).** Asked for as *"have Steps
+  automatically be a numbered list, and as listed ingredients a bulleted list… maybe this will make
+  things clearer in the future?"* It generalised, because the reason it wasn't already true was
+  bigger than recipes: **template fields had no read rendering at all.** `renderEntryField()` emitted
+  a `<textarea>` in both modes, so a recipe you were cooking from showed its steps in a grey edit box
+  while the note's own body, an inch above, rendered through `renderEntryMarkdown()`. Travel packing
+  lists, writing outlines and journal gratitude were all in the same state.
+  - `ENTRY_FIELD_META` gains a **`list` hint**, per FIELD and deliberately not per `kind`: `steps`,
+    `packing`, `draft` and `notes` are all `lines`, but a draft is prose and bulleting it would be
+    wrong. `steps` is `ordered`; ingredients, packing, places, to-do, outline and gratitude are
+    `bullet`; `unsorted` is left plain on purpose, since looking untidy is the one thing it is for.
+  - `markEntryFieldLines()` normalises bare lines into markdown and hands off to the SAME renderer
+    the body uses, so links, bold and checkboxes behave identically inside a field. It **consumes a
+    marker that is already there** rather than adding a second — people have typed `1.` and `-` into
+    these boxes for as long as they have existed, and the failure mode is "1. 1. Preheat the oven".
+    Same shape as the stray `]]` from the link button.
+  - Checklist lines in a field are now **really tickable**, via a curried `entryFieldCheckHandler`
+    (the renderer emits `${handler}(${index})`, so a handler that needs the field key must close
+    over it first). `entryChecklistStats()` has counted field checklists toward a card's "3/5" since
+    it was written; the count finally has something behind it.
+  - Read mode shows **only fields with content** — "+ Add mood" is an editing affordance and belongs
+    behind the pencil. `test_entry_convert.js` asserts both halves, since the discoverability those
+    buttons provide still has to exist somewhere.
+  - **The pencil is gone from the cards in VIEW ALL.** It called `openEntry()` — exactly what tapping
+    the card body already did — and once notes started opening in read mode it promised an editor it
+    did not deliver.
+  - 8/8 mutations caught. The one that matters most: edit mode must show the STORED text, never the
+    marked-up version, or every save would bake generated markers into the person's own data.
+- **Notes: a finished `[[link]]` is one object under Backspace (2026-09-20).** Reported as
+  *"backspacking the [[ ]] links causes a bit of visual insanity as the view goes up and down
+  constantly: the backspace sends the screen back to the cursor and text line, but immediately back
+  down to the suggestions"*.
+  - Deleting one `]` leaves `[[Title]`, which `entryTokenAtCaret()` reads as an **open** token — so
+    the suggestion list reappears, and `repaintEntryAutocomplete()` calls `scrollIntoView` on every
+    repaint while the caret stays put. That is the up-and-down.
+  - `entryTokenEndingAt()` recognises a complete token whose `]]` ends at the caret, and Backspace
+    then **selects** it rather than nibbling a bracket off. One press highlights, the next removes —
+    which is also what was asked for ("the entire [[]] gets auto highlighted"), one keystroke
+    earlier, so the picker never reopens at all.
+  - Backspace **inside** a link is deliberately untouched: that is how you retarget one.
 - **Notes editor: a stray `]]`, and a review screen with nothing on it (2026-09-20).** Two reports
   from the same pass through the testing checklist.
   - *"there is the [[]] button to link, which works, but after selecting the note to link, you get

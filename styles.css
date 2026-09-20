@@ -3253,6 +3253,17 @@ button.brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 4
 }
 .tmpl-input:focus { outline: none; }
 textarea.tmpl-input { line-height: 1.5; }
+/* The same field, read rather than edited. Matches .tmpl-input's type metrics exactly so switching
+   modes with the pencil doesn't reflow the page under your thumb. */
+.tmpl-read, .tmpl-read-text { font-size: 13px; line-height: 1.5; color: var(--text); padding: 2px 0; }
+.tmpl-read > :first-child { margin-top: 0; }
+.tmpl-read > :last-child { margin-bottom: 0; }
+.tmpl-read p { margin: 0 0 6px; }
+/* Steps read as a numbered list and ingredients as bullets — the markers carry the meaning, so
+   they sit outside the text column rather than hanging into it. */
+.tmpl-read ul, .tmpl-read ol { margin: 0 0 0 18px; padding: 0; }
+.tmpl-read li { margin: 0 0 3px; }
+.tmpl-read li::marker { color: var(--text-faint); }
 .tmpl-add {
   text-align: left; background: transparent; cursor: pointer;
   border: 1px dashed var(--border); border-radius: var(--radius); padding: 9px 11px;

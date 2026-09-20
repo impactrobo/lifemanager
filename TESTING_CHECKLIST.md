@@ -626,4 +626,36 @@ note stopped on a review screen with nothing on it to review.
 - [ ] A note whose lines all land in **UNSORTED** still gets reviewed. Unsorted is content, and it's
       the pile worth looking at.
 
+## Notes: fields render when you read them (2026-09-20)
+Asked for as *"have Steps automatically be a numbered list, and as listed ingredients a bulleted
+list"*. It generalised: template fields had **no read rendering at all** — every one was a
+`<textarea>` in both modes, so a recipe you were cooking from showed its steps in a grey edit box
+while the note's own body rendered properly an inch above. Now `lines` fields carry a per-field
+list hint and go through the same renderer the body uses.
+- [ ] **Open a recipe.** Steps are a numbered list, Ingredients are bullets, and both read like a
+      recipe rather than a form. This is the ask.
+- [ ] A recipe where you **already typed `1.` or `-`** — no doubled markers ("1. 1. Preheat").
+- [ ] **Prose fields stay prose**: a Writing note's Draft and a Journal's Notes must NOT become
+      bullets. Outline, Gratitude, Places, To-do and Packing should.
+- [ ] **Press the pencil.** The textarea comes back with **exactly what you typed** — no numbers or
+      dashes baked in. Save and reopen to be sure nothing was written into your text.
+- [ ] A **Travel note's Packing list** written as `- [ ] socks`: the boxes are now real and tickable
+      where you read them, and the card's "3/5" counter follows.
+- [ ] **Empty fields no longer show "+ Add" in read mode** — they appear once you hit the pencil.
+      Does that feel right, or do you want the prompts visible while reading?
+- [ ] **No pencil on the cards in VIEW ALL** any more — tapping the card opens the note, and the
+      pencil inside it edits. Confirm nothing feels harder to reach.
+
+## Notes: backspacing a `[[link]]` (2026-09-20)
+Reported as *"backspacking the [[ ]] links causes a bit of visual insanity as the view goes up and
+down constantly"*. Deleting one `]` left `[[Title]`, which reads as an **open** token — so the
+suggestion list reappeared and scrolled itself into view on every keystroke. A finished link is now
+one object: one Backspace selects it whole, the next removes it.
+- [ ] Put the cursor at the end of a `[[link]]` and press **Backspace once**: the whole link
+      highlights, nothing is deleted, and **no suggestion list appears**. Press again — it's gone.
+- [ ] No jumping. This is the whole report, and it can only be judged on a real screen.
+- [ ] Put the cursor **inside** a link and backspace: ordinary editing, the picker opens as before.
+      That path is meant to still work — it's how you retarget a link.
+- [ ] Select a link by hand and press Backspace: deletes the selection, as always.
+
 ## Add future items below as new features ship

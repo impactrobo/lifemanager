@@ -146,6 +146,59 @@ async function openFreshNote(page, body) {
   }
   console.log('3b. typing "[[" mid-line does not eat the text after the caret');
 
+  // ---- 3c. Backspace treats a finished link as one object ----
+  // Reported 2026-09-20: "backspacking the [[ ]] links causes a bit of visual insanity as the view
+  // goes up and down constantly". Deleting one "]" leaves "[[Title]", which reads as an OPEN token,
+  // so the suggestion list reappears and scrollIntoView fires on every keystroke. The token must be
+  // SELECTED rather than nibbled, and crucially the picker must not reopen.
+  await openFreshNote(page, 'stir the [[Sourdough starter]]');
+  const atEnd = await page.evaluate(() => {
+    const ta = document.getElementById('entryBody');
+    ta.setSelectionRange(ta.value.length, ta.value.length);
+    // The real keydown path, not a direct call — the fix lives in the handler.
+    const ev = new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true, cancelable: true });
+    ta.dispatchEvent(ev);
+    return {
+      defaultPrevented: ev.defaultPrevented,
+      value: ta.value,
+      selStart: ta.selectionStart,
+      selEnd: ta.selectionEnd,
+      acOpen: !!VIEW.entryAutocomplete,
+    };
+  });
+  if (!atEnd.defaultPrevented || atEnd.value !== 'stir the [[Sourdough starter]]') {
+    throw new Error(`Backspace at the end of a link changed the text: ${JSON.stringify(atEnd)}`);
+  }
+  if (atEnd.selStart !== 9 || atEnd.selEnd !== 30) {
+    throw new Error(`the whole token should be selected (9..30), got ${atEnd.selStart}..${atEnd.selEnd}`);
+  }
+  if (atEnd.acOpen) throw new Error('the suggestion list reopened — this is the thrash being reported');
+  // The second Backspace is the browser's own: it clears the selection.
+  const afterSecond = await page.evaluate(() => {
+    const ta = document.getElementById('entryBody');
+    ta.setRangeText('', ta.selectionStart, ta.selectionEnd, 'end');
+    VIEW.entryDraftBody = ta.value;
+    syncEntryAutocomplete(ta);
+    return { value: ta.value, acOpen: !!VIEW.entryAutocomplete };
+  });
+  if (afterSecond.value !== 'stir the ') {
+    throw new Error(`the second Backspace left ${JSON.stringify(afterSecond.value)}`);
+  }
+  if (afterSecond.acOpen) throw new Error('the picker opened after the link was removed');
+  console.log('3c. Backspace selects a finished link whole, and the picker never reopens');
+
+  // Mid-token Backspace is still ordinary editing — you are retyping the target on purpose.
+  await openFreshNote(page, 'stir the [[Sourdough starter]]');
+  const midToken = await page.evaluate(() => {
+    const ta = document.getElementById('entryBody');
+    ta.setSelectionRange(20, 20);                 // inside the title
+    const ev = new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true, cancelable: true });
+    ta.dispatchEvent(ev);
+    return ev.defaultPrevented;
+  });
+  if (midToken) throw new Error('Backspace inside a link was swallowed — editing a link title must still work');
+  console.log('3d. Backspace inside a link is left alone');
+
   // ---- 4. A blank note converts with no review step ----
   await page.evaluate(() => {
     // Titled but empty. A note with NEITHER title nor body is swept as an abandoned landing note

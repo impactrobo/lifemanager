@@ -403,7 +403,10 @@ function renderEntryCard(e) {
         <span class="mono" style="font-size:11px; color:var(--text-faint);">${fmtEntryDate(e)}</span>
       </div>
       <div style="display:flex; gap:4px;">
-        <button class="icon-btn" onclick="openEntry('${e.id}')" title="Open">${icon('pencil')}</button>
+        ${/* No pencil here (2026-09-20). It called openEntry() — precisely what tapping the card
+             body already does — and since notes open in READ mode it promised an editor it did not
+             deliver. One card, one tap: you land in the note and the pencil INSIDE it is the one
+             that edits. Asked for as "don't think we need the edit pencils on the note cards". */ ''}
         <button class="icon-btn" onclick="deleteEntry('${e.id}')" title="Delete">${icon('close')}</button>
       </div>
     </div>
@@ -864,11 +867,38 @@ function renderConvertMovePicker() {
 const ENTRY_FIELDS_OWNED_ELSEWHERE = { recipe: ['servings', 'time'] };
 function renderEntryTemplateFields(e) {
   const owned = ENTRY_FIELDS_OWNED_ELSEWHERE[e.type] || [];
-  const fields = entryTypeMeta(e.type).fields.filter(f => owned.indexOf(f) === -1);
+  let fields = entryTypeMeta(e.type).fields.filter(f => owned.indexOf(f) === -1);
   if (entryFieldValue(e, 'unsorted')) fields.push('unsorted');
+  const editing = VIEW.entryMode === 'edit';
+  // READ MODE shows only what has been written. "+ Add steps" is an editing affordance, and a
+  // column of them under a note you are reading is the same noise the body avoids by putting
+  // writing behind the pencil.
+  if (!editing) fields = fields.filter(f => entryFieldValue(e, f));
   if (!fields.length) return '';
   return `<div class="subtle-label" style="margin:16px 0 8px;">${entryTypeMeta(e.type).short} FIELDS</div>
-    <div class="tmpl-list">${fields.map(f => renderEntryField(e, f)).join('')}</div>`;
+    <div class="tmpl-list">${fields.map(f => editing ? renderEntryField(e, f) : renderEntryFieldRead(e, f)).join('')}</div>`;
+}
+// A field as you READ it. Until 2026-09-20 there was no such thing: renderEntryField() emitted a
+// <textarea> in both modes, so a recipe you were cooking from showed its steps in a grey edit box
+// while the note's own body, an inch above, rendered properly.
+//
+// It goes through renderEntryMarkdown() — the same renderer the body uses — so links, bold and
+// checkboxes all behave identically inside a field. The only field-specific part is the `list`
+// hint applied on the way in.
+function renderEntryFieldRead(e, key) {
+  const meta = entryFieldMeta(key);
+  const val = entryFieldValue(e, key);
+  if (!val) return '';
+  const unsorted = key === 'unsorted';
+  const body = (meta.kind === 'text' || meta.kind === 'select')
+    ? `<div class="tmpl-read-text">${renderEntryInline(escapeHtml(val))}</div>`
+    : `<div class="tmpl-read rich-text">${
+         renderEntryMarkdown(markEntryFieldLines(val, meta.list), `entryFieldCheckHandler(${jsArg(key)})`)
+       }</div>`;
+  return `<div class="tmpl-field ${unsorted ? 'is-unsorted' : ''}">
+    <div class="tmpl-label">${escapeHtml(meta.label)}${unsorted ? ' — nothing claimed this, move it where it belongs' : ''}</div>
+    ${body}
+  </div>`;
 }
 function renderEntryField(e, key) {
   const meta = entryFieldMeta(key);
@@ -1311,6 +1341,20 @@ function onEntryBodyKeydown(evt) {
       return;
     }
   }
+  // Backspace at the right edge of a finished [[link]] selects it whole instead of nibbling one
+  // bracket off. The nibble is what caused the reported thrash: "[[Title]" reads as an OPEN token,
+  // so the suggestion list reappears and scrolls itself into view on every keystroke. Selecting
+  // instead means the picker never reopens, and the second Backspace clears the selection the way
+  // it clears any other one. Only with a collapsed caret — a real selection is the person's own.
+  if (evt.key === 'Backspace' && !evt.shiftKey && ta.selectionStart === ta.selectionEnd) {
+    const tok = entryTokenEndingAt(ta.value, ta.selectionStart);
+    if (tok) {
+      evt.preventDefault();
+      ta.setSelectionRange(tok.start, tok.end);
+      closeEntryAutocomplete();   // patches #entryAutocomplete only, so the selection survives
+      return;
+    }
+  }
   if (evt.key !== 'Enter' || evt.shiftKey) return;
   if (ta.selectionStart !== ta.selectionEnd) return;
   const next = continueEntryList(ta.value, ta.selectionStart);
@@ -1329,6 +1373,22 @@ function toggleOpenEntryCheck(nth) {
   touchEntry(e);
   saveState();
   render();
+}
+// Curried, because renderEntryMarkdown() emits `${checkHandler}(${index})` — a handler that has to
+// know WHICH field must close over the key before the renderer appends the index. That is what lets
+// a Travel packing list or a Recipe ingredient line be ticked where you read it; entryChecklistStats
+// has counted those toward a card's "3/5" all along, so the count finally has something behind it.
+function entryFieldCheckHandler(key) {
+  return function (nth) {
+    const e = openEntryRecord();
+    if (!e || !e.fields) return;
+    const next = toggleChecklistAt(entryFieldValue(e, key), nth);
+    if (next === entryFieldValue(e, key)) return;
+    e.fields[key] = next;
+    touchEntry(e);
+    saveState();
+    render();
+  };
 }
 
 // ---- Tags ----
