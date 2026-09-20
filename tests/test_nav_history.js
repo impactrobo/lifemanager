@@ -109,6 +109,55 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   console.log('4. ensureTab on the tab you are already on:', afterSame);
   if (afterSame !== beforeNoise) throw new Error('Re-entering the current tab is not a Back step: ' + afterSame);
 
+  // ---- 5. The header arrows are hidden, but the history behind them is not ----
+  // Hidden 2026-09-20: "very confusing when you go through a note link and then the separate back
+  // arrow pops up. But if you hit the big back arrow in the header you're something else." Two
+  // different "back"s on one screen — the entry's own chevron walks note → note, the header arrow
+  // undoes the last screen change.
+  //
+  // The trap this guards is the obvious cleanup: with nothing in the header showing NAV_HISTORY,
+  // the whole mechanism looks dead and deletable. It is not — Settings' CLOSE button calls
+  // goBack(), so the history has to keep being recorded whether or not anything displays it.
+  // Checks 1-4 above still cover the walking; this covers the wiring.
+  const arrows = await page.evaluate(() => {
+    const vis = (id) => {
+      const el = document.getElementById(id);
+      if (!el) return { present: false, shown: false };   // deleted, not hidden — reported below
+      const r = el.getBoundingClientRect();
+      return { present: true, shown: r.width > 0 && r.height > 0 };
+    };
+    return { back: vis('backBtn'), fwd: vis('forwardBtn') };
+  });
+  console.log('5. header arrows:', JSON.stringify(arrows));
+  if (!arrows.back.present || !arrows.fwd.present) {
+    throw new Error('the arrows were deleted rather than hidden — NAV_ARROWS_ENABLED is meant to be one line to reverse');
+  }
+  if (arrows.back.shown || arrows.fwd.shown) {
+    throw new Error('the header arrows are still visible: ' + JSON.stringify(arrows));
+  }
+
+  // Settings' CLOSE is the live caller. It must still come back to where you opened Settings from.
+  await page.evaluate(() => { switchTab('train'); setFitnessSubtab('phases'); });
+  await settle(page);
+  const beforeSetup = await page.evaluate(() => `${NAV.currentTab}/${NAV.fitnessSubtab}`);
+  await page.evaluate(() => openSetup('home'));
+  await settle(page);
+  const inSetup = await page.evaluate(() => ({
+    tab: NAV.currentTab,
+    closeWired: /goBack\(\)/.test((document.querySelector('.tabbar-close') || {}).outerHTML || ''),
+  }));
+  if (inSetup.tab !== 'setup') throw new Error('openSetup did not land on Settings');
+  if (!inSetup.closeWired) {
+    throw new Error("Settings' CLOSE no longer calls goBack() — if that moved, this guard has to move with it");
+  }
+  await page.evaluate(() => goBack());
+  await settle(page);
+  const afterClose = await page.evaluate(() => `${NAV.currentTab}/${NAV.fitnessSubtab}`);
+  console.log(`5. Settings CLOSE: ${beforeSetup} -> setup -> ${afterClose}`);
+  if (afterClose !== beforeSetup) {
+    throw new Error(`CLOSE left you on ${afterClose}, not back on ${beforeSetup} — nav history is still load-bearing`);
+  }
+
   if (errors.length) throw new Error(errors.join('\n'));
   console.log('test_nav_history.js: PASS');
   await browser.close();

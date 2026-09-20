@@ -357,6 +357,35 @@ Newest first. Keep this reasonably current so a fresh session can see what alrea
 without re-reading the whole diff history. Roughly grouped: this project spent early Sept 2026
 on an architecture split + a large wave of Maximalist aesthetics.
 
+- **Back / Forward hidden, and the wordmark stopped colliding (2026-09-20).** Asked for as *"time to
+  hide the back and forth arrows. Very confusing when you go through a note link and then the
+  separate back arrow pops up. But if you hit the big back arrow in the header you're something
+  else."*
+  - Two different "back"s on one screen was one too many. The entry's chevron walks note → note on
+    its own stack (note → note happens on a single screen, so nav history has nothing to pop); the
+    header arrow undid the last screen change. Only the contextual one survives.
+  - `NAV_ARROWS_ENABLED = false` in `_doRender()`, with `hidden` in the markup so they never flash
+    before the first render — the same shape as the retired Home-edit button, and one line to
+    reverse. **The machinery stays**, and not only for that: `goBack()` is what Settings' CLOSE
+    button calls, so `NAV_HISTORY` must keep being recorded whether or not anything displays it.
+    `test_nav_history.js` now asserts the arrows are hidden-not-deleted AND that CLOSE still
+    returns you to where you opened Settings from — the guard against the obvious cleanup, since
+    with nothing in the header the whole mechanism looks dead.
+  - **A collision found while doing it, dating from the day before.** The nav groups are absolutely
+    positioned, so `.brand` is centred in the WHOLE bar and knows nothing about them. Fine with two
+    buttons a side; the debug clock made it three and the wordmark began running under them below
+    ~380px — 8px of overlap at 360, 28px at 320, while 390 cleared by 7px. A screenshot at one
+    width had said it was fine.
+  - Fixed with a `clamp()` type ramp plus a `max-width` reserve. The reserve is **twice the button
+    group and nothing else**: `100%` resolves against the topbar's CONTENT box, which already has
+    the 16px padding removed, so including the inset over-reserves by 32px — the first attempt did
+    exactly that and truncated a wordmark that would have fitted. Below 380px the header's own
+    buttons drop to 26px and the type ramps harder, because honey's Fredoka needs 107px of the
+    108px available at 320.
+  - `tests/test_topbar_fit.js` checks 5 widths x 23 aesthetics (`--font-head` varies enormously
+    between them). 4/4 mutations caught — but only after adding a case that **forces** an over-wide
+    wordmark: with the fonts shipped today the type ramp alone suffices, so deleting the `max-width`
+    guard passed unnoticed, and a guard that cannot be failed is not pinned.
 - **Notes: template fields render when you READ them (2026-09-20).** Asked for as *"have Steps
   automatically be a numbered list, and as listed ingredients a bulleted list… maybe this will make
   things clearer in the future?"* It generalised, because the reason it wasn't already true was

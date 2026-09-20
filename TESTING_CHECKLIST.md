@@ -658,4 +658,27 @@ one object: one Backspace selects it whole, the next removes it.
       That path is meant to still work — it's how you retarget a link.
 - [ ] Select a link by hand and press Backspace: deletes the selection, as always.
 
+## Back / Forward arrows hidden; the wordmark stopped colliding (2026-09-20)
+Asked for: *"time to hide the back and forth arrows. Very confusing when you go through a note link
+and then the separate back arrow pops up. But if you hit the big back arrow in the header you're
+something else."* Two different "back"s on one screen — the entry's own chevron walks note → note,
+the header arrow undid the last screen change. The header pair is gone; the machinery stays because
+Settings' CLOSE calls `goBack()`.
+
+Separately, and **not caused by that change**: the wordmark is centred in the whole bar while the
+button groups are absolutely positioned, so it knew nothing about them. Adding the debug clock on
+2026-09-19 made it three buttons and the wordmark began running *under* them below ~380px — 8px of
+overlap at 360, 28px at 320. 390 cleared by 7px, which is why the screenshot missed it.
+- [ ] **No Back / Forward arrows in the header.** The left side is empty; does the bar look
+      unbalanced with three buttons on the right and nothing on the left?
+- [ ] **Follow a note link.** Only one back control now — the chevron inside the note, next to the
+      type chip. Press it: back to the previous note. This was the whole confusion.
+- [ ] **Settings → X CLOSE** still returns you to the screen you opened Settings from, not Home.
+      That button calls the same nav history the arrows used, so it's the thing most likely to
+      break from this.
+- [ ] Moving between subtabs and sections: everything still reachable in one tap from the bottom
+      bar, and the **house** still gets you Home. Anywhere you feel stranded, say so.
+- [ ] **The wordmark.** It scales with screen width now and never touches the buttons. Yours should
+      look unchanged at 390+; if it looks smaller or clipped, that's worth flagging.
+
 ## Add future items below as new features ship

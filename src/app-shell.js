@@ -1157,10 +1157,27 @@ function _doRender() {
   // hides rather than painting a blank strip.
   tabbarEl.classList.toggle('hidden', !tabbarHtml.trim());
   attachTabbarGestures();
-  document.getElementById('backBtn').classList.toggle('disabled', NAV_HISTORY.length === 0);
-  // Forward is always shown alongside Back now (not hidden even on first launch) — just dimmed
+  // HIDDEN BY REQUEST (2026-09-20). Two different "back"s on one screen is one too many: following
+  // a note link shows the ENTRY's own chevron (goBackEntry(), its own stack — note → note happens
+  // on a single screen, so nav history has nothing to pop), while the header arrow beside it
+  // undoes the last screen change instead. Reported as "very confusing when you go through a note
+  // link and then the separate back arrow pops up. But if you hit the big back arrow in the header
+  // you're something else." Every destination is still one tap away: the bottom bar for subtabs,
+  // the house for Home, the entry chevron for note → note.
+  //
+  // The machinery stays, and not only so this is one line to reverse: goBack() is ALSO what
+  // Settings' CLOSE button calls (see renderTabbar's tabbar-close), so NAV_HISTORY has to keep
+  // being maintained whether or not anything in the header shows it. test_nav_history.js still
+  // covers all of it.
+  const NAV_ARROWS_ENABLED = false;
+  const backEl = document.getElementById('backBtn');
+  const fwdEl = document.getElementById('forwardBtn');
+  backEl.classList.toggle('hidden', !NAV_ARROWS_ENABLED);
+  fwdEl.classList.toggle('hidden', !NAV_ARROWS_ENABLED);
+  backEl.classList.toggle('disabled', NAV_HISTORY.length === 0);
+  // Forward is always shown alongside Back (not hidden even on first launch) — just dimmed
   // and inert whenever its own stack is empty, same treatment as Back.
-  document.getElementById('forwardBtn').classList.toggle('disabled', NAV_FORWARD.length === 0);
+  fwdEl.classList.toggle('disabled', NAV_FORWARD.length === 0);
   // The topbar gear is a global entry point to Home's own Setup page (Aesthetic/Accent/Data) —
   // it lives in the persistent topbar (not the per-section bottom bar) precisely so it stays
   // reachable from anywhere, the same way it always has been.

@@ -102,7 +102,41 @@ input, select, textarea { font-family: var(--font-body); }
   padding: 14px 16px 10px;
   display: flex; align-items: center; justify-content: center;
 }
-.topbar .brand { font-family: var(--font-head); font-size: 19px; font-weight: 800; letter-spacing: 0.01em; white-space: nowrap; }
+/* The two nav groups are absolutely positioned, so the wordmark is centred in the WHOLE bar and
+   knows nothing about them. That was fine with two buttons a side; the debug clock made it three on
+   the right (2026-09-19) and the centred wordmark then runs UNDER them on a narrow phone — measured
+   overlapping by 8px at 360 and 28px at 320, while 390 happened to clear by 7px, which is why a
+   screenshot at one width missed it.
+   Two guards, because one isn't enough: clamp() scales the type down with the viewport, and the
+   max-width stops a wide --font-head (Archivo Black, Wallpoet) from overflowing anyway — it
+   truncates instead, which is ugly but strictly better than sitting on top of the buttons.
+   The reserve is TWICE the button group's width and nothing else: `100%` here resolves against the
+   topbar's CONTENT box, which already has the 16px padding removed, and the group's 16px inset is
+   measured from the padding box — so the centred wordmark's clearance works out as
+   `content width - 2 x group width`. Including the inset as well over-reserves by 32px and
+   truncates a wordmark that would have fitted, which is exactly what the first attempt at this
+   did. Group = 3 buttons x 30px + 2 x 6px gap = 102. */
+.topbar .brand {
+  font-family: var(--font-head); font-size: clamp(13px, 4.4vw, 19px); font-weight: 800;
+  letter-spacing: 0.01em; white-space: nowrap;
+  max-width: calc(100% - 204px); overflow: hidden; text-overflow: ellipsis;
+}
+/* On the narrowest phones (SE at 320, common Androids at 360) three 30px buttons plus their insets
+   leave the centred wordmark 84px, which is not enough for it at any readable size — it was hitting
+   the ellipsis guard above. Trimming the header's own buttons by 4px buys 24px of it back, which is
+   cheaper than shrinking the app's name to fit. Scoped to .topbar so icon buttons everywhere else
+   keep their size. */
+@media (max-width: 380px) {
+  .topbar .icon-btn { width: 26px; height: 26px; }
+  /* Group is 3 x 26 + 2 x 6 = 90. The type ramps down harder here too: five aesthetics ship a
+     display --font-head wide enough (honey, draconic, metalheart, liminal, spacehighway) to
+     overrun even the widened space at 320px, and a wordmark that fits is worth more than one
+     rendered at a uniform size. */
+  /* 3.5vw lands at 11.2px on a 320 screen; honey's Fredoka — the widest --font-head shipped —
+     measures 107px there against 108px of clear space, and every other aesthetic has room to
+     spare. Measured, not guessed: 12px overran it by 3px. */
+  .topbar .brand { max-width: calc(100% - 180px); font-size: clamp(10px, 3.5vw, 16px); }
+}
 .topbar .brand span { color: var(--accent); }
 .topbar .settings-btn { }
 .topbar .nav-btns-right { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); display: flex; gap: 6px; }
