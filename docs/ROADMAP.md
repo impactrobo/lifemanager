@@ -56,6 +56,45 @@ These are **not** requested features — they're natural extensions given the cu
 app, logged here so they're not lost, not so they get built unprompted. Confirm with the person
 before starting any of these.
 
+- **Recipes: a per-serving line beside the totals — raised 2026-09-20, noted only.** *"Recipe
+  tabulation shows total cals + macronutrients. Can we do a per serving line item as well?"*
+  - Half of this already exists and is easy to miss: `recipeTotals()` returns `perServingCal`, and
+    the recipe CARD already reads `4 servings · 30 min · 820 cal · 205/serving`. What has no
+    per-serving form is the macro tabulation under MATCHED INGREDIENTS
+    (`app-notes.js:1553`), which prints `820 cal total · 45p / 90c / 22f` and nothing else.
+  - So the work is one line: divide each macro by `recipeServings(e)` and print a second row.
+  - **The catch is that `servings` is a free-TEXT field** (`ENTRY_FIELDS.servings.kind === 'text'`),
+    because people write "4-6" and "makes about a dozen". `recipeServings()` pulls the first number
+    out and returns **0** when there isn't one — so "a dozen" divides by zero. The per-serving row
+    has to be absent rather than wrong in that case, exactly as `perServingCal` already handles it.
+    Worth deciding whether "4-6" quietly meaning 4 is good enough or wants a range.
+- **Recipes: variants, so a recipe can become its own hub — raised 2026-09-20, noted only.**
+  *"A way to instantly generate another recipe off of a recipe, as a different 'page' within the
+  note (sort of like every recipe can become a hub) but it starts as a duplicate of the original.
+  This allows the user to adjust timings/ingredients/ratios and annotate to eventually make their
+  perfect dish."*
+  - Most of the machinery is already here. Hubs have ordering, per-member context lines and nesting
+    (`addToHub`, `moveHubItem`, `hubsContaining`), and Convert already turns a recipe into a hub and
+    back. What's missing is **duplicate-as-a-new-entry**, and the presentation.
+  - **The real fork is what a variant IS**, and the phrasing straddles it:
+    - *Sibling entries gathered by a hub.* Each variant is a real recipe, so it gets ingredient
+      matching, its own macros, its own ADD TO MEALS, and shows up in search and links for free.
+      The cost is that the Notes list fills with near-identical cards.
+    - *Pages inside one entry.* The list stays clean, but every recipe feature — matching, meals,
+      macros, linking, convert — would have to learn "which page", which is a large change to
+      the entry model for a presentation win.
+    - Recommendation if it gets built: **siblings plus a hub**, with the Notes list collapsing
+      entries that are members of a recipe-hub. That buys the "pages" feel without teaching the
+      whole app about pages.
+  - Cheap, because of how matching already works: `ingredientMap` is global and keyed by ingredient
+    NAME, so a duplicate needs no re-matching prompts even before you copy `fields.ingredients`
+    across wholesale.
+  - **The thing to get right is Meals.** Three variants imported to Meals all called "Chicken Curry"
+    makes the diet log useless — a variant needs a distinguishing name at import, or the import
+    chip needs to say which variant it came from.
+  - The payoff worth designing toward is **comparison**: two variants side by side with their macro
+    totals and your annotations. That is also the argument for variants being real entries with
+    real totals rather than free text.
 - **NetNavi / PET companions — discussed 2026-09-15, nothing built.** (The weekly review it would speak on shipped 2026-09-16; its templates are the seam.) The app is already called
   LIFEMan.EXE, which is a Mega Man Battle Network reference, and that is where the idea came from.
   - **The source material is a real spec, not a sketch.** A "PET Device — Transfer Package" artifact
