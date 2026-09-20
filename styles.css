@@ -145,6 +145,20 @@ body[data-handed="left"] .topbar .nav-btns { left: auto; right: 16px; }
   background: var(--surface); border: 1px solid var(--border-soft); border-radius: var(--radius);
   padding: 14px; margin-bottom: 10px;
 }
+/* Eight aesthetics draw a .panel's edge as an INSET box-shadow instead of a border — millennium
+   rings 9px deep, hedge 7px, cartomancer 5px, the rest 1-2px. An inset shadow is PAINTED, not laid
+   out, so a panel can pad less than its own ring and nothing in the box model objects. A child with
+   its own background then paints straight over the panel's visible edge.
+   Reported 2026-09-19 on Hedge — "the scheduled item is hanging outside the bounds of the
+   container" — where the day pane's 2px vertical padding left the NOW card sitting 5px INSIDE the
+   ring. The default 14px above clears every ring, which is why only panels that tighten their
+   padding can hit this. Any that do must still clear this much.
+   test_panel_ring.js re-derives the deepest ring at runtime across all 23 aesthetics and fails if
+   one ever outgrows the number here. */
+:root { --panel-ring: 10px; }
+/* Home's day timeline. Vertically tight on purpose — it is the pane with the least room to spare —
+   but never tighter than the ring above. */
+.day-pane { padding: var(--panel-ring) 14px; }
 .panel + .panel { margin-top: 10px; }
 .panel-done { border-color: var(--good); background: var(--good-soft); }
 .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }

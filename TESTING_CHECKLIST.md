@@ -590,4 +590,21 @@ non-GET requests alone entirely, and an offline cache miss answers a real 503 in
       top — tapping a notification, editing a reminder, airplane mode across a due time, and
       DISABLE. Those were blocked behind this bug.
 
+## The NOW card painted over the day pane's edge (2026-09-20)
+Reported on Hedge: *"the scheduled item is hanging outside the bounds of the container."* Eight
+aesthetics draw a panel's edge as an **inset box-shadow** rather than a border — millennium rings
+9px deep, hedge 7px, cartomancer 5px. An inset shadow is painted, not laid out, so the box model
+knows nothing about it: the day pane padded 2px vertically and the NOW card, the one row with a
+background of its own, sat up to 7px *inside* the ring and painted over it. Measuring rectangles
+found nothing wrong, twice — which is exactly why it needed your eyes.
+- [ ] **Hedge, late evening** (use the debug clock to get to ~9:50pm if it's not): the NOW card sits
+      clear of the panel's bright inner edge on all four sides. This is the report.
+- [ ] Same on **Millennium** and **Cartomancer** — they ring deeper and shallower respectively, and
+      millennium at 9px was worse than the one you caught.
+- [ ] The day pane is **~16px taller** now. On Home, does that cost anything you miss? It was
+      deliberately the tightest pane in the app, and this is the trade.
+- [ ] A few other aesthetics for sanity — the ones with an ordinary 1px border shouldn't have
+      changed at all beyond the extra height.
+- [ ] Midday, with rows above and below the NOW card: still reads correctly, nothing doubled up.
+
 ## Add future items below as new features ship

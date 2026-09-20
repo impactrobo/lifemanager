@@ -185,7 +185,10 @@ function renderDailySchedule(dateStr, compact) {
       </div>
     </div>`;
 
-  return `${summary}<div class="panel" style="padding:2px 14px;">${head}${rows}</div>`;
+  // .day-pane rather than an inline padding: the NOW row paints its own background, so this panel's
+  // padding has to clear whatever inset ring the aesthetic draws as its edge (see --panel-ring in
+  // styles.css). At the 2px this used to be, the card sat inside the ring and painted over it.
+  return `${summary}<div class="panel day-pane">${head}${rows}</div>`;
 }
 // The alert's whole job is to get you to the things it's about, so it opens the fold they're in.
 function revealPassedDay() { VIEW.dayBandsOpen.passed = true; render(); }

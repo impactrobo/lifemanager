@@ -318,6 +318,26 @@ Newest first. Keep this reasonably current so a fresh session can see what alrea
 without re-reading the whole diff history. Roughly grouped: this project spent early Sept 2026
 on an architecture split + a large wave of Maximalist aesthetics.
 
+- **A panel's padding has to clear the edge it paints inside itself (2026-09-20).** Reported on
+  Hedge: *"the scheduled item is hanging outside the bounds of the container"* — Home's day pane at
+  9:50pm, with the NOW card as the last row.
+  - Eight aesthetics draw a `.panel`'s edge as an **inset box-shadow** instead of a `border`
+    (`border: none; box-shadow: var(--hg-edge)`), ringing 9px deep on millennium, 7px on hedge, 5px
+    on cartomancer. An inset shadow is **painted, not laid out** — it occupies no space and the box
+    model knows nothing about it, so a panel can legally pad less than its own visible edge.
+  - The day pane padded `2px 14px`. Horizontally that cleared every ring; vertically it left the
+    NOW card — the one row with a background of its own — sitting up to 7px INSIDE the ring,
+    painting over it. `getBoundingClientRect()` reported everything comfortably within the panel,
+    which is why the first two investigations found nothing: **the geometry was never wrong.**
+  - Now `--panel-ring: 10px` in styles.css names the constraint, and `.day-pane` uses it instead of
+    an inline padding. Costs ~16px of height on the pane that had the least to spare, which is the
+    trade. Other panels that tighten padding (the calendar's reminders strip, a few six-pixel ones)
+    are unaffected: their children are transparent, so nothing paints over anything.
+  - `tests/test_panel_ring.js` **re-derives the deepest ring at runtime** across all 23 aesthetics
+    rather than restating it, and fails both if one outgrows `--panel-ring` and if the NOW card
+    crosses a painted edge anywhere. It waits on each lazily-loaded `theme.css` actually being
+    parsed — measuring before the sheet lands reads the unringed default and passes a broken build.
+    3/3 mutations caught; reverting the padding reproduces the report naming hedge by name.
 - **The service worker was silently breaking every POST (2026-09-19).** Reported from the phone as
   *"Could not enable reminder notifications: FetchEvent.respondWith received an error: Returned
   response is null"*, with a reasonable guess attached — that it needed sign-in so Firebase could
