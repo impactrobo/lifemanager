@@ -42,10 +42,31 @@ const MATCH_UNITS = {
   tbsp: 'tbsp', tbsps: 'tbsp', tablespoon: 'tbsp', tablespoons: 'tbsp',
   tsp: 'tsp', tsps: 'tsp', teaspoon: 'tsp', teaspoons: 'tsp',
   floz: 'floz',
+  // US volume. Reported 2026-09-20 as "I don't think we have the imperial measurements on here" —
+  // imperial WEIGHT was already covered (lb/oz/pound/ounce all parsed), so the real hole was
+  // volume: "1 pint cream", "2 quarts stock" and "1/2 gallon milk" all fell through to "no unit"
+  // and took the word into the food name with them ("gallon milk" matches nothing).
+  pt: 'pt', pint: 'pt', pints: 'pt',
+  qt: 'qt', quart: 'qt', quarts: 'qt',
+  gal: 'gal', gallon: 'gal', gallons: 'gal',
+};
+// Units written as two words. Tried before the single-word table, because the single-word matcher
+// takes one [a-zA-Z]+ run and would read "fl oz water" as the unit "fl" followed by "oz water".
+const MATCH_UNITS_MULTIWORD = {
+  'fl oz': 'floz', 'fl ozs': 'floz', 'fluid oz': 'floz',
+  'fluid ounce': 'floz', 'fluid ounces': 'floz',
 };
 // kg and l are not units the app stores, but they are units people write. Normalised to the ones
 // it does, with the quantity scaled to match — a conversion that is exact and so needs no prompt.
-const MATCH_UNIT_SCALE = { kg: { unit: 'g', factor: 1000 }, mg: { unit: 'g', factor: 0.001 }, l: { unit: 'mL', factor: 1000 } };
+// US liquid measures (not the imperial ones: a US pint is 473mL, an imperial pint 568mL, and this
+// app's other volumes — cup, tbsp, tsp — are already the US ones, so mixing conventions inside one
+// recipe would be worse than picking the one that matches its neighbours).
+const MATCH_UNIT_SCALE = {
+  kg: { unit: 'g', factor: 1000 }, mg: { unit: 'g', factor: 0.001 }, l: { unit: 'mL', factor: 1000 },
+  pt: { unit: 'mL', factor: 473.176 },
+  qt: { unit: 'mL', factor: 946.353 },
+  gal: { unit: 'mL', factor: 3785.41 },
+};
 
 // "1 1/2", "1/2", "2.5", "2,5" -> a number. Written fractions are common in recipes and a parser
 // that can't read them sends half the list to "no amount".
@@ -68,14 +89,26 @@ function parseIngredientLine(raw) {
   let qty = null;
   if (qtyMatch) { qty = parseMatchQty(qtyMatch[1]); s = s.slice(qtyMatch[0].length); }
   let unit = null;
-  const unitMatch = s.match(/^([a-zA-Z]+)\.?\s+/) || s.match(/^([a-zA-Z]+)\.?$/);
-  if (unitMatch) {
-    const key = MATCH_UNITS[unitMatch[1].toLowerCase()];
-    if (key) { unit = key; s = s.slice(unitMatch[0].length); }
+  // Two-word units first: "fl oz" has to be claimed whole, or the single-word pass below reads
+  // "fl" as the unit and leaves "oz water" as the food name.
+  const multi = s.match(/^([a-zA-Z]+\.?\s+[a-zA-Z]+)\.?\s+/) || s.match(/^([a-zA-Z]+\.?\s+[a-zA-Z]+)\.?$/);
+  if (multi) {
+    const key = MATCH_UNITS_MULTIWORD[multi[1].toLowerCase().replace(/\.\s*/g, ' ').replace(/\s+/g, ' ').trim()];
+    if (key) { unit = key; s = s.slice(multi[0].length); }
+  }
+  if (!unit) {
+    const unitMatch = s.match(/^([a-zA-Z]+)\.?\s+/) || s.match(/^([a-zA-Z]+)\.?$/);
+    if (unitMatch) {
+      const key = MATCH_UNITS[unitMatch[1].toLowerCase()];
+      if (key) { unit = key; s = s.slice(unitMatch[0].length); }
+    }
   }
   // A unit the app doesn't store, written the way people write it.
   if (unit && MATCH_UNIT_SCALE[unit]) {
-    if (qty != null) qty = qty * MATCH_UNIT_SCALE[unit].factor;
+    // Rounded to 3dp: the US volume factors are not round numbers, so 3 qt came out as
+    // 2839.0589999999997 and showed up verbatim in the review sheet. A thousandth of a millilitre
+    // is far below anything that matters for a shopping list.
+    if (qty != null) qty = Math.round(qty * MATCH_UNIT_SCALE[unit].factor * 1000) / 1000;
     unit = MATCH_UNIT_SCALE[unit].unit;
   }
   const name = s.replace(/\([^)]*\)/g, ' ').replace(MATCH_NOISE, ' ').replace(/[,;]/g, ' ')

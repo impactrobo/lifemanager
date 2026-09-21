@@ -117,7 +117,9 @@ function convertTargets(toType) {
   return out;
 }
 function convertTargetLabel(key) {
-  if (key === 'body') return 'Body / intro';
+  // "Body / intro" tried to name it for both a Quick note and a Hub at once and read as neither.
+  // "Body" is what it is everywhere. (2026-09-20, from the field log.)
+  if (key === 'body') return 'Body';
   if (key === 'entries') return 'Hub members';
   return entryFieldMeta(key).label;
 }

@@ -317,6 +317,58 @@ async function openFreshNote(page, body) {
   }
   console.log('6. an all-unsorted plan still gets reviewed — unsorted is content, not emptiness');
 
+  // ---- 7. Leaving edit mode by the PENCIL asks about an unresolved link ----
+  // From the field log, 2026-09-20: "Saving the note doesn't ask or prompt anything, but there is a
+  // MISSING NOTE callout in the text upon reading it." commitEntryDraft() filled
+  // VIEW.entryUnresolved on every path, but only saveOpenEntry() ever read it — and SAVE exists
+  // only WHILE editing, so the pencil (the ordinary way out) committed a dead link in silence.
+  await page.evaluate(() => {
+    STATE.entries = [Object.assign(blankEntry('quick'), { id: 'writer', title: 'Plans', body: '' })];
+    invalidateEntryIndex();
+    clearEntryDraft();
+    switchTab('notes'); setNotesSubtab('view');
+    openEntry('writer'); setEntryMode('edit');
+  });
+  await settle(page);
+  await page.evaluate(() => {
+    const ta = document.getElementById('entryBody');
+    ta.value = 'see [[Nowhere At All]] for the details';
+    VIEW.entryDraftBody = ta.value;
+  });
+  await page.evaluate(() => setEntryMode('view'));
+  await settle(page);
+  const prompted = await page.evaluate(() => {
+    const o = document.getElementById('confirmOverlay');
+    return {
+      shown: !!o && !o.classList.contains('hidden'),
+      msg: (document.getElementById('confirmMsg').textContent || '').trim(),
+      mode: VIEW.entryMode,
+    };
+  });
+  if (!prompted.shown) {
+    throw new Error('leaving edit mode by the pencil did not ask about the unresolved link — ' +
+      'it becomes a "Missing note" callout you only discover while reading');
+  }
+  if (!/nowhere at all/i.test(prompted.msg)) {
+    throw new Error(`the prompt does not name the link: ${JSON.stringify(prompted.msg)}`);
+  }
+  if (prompted.mode !== 'view') throw new Error('the pencil should still have switched to read mode');
+  await page.evaluate(() => closeConfirm());
+  await settle(page);
+  console.log('7. the pencil asks about an unresolved [[link]], as SAVE always did');
+
+  // ---- 8. The hold-preview tolerates a resting thumb ----
+  // "I need to move my thumb off the title while holding for proper functionality." pointermove
+  // cancelled on ANY movement, and a finger on glass emits a stream of sub-pixel moves.
+  const slop = await page.evaluate(() => {
+    const src = onEntryBodyKeydown.toString();   // force a real function ref so the bundle is loaded
+    return { hasSlop: typeof ENTRY_PRESS_SLOP === 'number' && ENTRY_PRESS_SLOP > 0, slop: ENTRY_PRESS_SLOP, src: !!src };
+  });
+  if (!slop.hasSlop) {
+    throw new Error('the link hold has no movement tolerance again — a resting thumb will cancel it');
+  }
+  console.log(`8. the link hold tolerates ${slop.slop}px of drift before cancelling`);
+
   if (errors.length) throw new Error(errors.join('\n'));
   console.log('test_entry_editor.js: PASS');
   await browser.close();

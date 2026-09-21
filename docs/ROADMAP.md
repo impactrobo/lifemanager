@@ -357,6 +357,42 @@ Newest first. Keep this reasonably current so a fresh session can see what alrea
 without re-reading the whole diff history. Roughly grouped: this project spent early Sept 2026
 on an architecture split + a large wave of Maximalist aesthetics.
 
+- **Field-log round one: five fixes from real device notes (2026-09-21).** The testing checklist is
+  published as a db-backed Artifact, so the notes came back as data rather than conversation —
+  66 items worked through, 8 flagged. These are the ones with a single clear cause.
+  - **The link hold-preview cancelled on any movement.** `pointermove` cleared the 450ms timer with
+    zero tolerance, and a thumb resting on glass emits a continuous stream of sub-pixel moves — so
+    the preview almost never fired, reported as *"I need to move my thumb off the title while
+    holding for proper functionality"* (it completed only once the finger left the link and stopped
+    generating moves over it). Now 12px of slop, the same tolerance the tab bar's hold already used.
+  - **iOS's own long-press menu was taking the gesture** — *"hold too long and a browser popup comes
+    up"*. These are `<a href="#">`, which is what makes Safari offer it; `-webkit-touch-callout:
+    none` on `.entry-link` declines. `user-select` is deliberately left alone, so a paragraph
+    containing a link can still be selected and copied.
+  - **An unresolved `[[link]]` stopped prompting.** `commitEntryDraft()` filled
+    `VIEW.entryUnresolved` on every path but only `saveOpenEntry()` read it — and SAVE exists only
+    WHILE editing, so once the pencil became the ordinary way out of edit mode the prompt was
+    unreachable. Reported as *"saving the note doesn't ask or prompt anything, but there is a
+    MISSING NOTE callout in the text upon reading it."* Extracted as
+    `promptUnresolvedEntryLinks()` and called from both.
+  - **MATCH WRITTEN INGREDIENTS moved into the Ingredients field** and appears as you type. Two
+    reports, one cause: `setEntryField()` deliberately does not render (it would rebuild the
+    textarea you are typing in), so nothing repainted after the field committed and the button
+    stayed absent until an unrelated render happened — *"doesn't pop up unless you close the note
+    and come back"*. It is now always in the DOM for a recipe and toggles its own `hidden` on input.
+  - **Imperial VOLUME in the ingredient parser.** *"I don't think we have the imperial measurements
+    on here"* — half already true: lb, lbs, pound, pounds, oz, ounce and ounces all parsed. The hole
+    was pint / quart / gallon, which fell through to no-unit and took the measure word into the food
+    name with them, so the line went hunting for a food called "gallon milk". `fl oz` needed a
+    two-word pass, since the single-word matcher read "fl" as the unit and left "oz water" as the
+    name. US measures, to match the cup/tbsp/tsp already in use — `tests/test_ingredient_units.js`
+    asserts the pint is the 473mL one and not the imperial 568mL.
+  - Counted words ("2 sticks butter", "3 cloves garlic", "1 large onion") are still **not** units,
+    and the test pins that: they need a count vocabulary, and reading them as volume would be worse
+    than leaving them alone.
+  - Plus two one-liners from the same notes: convert's `body` field is labelled **"Body"** rather
+    than "Body / intro", and the PHOTOS header states the 4-photo cap instead of only surfacing it
+    as a toast once you have already picked a fifth. 6/6 mutations caught.
 - **Back / Forward hidden, and the wordmark stopped colliding (2026-09-20).** Asked for as *"time to
   hide the back and forth arrows. Very confusing when you go through a note link and then the
   separate back arrow pops up. But if you hit the big back arrow in the header you're something

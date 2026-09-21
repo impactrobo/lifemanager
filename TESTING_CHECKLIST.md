@@ -681,4 +681,26 @@ overlap at 360, 28px at 320. 390 cleared by 7px, which is why the screenshot mis
 - [ ] **The wordmark.** It scales with screen width now and never touches the buttons. Yours should
       look unchanged at 390+; if it looks smaller or clipped, that's worth flagging.
 
+## From your field-log notes, round one (2026-09-21)
+Five things off the 66 items you worked through.
+- [ ] **Press and hold a link.** The preview should appear with your thumb resting still — no need
+      to move it — and **no Safari menu**. The hold cancelled on any movement at all, and a finger
+      on glass never stops moving; separately, iOS's own long-press menu was taking the gesture.
+- [ ] Drag properly (more than ~12px) while holding: the preview should NOT appear. That's the
+      difference between a hold and a scroll, and it's what the tolerance has to keep.
+- [ ] **Write `[[Something That Doesn't Exist]]` and leave edit mode with the pencil.** You should
+      be asked whether to create it. Before, only the SAVE button asked — and SAVE only exists
+      while editing, so the pencil committed a dead link silently.
+- [ ] **MATCH WRITTEN INGREDIENTS** now sits directly under the Ingredients box and appears as soon
+      as you type in it — no closing and reopening the note.
+- [ ] **Imperial volume in the parser.** Try "1 pint cream", "2 quarts stock", "1/2 gallon milk",
+      "6 fl oz water". Imperial *weight* (lb, oz, pound, ounce) already worked; volume was the hole,
+      and the measure word was being swallowed into the food name.
+- [ ] These are **US** measures — a US pint is 473mL, not the imperial 568mL — because the app's
+      cup, tbsp and tsp are already US. If you think in imperial pints, say so.
+- [ ] **"2 sticks butter", "3 cloves garlic", "1 large onion" are still not parsed.** Those are
+      counted, not measured, and need their own vocabulary. Flag this if it's in your way.
+- [ ] Small ones: the convert screen says **"Body"** not "Body / intro", and PHOTOS states the
+      **4-photo limit** up front instead of only via a toast when you pick a fifth.
+
 ## Add future items below as new features ship

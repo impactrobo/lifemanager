@@ -207,23 +207,31 @@ function commitEntryDraft() {
   clearEntryDraft();
   return e;
 }
+// A [[name]] that matched nothing is almost always a note you meant to write next. Offering to
+// create it is the useful answer; the alternative — silently leaving brackets in the prose — reads
+// as a bug. Returns true when it asked, so the caller can skip its own "Saved" toast.
+//
+// Split out of saveOpenEntry() on 2026-09-20, because that button is no longer the way most people
+// leave edit mode: SAVE only exists WHILE editing, and the pencil (setEntryMode('view')) is the
+// ordinary way out. commitEntryDraft() filled VIEW.entryUnresolved on both paths but only this one
+// ever read it, so leaving by the pencil committed an unresolved link with no prompt at all —
+// reported as "saving the note doesn't ask or prompt anything, but there is a MISSING NOTE callout
+// in the text upon reading it".
+function promptUnresolvedEntryLinks(e) {
+  const stuck = VIEW.entryUnresolved || [];
+  VIEW.entryUnresolved = null;
+  if (!stuck.length || !e) return false;
+  const name = stuck[0];
+  const more = stuck.length > 1 ? ` (and ${stuck.length - 1} more)` : '';
+  showConfirm(`No note called “${name}”${more}. Create it?`, () => createAndLinkEntry(name, e.id));
+  return true;
+}
 function saveOpenEntry() {
   const e = commitEntryDraft();
   if (!e) return;
   VIEW.entryMode = 'view';
   saveState();
-  const stuck = VIEW.entryUnresolved || [];
-  VIEW.entryUnresolved = null;
-  if (stuck.length) {
-    // A [[name]] that matched nothing is almost always a note you meant to write next. Offering to
-    // create it is the useful answer; the alternative — silently leaving brackets in the prose —
-    // reads as a bug.
-    const name = stuck[0];
-    const more = stuck.length > 1 ? ` (and ${stuck.length - 1} more)` : '';
-    showConfirm(`No note called “${name}”${more}. Create it?`, () => createAndLinkEntry(name, e.id));
-    render();
-    return;
-  }
+  if (promptUnresolvedEntryLinks(e)) { render(); return; }
   showToast('Saved');
   render();
 }
@@ -262,7 +270,17 @@ function closeEntry() {
   render();
 }
 function setEntryMode(mode) {
-  if (mode === 'view') { commitEntryDraft(); saveState(); }
+  if (mode === 'view') {
+    const e = commitEntryDraft();
+    saveState();
+    VIEW.entryMode = mode;
+    // Leaving edit mode by the pencil is "I'm done writing" just as much as pressing SAVE was, so
+    // it asks about a [[name]] that resolved to nothing the same way. Without this the link
+    // silently became a "Missing note" callout you only saw once you were already reading.
+    if (promptUnresolvedEntryLinks(e)) { render(); return; }
+    render();
+    return;
+  }
   VIEW.entryMode = mode;
   render();
 }
@@ -499,7 +517,9 @@ function renderEntryEditor(e) {
     ${renderEntryTemplateFields(e)}
     ${isRecipeEntry(e) ? renderRecipeEditor(e) : ''}
     ${isHubEntry(e) ? renderHubMembers(e) : ''}
-    <div class="subtle-label" style="margin:16px 0 8px;">PHOTOS</div>
+    ${/* The cap is stated rather than discovered: it used to appear only as a toast once you had
+          already picked a fifth photo, which is the wrong moment to learn about it. */ ''}
+    <div class="subtle-label" style="margin:16px 0 8px;">PHOTOS <span style="color:var(--text-faint); font-weight:400;">&middot; up to ${MAX_NOTE_PHOTOS}</span></div>
     <div class="photo-thumb-row" id="entryPhotoRow"></div>
     <button class="btn btn-ghost btn-sm" onclick="document.getElementById('entryPhotoInput').click()">+ ADD PHOTO</button>
     <input type="file" id="entryPhotoInput" accept="image/*" multiple style="display:none" onchange="handleEntryPhotoInput(event)">
@@ -898,7 +918,30 @@ function renderEntryFieldRead(e, key) {
   return `<div class="tmpl-field ${unsorted ? 'is-unsorted' : ''}">
     <div class="tmpl-label">${escapeHtml(meta.label)}${unsorted ? ' — nothing claimed this, move it where it belongs' : ''}</div>
     ${body}
+    ${key === 'ingredientText' ? renderIngredientMatchButton(e) : ''}
   </div>`;
+}
+// Sits directly under a recipe's "Ingredients, as written" box, in both modes.
+//
+// Two reports, one cause (2026-09-20): "the button should be under ingredients and populate once
+// any text ends up in the INGREDIENTS as written field", and "the button doesn't pop up unless you
+// close the note and come back into it, so you can't write and match as you generate a new
+// recipe". setEntryField() deliberately does NOT render — a render would rebuild the textarea you
+// are typing in — so nothing repainted after the field committed and the button stayed absent
+// until some unrelated render happened to run.
+//
+// So it is always in the DOM for a recipe and toggles its own `hidden` on input, patching one
+// attribute instead of re-rendering. Same trick the ingredient rows and the photo row already use.
+function renderIngredientMatchButton(e) {
+  if (!isRecipeEntry(e)) return '';
+  const written = entryFieldValue(e, 'ingredientText');
+  return `<button class="btn btn-sm btn-block" id="ingMatchBtn" style="margin:8px 0 0;"
+    ${written.trim() ? '' : 'hidden'} onclick="openIngredientMatch('${e.id}')">
+    &#10227; MATCH WRITTEN INGREDIENTS TO FOODS</button>`;
+}
+function onIngredientTextInput(ta) {
+  const btn = document.getElementById('ingMatchBtn');
+  if (btn) btn.hidden = !String(ta.value || '').trim();
 }
 function renderEntryField(e, key) {
   const meta = entryFieldMeta(key);
@@ -915,10 +958,13 @@ function renderEntryField(e, key) {
        </select>`
     : meta.kind === 'text'
       ? `<input type="text" class="tmpl-input" value="${escapeHtml(val)}" onchange="setEntryField('${key}', this.value)">`
-      : `<textarea class="tmpl-input" rows="${Math.min(10, Math.max(2, val.split('\n').length + 1))}" onchange="setEntryField('${key}', this.value)">${escapeHtml(val)}</textarea>`;
+      : `<textarea class="tmpl-input" rows="${Math.min(10, Math.max(2, val.split('\n').length + 1))}" onchange="setEntryField('${key}', this.value)"${
+           key === 'ingredientText' ? ' oninput="onIngredientTextInput(this)"' : ''
+         }>${escapeHtml(val)}</textarea>`;
   return `<div class="tmpl-field ${unsorted ? 'is-unsorted' : ''}">
     <div class="tmpl-label">${escapeHtml(meta.label)}${unsorted ? ' — nothing claimed this, move it where it belongs' : ''}</div>
     ${body}
+    ${key === 'ingredientText' ? renderIngredientMatchButton(e) : ''}
   </div>`;
 }
 function openEntryField(key) {
@@ -1170,11 +1216,28 @@ document.addEventListener('pointerdown', (evt) => {
   ENTRY_PRESS_FIRED = false;
   const id = a.getAttribute('data-entry-link');
   const x = evt.clientX, y = evt.clientY;
+  ENTRY_PRESS_ORIGIN = { x, y };
   clearTimeout(ENTRY_PRESS_TIMER);
   ENTRY_PRESS_TIMER = setTimeout(() => { ENTRY_PRESS_FIRED = true; openEntryPreview(id, x, y); }, ENTRY_PRESS_MS);
 });
-['pointerup', 'pointercancel', 'pointermove', 'scroll'].forEach(kind => {
-  document.addEventListener(kind, () => clearTimeout(ENTRY_PRESS_TIMER), true);
+// pointermove used to cancel on ANY movement, which on a touchscreen means it cancelled almost
+// every time: a thumb resting on glass emits a stream of sub-pixel moves, so the 450ms timer was
+// being cleared before it could ever fire. Reported 2026-09-20 as "I need to move my thumb off the
+// title while holding for proper functionality" — the hold only completed once the finger left the
+// link and stopped generating moves over it. 12px of slop, the same tolerance the tab bar's hold
+// already uses, is the difference between a held finger and a deliberate drag.
+const ENTRY_PRESS_SLOP = 12;
+let ENTRY_PRESS_ORIGIN = null;
+document.addEventListener('pointermove', (evt) => {
+  if (!ENTRY_PRESS_ORIGIN) return;
+  if (Math.abs(evt.clientX - ENTRY_PRESS_ORIGIN.x) > ENTRY_PRESS_SLOP ||
+      Math.abs(evt.clientY - ENTRY_PRESS_ORIGIN.y) > ENTRY_PRESS_SLOP) {
+    clearTimeout(ENTRY_PRESS_TIMER);
+    ENTRY_PRESS_ORIGIN = null;
+  }
+}, true);
+['pointerup', 'pointercancel', 'scroll'].forEach(kind => {
+  document.addEventListener(kind, () => { clearTimeout(ENTRY_PRESS_TIMER); ENTRY_PRESS_ORIGIN = null; }, true);
 });
 
 // ---- [[ autocomplete ----
@@ -1524,8 +1587,9 @@ function renderRecipeEditor(e) {
   const written = entryFieldValue(e, 'ingredientText');
   const skipped = entryFieldValue(e, 'ingredientsSkipped');
   return `
-    ${written ? `<button class="btn btn-sm btn-block" style="margin:12px 0 0;" onclick="openIngredientMatch('${e.id}')">
-      ⟳ MATCH WRITTEN INGREDIENTS TO FOODS</button>` : ''}
+    ${/* The MATCH button moved UP, into the Ingredients field itself — see
+          renderIngredientMatchButton(). It used to sit here, below Steps and Source, a long way
+          from the text it acts on. */ ''}
     ${skipped ? `<div class="ing-skipped">
       <b>Not counted</b> — these were skipped when matching, so the totals below don't include them:
       <div>${escapeHtml(skipped).replace(/\n/g, '<br>')}</div>
