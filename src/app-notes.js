@@ -284,6 +284,20 @@ function setEntryMode(mode) {
   VIEW.entryMode = mode;
   render();
 }
+// The whole card opens the note. Until 2026-09-24 only the title-and-snippet block did, so a tap
+// on the type chip, the date, a recipe's ingredient pills, the photo strip or the counters below
+// simply did nothing — reported as "is the entire note card selectable for entry or just below the
+// title? Seemed like my taps were getting eaten." On a phone a card IS the target; anything else
+// is a hit area you have to learn.
+//
+// Everything that already does its own thing keeps doing it: the favourite star, delete, a photo
+// thumbnail, a link chip. Checked by what was TAPPED rather than by stopPropagation on each of
+// them, so a control added later is covered without having to remember this function exists.
+function onNoteCardTap(evt, id) {
+  const t = /** @type {HTMLElement} */ (evt.target);
+  if (t && t.closest && t.closest('button, a, input, textarea, select, img, [role="button"]')) return;
+  openEntry(id);
+}
 function toggleEntryFavorite(id) {
   const e = liveEntryById(id);
   if (!e) return;
@@ -410,7 +424,7 @@ function renderEntryCard(e) {
   const out = entryOutgoingLinks(e).length;
   const back = entryBacklinks(e).length;
   const snippet = entrySnippet(e);
-  return `<div class="note-card" ${entityAttr('note', e.id)} style="border-left:4px solid ${color};">
+  return `<div class="note-card" ${entityAttr('note', e.id)} onclick="onNoteCardTap(event, '${e.id}')" style="border-left:4px solid ${color};">
     <div class="row" style="align-items:flex-start; margin-bottom:6px;">
       <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; min-width:0;">
         <button class="entry-star ${e.favorite ? 'is-on' : ''}" onclick="toggleEntryFavorite('${e.id}')"
@@ -428,7 +442,9 @@ function renderEntryCard(e) {
         <button class="icon-btn" onclick="deleteEntry('${e.id}')" title="Delete">${icon('close')}</button>
       </div>
     </div>
-    <div class="entry-card-tap" onclick="openEntry('${e.id}')">
+    ${/* The whole card opens the note now (onNoteCardTap on .note-card) — this block keeps the
+          class for its styling but no longer carries the only tap target on the card. */ ''}
+    <div class="entry-card-tap">
       <div style="font-weight:700; font-size:14px; margin-bottom:4px;">${escapeHtml(entryTitleOf(e))}</div>
       ${snippet ? `<div style="font-size:13px; color:var(--text-dim);">${escapeHtml(snippet)}</div>` : ''}
     </div>

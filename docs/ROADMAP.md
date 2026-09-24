@@ -357,6 +357,32 @@ Newest first. Keep this reasonably current so a fresh session can see what alrea
 without re-reading the whole diff history. Roughly grouped: this project spent early Sept 2026
 on an architecture split + a large wave of Maximalist aesthetics.
 
+- **Volume-tracked foods can be weighed (2026-09-24).** *"I just think we should always have a gram
+  unit allowed as I tend to measure even sauces / oil / etc in grams for pure accuracy."*
+  - Nine foods are volume-tracked (two oils, two juices, two milks, soy sauce, hot sauce, bone
+    broth) with per100 expressed per 100 **mL**, so a gram figure means nothing without knowing how
+    heavy a millilitre of that food is. `VOLUME_TO_ML['g']` is undefined, so the old arithmetic fell
+    through to `|| 1` and would have read 30 g of olive oil as 30 mL — a 9% understatement, silently,
+    on a food that is 884 cal per 100.
+  - The shopping-list comment already refuses to invent a density, and that still holds. The
+    difference is that each food now **declares** one, which is a published number rather than a
+    guess: oils 0.913, milks 1.03, juices 1.05, soy sauce 1.07. A food with no declared density —
+    including any custom food someone creates mid-match — is not offered a weight unit at all.
+  - `foodBaseAmount()` is now the single conversion, and `shoppingBaseOf()` delegates to it. Two
+    copies would have kept 30 g of oil and 2 tbsp of it on separate shopping lines while the meal
+    macros counted them as the same thing — the mutation test confirms exactly that.
+  - Meal Builder's toggle says **US** rather than IMPERIAL, since these are US measures throughout
+    (the stored key stays `'imperial'`; renaming it would need a migration for a label change).
+- **Two follow-ups from the previous round (2026-09-24).**
+  - **Declining iOS's callout made it fall through to text selection**: long-pressing a link then
+    selected the whole screen. `user-select: none` was deliberately left off the first time to keep
+    a paragraph containing a link copyable — the wrong trade, since suppressing selection on the
+    LINK alone leaves every surrounding paragraph selectable anyway.
+  - **A note card only opened from its title block.** The type chip, the date, the recipe pills and
+    the counters were all dead space — *"seemed like my taps were getting eaten"*. The whole card
+    is the target now, with the star, delete and photo thumbs excluded by checking what was TAPPED
+    rather than by hanging `stopPropagation` on each of them, so a control added later is covered
+    without anyone having to remember.
 - **Field-log round one: five fixes from real device notes (2026-09-21).** The testing checklist is
   published as a db-backed Artifact, so the notes came back as data rather than conversation —
   66 items worked through, 8 flagged. These are the ones with a single clear cause.

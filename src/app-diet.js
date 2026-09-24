@@ -181,7 +181,7 @@ function renderMealBuilderForm() {
     <div class="subtle-label" style="margin:16px 0 6px;">UNITS</div>
     <div class="day-toggle-row" style="display:flex; gap:6px; margin-bottom:18px;">
       <button class="btn btn-sm ${MEAL_UNIT_SYSTEM==='metric'?'btn-primary':''}" style="flex:1;" onclick="setMealUnitSystem('metric')">METRIC (g / mL)</button>
-      <button class="btn btn-sm ${MEAL_UNIT_SYSTEM==='imperial'?'btn-primary':''}" style="flex:1;" onclick="setMealUnitSystem('imperial')">IMPERIAL (lb/oz, cups...)</button>
+      <button class="btn btn-sm ${MEAL_UNIT_SYSTEM==='imperial'?'btn-primary':''}" style="flex:1;" onclick="setMealUnitSystem('imperial')">US (lb/oz, cups...)</button>
     </div>
 
     <div class="subtle-label" style="margin-bottom:8px;">ADD A FOOD</div>

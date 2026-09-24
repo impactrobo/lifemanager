@@ -703,4 +703,21 @@ Five things off the 66 items you worked through.
 - [ ] Small ones: the convert screen says **"Body"** not "Body / intro", and PHOTOS states the
       **4-photo limit** up front instead of only via a toast when you pick a fifth.
 
+## Field-log round two (2026-09-24)
+- [ ] **Hold a link.** No Safari menu *and* no runaway selection. Declining the callout made iOS
+      fall through to text selection instead, which is why the whole screen lit up. Selection is
+      suppressed on the link only — check you can still select and copy a paragraph around it.
+- [ ] **Tap a note card anywhere** — the date, the type chip, the counters, a recipe's pills. All
+      of it opens the note now; only the title block used to.
+- [ ] The **star** and the **X** on a card still do their own job and don't open the note.
+- [ ] **Grams on oils and sauces.** Meal Builder → add olive oil: the unit list is mL *and* g
+      (cup/tbsp/tsp/fl oz *and* oz in US mode). 91.3 g should read the same calories as 100 mL —
+      oil is 0.913 g/mL, and the app now declares that per food rather than assuming 1.
+- [ ] The same for soy sauce, hot sauce, the juices, the milks and bone broth.
+- [ ] A **custom food you create yourself** has no density, so it won't offer grams. Does that
+      read as sensible, or do you want to be asked for a density when creating one?
+- [ ] **Shopping list**: plan one meal using oil by volume and another using it by weight — they
+      should combine into one line, not two.
+- [ ] Meal Builder's unit toggle now says **US**, not IMPERIAL.
+
 ## Add future items below as new features ship

@@ -3103,12 +3103,17 @@ button.brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 4
 .entry-check-box:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* -webkit-touch-callout: none stops iOS's own long-press menu (Open / Copy / Share) from taking
    over the gesture — reported 2026-09-20 as "hold too long and a browser popup comes up". These
-   are <a href="#"> elements, which is what makes Safari offer it. Selection is deliberately left
-   alone: the callout is the thing in the way, and killing user-select would stop you copying a
-   paragraph that happens to contain a link. */
+   are <a href="#"> elements, which is what makes Safari offer it.
+   user-select: none was left off at first, to keep a paragraph containing a link copyable. That
+   was the wrong trade: with the callout declined, iOS falls through to TEXT SELECTION instead and
+   long-pressing a link selected the whole screen (reported 2026-09-24). Suppressing selection on
+   the LINK only still leaves every surrounding paragraph selectable, so the copy case survives —
+   you just can't start a selection from the link itself, which is the one place a long press now
+   means something else. */
 .entry-link {
   font-weight: 600; text-decoration: none; border-bottom: 1px solid currentColor;
   -webkit-touch-callout: none;
+  -webkit-user-select: none; user-select: none;
 }
 .entry-link-dead { color: var(--text-faint); text-decoration: line-through; border: 0; }
 .entry-link-missing { color: var(--text-faint); font-style: italic; border: 0; }

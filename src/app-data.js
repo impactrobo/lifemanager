@@ -189,7 +189,7 @@ const FOOD_DB = [
   { id: 'chicken_liver', name: 'Chicken liver, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 167, protein: 25, carb: 0.9, fat: 6.5, fiber: 0, sodium: 71, potassium: 230, calcium: 8, iron: 8.5, magnesium: 18, vitaminC: 12, vitaminD: 0.7, vitaminB12: 16.6 } },
   { id: 'oxtail', name: 'Oxtail, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 240, protein: 27, carb: 0, fat: 14, fiber: 0, sodium: 65, potassium: 280, calcium: 15, iron: 3.5, magnesium: 20, vitaminC: 0, vitaminD: 0, vitaminB12: 2.2 } },
   { id: 'chicken_skin', name: 'Chicken skin, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 449, protein: 18, carb: 0, fat: 43, fiber: 0, sodium: 60, potassium: 150, calcium: 10, iron: 0.7, magnesium: 12, vitaminC: 0, vitaminD: 0.2, vitaminB12: 0.3 } },
-  { id: 'bone_broth', name: 'Bone broth (beef/chicken)', category: 'meat', unit: 'volume', base: 'mL', per100: { cal: 30, protein: 5, carb: 1, fat: 1, fiber: 0, sodium: 250, potassium: 130, calcium: 8, iron: 0.2, magnesium: 3, vitaminC: 0, vitaminD: 0, vitaminB12: 0.1 }, approx: true },
+  { id: 'bone_broth', name: 'Bone broth (beef/chicken)', category: 'meat', unit: 'volume', base: 'mL', density: 1, per100: { cal: 30, protein: 5, carb: 1, fat: 1, fiber: 0, sodium: 250, potassium: 130, calcium: 8, iron: 0.2, magnesium: 3, vitaminC: 0, vitaminD: 0, vitaminB12: 0.1 }, approx: true },
   { id: 'chicken_thigh', name: 'Chicken thigh, skinless, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 209, protein: 26, carb: 0, fat: 11, fiber: 0, sodium: 90, potassium: 240, calcium: 12, iron: 1.3, magnesium: 23, vitaminC: 0, vitaminD: 0.1, vitaminB12: 0.4 } },
   { id: 'ground_chicken', name: 'Ground chicken, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 189, protein: 24, carb: 0, fat: 10, fiber: 0, sodium: 75, potassium: 250, calcium: 13, iron: 1.2, magnesium: 22, vitaminC: 0, vitaminD: 0.1, vitaminB12: 0.4 } },
   { id: 'turkey_breast', name: 'Turkey breast, skinless, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 135, protein: 30, carb: 0, fat: 1, fiber: 0, sodium: 63, potassium: 260, calcium: 15, iron: 0.6, magnesium: 28, vitaminC: 0, vitaminD: 0.1, vitaminB12: 0.4 } },
@@ -208,8 +208,8 @@ const FOOD_DB = [
   { id: 'egg_yolk', name: 'Egg yolk only', category: 'dairy', unit: 'count', base: 'g', itemAmount: 17, itemLabel: 'yolk', per100: { cal: 322, protein: 16, carb: 3.6, fat: 27, fiber: 0, sodium: 48, potassium: 109, calcium: 129, iron: 2.7, magnesium: 5, vitaminC: 0, vitaminD: 5.4, vitaminB12: 1.9 } },
   { id: 'greek_yogurt', name: 'Greek yogurt, plain, nonfat', category: 'dairy', unit: 'weight', base: 'g', per100: { cal: 59, protein: 10, carb: 3.6, fat: 0.4, fiber: 0, sodium: 36, potassium: 141, calcium: 110, iron: 0.1, magnesium: 11, vitaminC: 0, vitaminD: 0, vitaminB12: 0.5 } },
   { id: 'cottage_cheese', name: 'Cottage cheese, low-fat', category: 'dairy', unit: 'weight', base: 'g', per100: { cal: 81, protein: 11, carb: 3.4, fat: 2.3, fiber: 0, sodium: 364, potassium: 104, calcium: 83, iron: 0.1, magnesium: 5, vitaminC: 0, vitaminD: 0, vitaminB12: 0.4 } },
-  { id: 'fortified_milk', name: 'Fortified milk, whole', category: 'dairy', unit: 'volume', base: 'mL', per100: { cal: 61, protein: 3.2, carb: 4.8, fat: 3.3, fiber: 0, sodium: 43, potassium: 132, calcium: 113, iron: 0.03, magnesium: 10, vitaminC: 0, vitaminD: 1.3, vitaminB12: 0.5 }, approx: true },
-  { id: 'lactose_free_milk', name: 'Lactose-free whole milk', category: 'dairy', unit: 'volume', base: 'mL', per100: { cal: 61, protein: 3.2, carb: 4.8, fat: 3.3, fiber: 0, sodium: 43, potassium: 150, calcium: 125, iron: 0.03, magnesium: 10, vitaminC: 0, vitaminD: 1.3, vitaminB12: 0.5 }, approx: true },
+  { id: 'fortified_milk', name: 'Fortified milk, whole', category: 'dairy', unit: 'volume', base: 'mL', density: 1.03, per100: { cal: 61, protein: 3.2, carb: 4.8, fat: 3.3, fiber: 0, sodium: 43, potassium: 132, calcium: 113, iron: 0.03, magnesium: 10, vitaminC: 0, vitaminD: 1.3, vitaminB12: 0.5 }, approx: true },
+  { id: 'lactose_free_milk', name: 'Lactose-free whole milk', category: 'dairy', unit: 'volume', base: 'mL', density: 1.03, per100: { cal: 61, protein: 3.2, carb: 4.8, fat: 3.3, fiber: 0, sodium: 43, potassium: 150, calcium: 125, iron: 0.03, magnesium: 10, vitaminC: 0, vitaminD: 1.3, vitaminB12: 0.5 }, approx: true },
   { id: 'hard_cheese', name: 'Hard cheese (Parmesan-type)', category: 'dairy', unit: 'weight', base: 'g', per100: { cal: 431, protein: 38, carb: 4, fat: 29, fiber: 0, sodium: 1529, potassium: 92, calcium: 1184, iron: 0.8, magnesium: 44, vitaminC: 0, vitaminD: 0.5, vitaminB12: 1.2 } },
   { id: 'cheddar_cheese', name: 'Cheddar cheese', category: 'dairy', unit: 'weight', base: 'g', per100: { cal: 403, protein: 25, carb: 1.3, fat: 33, fiber: 0, sodium: 621, potassium: 76, calcium: 721, iron: 0.7, magnesium: 28, vitaminC: 0, vitaminD: 0.6, vitaminB12: 0.8 } },
   { id: 'mozzarella_cheese', name: 'Mozzarella, part-skim', category: 'dairy', unit: 'weight', base: 'g', per100: { cal: 254, protein: 24, carb: 2.8, fat: 16, fiber: 0, sodium: 484, potassium: 76, calcium: 505, iron: 0.4, magnesium: 20, vitaminC: 0, vitaminD: 0.2, vitaminB12: 1 } },
@@ -263,11 +263,11 @@ const FOOD_DB = [
   { id: 'kiwi', name: 'Kiwi', category: 'fruit', unit: 'weight', base: 'g', per100: { cal: 61, protein: 1.1, carb: 15, fat: 0.5, fiber: 3, sodium: 3, potassium: 312, calcium: 34, iron: 0.3, magnesium: 17, vitaminC: 93, vitaminD: 0, vitaminB12: 0 } },
   { id: 'banana', name: 'Banana', category: 'fruit', unit: 'weight', base: 'g', per100: { cal: 89, protein: 1.1, carb: 23, fat: 0.3, fiber: 2.6, sodium: 1, potassium: 358, calcium: 5, iron: 0.3, magnesium: 27, vitaminC: 8.7, vitaminD: 0, vitaminB12: 0 } },
   { id: 'raspberries', name: 'Raspberries', category: 'fruit', unit: 'weight', base: 'g', per100: { cal: 52, protein: 1.2, carb: 12, fat: 0.65, fiber: 6.5, sodium: 1, potassium: 151, calcium: 25, iron: 0.7, magnesium: 22, vitaminC: 26, vitaminD: 0, vitaminB12: 0 }, approx: true },
-  { id: 'orange_juice', name: 'Orange juice', category: 'fruit', unit: 'volume', base: 'mL', per100: { cal: 45, protein: 0.7, carb: 10.4, fat: 0.2, fiber: 0.2, sodium: 1, potassium: 200, calcium: 11, iron: 0.2, magnesium: 11, vitaminC: 50, vitaminD: 0, vitaminB12: 0 }, approx: true },
-  { id: 'apple_juice', name: 'Apple juice', category: 'fruit', unit: 'volume', base: 'mL', per100: { cal: 46, protein: 0.1, carb: 11.3, fat: 0.1, fiber: 0.2, sodium: 4, potassium: 101, calcium: 8, iron: 0.1, magnesium: 5, vitaminC: 0.9, vitaminD: 0, vitaminB12: 0 }, approx: true },
+  { id: 'orange_juice', name: 'Orange juice', category: 'fruit', unit: 'volume', base: 'mL', density: 1.05, per100: { cal: 45, protein: 0.7, carb: 10.4, fat: 0.2, fiber: 0.2, sodium: 1, potassium: 200, calcium: 11, iron: 0.2, magnesium: 11, vitaminC: 50, vitaminD: 0, vitaminB12: 0 }, approx: true },
+  { id: 'apple_juice', name: 'Apple juice', category: 'fruit', unit: 'volume', base: 'mL', density: 1.05, per100: { cal: 46, protein: 0.1, carb: 11.3, fat: 0.1, fiber: 0.2, sodium: 4, potassium: 101, calcium: 8, iron: 0.1, magnesium: 5, vitaminC: 0.9, vitaminD: 0, vitaminB12: 0 }, approx: true },
   // ---- Fats & Oils (incl. nuts, seeds, avocado) ----
-  { id: 'olive_oil', name: 'Extra virgin olive oil', category: 'fats', unit: 'volume', base: 'mL', per100: { cal: 884, protein: 0, carb: 0, fat: 100, fiber: 0, sodium: 2, potassium: 1, calcium: 1, iron: 0.6, magnesium: 0, vitaminC: 0, vitaminD: 0, vitaminB12: 0 }, approx: true },
-  { id: 'avocado_oil', name: 'Avocado oil', category: 'fats', unit: 'volume', base: 'mL', per100: { cal: 884, protein: 0, carb: 0, fat: 100, fiber: 0, sodium: 0, potassium: 0, calcium: 0, iron: 0, magnesium: 0, vitaminC: 0, vitaminD: 0, vitaminB12: 0 }, approx: true },
+  { id: 'olive_oil', name: 'Extra virgin olive oil', category: 'fats', unit: 'volume', base: 'mL', density: 0.913, per100: { cal: 884, protein: 0, carb: 0, fat: 100, fiber: 0, sodium: 2, potassium: 1, calcium: 1, iron: 0.6, magnesium: 0, vitaminC: 0, vitaminD: 0, vitaminB12: 0 }, approx: true },
+  { id: 'avocado_oil', name: 'Avocado oil', category: 'fats', unit: 'volume', base: 'mL', density: 0.913, per100: { cal: 884, protein: 0, carb: 0, fat: 100, fiber: 0, sodium: 0, potassium: 0, calcium: 0, iron: 0, magnesium: 0, vitaminC: 0, vitaminD: 0, vitaminB12: 0 }, approx: true },
   { id: 'avocado', name: 'Avocado', category: 'fats', unit: 'weight', base: 'g', per100: { cal: 160, protein: 2, carb: 8.5, fat: 15, fiber: 6.7, sodium: 7, potassium: 485, calcium: 12, iron: 0.6, magnesium: 29, vitaminC: 10, vitaminD: 0, vitaminB12: 0 } },
   { id: 'walnuts', name: 'Walnuts', category: 'fats', unit: 'weight', base: 'g', per100: { cal: 654, protein: 15, carb: 14, fat: 65, fiber: 6.7, sodium: 2, potassium: 441, calcium: 98, iron: 2.9, magnesium: 158, vitaminC: 1.3, vitaminD: 0, vitaminB12: 0 } },
   { id: 'almonds', name: 'Almonds', category: 'fats', unit: 'weight', base: 'g', per100: { cal: 579, protein: 21, carb: 22, fat: 50, fiber: 12.5, sodium: 1, potassium: 733, calcium: 269, iron: 3.7, magnesium: 270, vitaminC: 0, vitaminD: 0, vitaminB12: 0 } },
@@ -286,8 +286,8 @@ const FOOD_DB = [
   { id: 'mayonnaise', name: 'Mayonnaise', category: 'sauces', unit: 'weight', base: 'g', per100: { cal: 680, protein: 1, carb: 0.6, fat: 75, fiber: 0, sodium: 635, potassium: 20, calcium: 8, iron: 0.2, magnesium: 2, vitaminC: 0, vitaminD: 0.3, vitaminB12: 0.1 }, approx: true },
   { id: 'mayonnaise_light', name: 'Mayonnaise, light', category: 'sauces', unit: 'weight', base: 'g', per100: { cal: 232, protein: 0.6, carb: 8, fat: 22, fiber: 0, sodium: 700, potassium: 25, calcium: 5, iron: 0.1, magnesium: 2, vitaminC: 0, vitaminD: 0, vitaminB12: 0 }, approx: true },
   { id: 'bbq_sauce', name: 'BBQ sauce', category: 'sauces', unit: 'weight', base: 'g', per100: { cal: 172, protein: 0.9, carb: 40, fat: 0.6, fiber: 0.7, sodium: 690, potassium: 170, calcium: 18, iron: 0.6, magnesium: 12, vitaminC: 2, vitaminD: 0, vitaminB12: 0 }, approx: true },
-  { id: 'soy_sauce', name: 'Soy sauce', category: 'sauces', unit: 'volume', base: 'mL', per100: { cal: 53, protein: 8, carb: 4.9, fat: 0.1, fiber: 0.8, sodium: 5493, potassium: 362, calcium: 20, iron: 1.7, magnesium: 43, vitaminC: 0, vitaminD: 0, vitaminB12: 0 }, approx: true },
-  { id: 'hot_sauce', name: 'Hot sauce (Louisiana-style)', category: 'sauces', unit: 'volume', base: 'mL', per100: { cal: 12, protein: 0.5, carb: 1.5, fat: 0.7, fiber: 0.3, sodium: 1846, potassium: 190, calcium: 20, iron: 1.1, magnesium: 15, vitaminC: 5, vitaminD: 0, vitaminB12: 0 }, approx: true },
+  { id: 'soy_sauce', name: 'Soy sauce', category: 'sauces', unit: 'volume', base: 'mL', density: 1.07, per100: { cal: 53, protein: 8, carb: 4.9, fat: 0.1, fiber: 0.8, sodium: 5493, potassium: 362, calcium: 20, iron: 1.7, magnesium: 43, vitaminC: 0, vitaminD: 0, vitaminB12: 0 }, approx: true },
+  { id: 'hot_sauce', name: 'Hot sauce (Louisiana-style)', category: 'sauces', unit: 'volume', base: 'mL', density: 1.01, per100: { cal: 12, protein: 0.5, carb: 1.5, fat: 0.7, fiber: 0.3, sodium: 1846, potassium: 190, calcium: 20, iron: 1.1, magnesium: 15, vitaminC: 5, vitaminD: 0, vitaminB12: 0 }, approx: true },
   { id: 'ranch_dressing', name: 'Ranch dressing', category: 'sauces', unit: 'weight', base: 'g', per100: { cal: 430, protein: 1, carb: 6, fat: 45, fiber: 0, sodium: 700, potassium: 60, calcium: 30, iron: 0.2, magnesium: 5, vitaminC: 0, vitaminD: 0, vitaminB12: 0.1 }, approx: true },
   // ---- Powders & Supplements ----
   { id: 'nutritional_yeast', name: 'Nutritional yeast', category: 'supplements', unit: 'weight', base: 'g', per100: { cal: 325, protein: 45, carb: 36, fat: 4, fiber: 20, sodium: 25, potassium: 1200, calcium: 30, iron: 4, magnesium: 130, vitaminC: 0, vitaminD: 0, vitaminB12: 17 } },
@@ -318,10 +318,15 @@ function mealUnitOptions(food) {
   if (food.unit === 'weight') return MEAL_UNIT_SYSTEM === 'imperial'
     ? [{ value: 'oz', label: 'oz' }, { value: 'lb', label: 'lb' }]
     : [{ value: 'g', label: 'g' }];
-  // volume
-  return MEAL_UNIT_SYSTEM === 'imperial'
+  // volume. A food that declares a density can also be WEIGHED, which is how most people actually
+  // measure oil and sauce accurately — the spoon is the imprecise part. Offered last, so the
+  // natural unit stays the default (defaultMealUnitFor takes [0]).
+  const weighable = food.density
+    ? (MEAL_UNIT_SYSTEM === 'imperial' ? [{ value: 'oz', label: 'oz' }] : [{ value: 'g', label: 'g' }])
+    : [];
+  return (MEAL_UNIT_SYSTEM === 'imperial'
     ? [{ value: 'cup', label: 'cup' }, { value: 'tbsp', label: 'tbsp' }, { value: 'tsp', label: 'tsp' }, { value: 'floz', label: 'fl oz' }]
-    : [{ value: 'mL', label: 'mL' }];
+    : [{ value: 'mL', label: 'mL' }]).concat(weighable);
 }
 function defaultMealUnitFor(food) { return mealUnitOptions(food)[0].value; }
 // Converts a meal-item's {foodId, qty, unit} into grams-or-mL-equivalent-in-the-food's-base,
@@ -338,18 +343,36 @@ function zeroNutrients() {
   NUTRIENT_KEYS.forEach(k => { z[k] = 0; });
   return z;
 }
+// How much of `food`'s OWN base (g or mL) is `qty` of `unit`? null when the two cannot be converted
+// without inventing something. One place, because the meal macros and the shopping list both need
+// the answer and two copies of it would disagree the moment either gained a case.
+//
+// The density branch is what lets a volume-tracked food be WEIGHED. Asked for 2026-09-24: "I just
+// think we should always have a gram unit allowed as I tend to measure even sauces / oil / etc in
+// grams for pure accuracy." Only foods that DECLARE a density get it: olive oil is 0.913 g/mL, so
+// treating a gram as a millilitre would overstate a tablespoon by 9% on a food that is 884 cal per
+// 100. Declaring the number per food is not the same as inventing one per conversion, which is
+// what the shopping-list comment rules out.
+function foodBaseAmount(food, qty, unit) {
+  if (!food) return null;
+  if (food.unit === 'count') return unit === 'item' ? qty * (food.itemAmount || 0) : null;
+  if (food.unit === 'weight') {
+    if (WEIGHT_TO_G[unit] != null) return qty * WEIGHT_TO_G[unit];
+    if (VOLUME_TO_ML[unit] != null && food.density) return qty * VOLUME_TO_ML[unit] * food.density;
+    return null;
+  }
+  if (VOLUME_TO_ML[unit] != null) return qty * VOLUME_TO_ML[unit];
+  if (WEIGHT_TO_G[unit] != null && food.density) return (qty * WEIGHT_TO_G[unit]) / food.density;
+  return null;
+}
 function computeItemMacro(item) {
   const food = foodById(item.foodId);
   if (!food) return zeroNutrients();
   const qty = Number(item.qty) || 0;
-  let baseAmount;
-  if (food.unit === 'count') {
-    baseAmount = qty * food.itemAmount;
-  } else if (food.unit === 'weight') {
-    baseAmount = qty * (WEIGHT_TO_G[item.unit] || 1);
-  } else {
-    baseAmount = qty * (VOLUME_TO_ML[item.unit] || 1);
-  }
+  // A unit this food can't be converted from falls back to reading the number as the base amount,
+  // which is what the arithmetic here has always done for an unrecognised unit.
+  const converted = foodBaseAmount(food, qty, item.unit);
+  const baseAmount = converted == null ? qty : converted;
   const factor = baseAmount / 100;
   const out = {};
   NUTRIENT_KEYS.forEach(k => { out[k] = (food.per100[k] || 0) * factor; });

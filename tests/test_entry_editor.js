@@ -369,6 +369,67 @@ async function openFreshNote(page, body) {
   }
   console.log(`8. the link hold tolerates ${slop.slop}px of drift before cancelling`);
 
+  // ---- 9. The whole card opens the note, except its own controls ----
+  // Reported 2026-09-24: "is the entire note card selectable for entry or just below the title?
+  // Seemed like my taps were getting eaten." Only the title-and-snippet block carried the tap, so
+  // the type chip, the date, the counters and the photo strip all did nothing.
+  await page.evaluate(() => {
+    STATE.entries = [Object.assign(blankEntry('quick'), {
+      id: 'card1', title: 'Tap me', body: 'some body text', favorite: false,
+    })];
+    invalidateEntryIndex();
+    clearEntryDraft();
+    switchTab('notes'); setNotesSubtab('view');
+    VIEW.entryOpenId = null;
+  });
+  await settle(page);
+
+  const tapAt = async (selector) => {
+    await page.evaluate(() => { VIEW.entryOpenId = null; render(); });
+    await settle(page);
+    const ok = await page.evaluate((sel) => {
+      const card = document.querySelector('.note-card');
+      const target = card && card.querySelector(sel);
+      if (!target) return null;
+      target.click();
+      return true;
+    }, selector);
+    if (ok === null) throw new Error(`no ${selector} on the card — fixture drift`);
+    await settle(page);
+    return page.evaluate(() => VIEW.entryOpenId);
+  };
+
+  // The date sits in the card's top row, which used to be dead space.
+  const viaDate = await tapAt('.mono');
+  if (viaDate !== 'card1') throw new Error('tapping the date on the card did not open the note');
+  // The type label, likewise.
+  const viaType = await tapAt('.note-tag-label');
+  if (viaType !== 'card1') throw new Error('tapping the type chip did not open the note');
+  // And the title block, which always worked — the guard against fixing one by breaking the other.
+  const viaTitle = await tapAt('.entry-card-tap');
+  if (viaTitle !== 'card1') throw new Error('tapping the title block no longer opens the note');
+  console.log('9. the card opens from its date, its type chip and its title');
+
+  // ---- 10. ...but its own buttons still do their own job ----
+  await page.evaluate(() => { VIEW.entryOpenId = null; render(); });
+  await settle(page);
+  const star = await page.evaluate(() => {
+    document.querySelector('.note-card .entry-star').click();
+    return { open: VIEW.entryOpenId, fav: !!liveEntryById('card1').favorite };
+  });
+  await settle(page);
+  if (star.open) throw new Error('the favourite star opened the note as well as starring it');
+  if (!star.fav) throw new Error('the favourite star stopped starring');
+  const del = await page.evaluate(() => {
+    document.querySelector('.note-card .icon-btn').click();
+    return VIEW.entryOpenId;
+  });
+  await settle(page);
+  if (del) throw new Error('the delete button opened the note instead of asking to delete it');
+  await page.evaluate(() => closeConfirm());
+  await settle(page);
+  console.log('10. the star and the delete button are not swallowed by the card');
+
   if (errors.length) throw new Error(errors.join('\n'));
   console.log('test_entry_editor.js: PASS');
   await browser.close();

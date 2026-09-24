@@ -218,10 +218,11 @@ function applyIngredientMatch(e, rows) {
 // in the same base is summed in the food's OWN base unit; genuinely different measures (cups of
 // flour vs grams of flour) still stay apart, because converting volume to weight needs a density
 // the app doesn't have and shouldn't invent.
+// Delegates to foodBaseAmount() rather than repeating the conversion: once a volume food could be
+// weighed (2026-09-24), a second copy here would have kept 30 g of olive oil and 2 tbsp of it on
+// separate shopping lines while the meal macros counted them as the same thing.
 function shoppingBaseOf(food, unit, qty) {
-  if (food.unit === 'count') return unit === 'item' ? qty * (food.itemAmount || 0) : null;
-  if (food.unit === 'weight') return WEIGHT_TO_G[unit] != null ? qty * WEIGHT_TO_G[unit] : null;
-  return VOLUME_TO_ML[unit] != null ? qty * VOLUME_TO_ML[unit] : null;
+  return foodBaseAmount(food, qty, unit);
 }
 function combineShoppingItems(entries) {
   const byFood = new Map();
