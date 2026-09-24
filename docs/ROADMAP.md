@@ -357,6 +357,25 @@ Newest first. Keep this reasonably current so a fresh session can see what alrea
 without re-reading the whole diff history. Roughly grouped: this project spent early Sept 2026
 on an architecture split + a large wave of Maximalist aesthetics.
 
+- **Swipe right to leave a note (2026-09-24).** *"Trying to flip through notes and it's a pain to go
+  to VIEW ALL or scrolling all the way down to DONE if you picked the wrong one"* — then narrowed to
+  *"should go back to the list, and yes only in READ mode not edit mode"*.
+  - It calls `goBackEntry()`, which was already the right answer to "leave this note": it pops the
+    link trail if you followed one and only falls through to the list when there is none. So the
+    gesture and the back chevron are one behaviour with two ways to ask for it, rather than a second
+    rule to keep in sync.
+  - READ MODE ONLY, by request — in edit mode a horizontal drag is how you move the caret.
+  - **A navigation gesture on a scrolling page is mostly a set of refusals**, and the test is mostly
+    refusals too: vertical scrolls that drift sideways, long diagonal flicks, leftward swipes, taps,
+    swipes while a sheet is open, and drags that ended up selecting text. Each one is a way to throw
+    away what somebody was reading.
+  - No FORWARD half: the described pain is one-directional, and the header's forward arrow was
+    hidden days earlier as a browser habit rather than an app one.
+  - 7/7 mutations caught, but two needed a second pass. One was a **redundant guard** — read mode is
+    checked at both pointerdown and pointerup, so removing either alone changed nothing and the
+    mutation had to remove both. The other was a **real gap**: the vertical-scroll case used a 40px
+    sideways drift, which the DISTANCE threshold already refuses, so the horizontal-dominance rule
+    was never exercised until a 90px-sideways/300px-down flick was added.
 - **Volume-tracked foods can be weighed (2026-09-24).** *"I just think we should always have a gram
   unit allowed as I tend to measure even sauces / oil / etc in grams for pure accuracy."*
   - Nine foods are volume-tracked (two oils, two juices, two milks, soy sauce, hot sauce, bone

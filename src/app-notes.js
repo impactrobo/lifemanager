@@ -1256,6 +1256,55 @@ document.addEventListener('pointermove', (evt) => {
   document.addEventListener(kind, () => { clearTimeout(ENTRY_PRESS_TIMER); ENTRY_PRESS_ORIGIN = null; }, true);
 });
 
+// ---- Swipe right to leave a note ----
+// Asked for 2026-09-24: "would swipe inputs for back and forward be doable? Trying to flip through
+// notes and it's a pain to go to VIEW ALL or scrolling all the way down to DONE if you picked the
+// wrong one."
+//
+// It goes through goBackEntry(), which is already the right answer to "leave this note": it pops
+// the link trail if you followed one, and only falls through to the list when there is no trail.
+// So swiping out of a note you reached via [[link]] lands on the note you came from, which is what
+// the chevron in the header does too — one behaviour, two ways to ask for it.
+//
+// READ MODE ONLY, by request. In edit mode a horizontal drag is how you move the caret and select
+// text, and stealing that would be much worse than the walk to DONE.
+//
+// DONE stays. This is an accelerator, not the only exit — a gesture with no visible equivalent is
+// a feature only the person who built it knows about.
+//
+// No FORWARD half: the pain described is one-directional, and the header's forward arrow was
+// hidden four days ago as a browser habit rather than an app one. Easy to add if it is missed.
+const ENTRY_SWIPE_MIN_X = 70;    // px of travel before this is a swipe rather than a sloppy tap
+const ENTRY_SWIPE_RATIO = 1.5;   // how much more horizontal than vertical it has to be
+let ENTRY_SWIPE_START = null;
+document.addEventListener('pointerdown', (evt) => {
+  ENTRY_SWIPE_START = null;
+  if (!VIEW.entryOpenId || VIEW.entryMode !== 'view') return;
+  // A sheet or modal on top owns the gesture — swiping the convert screen must not also leave the
+  // note underneath it.
+  const overlays = document.getElementById('overlayRoot');
+  if (overlays && overlays.children.length) return;
+  const app = document.getElementById('app');
+  if (!app || !app.contains(/** @type {any} */ (evt.target))) return;
+  ENTRY_SWIPE_START = { x: evt.clientX, y: evt.clientY, id: VIEW.entryOpenId };
+});
+document.addEventListener('pointercancel', () => { ENTRY_SWIPE_START = null; });
+document.addEventListener('pointerup', (evt) => {
+  const s = ENTRY_SWIPE_START;
+  ENTRY_SWIPE_START = null;
+  if (!s) return;
+  // Anything that navigated mid-gesture (a link tap, a checkbox re-render) invalidates it.
+  if (VIEW.entryOpenId !== s.id || VIEW.entryMode !== 'view') return;
+  const dx = evt.clientX - s.x;
+  const dy = evt.clientY - s.y;
+  // Rightward, and decisively more horizontal than vertical — otherwise every flick down the page
+  // that drifts a little sideways would throw you out of the note.
+  if (dx < ENTRY_SWIPE_MIN_X || Math.abs(dx) < Math.abs(dy) * ENTRY_SWIPE_RATIO) return;
+  const sel = window.getSelection ? String(window.getSelection()) : '';
+  if (sel) return;   // they were dragging out a text selection, not asking to leave
+  goBackEntry();
+});
+
 // ---- [[ autocomplete ----
 function renderEntryAutocomplete(e) {
   const ac = VIEW.entryAutocomplete;

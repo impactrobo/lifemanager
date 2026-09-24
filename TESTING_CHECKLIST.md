@@ -720,4 +720,20 @@ Five things off the 66 items you worked through.
       should combine into one line, not two.
 - [ ] Meal Builder's unit toggle now says **US**, not IMPERIAL.
 
+## Swipe right to leave a note (2026-09-24)
+Asked for as *"trying to flip through notes and it's a pain to go to VIEW ALL or scrolling all the
+way down to DONE if you picked the wrong one"*, narrowed to *"should go back to the list, and yes
+only in READ mode not edit mode"*. DONE stays — this is an accelerator, not the only exit.
+- [ ] **Open a note and swipe right.** Back to the list. This is the ask.
+- [ ] Reach a note by tapping a `[[link]]`, then swipe: you land on **the note you came from**, not
+      the list. Same rule the back chevron follows.
+- [ ] **Scroll the note normally**, including long flicks that wander sideways — you should never be
+      thrown out. This is the one that decides whether the gesture is liveable.
+- [ ] **Edit mode ignores it**: a horizontal drag there moves the caret, as always.
+- [ ] Swiping **left** does nothing. Say if you want a forward half.
+- [ ] Open Convert (the type chip) and swipe — the sheet handles it, you don't also leave the note.
+- [ ] Long-press to select text, drag, release — no navigation.
+- [ ] Is **70px** the right distance, and does it ever fire when you didn't mean it? That's the only
+      thing here I can't judge from a sandbox.
+
 ## Add future items below as new features ship
