@@ -565,6 +565,17 @@ button.hit-mark { padding: 0; background: none; font: inherit; color: inherit; c
    toggleSavingsCompletion() / budgetRecurringSavingsCompletedTotal(). */
 .budget-bar-savings-fill { position: absolute; top: 0; bottom: 0; background: var(--savings); box-shadow: 0 0 6px 0 var(--savings); transition: width 0.3s ease; }
 .budget-bar-incidentals { position: absolute; top: 0; bottom: 0; background: var(--accent); }
+/* Overspend carried in from earlier months. Anchored to the RIGHT end, not stacked after the
+   spending segments: it is not another category of outflow, it is income that was never really
+   available, so it reads as the end of the bar being taken away rather than as more spending.
+   Hatched and grey — deliberately the dullest thing on the bar. It is a fact about a month that
+   has already finished, and it should not compete with what you can still act on. */
+.budget-bar-carried {
+  position: absolute; top: 0; bottom: 0; right: 0;
+  background: repeating-linear-gradient(135deg,
+    var(--text-faint) 0, var(--text-faint) 3px, transparent 3px, transparent 7px);
+  opacity: 0.5;
+}
 .budget-bar-line { position: absolute; top: -2px; bottom: -2px; width: 3px; background: var(--bad); }
 .budget-bar-over { box-shadow: 0 0 0 2px var(--bad) inset; }
 .budget-bar-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: var(--text-dim); margin-top: 10px; }

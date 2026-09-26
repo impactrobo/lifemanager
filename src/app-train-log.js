@@ -1571,6 +1571,21 @@ function renderHomeSetup() {
       </div>
       <div style="font-size:11px; color:var(--text-faint); margin-top:8px;">Swaps Back/Forward with Home/Settings, so the pair you use most sits under your thumb. Only the top bar for now.</div>
     </div>
+    ${/* How far an overspend follows you. The bar greys out the end of a month's income by what
+          earlier months already spent; this decides how many earlier months get to do that. */ ''}
+    <div class="subtle-label" style="margin:18px 0 10px;">OVERSPEND</div>
+    <div class="panel">
+      <div class="row" style="margin-bottom:0;">
+        <span class="lbl" style="margin-bottom:0;">Carries forward</span>
+        <div class="unit-toggle">
+          <button class="${budgetCarryMode() === 'previous' ? 'active' : ''}" onclick="setBudgetCarryMode('previous')">ONE MONTH</button>
+          <button class="${budgetCarryMode() === 'stacking' ? 'active' : ''}" onclick="setBudgetCarryMode('stacking')">STACKING</button>
+        </div>
+      </div>
+      <div style="font-size:11px; color:var(--text-faint); margin-top:8px;">${budgetCarryMode() === 'stacking'
+        ? 'A running debt: overspending adds to it, and a month that comes in under pays it down. It never goes below zero — you can clear it, not build credit. Honest, and harder to ignore.'
+        : 'Only the month just gone greys out part of this month’s income. A bad month is paid for once.'}</div>
+    </div>
     <div class="subtle-label" style="margin:18px 0 10px;">UNITS</div>
     <div class="panel">
       <div class="row" style="margin-bottom:0;">

@@ -1063,6 +1063,69 @@ function renderSavingsProgressSection(key) {
 // (every active isSavings charge) with a solid fill on top that grows as those charges get
 // checked off as contributed for the month (see budgetRecurringSavingsCompletedTotal() /
 // toggleSavingsCompletion()) — a real goal-progress fill, not just a flat reserved block.
+// ---- Overspend carried into the next month ----
+// Asked for 2026-09-26: "should someone overspend within a month and say, not save for the month
+// — should the bar then show an additional savings need due to overspend for the last month? Or
+// the next month's income has a greyed-out area depicting less available income due to the
+// overspend."
+//
+// The greyed-out version, because the two options make different CLAIMS. "An additional savings
+// need" says the overspend is a debt you will make up — only true if you actually will, and a
+// target you have learned to ignore is worse than no target. The greyed area says the money is
+// simply gone: no decision required, no promise implied. It is a fact about last month, not a goal
+// for this one.
+//
+// CARRY MODE, settled as "one month back should be the default… but I like the idea of a
+// 'stacking overspend' to keep a user honest. We can add the stacking as an option."
+//
+//   previous  — only the month immediately before counts. Each month starts nearly clean, and a
+//               bad month is paid for once.
+//   stacking  — a running debt. It accumulates when you overspend and is PAID DOWN by a month
+//               that comes in under, floored at zero. The floor is what keeps it a debt rather
+//               than a second savings account: you cannot build credit here, only clear what you
+//               owe. Under stacking the debt also eats into the income a month is measured
+//               against, so a month that spends its full nominal income while carrying debt stays
+//               in debt — which is the honesty the option is for.
+const BUDGET_CARRY_SCAN_MONTHS = 36;   // how far back stacking looks; three years is past any log
+function budgetCarryMode() {
+  return STATE.settings && STATE.settings.overspendCarry === 'stacking' ? 'stacking' : 'previous';
+}
+function setBudgetCarryMode(mode) {
+  STATE.settings.overspendCarry = mode === 'stacking' ? 'stacking' : 'previous';
+  saveState();
+  render();
+}
+function budgetMonthOutflow(key) {
+  return budgetRecurringTotal(key) + budgetIncidentalsTotal(key);
+}
+function shiftBudgetMonthKey(key, delta) {
+  const m = /^(\d{4})-(\d{2})$/.exec(String(key || ''));
+  if (!m) return null;
+  const d = new Date(Number(m[1]), Number(m[2]) - 1 + delta, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+// One month's step of the ledger, shared by both modes so they can never disagree about what
+// overspending IS. Positive result = still owing.
+function budgetDebtAfterMonth(key, debtBefore) {
+  return Math.max(0, debtBefore + budgetMonthOutflow(key) - budgetTotalIncome(key));
+}
+// What earlier months push INTO `key`. Never includes `key` itself.
+function budgetCarriedOverspend(key) {
+  const prev = shiftBudgetMonthKey(key, -1);
+  if (!prev) return 0;
+  if (budgetCarryMode() === 'previous') return budgetDebtAfterMonth(prev, 0);
+  let debt = 0;
+  for (let i = BUDGET_CARRY_SCAN_MONTHS; i >= 1; i--) {
+    const m = shiftBudgetMonthKey(key, -i);
+    if (!m) continue;
+    // A month with nothing logged and no income is one the app simply was not used in — walking
+    // through it would charge that month's recurring bills against an income of zero and invent a
+    // debt out of a gap in the record.
+    if (!budgetTotalIncome(m) && !budgetIncidentalsForMonth(m).length) continue;
+    debt = budgetDebtAfterMonth(m, debt);
+  }
+  return debt;
+}
 function renderBudgetBar(key) {
   const totalIncome = budgetTotalIncome(key);
   const recurringTotal = budgetRecurringTotal(key);
@@ -1070,7 +1133,10 @@ function renderBudgetBar(key) {
   const recurringSavingsTotal = budgetRecurringSavingsTotal(key);
   const recurringSavingsCompleted = budgetRecurringSavingsCompletedTotal(key);
   const incidentalsTotal = budgetIncidentalsTotal(key);
-  const remaining = totalIncome - recurringTotal - incidentalsTotal;
+  // Last month's overspend is money that has already gone. It is subtracted from what is left
+  // rather than added to what is owed — see budgetCarriedOverspend().
+  const carried = budgetCarriedOverspend(key);
+  const remaining = totalIncome - recurringTotal - incidentalsTotal - carried;
   const overBudget = remaining < 0;
   const safeIncome = totalIncome > 0 ? totalIncome : 1;
   const recurringExpensePct = totalIncome > 0 ? Math.max(0, Math.min(100, recurringExpenseTotal / safeIncome * 100)) : 0;
@@ -1078,6 +1144,7 @@ function renderBudgetBar(key) {
   const recurringSavingsFillPct = recurringSavingsTotal > 0 ? Math.max(0, Math.min(recurringSavingsPct, recurringSavingsCompleted / safeIncome * 100)) : 0;
   const recurringPct = recurringExpensePct + recurringSavingsPct;
   const incidentalsPct = totalIncome > 0 ? Math.max(0, Math.min(100 - recurringPct, incidentalsTotal / safeIncome * 100)) : 0;
+  const carriedPct = totalIncome > 0 ? Math.max(0, Math.min(100, carried / safeIncome * 100)) : 0;
   const baseIncome = recurringIncomeMonthlyTotal();
   const extraIncome = totalIncome - baseIncome;
 
@@ -1092,12 +1159,18 @@ function renderBudgetBar(key) {
       <div class="budget-bar-savings" style="left:${recurringExpensePct}%; width:${recurringSavingsPct}%;"></div>
       ${recurringSavingsFillPct > 0 ? `<div class="budget-bar-savings-fill" style="left:${recurringExpensePct}%; width:${recurringSavingsFillPct}%;" title="Contributed so far: ${fmtMoney(recurringSavingsCompleted)} of ${fmtMoney(recurringSavingsTotal)}"></div>` : ''}
       <div class="budget-bar-incidentals" style="left:${recurringPct}%; width:${incidentalsPct}%;"></div>
+      ${/* Greyed, and anchored to the RIGHT end rather than stacked after the spending. It is not
+            another category of outflow — it is income that was never really available this month,
+            so it reads as the end of the bar being taken away. */ ''}
+      ${carriedPct > 0 ? `<div class="budget-bar-carried" style="width:${carriedPct}%;"
+          title="Carried from last month's overspend: ${fmtMoney(carried)}"></div>` : ''}
       ${recurringPct > 0 ? `<div class="budget-bar-line" style="left:${recurringPct}%;" title="Recurring charges: ${fmtMoney(recurringTotal)}"></div>` : ''}
     </div>
     <div class="budget-bar-legend">
       <span><i class="budget-dot" style="background:var(--bad);"></i>Recurring <b>${fmtMoney(recurringExpenseTotal)}</b></span>
       ${recurringSavingsTotal > 0 ? `<span><i class="budget-dot" style="background:var(--savings);"></i>Savings/Invest <b>${fmtMoney(recurringSavingsCompleted)} / ${fmtMoney(recurringSavingsTotal)}</b></span>` : ''}
       <span><i class="budget-dot" style="background:var(--accent);"></i>Incidentals <b>${fmtMoney(incidentalsTotal)}</b></span>
+      ${carried > 0 ? `<span><i class="budget-dot" style="background:var(--text-faint);"></i>${budgetCarryMode() === 'stacking' ? 'Carried debt' : 'Last month&rsquo;s overspend'} <b>${fmtMoney(carried)}</b></span>` : ''}
       <span>${overBudget ? `<b style="color:var(--bad);">${fmtMoney(Math.abs(remaining))} over budget</b>` : `Remaining <b style="color:var(--good);">${fmtMoney(remaining)}</b>`}</span>
     </div>`;
 }

@@ -761,4 +761,24 @@ month, what actually leaves the account). This is the first time the recurring t
 - [ ] Check the **budget bar** still splits spend and savings correctly in a month containing an
       on-date renewal.
 
+## Overspend carries into next month (2026-09-26)
+The greyed-area answer rather than the extra-savings-need one: last month's overspend is money
+already gone, so it takes a bite out of what this month has available rather than setting you a
+target. Settings → **OVERSPEND** switches between ONE MONTH (default) and STACKING.
+- [ ] **Overspend a month** (use the debug clock to move between months), then look at the next one:
+      a grey hatched block at the **right end** of the bar, and Remaining is lower by that amount.
+- [ ] The legend names it — *Last month's overspend* on ONE MONTH, *Carried debt* on STACKING.
+- [ ] **ONE MONTH**: overspend twice in a row, then check the third month only carries the second
+      one. A bad month is paid for once.
+- [ ] **STACKING**: same setup — the third month should carry **both**.
+- [ ] **STACKING pays down**: follow an overspend with a month that comes in under. The debt should
+      shrink, and a big surplus should take it to zero and **stop there** — you can clear it, not
+      build credit for a future blow-out.
+- [ ] Switch the setting back and forth on a real month and confirm the number changes the way you
+      expect. This is the one where your own data is the only real test.
+- [ ] **Months before you started using the app must not invent debt.** Page back far enough that
+      there's nothing logged — no phantom carried amount should appear.
+- [ ] Is the grey block **too subtle or too loud**? It's deliberately the dullest thing on the bar,
+      since it's about a month you can no longer act on.
+
 ## Add future items below as new features ship

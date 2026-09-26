@@ -357,6 +357,35 @@ Newest first. Keep this reasonably current so a fresh session can see what alrea
 without re-reading the whole diff history. Roughly grouped: this project spent early Sept 2026
 on an architecture split + a large wave of Maximalist aesthetics.
 
+- **An overspend carries into the next month (2026-09-26).** *"Should the bar then show an
+  additional savings need due to overspend for the last month? Or the next month's income has a
+  greyed-out area depicting less available income due to the overspend."*
+  - **The greyed area**, because the two options make different claims. "An additional savings
+    need" says the overspend is a debt you will make up — true only if you actually will, and a
+    target you have learned to ignore is worse than no target. The greyed area says the money is
+    simply gone: no decision required, no promise implied. It is a fact about last month, not a
+    goal for this one.
+  - Two modes, settled as *"one month back should be the default… but I like the idea of a
+    'stacking overspend' to keep a user honest. We can add the stacking as an option."*
+    `previous` counts only the month just gone; `stacking` is a running debt that accumulates and
+    is **paid down by a month that comes in under, floored at zero**. The floor is what keeps it a
+    debt rather than a second savings account — you can clear it, not bank credit against a future
+    blow-out. Under stacking the debt also reduces the income a month is measured against, so a
+    month that spends its full nominal income while owing stays owing, which is the honesty the
+    option exists for. Settings → OVERSPEND.
+  - Both modes share `budgetDebtAfterMonth()`, so they cannot disagree about what overspending IS —
+    only about how many months get to contribute.
+  - **A gap in the log must not become a debt.** Stacking scans 36 months back, and a month with no
+    income configured and nothing logged is what every month before someone started using the app
+    looks like — walking one charges its recurring bills against an income of zero. The mutation
+    test puts a number on it: without the skip, an empty log manufactures **$14,500** of debt.
+  - Drawn hatched and grey, anchored to the RIGHT end of the bar rather than stacked after the
+    spending: it is not another category of outflow, it is income that was never really available,
+    and it is deliberately the dullest thing there because it concerns a month you can no longer
+    act on.
+  - One test premise had to be corrected rather than the code: the first version of the gap check
+    assumed a quiet month proved a gap. It does not — recurring income is a standing figure, so a
+    month with no spending is a genuine surplus and correctly clears the debt. 6/6 mutations caught.
 - **Recurring charges get a frequency, and yearly ones choose how they land (2026-09-26).** *"Let's
   also build frequency into recurring charges and remove the 'savings' option which we separated out
   anyways. Additionally, the yearly option should take a specific date: for example I just
