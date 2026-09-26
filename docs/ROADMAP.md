@@ -357,6 +357,34 @@ Newest first. Keep this reasonably current so a fresh session can see what alrea
 without re-reading the whole diff history. Roughly grouped: this project spent early Sept 2026
 on an architecture split + a large wave of Maximalist aesthetics.
 
+- **PERFORMANCE: done vs targets over any range (2026-09-26).** *"We can create a PERFORMANCE tab
+  that documents what was done vs. targets, and the user can select a date range that sums the
+  user's total performance in that range."* Scoped in conversation to everything rather than only
+  money, per-area totals rather than a blended score, and presets plus a custom range.
+  - **The weekly review was generalised, not copied.** `weeklyReview(monday)` was already a loop
+    over seven dates; only the 7 and the Monday anchor were fixed. It is now a thin wrapper that
+    adds the week-specific parts (off-week record, is-this-the-current-week) on top of
+    `rangeReview(from, to)`, and `test_performance.js` asserts the two agree over a Mon–Sun span.
+    A second implementation of "how did that go" would start out agreeing with the review and end
+    up disagreeing with it.
+  - **No blended score.** A single percentage has to decide whether a missed workout outweighs $50
+    of overspend, and every answer to that is invented — worse, a bad area hides behind good ones.
+    The headline counts areas on track and stops.
+  - **`ok: null` is a third state, not a failure.** An area with no plan, no target or nothing
+    logged counts neither way. Scoring an area you never set up as a failure is how a screen like
+    this teaches you to ignore it. Related: an unmarked habit day is a day the app wasn't opened,
+    not a lapse — only broken days count against you.
+  - **A range is not always whole weeks**, and the screen says so ("31 days · 4 weeks + 3 days")
+    rather than rounding, because training plans and the weight rate really are week-anchored.
+    Money is summed over WHOLE months, since a recurring charge belongs to a month rather than a
+    day — also stated, since silently dropping a partial month would lose real spending.
+  - It spans every section, so like Settings it is a screen with a CLOSE bar rather than a subtab
+    of any one section — there is none it could sit under without lying about its scope. Reached
+    from Home's YOUR WEEK box, which is already the "how am I doing" surface.
+  - 6/6 mutations caught — but only after a **false pass**: the habit fixture had `habitLog` keyed
+    date→habit when it is habit→date, so the first run of the mutation suite reported catches that
+    were really the fixture failing. Two rules (unjudgeable-isn't-failure, unmarked-isn't-broken)
+    were genuinely unexercised until it was fixed, because with nothing marked neither could fire.
 - **An overspend carries into the next month (2026-09-26).** *"Should the bar then show an
   additional savings need due to overspend for the last month? Or the next month's income has a
   greyed-out area depicting less available income due to the overspend."*

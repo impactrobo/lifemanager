@@ -771,6 +771,12 @@ const SECTION_BARS = {
       ? [{ icon: 'hobbies', label: 'SKILLS', onclick: 'closeSkill()' }]
       : [],
   },
+  // PERFORMANCE spans every section — training, habits, targets, weight, practice and money — so
+  // like Settings it is a screen rather than a subtab of any one of them. There is no section it
+  // could sit under without lying about its scope.
+  performance: {
+    buttons: [{ icon: 'close', label: 'CLOSE', onclick: 'goBack()', cls: 'tabbar-close' }],
+  },
   setup: {
     // Settings is the only screen that still pops up over another (see openSetup()), so its bar
     // CLOSES rather than switches -- back to whatever opened it, while the wordmark goes all the
@@ -1082,7 +1088,9 @@ function _doRender() {
   _captureOverlayScroll(); // ...and the overlays', before _hoistOverlays() empties their host
   syncDebugBar();         // lives outside #app, so nothing below would ever touch it
   const app = document.getElementById('app');
-  if (NAV.currentTab === 'home') {
+  if (NAV.currentTab === 'performance') {
+    app.innerHTML = renderPerformance();
+  } else if (NAV.currentTab === 'home') {
     app.innerHTML = renderHome();
   } else if (NAV.currentTab === 'schedule') {
     app.innerHTML = renderSchedule();

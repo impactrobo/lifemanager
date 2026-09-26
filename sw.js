@@ -8,7 +8,7 @@
 // on an installed (esp. iOS) PWA is handled in app.js by the <meta name="app-build"> check —
 // NOT by this file. Bump CACHE_NAME only to force-purge the offline cache (e.g. you removed a
 // file from APP_SHELL or a cached response went bad); it is not part of the normal deploy step.
-const CACHE_NAME = 'lifeman-v20'; // v4: app.js split into src/app-*.js -- old caches hold a now-404 './app.js'
+const CACHE_NAME = 'lifeman-v21'; // v4: app.js split into src/app-*.js -- old caches hold a now-404 './app.js'
 const APP_SHELL = ['./', './index.html', './styles.css', './manifest.json']
   .concat([
     './src/app-aesthetics.js',
@@ -34,6 +34,7 @@ const APP_SHELL = ['./', './index.html', './styles.css', './manifest.json']
     './src/app-notes.js',
     './src/app-home.js',
     './src/app-review.js',
+    './src/app-performance.js',
     './src/app-calendar.js',
     './src/app-links.js',
     './src/app-budget.js',

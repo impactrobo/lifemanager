@@ -175,9 +175,48 @@ function setSleepTarget(v) { STATE.settings.sleepTargetHours = Math.max(0.5, Num
 // ---- The whole week, as data ----
 // Pure: reads STATE, writes nothing, renders nothing. Every number the review shows comes from
 // here, which is what makes the counts testable without going near the DOM.
+// Every date from `from` to `to` inclusive. Bounded so a typo in a custom range can't spin: nobody
+// is reviewing ten years a day at a time, and a runaway loop here would hang the render.
+const RANGE_MAX_DAYS = 800;
+function rangeDatesOf(from, to) {
+  const out = [];
+  if (!from || !to || to < from) return out;
+  let d = from;
+  while (d <= to && out.length < RANGE_MAX_DAYS) { out.push(d); d = shiftDate(d, 1); }
+  return out;
+}
+// The weekly review, generalised to ANY range — which is all the PERFORMANCE screen needed
+// (2026-09-26). Everything below was already a loop over `dates`; only the 7 and the Monday
+// anchor were fixed, so weeklyReview() is now a thin wrapper that adds the week-specific parts
+// (its off-week record, whether it is the current week) on top of this.
+//
+// Kept as ONE function rather than a copy per screen: a second implementation of "how did that go"
+// would start agreeing with the review and end disagreeing with it, and the whole point of both
+// screens is that they are reporting the same facts over different spans.
+function rangeReview(from, to) {
+  return _reviewOver(rangeDatesOf(from, to));
+}
 function weeklyReview(mondayStr) {
   const dates = reviewDatesOf(mondayStr);
-  const endDate = dates[6];
+  const rec = weekRecord(mondayStr);
+  return Object.assign(_reviewOver(dates), {
+    isCurrent: mondayStr === mondayOf(todayStr()),
+    off: !!rec.off,
+    note: rec.note || '',
+  });
+}
+function _reviewOver(dates) {
+  if (!dates.length) {
+    return {
+      start: null, end: null, hasFuture: false,
+      training: { planned: 0, done: 0, extra: 0, modded: 0, offDays: 0, days: [], sessions: 0 },
+      habits: { kept: 0, broken: 0, unmarked: 0, marked: 0, perHabit: [] },
+      targets: REVIEW_TARGETS.map(t => ({ key: t.key, label: t.label, target: t.target(), hit: 0, logged: 0, best: null, fmt: t.fmt })),
+      weight: null, prs: [], practice: { planned: 0, sessions: 0, minutes: 0 },
+    };
+  }
+  const mondayStr = dates[0];
+  const endDate = dates[dates.length - 1];
   const today = todayStr();
   const logged = sessionsLoggedBetween(mondayStr, endDate);
   const loggedByDate = {};
@@ -271,12 +310,9 @@ function weeklyReview(mondayStr) {
   });
   const practicePlanned = days.reduce((n, d) => n + (d.inFuture ? 0 : d.practice.length), 0);
 
-  const rec = weekRecord(mondayStr);
   return {
     start: mondayStr, end: endDate,
-    isCurrent: mondayStr === mondayOf(today),
     hasFuture: days.some(d => d.inFuture),
-    off: !!rec.off, note: rec.note || '',
     training: { planned, done, extra, modded, offDays, days, sessions: logged.length },
     habits: { kept, broken, unmarked, marked: kept + broken, perHabit },
     targets,
@@ -356,6 +392,12 @@ function renderHomeReviewBox() {
 
       <button class="btn btn-ghost btn-block btn-sm" style="margin-top:12px;" onclick="UI.reviewExpanded=${open ? 'false' : 'true'}; render();">
         ${open ? 'HIDE DETAIL' : 'FULL REVIEW'}
+      </button>
+      ${/* The way in to PERFORMANCE. It belongs here rather than on a section's bar: this box is
+            already the "how am I doing" surface, and PERFORMANCE is the same question asked over a
+            longer span. */ ''}
+      <button class="btn btn-ghost btn-block btn-sm" style="margin-top:6px;" onclick="openPerformance()">
+        PERFORMANCE OVER A RANGE &rsaquo;
       </button>
     </div>`;
 }

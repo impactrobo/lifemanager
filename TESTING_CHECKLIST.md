@@ -781,4 +781,27 @@ target. Settings → **OVERSPEND** switches between ONE MONTH (default) and STAC
 - [ ] Is the grey block **too subtle or too loud**? It's deliberately the dullest thing on the bar,
       since it's about a month you can no longer act on.
 
+## PERFORMANCE: done vs targets, over a range (2026-09-26)
+A new screen covering everything — training, habits, daily targets, weight, practice and money.
+Reached from **Home → YOUR WEEK → PERFORMANCE OVER A RANGE**, and it closes back to where you came
+from like Settings does. The weekly review was generalised rather than copied, so the week box and
+this screen read the same function.
+- [ ] Open it. The headline reads **"N of M areas on track"** — not a blended percentage. Does
+      counting areas tell you what you wanted, or do you miss a single score?
+- [ ] **A dash means unjudgeable** (no plan, no target, nothing logged) and counts neither way.
+      Check the areas you haven't set up show a dash rather than a ✗.
+- [ ] Try each preset: THIS MONTH / LAST MONTH / 3 MONTHS / YTD, then a **custom** From/To.
+- [ ] The line under the dates states the span, e.g. *"31 days · 4 weeks + 3 days"*. Training plans
+      and the weight rate are week-anchored, so a month really does end in a partial week — is
+      saying so useful, or just noise?
+- [ ] It also says **money is counted over whole months**. A range starting mid-March still counts
+      all of March, because a recurring charge belongs to a month rather than a day. Does that
+      match what you'd expect from a custom range?
+- [ ] **Cross-check one month against the real screens** — open FINANCIAL for the same month and
+      confirm spending and saved agree. That's the number most worth distrusting.
+- [ ] **Habits**: a day you simply didn't mark should NOT count against you; a broken one should.
+      Verify with a month where you marked a few days and skipped the rest.
+- [ ] A very long range (YTD) — does it stay fast, and do the numbers look sane?
+- [ ] Anything you expected to see on this screen that isn't here.
+
 ## Add future items below as new features ship
