@@ -90,11 +90,12 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     switchTab('budget'); setBudgetSubtab('recurring');
   });
   await settle(page);
-  await page.evaluate(() => { setBudgetRecurringTab('charges'); openRecurringChargeForm(); });  // behind the CHARGES tab + ADD CHARGE
+  // Behind SAVE & INVEST + ADD SAVINGS. That tab is what flags a line isSavings now; the
+  // checkbox that used to do it on the CHARGES form went on 2026-09-26.
+  await page.evaluate(() => { setBudgetRecurringTab('savings'); openRecurringChargeForm('savings'); });
   await settle(page);
   await page.fill('#recName', 'Roth IRA Auto-Invest');
   await page.fill('#recAmount', '500');
-  await page.check('#recIsSavings');
   await page.evaluate(() => addRecurringCharge());
   await settle(page);
   const chargeId = await page.evaluate(() => STATE.budget.recurring.find(r => r.name === 'Roth IRA Auto-Invest').id);

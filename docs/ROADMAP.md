@@ -357,6 +357,37 @@ Newest first. Keep this reasonably current so a fresh session can see what alrea
 without re-reading the whole diff history. Roughly grouped: this project spent early Sept 2026
 on an architecture split + a large wave of Maximalist aesthetics.
 
+- **Recurring charges get a frequency, and yearly ones choose how they land (2026-09-26).** *"Let's
+  also build frequency into recurring charges and remove the 'savings' option which we separated out
+  anyways. Additionally, the yearly option should take a specific date: for example I just
+  subscribed to a hiking app that is $35 every year, which will be Oct 1."*
+  - Charges were implicitly monthly — every total summed `amount` directly. They now carry the same
+    `frequency` an income source does, reusing `INCOME_FREQUENCIES` rather than a second table,
+    since "how many of these are there in a month" drifting between two copies is exactly the kind
+    of thing this codebase keeps designing out.
+  - A yearly charge also declares `yearlyMode`: **spread** (a twelfth every month — what to set
+    aside) or **onDate** (the whole amount in its renewal month, nothing in the other eleven — what
+    leaves the account). Per charge, not a global setting, so a small subscription can smooth while
+    a big annual bill lands on its date. Settled as *"an option for 'divide per month' vs 'on date'
+    which will then establish how the charge is displayed"*.
+  - **This makes the recurring totals month-dependent for the first time**, which is the real risk:
+    an on-date charge is $35 in October and $0 in November, so a total that forgot to ask which
+    month it was for would be wrong eleven times in twelve. Every caller now passes a key, and
+    `renderBudgetRecurring()` — which had none — fetches `budgetMonthKey()`.
+  - Two deliberate fallbacks: a charge with **no frequency field at all** counts as monthly, which
+    is every charge saved before this; and **on-date with no date chosen yet** spreads rather than
+    vanishing, so the money stays in the totals while the date is missing.
+  - `updateRecurringField()` fell through to `r.category = value` for any unrecognised field, so the
+    three new ones would silently have become the charge's category. Named explicitly.
+  - **The "Savings / Investment" checkbox is gone from both forms.** SAVE & INVEST has been its own
+    tab since 2026-09-19 and adding there sets the flag, so the checkbox asked a question the tab
+    already answers — and asking it twice is how a savings line ended up in the wrong list. The
+    `isSavings` FLAG stays (load-bearing for the bar split, the monthly completion boxes and goal
+    linking), and the edit form's checkbox became a **MOVE TO SAVE & INVEST** button mirroring the
+    one going the other way: a mis-filed charge with no way out would be worse than a redundant
+    question. `test_budget_goals.js` and `test_budget_savings_progress.js` both created their
+    fixtures through that checkbox and now go through the SAVE & INVEST form instead.
+  - 5/5 mutations caught.
 - **Swipe right to leave a note (2026-09-24).** *"Trying to flip through notes and it's a pain to go
   to VIEW ALL or scrolling all the way down to DONE if you picked the wrong one"* — then narrowed to
   *"should go back to the list, and yes only in READ mode not edit mode"*.

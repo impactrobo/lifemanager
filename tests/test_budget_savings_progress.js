@@ -34,10 +34,13 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   await page.evaluate(() => saveIncomeSource());
   await settle(page);
 
-  // 2. Add a recurring charge flagged isSavings via the real form
-  await page.evaluate(() => { setBudgetRecurringTab('charges'); openRecurringChargeForm(); }); await settle(page); await page.fill('#recName', 'Test Index Fund');
+  // 2. Add a recurring charge flagged isSavings via the real form.
+  //
+  // Through the SAVE & INVEST tab, which is what sets the flag now: the "Savings / Investment"
+  // checkbox on the CHARGES form was removed 2026-09-26 ("remove the savings option which we
+  // separated out anyways"), so which button opened the form IS the answer.
+  await page.evaluate(() => { setBudgetRecurringTab('savings'); openRecurringChargeForm('savings'); }); await settle(page); await page.fill('#recName', 'Test Index Fund');
   await page.fill('#recAmount', '400');
-  await page.check('#recIsSavings');
   await page.evaluate(() => saveRecurringCharge());
   await settle(page);
 

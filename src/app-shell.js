@@ -87,6 +87,11 @@ function defaultTransientUi() {
     // it, the same rule every other open overlay follows. Shifting the clock itself only calls
     // render(), not resetTransientUi(), so the popup survives its own buttons.
     debugClockOpen: false,
+    // The recurring-charge form re-renders when its frequency changes (the yearly controls appear
+    // and disappear), so what is half-typed has to be carried across it.
+    recurringChargeDraft: null,
+    recurringChargeFreq: 'monthly',
+    recurringChargeYearlyMode: 'spread',
     landmarksOpen: false,   // the MEV/MAV/MRV editor under Set Volume on WORKOUTS
     homeEditMode: false,
     homeAddPopup: null,                // 'sections' | 'boxes' | null

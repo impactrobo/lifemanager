@@ -736,4 +736,29 @@ only in READ mode not edit mode"*. DONE stays — this is an accelerator, not th
 - [ ] Is **70px** the right distance, and does it ever fire when you didn't mean it? That's the only
       thing here I can't judge from a sandbox.
 
+## Recurring charges get a frequency (2026-09-26)
+Charges were implicitly monthly — every total summed the amount straight. They now carry the same
+frequency an income source does, and a **yearly** one also says how it should land: *divide per
+month* (a twelfth every month, what to set aside) or *on its date* (the whole amount in its renewal
+month, what actually leaves the account). This is the first time the recurring totals depend on
+**which** month you're looking at, so the month arrows are the thing to exercise.
+- [ ] **Add your hiking app**: $35, Yearly, ON ITS DATE, renews Oct 1. The row should read
+      *$35 · Yearly · on Oct 1*.
+- [ ] Step the month arrows: it's in **October's** total and absent from every other month. Check
+      November and next October.
+- [ ] Add another yearly charge set to **DIVIDE PER MONTH** — it should read `/mo` and appear in
+      every month at a twelfth.
+- [ ] **Your existing charges are untouched** and still count as monthly. Nothing should have
+      changed in this month's totals except the new lines.
+- [ ] Try **Weekly** and **Bi-Weekly** — the row shows the derived `/mo` figure.
+- [ ] Type a name and amount, *then* change the frequency: what you typed must still be there. The
+      form re-renders when the yearly controls appear.
+- [ ] Pick ON ITS DATE and save **without** a date — it should stop you.
+- [ ] **The savings checkbox is gone** from both the add and edit forms. Adding under SAVE & INVEST
+      is what makes something savings now.
+- [ ] Both **MOVE** buttons work — a charge to SAVE & INVEST and back. That's the only way to
+      re-file something now, so it matters more than it did.
+- [ ] Check the **budget bar** still splits spend and savings correctly in a month containing an
+      on-date renewal.
+
 ## Add future items below as new features ship

@@ -47,17 +47,53 @@ function budgetAdditionalIncomeTotal(key) {
 function budgetIncidentalsTotal(key) {
   return budgetIncidentalsForMonth(key).reduce((s, e) => s + (Number(e.amount) || 0), 0);
 }
-function budgetRecurringTotal() {
-  return STATE.budget.recurring.filter(r => r.active).reduce((s, r) => s + (Number(r.amount) || 0), 0);
+// ---- What a recurring charge costs in ONE month ----
+// Charges were implicitly monthly until 2026-09-26: every total summed `amount` straight. A charge
+// now carries the same `frequency` an income source does — INCOME_FREQUENCIES, one table, because a
+// second copy of "how many of these are there in a month" would drift — and a YEARLY charge also
+// says how it should LAND:
+//
+//   spread  — a twelfth in every month. What you set aside for it.
+//   onDate  — the whole amount in its renewal month and nothing in the other eleven. What actually
+//             leaves the account.
+//
+// Asked for as "an option for 'divide per month' vs 'on date' which will then establish how the
+// charge is displayed", for a $35 hiking subscription renewing on Oct 1. Per charge rather than as
+// a global setting, so a small subscription can smooth while a big annual bill lands on its date.
+//
+// This is what makes the recurring totals MONTH-DEPENDENT for the first time, and why every caller
+// below now passes a month key.
+function chargeYearlyMode(r) { return r && r.yearlyMode === 'onDate' ? 'onDate' : 'spread'; }
+function chargeRenewalMonth(r) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String((r && r.renewalDate) || ''));
+  return m ? Number(m[2]) : null;
+}
+function monthOfBudgetKey(key) {
+  const m = /^(\d{4})-(\d{2})$/.exec(String(key || ''));
+  return m ? Number(m[2]) : null;
+}
+function chargeMonthlyAmount(r, key) {
+  const amount = Number(r && r.amount) || 0;
+  const freq = INCOME_FREQUENCIES[r && r.frequency] || INCOME_FREQUENCIES.monthly;
+  if (!r || r.frequency !== 'yearly') return amount * freq.perMonth;
+  if (chargeYearlyMode(r) === 'spread') return amount / 12;
+  const month = chargeRenewalMonth(r);
+  // On-date with no date chosen yet would otherwise vanish from every month at once. Spreading is
+  // the safer half-answer: the money is still in the totals while the date is missing.
+  if (!month) return amount / 12;
+  return monthOfBudgetKey(key) === month ? amount : 0;
+}
+function budgetRecurringTotal(key) {
+  return STATE.budget.recurring.filter(r => r.active).reduce((s, r) => s + chargeMonthlyAmount(r, key), 0);
 }
 // Recurring charges flagged isSavings are still a reserved outflow (money leaving each month,
 // same as rent or a subscription) but it's going toward the person's own savings/investments
 // rather than spent — split out so the budget bar and legend can show that slice separately.
-function budgetRecurringExpenseTotal() {
-  return STATE.budget.recurring.filter(r => r.active && !r.isSavings).reduce((s, r) => s + (Number(r.amount) || 0), 0);
+function budgetRecurringExpenseTotal(key) {
+  return STATE.budget.recurring.filter(r => r.active && !r.isSavings).reduce((s, r) => s + chargeMonthlyAmount(r, key), 0);
 }
-function budgetRecurringSavingsTotal() {
-  return STATE.budget.recurring.filter(r => r.active && r.isSavings).reduce((s, r) => s + (Number(r.amount) || 0), 0);
+function budgetRecurringSavingsTotal(key) {
+  return STATE.budget.recurring.filter(r => r.active && r.isSavings).reduce((s, r) => s + chargeMonthlyAmount(r, key), 0);
 }
 // A savings-flagged recurring charge reserves its slice every month automatically, but it isn't
 // necessarily actually *done* yet — savingsCompletions tracks, per month, which of those charges
@@ -74,7 +110,7 @@ function budgetRecurringSavingsCompletedTotal(key) {
   const doneIds = budgetSavingsCompletionIds(key);
   return STATE.budget.recurring
     .filter(r => r.active && r.isSavings && doneIds.includes(r.id))
-    .reduce((s, r) => s + (Number(r.amount) || 0), 0);
+    .reduce((s, r) => s + chargeMonthlyAmount(r, key), 0);
 }
 function toggleSavingsCompletion(key, id, checked) {
   if (!STATE.budget.savingsCompletions[key]) STATE.budget.savingsCompletions[key] = [];
@@ -99,7 +135,7 @@ function syncGoalContributionForRecurringCharge(monthKey, chargeId, checked) {
   if (checked) {
     if (goal.contributions.some(c => c.id === autoId)) return; // already synced
     const charge = STATE.budget.recurring.find(r => r.id === chargeId);
-    const amount = charge ? Number(charge.amount) || 0 : 0;
+    const amount = charge ? chargeMonthlyAmount(charge, monthKey) : 0;
     if (amount <= 0) return;
     // Dated to the last day of the month the checkbox is actually for, not "today" — the two
     // can differ (e.g. catching up on last month's box after the month has turned over).
@@ -670,8 +706,12 @@ function addRecurringCharge() {
   const category = inputVal('recCategory') || 'Other';
   // Which section's button opened the form IS the answer under RECURRING SAVINGS — there is no
   // checkbox there to read, because "is this savings?" is not a question that section asks.
-  const isSavings = UI.recurringChargeFormOpen === 'savings' || inputChecked('recIsSavings');
-  STATE.budget.recurring.push({ id: uid(), name, amount, category, active: true, isSavings, dueDay: null, reminderRecurrenceId: null });
+  const isSavings = UI.recurringChargeFormOpen === 'savings';
+  const frequency = inputVal('recFrequency') || 'monthly';
+  const yearlyMode = frequency === 'yearly' ? (UI.recurringChargeYearlyMode || 'spread') : 'spread';
+  const renewalDate = frequency === 'yearly' && yearlyMode === 'onDate' ? (inputVal('recRenewalDate') || '') : '';
+  if (frequency === 'yearly' && yearlyMode === 'onDate' && !renewalDate) { showToast('Pick the date it renews on'); return false; }
+  STATE.budget.recurring.push({ id: uid(), name, amount, category, active: true, isSavings, frequency, yearlyMode, renewalDate, dueDay: null, reminderRecurrenceId: null });
   saveState();
   showToast('Recurring charge added');
   return true;
@@ -688,6 +728,14 @@ function updateRecurringField(id, field, value) {
     // the existing series is simply describing the wrong day and has to be rebuilt, not patched.
     if (r.reminderRecurrenceId) resyncChargeReminder(r);
   }
+  // Named explicitly, because the fall-through below writes to `category` — anything not listed
+  // here would silently become the charge's category rather than the field it was aimed at.
+  else if (field === 'frequency') {
+    r.frequency = INCOME_FREQUENCIES[value] ? value : 'monthly';
+    if (r.frequency !== 'yearly') { r.yearlyMode = 'spread'; r.renewalDate = ''; }
+  }
+  else if (field === 'yearlyMode') r.yearlyMode = value === 'onDate' ? 'onDate' : 'spread';
+  else if (field === 'renewalDate') r.renewalDate = String(value || '');
   else r.category = value;
   saveState();
   render();
@@ -799,6 +847,24 @@ function deleteRecurringCharge(id) {
 // screen, so one of them staying a wall of live inputs would just look unfinished. ACTIVE stays
 // live in both modes here too; the savings flag and the due date are settings you set once, so they
 // live behind the pencil.
+// What a row has to say beyond its amount. A monthly charge says nothing — that is the assumption,
+// and labelling every ordinary row "Monthly" is noise. Anything else has to declare itself, because
+// "$35" on a yearly charge means something very different from "$35" on a monthly one, and a
+// yearly one additionally has to say whether that $35 is smeared across the year or lands in
+// October.
+function chargeFrequencyNote(r) {
+  const key = r && r.frequency;
+  if (!key || key === 'monthly') return '';
+  const label = (INCOME_FREQUENCIES[key] || {}).label || key;
+  if (key !== 'yearly') {
+    return ` &middot; ${escapeHtml(label)} &middot; <span class="mono">${fmtMoney(chargeMonthlyAmount(r, budgetMonthKey()))}</span>/mo`;
+  }
+  if (chargeYearlyMode(r) === 'onDate') {
+    const when = r.renewalDate ? fmtGoalDate(r.renewalDate) : 'no date set';
+    return ` &middot; Yearly &middot; on ${escapeHtml(when)}`;
+  }
+  return ` &middot; Yearly &middot; <span class="mono">${fmtMoney(chargeMonthlyAmount(r, budgetMonthKey()))}</span>/mo`;
+}
 function renderRecurringRow(r) {
   const editing = UI.recurringChargeEditing === r.id;
   const activeToggle = `
@@ -812,7 +878,7 @@ function renderRecurringRow(r) {
         <div style="min-width:0;">
           <div style="font-size:14px; font-weight:700;">${r.isSavings ? `<span class="savings-badge">${icon('recurDollar')} SAVINGS</span>` : ''}${escapeHtml(r.name)}</div>
           <div style="font-size:12px; color:var(--text-dim); margin-top:2px;">
-            <span class="mono">${fmtMoney(r.amount)}</span>${r.category ? ` &middot; ${escapeHtml(r.category)}` : ''}</div>
+            <span class="mono">${fmtMoney(r.amount)}</span>${chargeFrequencyNote(r)}${r.category ? ` &middot; ${escapeHtml(r.category)}` : ''}</div>
         </div>
         <button class="icon-btn" onclick="editRecurringCharge('${r.id}')" title="Edit this charge" aria-label="Edit this charge">${icon('pencil')}</button>
       </div>
@@ -830,17 +896,30 @@ function renderRecurringRow(r) {
       <label class="field"><span class="lbl">Category</span><select onchange="updateRecurringField('${r.id}','category',this.value)">${
         r.isSavings ? savingsCategoryOptions(r.category) : budgetCategoryOptions(r.category)}</select></label>
     </div>
+    <label class="field"><span class="lbl">Frequency</span>
+      <select onchange="updateRecurringField('${r.id}','frequency',this.value)">${incomeFrequencyOptions(r.frequency || 'monthly')}</select>
+    </label>
+    ${(r.frequency === 'yearly') ? `
+      <div class="field" style="margin-bottom:10px;">
+        <span class="lbl">How it counts</span>
+        <div class="row" style="gap:6px;">
+          <button type="button" class="btn btn-sm ${chargeYearlyMode(r) === 'onDate' ? '' : 'btn-primary'}" style="flex:1;"
+            onclick="updateRecurringField('${r.id}','yearlyMode','spread')">DIVIDE PER MONTH</button>
+          <button type="button" class="btn btn-sm ${chargeYearlyMode(r) === 'onDate' ? 'btn-primary' : ''}" style="flex:1;"
+            onclick="updateRecurringField('${r.id}','yearlyMode','onDate')">ON ITS DATE</button>
+        </div>
+      </div>
+      ${chargeYearlyMode(r) === 'onDate' ? `<label class="field"><span class="lbl">Renews on</span>
+        <input type="date" value="${escapeHtml(r.renewalDate || '')}" onchange="updateRecurringField('${r.id}','renewalDate',this.value)"></label>` : ''}` : ''}
     ${activeToggle}
-    ${/* A savings line does not carry a "Savings / Investment" checkbox — it is sitting in the
-          RECURRING SAVINGS section, which says so. But a mis-filed line still needs a way out, and
-          the checkbox was that way, so it becomes a button that says where it goes instead. In the
-          other direction the checkbox stays: under CHARGES it is how something BECOMES savings. */ ''}
+    ${/* Both directions are a MOVE button now (2026-09-26). The CHARGES side used to be a
+          "Savings / Investment" checkbox, which asked a question SAVE & INVEST already answers by
+          existing — and asking it in two places is how a savings line ended up in the wrong list.
+          The escape hatch has to stay in both directions, though: a mis-filed charge with no way
+          out is worse than a redundant question. So it is the same button, mirrored. */ ''}
     ${r.isSavings
       ? `<button class="btn btn-ghost btn-sm btn-block" style="margin-top:8px;" onclick="toggleRecurringSavings('${r.id}', false)">MOVE TO RECURRING CHARGES</button>`
-      : `<label style="display:flex; align-items:center; gap:8px; font-size:12px; color:var(--savings); cursor:pointer; margin-top:6px;">
-      <input type="checkbox" onchange="toggleRecurringSavings('${r.id}', this.checked)">
-      Savings / Investment — money you're paying yourself, not spending
-    </label>`}
+      : `<button class="btn btn-ghost btn-sm btn-block" style="margin-top:8px;" onclick="toggleRecurringSavings('${r.id}', true)">MOVE TO SAVE &amp; INVEST</button>`}
     ${renderChargeDueSection(r)}
     ${renderLinkChips('charge', r.id)}
     <button class="btn btn-ghost btn-sm btn-block" style="margin-top:10px;" onclick="closeRecurringChargeEdit()">DONE</button>
@@ -853,31 +932,84 @@ function closeRecurringChargeEdit() { UI.recurringChargeEditing = null; render()
 // editable in the form either way -- the button sets the default, it doesn't lock the answer.
 function renderRecurringChargeControls(kind) {
   const savings = kind === 'savings';
+  const draft = UI.recurringChargeDraft || {};
   if (UI.recurringChargeFormOpen !== (savings ? 'savings' : 'charge')) {
     return `<button class="btn btn-block" onclick="openRecurringChargeForm('${savings ? 'savings' : 'charge'}')"><span class="ic" style="margin-right:6px;">${icon('pencil')}</span>+ ADD ${savings ? 'SAVINGS' : 'CHARGE'}</button>`;
   }
   return `
+    ${/* Picking a frequency re-renders the form (the yearly controls appear), so what has already
+          been typed is carried across in UI.recurringChargeDraft rather than wiped. */ ''}
     <div class="field-row">
-      <label class="field"><span class="lbl">Name</span><input type="text" id="recName" placeholder="${savings ? 'e.g. Roth IRA' : 'e.g. Rent'}"></label>
-      <label class="field"><span class="lbl">Amount</span><input type="number" step="0.01" inputmode="decimal" id="recAmount" placeholder="0.00"></label>
+      <label class="field"><span class="lbl">Name</span><input type="text" id="recName" value="${escapeHtml(draft.name || '')}" placeholder="${savings ? 'e.g. Roth IRA' : 'e.g. Rent'}"></label>
+      <label class="field"><span class="lbl">Amount</span><input type="number" step="0.01" inputmode="decimal" id="recAmount" value="${escapeHtml(draft.amount || '')}" placeholder="0.00"></label>
     </div>
     ${/* Under RECURRING SAVINGS the categories narrow to Savings / Investing, and the
           "is this savings?" checkbox is gone entirely — you answered that by adding it here. The
           form reads the flag off which button opened it; see addRecurringCharge(). */ ''}
     <label class="field"><span class="lbl">Category</span><select id="recCategory">${
-      savings ? savingsCategoryOptions('Savings') : budgetCategoryOptions('Housing')}</select></label>
-    ${savings ? '' : `
-    <label style="display:flex; align-items:center; gap:8px; font-size:12px; color:var(--savings); cursor:pointer; margin-bottom:10px;">
-      <input type="checkbox" id="recIsSavings">
-      Savings / Investment — money you're paying yourself, not spending
-    </label>`}
+      savings ? savingsCategoryOptions(draft.category || 'Savings') : budgetCategoryOptions(draft.category || 'Housing')}</select></label>
+    ${/* The "Savings / Investment" checkbox is gone (2026-09-26). SAVE & INVEST has been its own
+          tab since 2026-09-19 and adding a line there sets the flag, so the checkbox was a second
+          way to do one thing — and the one that put a savings line in the wrong list to begin with.
+          The isSavings FLAG stays: it still splits the budget bar, drives the monthly completion
+          boxes and links goals. MOVE TO RECURRING CHARGES remains the way out of a mis-filing. */ ''}
+    <label class="field"><span class="lbl">Frequency</span>
+      <select id="recFrequency" onchange="onRecurringFrequencyPicked(this.value)">${incomeFrequencyOptions(UI.recurringChargeFreq || 'monthly')}</select>
+    </label>
+    ${renderChargeYearlyControls(UI.recurringChargeFreq || 'monthly', UI.recurringChargeYearlyMode || 'spread', '')}
     <div class="row" style="gap:8px;">
       <button class="btn btn-primary" style="flex:1;" onclick="saveRecurringCharge()">SAVE ${savings ? 'SAVINGS' : 'CHARGE'}</button>
       <button class="btn btn-ghost" onclick="closeRecurringChargeForm()">CANCEL</button>
     </div>`;
 }
-function openRecurringChargeForm(kind) { UI.recurringChargeFormOpen = kind === 'savings' ? 'savings' : 'charge'; render(); }
-function closeRecurringChargeForm() { UI.recurringChargeFormOpen = null; render(); }
+// The yearly half of the form: only a yearly charge has to answer "spread or on a date", and only
+// an on-date one needs a date. Shown inline rather than behind a disclosure — it is two controls,
+// and the whole point is that the choice is visible while you are deciding the amount.
+function renderChargeYearlyControls(frequency, mode, dateValue) {
+  if (frequency !== 'yearly') return '';
+  const onDate = mode === 'onDate';
+  return `
+    <div class="field" style="margin-bottom:10px;">
+      <span class="lbl">How it counts</span>
+      <div class="row" style="gap:6px;">
+        <button type="button" class="btn btn-sm ${onDate ? '' : 'btn-primary'}" style="flex:1;"
+          onclick="setRecurringYearlyMode('spread')">DIVIDE PER MONTH</button>
+        <button type="button" class="btn btn-sm ${onDate ? 'btn-primary' : ''}" style="flex:1;"
+          onclick="setRecurringYearlyMode('onDate')">ON ITS DATE</button>
+      </div>
+      <div style="font-size:11px; color:var(--text-faint); margin-top:4px;">${onDate
+        ? 'The whole amount lands in its renewal month, and nothing in the other eleven — what actually leaves the account.'
+        : 'A twelfth every month — what to set aside for it.'}</div>
+    </div>
+    ${onDate ? `<label class="field"><span class="lbl">Renews on</span>
+      <input type="date" id="recRenewalDate" value="${escapeHtml(dateValue || '')}"></label>` : ''}`;
+}
+// The form re-renders on these two, so what has been typed into it has to survive. Same problem
+// the reminder form solves with reminderFormDraft, and the same answer.
+function onRecurringFrequencyPicked(value) {
+  UI.recurringChargeDraft = { name: inputVal('recName'), amount: inputVal('recAmount'), category: inputVal('recCategory') };
+  UI.recurringChargeFreq = value;
+  render();
+}
+function setRecurringYearlyMode(mode) {
+  UI.recurringChargeDraft = { name: inputVal('recName'), amount: inputVal('recAmount'), category: inputVal('recCategory') };
+  UI.recurringChargeYearlyMode = mode === 'onDate' ? 'onDate' : 'spread';
+  render();
+}
+function openRecurringChargeForm(kind) {
+  UI.recurringChargeFormOpen = kind === 'savings' ? 'savings' : 'charge';
+  UI.recurringChargeFreq = 'monthly';
+  UI.recurringChargeYearlyMode = 'spread';
+  UI.recurringChargeDraft = null;
+  render();
+}
+function closeRecurringChargeForm() {
+  UI.recurringChargeFormOpen = null;
+  UI.recurringChargeDraft = null;
+  UI.recurringChargeFreq = 'monthly';
+  UI.recurringChargeYearlyMode = 'spread';
+  render();
+}
 function saveRecurringCharge() {
   if (addRecurringCharge()) UI.recurringChargeFormOpen = null;
   render();
@@ -909,7 +1041,7 @@ function renderSavingsProgressSection(key) {
   const savingsCharges = STATE.budget.recurring.filter(r => r.active && r.isSavings);
   if (!savingsCharges.length) return '';
   const completedTotal = budgetRecurringSavingsCompletedTotal(key);
-  const plannedTotal = budgetRecurringSavingsTotal();
+  const plannedTotal = budgetRecurringSavingsTotal(key);
   return `
     <div class="row" style="margin:18px 0 8px;">
       <div class="subtle-label" style="margin-bottom:0;">SAVINGS PROGRESS</div>
@@ -933,9 +1065,9 @@ function renderSavingsProgressSection(key) {
 // toggleSavingsCompletion()) — a real goal-progress fill, not just a flat reserved block.
 function renderBudgetBar(key) {
   const totalIncome = budgetTotalIncome(key);
-  const recurringTotal = budgetRecurringTotal();
-  const recurringExpenseTotal = budgetRecurringExpenseTotal();
-  const recurringSavingsTotal = budgetRecurringSavingsTotal();
+  const recurringTotal = budgetRecurringTotal(key);
+  const recurringExpenseTotal = budgetRecurringExpenseTotal(key);
+  const recurringSavingsTotal = budgetRecurringSavingsTotal(key);
   const recurringSavingsCompleted = budgetRecurringSavingsCompletedTotal(key);
   const incidentalsTotal = budgetIncidentalsTotal(key);
   const remaining = totalIncome - recurringTotal - incidentalsTotal;
@@ -1039,7 +1171,8 @@ function renderBudgetRecurring() {
   // budgetRecurringSavingsTotal), so the bar's maths is untouched.
   const list = STATE.budget.recurring.filter(r => !r.isSavings);
   const savingsList = STATE.budget.recurring.filter(r => r.isSavings);
-  const total = budgetRecurringExpenseTotal();
+  const monthKey = budgetMonthKey();
+  const total = budgetRecurringExpenseTotal(monthKey);
   // Three tabs rather than four stacked sections (2026-09-19). They were all on one page and it was
   // a long scroll of things you were not looking at; the WELLNESS screens have used a sub-nav for
   // this since the start. Asked for as "have as much as possible in one screen".
@@ -1049,7 +1182,7 @@ function renderBudgetRecurring() {
   // only decides what you EDIT. That also replaces the explanatory paragraph that used to sit here
   // -- three live numbers say what the screen is for better than two lines of prose.
   const tab = budgetRecurringTab();
-  const savingsTotal = budgetRecurringSavingsTotal();
+  const savingsTotal = budgetRecurringSavingsTotal(monthKey);
   const totalRow = (label, value, color, key) => `
     <button class="rec-total ${tab === key ? 'active' : ''}" onclick="setBudgetRecurringTab('${key}')">
       <span class="rec-total-label">${label}</span>
