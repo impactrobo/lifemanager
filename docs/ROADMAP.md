@@ -56,6 +56,23 @@ These are **not** requested features — they're natural extensions given the cu
 app, logged here so they're not lost, not so they get built unprompted. Confirm with the person
 before starting any of these.
 
+- **Let a weight food be measured by volume — surfaced 2026-09-27 while fixing duplicate foods.**
+  Not requested; it came out of a reachability sweep and is logged so the finding isn't lost.
+  - A **volume** food that declares a `density` can already be weighed — that shipped 2026-09-24, and
+    `mealUnitOptions()` offers it g/oz as well as cups. The reverse is not true: a **weight** food is
+    only ever offered g/oz, even though the same density would make cups exact.
+  - So every recipe line written the way people actually write them — *"1 cup flour"*, *"2 cups
+    rice"*, *"1/2 cup sugar"* — comes back from the matcher as `status: 'unit'` and has to be
+    converted by hand, once per line, forever. That is the real cost, and it is a papercut on the
+    single most-used path in the feature. It also lines up with the field note on the matcher:
+    *"We are pretty close! I don't think we have the imperial measurements on here though."*
+  - The work is small and already half-present: `foodBaseAmount()` handles both directions given a
+    density, so this is (a) densities on the common dry goods in `FOOD_DB`, (b) `mealUnitOptions()`
+    offering volume units to a weight food that has one, (c) a way to set one — for a built-in that
+    needs a `STATE.diet.foodDensity` override map, since `FOOD_DB` is a constant.
+  - **Worth checking against real recipes first.** Flour by volume is famously imprecise (a packed
+    cup vs a spooned one differ by ~20%), so the honest version marks a volume-measured weight food
+    as approximate rather than implying the gram figure is exact.
 - **Recipes: a per-serving line beside the totals — raised 2026-09-20, noted only.** *"Recipe
   tabulation shows total cals + macronutrients. Can we do a per serving line item as well?"*
   - Half of this already exists and is easy to miss: `recipeTotals()` returns `perServingCal`, and
@@ -357,6 +374,51 @@ Newest first. Keep this reasonably current so a fresh session can see what alrea
 without re-reading the whole diff history. Roughly grouped: this project spent early Sept 2026
 on an architecture split + a large wave of Maximalist aesthetics.
 
+- **One name, one food (2026-09-27).** Reported from the field as a shopping-list bug — *"Happens
+  yes, but the same food twice doesn't combine. Think that would be useful"* — and it was never about
+  shopping.
+  - **`combineShoppingItems()` was already right.** It groups by `food.id` and sums every convertible
+    unit into the food's own base; `200 g + 8 oz` really does come out as one line of `426.8 g`. What
+    was wrong is that the app happily held **two food records called "Onion"**, because nothing
+    anywhere checked a name. Two ids meant two shopping lines — and also two sets of macros in the
+    diet log, and a coin toss over which one the ingredient matcher picked. The visible symptom was
+    the least of it.
+  - **Where the duplicates came from.** Not recipes: `matchIngredientName()` already resolves an
+    exact normalised name to the existing food, so the matcher's own CREATE path could hardly make
+    one. It was the plain **+ CUSTOM FOOD** form, which had no check at all — add "Onion" today,
+    forget, add it again next week.
+  - **The prompt offers three answers**, at the user's own direction: *USE EXISTING / OVERWRITE /
+    SAVE AS NEW — "this option should force a new name to be selected so there is no collision or
+    uncertainty moving forward"*. So a rename that still collides is refused, twice if necessary, and
+    the box opens seeded with `Onion (2)` rather than empty.
+    - **OVERWRITE keeps the id.** That is the entire difference between it and delete-then-add: every
+      meal, log entry and recipe pointing at the food keeps pointing at it and simply starts reading
+      the new numbers. The prompt says how many places that is before you press it.
+    - A **built-in** can be used or saved beside, never overwritten — `FOOD_DB` is a constant.
+  - **The check uses `normaliseFoodName()`, the matcher's own function.** Two functions disagreeing
+    about what "the same name" means is how you get a collision check that passes and a matcher that
+    then can't tell the two apart. The test asserts both sides fold case and punctuation identically.
+  - **A merge tool for the duplicates already there**, since prevention only fixes tomorrow. Both
+    copies carry the warning — neither is "the original" — and merging repoints **every** store a
+    `foodId` lives in: saved meals, the diet log, recipe ingredients, and the remembered ingredient
+    map. It counts them first and puts the number on the button, because repointing someone's diet
+    log is not something to do behind a bare "Merge?".
+  - **A merge that cannot finish does nothing.** With a built-in in the group, half-merging would
+    delete the custom copies, leave the built-in, report success, and hand back the same duplicate.
+    Caught by mutation testing: at two foods the guard is redundant and removing it changes nothing —
+    it only earns its place at three.
+  - Two standing guards caught real bugs in this work before the suite did:
+    `test_inline_handlers.js` (a food called `Chef's blend` would have broken the MERGE handler —
+    `escapeHtml` where `jsArg` was needed) and `test_search_focus.js` (the rename box re-rendered on
+    every keystroke, which on a phone is one letter per tap). 15/15 mutations caught.
+  - **What was NOT built, and why.** The other way two lines can share a name is one food measured
+    two ways that cannot convert (cups of flour vs grams) — deliberate, since converting volume to
+    weight needs a density. A reachability sweep over all 122 foods × every unit the meal builder
+    offers × both unit systems found **zero** cases: `mealUnitOptions()` never offers a unit the food
+    can't convert, and `foodAcceptsUnit()` refuses one in the matcher. The `unconverted` branch is
+    correct defensive code for imported data, and the density-setting UI it would need is a fix for a
+    case that cannot currently occur. See Ideas, "let a weight food be measured by volume", for the
+    version of it that would actually earn its place.
 - **A week's weight is the average of its weigh-ins (2026-09-27).** Asked for as the method the user
   had been running by hand for years: *"the weight sum from any and all weigh-ins within a week over
   the total number of weigh-ins for that week… so it only adjusts the average as you go for an

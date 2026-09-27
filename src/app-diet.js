@@ -367,15 +367,20 @@ function renderCustomFoodForm() {
     <button class="btn btn-primary btn-block" style="margin-top:12px;" onclick="saveCustomFood()">${editing ? 'UPDATE' : 'SAVE'} CUSTOM FOOD</button>
   </div>`;
 }
-function saveCustomFood() {
-  const name = (inputVal('cfName') || '').trim();
-  if (!name) { showToast('Give it a name'); return; }
+// The form, read into a food record. Split out of saveCustomFood() so that all three answers to a
+// name collision (use / overwrite / rename) work from the SAME reading -- the alternative is the
+// rename path re-reading inputs that a render has already replaced, which is how a "save as new"
+// quietly saves the old macros.
+// Returns null and toasts on anything invalid, exactly as the save did.
+function readCustomFoodForm(nameOverride) {
+  const name = (nameOverride != null ? nameOverride : (inputVal('cfName') || '')).trim();
+  if (!name) { showToast('Give it a name'); return null; }
   const category = inputVal('cfCategory');
   const servingType = inputVal('cfServingType'); // 'weight' | 'volume' | 'count'
   const itemLabelRaw = (inputVal('cfItemLabel') || '').trim();
-  if (servingType === 'count' && !itemLabelRaw) { showToast('Give the item a label, e.g. "egg"'); return; }
+  if (servingType === 'count' && !itemLabelRaw) { showToast('Give the item a label, e.g. "egg"'); return null; }
   const cal = Number(document.getElementById(nutrientInputId('cal')).value) || 0;
-  if (!cal) { showToast('Enter at least the calories for one serving'); return; }
+  if (!cal) { showToast('Enter at least the calories for one serving'); return null; }
   const servingAmount = Math.max(1, Number(inputVal('cfServingAmount')) || 100);
   // count-type: itemAmount fixed at 100, so per-serving values entered ARE per100 already (no
   // conversion needed) — see the block comment above this section for why.
@@ -383,7 +388,6 @@ function saveCustomFood() {
   const per100 = {};
   NUTRIENT_KEYS.forEach(k => { per100[k] = (Number(document.getElementById(nutrientInputId(k)).value) || 0) / divisor; });
 
-  const wasEditing = !!UI.customFoodEditId;
   const food = {
     id: UI.customFoodEditId || uid(), name, category,
     unit: servingType, base: servingType === 'weight' ? 'g' : servingType === 'volume' ? 'mL' : 'g',
@@ -391,18 +395,330 @@ function saveCustomFood() {
   };
   if (servingType === 'count') { food.itemAmount = 100; food.itemLabel = itemLabelRaw; }
   else { food.servingAmount = servingAmount; } // metadata only, for re-showing "per serving" when editing — never read by the macro math
+  return food;
+}
 
-  if (wasEditing) {
-    const idx = STATE.diet.customFoods.findIndex(f => f.id === UI.customFoodEditId);
-    if (idx >= 0) STATE.diet.customFoods[idx] = food;
-  } else {
-    STATE.diet.customFoods.push(food);
-  }
+// Commits a read food record. `keepId` writes over the record already carrying that id -- which is
+// what makes OVERWRITE different from a delete-and-add: every meal, log entry and recipe pointing at
+// it keeps pointing at it, and simply starts reading the new numbers.
+function commitCustomFood(food, keepId) {
+  const id = keepId || food.id;
+  const idx = STATE.diet.customFoods.findIndex(f => f.id === id);
+  const stored = Object.assign({}, food, { id });
+  if (idx >= 0) STATE.diet.customFoods[idx] = stored; else STATE.diet.customFoods.push(stored);
   saveState();
   UI.customFoodFormOpen = false;
   UI.customFoodEditId = null;
-  showToast(wasEditing ? 'Custom food updated' : 'Custom food saved');
+  UI.foodCollision = null;
+  return stored;
+}
+
+function saveCustomFood() {
+  const wasEditing = !!UI.customFoodEditId;
+  const food = readCustomFoodForm();
+  if (!food) return;
+  // Renaming an existing food onto another one's name is the same collision, so the check runs on
+  // edits too -- with the food being edited excluded, or saving it unchanged would flag itself.
+  const clash = foodsNamed(food.name, UI.customFoodEditId || null)[0];
+  if (clash) { openFoodCollision(food, clash); return; }
+  const saved = commitCustomFood(food, UI.customFoodEditId);
+  afterCustomFoodSaved(saved, wasEditing ? 'Custom food updated' : 'Custom food saved');
+}
+
+// ---- The collision prompt ----
+// Three answers, because all three are things someone genuinely means:
+//   USE EXISTING   -- "oh, I already made that". Discards what was typed; in the recipe CREATE path
+//                     it wires the ingredient straight to the food that was already there.
+//   OVERWRITE      -- "these numbers are better". Keeps the id, so nothing referencing it breaks.
+//                     Not offered against a built-in: FOOD_DB is a constant and isn't yours to edit.
+//   SAVE AS NEW    -- two things really do share a name. It FORCES a distinct one, at the user's own
+//                     request: "so there is no collision or uncertainty moving forward". A second
+//                     "Onion" you can't tell from the first is the bug, not the fix.
+function openFoodCollision(pending, existing) {
+  UI.foodCollision = {
+    pending, existingId: existing.id,
+    // Seeded, not blank: a name box that opens empty asks you to invent one, and the obvious answer
+    // is nearly always the old name with something on the end.
+    rename: suggestDistinctFoodName(pending.name),
+    error: '',
+  };
   render();
+}
+function closeFoodCollision() { UI.foodCollision = null; render(); }
+// "Onion" -> "Onion (2)" -> "Onion (3)", skipping anything already taken.
+function suggestDistinctFoodName(name) {
+  const base = String(name || '').replace(/\s*\(\d+\)\s*$/, '').trim();
+  for (let n = 2; n < 50; n++) {
+    const candidate = `${base} (${n})`;
+    if (!foodsNamed(candidate).length) return candidate;
+  }
+  return base + ' ' + uid().slice(0, 4);
+}
+// NO render() here. render() replaces #app.innerHTML wholesale, which destroys the input being typed
+// into — on a phone that is one letter per tap, and test_search_focus.js exists because this app has
+// made the mistake before. The error line is hidden by touching its node directly instead.
+//
+// The error is cleared rather than re-validated on every keystroke: one that reappears mid-word
+// reads as the field fighting you. It comes back on the next save attempt.
+function onFoodCollisionRename(value) {
+  if (!UI.foodCollision) return;
+  UI.foodCollision.rename = value;
+  if (!UI.foodCollision.error) return;
+  UI.foodCollision.error = '';
+  const el = document.getElementById('foodClashError');
+  if (el) el.hidden = true;
+}
+function resolveFoodCollisionUse() {
+  const c = UI.foodCollision;
+  if (!c) return;
+  const existing = foodById(c.existingId);
+  UI.foodCollision = null;
+  UI.customFoodFormOpen = false;
+  UI.customFoodEditId = null;
+  if (existing) afterCustomFoodSaved(existing, 'Using the "' + existing.name + '" you already had');
+  else render();
+}
+function resolveFoodCollisionOverwrite() {
+  const c = UI.foodCollision;
+  if (!c) return;
+  const existing = foodById(c.existingId);
+  if (!existing || !existing.custom) { showToast("That one is built in — it can't be overwritten"); return; }
+  // Editing a DIFFERENT food into a collision, then overwriting, would otherwise leave the record
+  // being edited behind as a second copy under the old name.
+  const editedId = UI.customFoodEditId;
+  const saved = commitCustomFood(c.pending, existing.id);
+  if (editedId && editedId !== existing.id) {
+    repointFood(editedId, existing.id);
+    STATE.diet.customFoods = STATE.diet.customFoods.filter(f => f.id !== editedId);
+    saveState();
+  }
+  afterCustomFoodSaved(saved, 'Overwrote "' + saved.name + '"');
+}
+// Shown by touching the node, for the same reason onFoodCollisionRename() doesn't render: a rejected
+// name is the one moment you are definitely mid-edit, and a re-render there drops the caret.
+function showFoodClashError(msg) {
+  if (UI.foodCollision) UI.foodCollision.error = msg;
+  const el = document.getElementById('foodClashError');
+  if (el) { el.textContent = msg; el.hidden = false; }
+}
+function resolveFoodCollisionNew() {
+  const c = UI.foodCollision;
+  if (!c) return;
+  const name = String(c.rename || '').trim();
+  if (!name) { showFoodClashError('Give it a name of its own.'); return; }
+  const still = foodsNamed(name, UI.customFoodEditId || null)[0];
+  if (still) { showFoodClashError(`"${still.name}" is taken too — pick something that tells them apart.`); return; }
+  const saved = commitCustomFood(Object.assign({}, c.pending, { name }), UI.customFoodEditId);
+  afterCustomFoodSaved(saved, 'Saved as "' + name + '"');
+}
+// Where a saved-or-chosen food goes next. The ingredient CREATE path needs the row wired up; the
+// plain form just needs the list to redraw. saveIngCreate() used to detect the save by watching
+// customFoods.length grow, which the collision prompt breaks in both directions -- USE EXISTING adds
+// nothing, OVERWRITE replaces in place -- so the food is handed over explicitly now.
+function afterCustomFoodSaved(food, message) {
+  const m = VIEW.ingMatch;
+  if (m && m.creating != null) {
+    const i = m.creating;
+    m.creating = null;
+    showToast(message);
+    setIngRowFood(i, food.id);   // renders
+    return;
+  }
+  showToast(message);
+  render();
+}
+
+function renderFoodCollisionModal() {
+  const c = UI.foodCollision;
+  if (!c) return '';
+  const existing = foodById(c.existingId);
+  if (!existing) return '';
+  const cal = (f) => Math.round((f.per100 && f.per100.cal) || 0) + ' cal/100' + f.base;
+  const refs = existing.custom ? foodReferences(existing.id) : null;
+  return `
+    <div class="modal-overlay sheet-modal" onclick="if(event.target===this)closeFoodCollision()">
+      <div class="sheet-modal-box">
+        <div class="sheet-modal-head">
+          <div class="sheet-modal-title">That name is taken</div>
+          <button class="icon-btn" onclick="closeFoodCollision()" title="Close" aria-label="Close">${icon('close')}</button>
+        </div>
+        <div class="sheet-modal-body">
+          <div class="food-clash-intro">You already have a food called <b>${escapeHtml(existing.name)}</b>.
+            Two foods with one name can't be told apart afterwards — on a shopping list, in a recipe,
+            or in the diet log.</div>
+          <div class="food-clash-pair">
+            <div class="food-clash-side">
+              <div class="food-clash-tag">Already saved${existing.custom ? '' : ' · built in'}</div>
+              <div class="food-clash-name">${escapeHtml(existing.name)}</div>
+              <div class="food-clash-macro mono">${cal(existing)}</div>
+              ${refs && refs.total ? `<div class="food-clash-refs">used ${refs.total} place${refs.total === 1 ? '' : 's'}</div>` : ''}
+            </div>
+            <div class="food-clash-side">
+              <div class="food-clash-tag">Just typed</div>
+              <div class="food-clash-name">${escapeHtml(c.pending.name)}</div>
+              <div class="food-clash-macro mono">${cal(c.pending)}</div>
+            </div>
+          </div>
+          <button class="btn btn-block" style="margin-bottom:8px;" onclick="resolveFoodCollisionUse()">
+            USE THE ONE I ALREADY HAVE</button>
+          ${existing.custom
+            ? `<button class="btn btn-block" style="margin-bottom:8px;" onclick="resolveFoodCollisionOverwrite()">
+                 OVERWRITE IT WITH WHAT I TYPED</button>
+               <div class="food-clash-note">Keeps the same food, so everything already using it${refs && refs.total ? ` (${refs.total} place${refs.total === 1 ? '' : 's'})` : ''} picks up the new numbers.</div>`
+            : `<div class="food-clash-note">That one is built in, so it can't be overwritten — use it, or save yours under its own name.</div>`}
+          <div class="food-clash-rename">
+            <div class="subtle-label" style="margin-bottom:6px;">OR SAVE AS A SEPARATE FOOD</div>
+            <label class="field"><span class="lbl">Its own name</span>
+              <input type="text" id="foodClashName" value="${escapeHtml(c.rename)}"
+                     oninput="onFoodCollisionRename(this.value)"
+                     placeholder="something that tells them apart"></label>
+            <div class="food-clash-error" id="foodClashError" ${c.error ? '' : 'hidden'}>${escapeHtml(c.error)}</div>
+            <button class="btn btn-block btn-primary" onclick="resolveFoodCollisionNew()">SAVE AS NEW</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+// ================= ONE NAME, ONE FOOD (2026-09-27) =================
+// Reported from the field as a shopping-list bug -- "the same food twice doesn't combine" -- and it
+// was never really about shopping. combineShoppingItems() groups by food.id, which is right; what
+// was wrong is that the app happily held TWO food records called "Onion". Nothing checked. Two ids
+// meant two shopping lines, but also two sets of macros in the diet log and a coin toss over which
+// one the ingredient matcher picked -- so the visible symptom was the least of it.
+//
+// Duplicates came from the plain + CUSTOM FOOD form, not from recipes: matchIngredientName() already
+// resolves an exact normalised name to the existing food, so the matcher's own CREATE path could
+// hardly make one. The form had no such check at all.
+//
+// Names are compared through normaliseFoodName() -- the SAME normalisation the matcher uses, so a
+// name the matcher would consider already taken is exactly the name this refuses to duplicate. Two
+// functions disagreeing about what "the same name" means is how you get a collision check that
+// passes and a matcher that then can't tell the two apart.
+function foodsNamed(name, exceptId) {
+  const key = normaliseFoodName(name);
+  if (!key) return [];
+  return allFoods().filter(f => normaliseFoodName(f.name) === key && f.id !== exceptId);
+}
+// Every custom food that shares its name with any other food, built-ins included -- a custom
+// "Chicken breast" beside FOOD_DB's is the same problem even though only one of them is yours.
+function duplicateFoodNameKeys() {
+  const seen = {}, dupes = {};
+  allFoods().forEach(f => {
+    const k = normaliseFoodName(f.name);
+    if (!k) return;
+    if (seen[k]) dupes[k] = true; else seen[k] = true;
+  });
+  return dupes;
+}
+// What a merge would actually move. Counted BEFORE the merge and shown, because repointing someone's
+// diet log is not something to do behind a bare "Merge?" -- the number is the whole informed part of
+// informed consent.
+function foodReferences(id) {
+  let mealItems = 0, logItems = 0, recipeItems = 0, remembered = 0;
+  (STATE.diet.meals || []).forEach(m => (m.items || []).forEach(it => { if (it.foodId === id) mealItems++; }));
+  Object.keys(STATE.diet.foodLog || {}).forEach(d =>
+    (STATE.diet.foodLog[d] || []).forEach(it => { if (it.foodId === id) logItems++; }));
+  allEntries().forEach(e => {
+    const ing = e.fields && e.fields.ingredients;
+    if (Array.isArray(ing)) ing.forEach(it => { if (it.foodId === id) recipeItems++; });
+  });
+  const map = ingredientMap();
+  Object.keys(map).forEach(k => { if (map[k] === id) remembered++; });
+  return { mealItems, logItems, recipeItems, remembered,
+           total: mealItems + logItems + recipeItems + remembered };
+}
+// Every place a foodId is stored, in one walk. If a fifth store ever appears this is the function
+// that has to learn about it -- which is why the merge counts through foodReferences() above rather
+// than each caller counting its own.
+function repointFood(fromId, toId) {
+  if (!fromId || !toId || fromId === toId) return 0;
+  let n = 0;
+  (STATE.diet.meals || []).forEach(m => (m.items || []).forEach(it => {
+    if (it.foodId === fromId) { it.foodId = toId; n++; }
+  }));
+  Object.keys(STATE.diet.foodLog || {}).forEach(d =>
+    (STATE.diet.foodLog[d] || []).forEach(it => { if (it.foodId === fromId) { it.foodId = toId; n++; } }));
+  allEntries().forEach(e => {
+    const ing = e.fields && e.fields.ingredients;
+    if (!Array.isArray(ing)) return;
+    let touched = false;
+    ing.forEach(it => { if (it.foodId === fromId) { it.foodId = toId; n++; touched = true; } });
+    if (touched) touchEntry(e);
+  });
+  const map = ingredientMap();
+  Object.keys(map).forEach(k => { if (map[k] === fromId) { map[k] = toId; n++; } });
+  return n;
+}
+// ---- Merging what's already there ----
+// Prevention fixes tomorrow; this fixes the duplicates already sitting in the data, which is where
+// the split macros actually are. Destructive and irreversible, so it names what it will move and
+// asks -- the same bar as breaking a habit.
+function openFoodMerge(nameKey) {
+  UI.foodMerge = { key: nameKey, survivorId: null };
+  render();
+}
+function closeFoodMerge() { UI.foodMerge = null; render(); }
+function setFoodMergeSurvivor(id) { if (UI.foodMerge) { UI.foodMerge.survivorId = id; render(); } }
+function foodMergeGroup(key) { return allFoods().filter(f => normaliseFoodName(f.name) === key); }
+function confirmFoodMerge() {
+  const m = UI.foodMerge;
+  if (!m || !m.survivorId) return;
+  const group = foodMergeGroup(m.key);
+  const survivor = group.find(f => f.id === m.survivorId);
+  const losers = group.filter(f => f.id !== m.survivorId);
+  if (!survivor || !losers.length) { closeFoodMerge(); return; }
+  // A built-in can be the survivor -- that is often the RIGHT answer, since FOOD_DB's numbers are
+  // sourced -- but a built-in can never be a loser, because there is no way to delete it.
+  const deletable = losers.filter(f => f.custom);
+  if (deletable.length !== losers.length) {
+    showToast("A built-in food can't be removed — merge into that one instead");
+    return;
+  }
+  const moved = deletable.reduce((n, f) => n + repointFood(f.id, survivor.id), 0);
+  const gone = deletable.map(f => f.id);
+  STATE.diet.customFoods = STATE.diet.customFoods.filter(f => !gone.includes(f.id));
+  UI.foodMerge = null;
+  saveState();
+  showToast(moved ? `Merged — ${moved} reference${moved === 1 ? '' : 's'} moved` : 'Merged');
+  render();
+}
+function renderFoodMergeModal() {
+  const m = UI.foodMerge;
+  if (!m) return '';
+  const group = foodMergeGroup(m.key);
+  if (group.length < 2) return '';
+  const totalMoved = group.filter(f => f.id !== m.survivorId).reduce((n, f) => n + foodReferences(f.id).total, 0);
+  return `
+    <div class="modal-overlay sheet-modal" onclick="if(event.target===this)closeFoodMerge()">
+      <div class="sheet-modal-box">
+        <div class="sheet-modal-head">
+          <div class="sheet-modal-title">Merge ${group.length} foods named "${escapeHtml(group[0].name)}"</div>
+          <button class="icon-btn" onclick="closeFoodMerge()" title="Close" aria-label="Close">${icon('close')}</button>
+        </div>
+        <div class="sheet-modal-body">
+          <div class="food-clash-intro">Pick the one to keep. Everything pointing at the others —
+            meals, the diet log, recipe ingredients, remembered matches — moves onto it, and the
+            others are deleted. <b>This can't be undone.</b></div>
+          ${group.map(f => {
+            const r = foodReferences(f.id);
+            const on = m.survivorId === f.id;
+            return `<button class="food-merge-opt${on ? ' is-on' : ''}" onclick="setFoodMergeSurvivor('${f.id}')">
+              <div class="food-merge-mark">${on ? '&#10003;' : ''}</div>
+              <div class="food-merge-main">
+                <div class="food-clash-name">${escapeHtml(f.name)}${f.custom ? '' : ' <span class="food-clash-tag">built in</span>'}</div>
+                <div class="food-clash-macro mono">${Math.round((f.per100 && f.per100.cal) || 0)} cal/100${f.base} · ${escapeHtml(f.unit)}</div>
+                <div class="food-clash-refs">used in ${r.mealItems} meal item${r.mealItems === 1 ? '' : 's'} ·
+                  ${r.logItems} logged · ${r.recipeItems} recipe row${r.recipeItems === 1 ? '' : 's'}</div>
+              </div>
+            </button>`;
+          }).join('')}
+        </div>
+        <div class="sheet-modal-foot">
+          <button class="btn btn-block btn-danger" ${m.survivorId ? '' : 'disabled'} onclick="confirmFoodMerge()">
+            ${m.survivorId ? `MERGE — MOVES ${totalMoved} REFERENCE${totalMoved === 1 ? '' : 'S'}` : 'PICK ONE TO KEEP'}</button>
+        </div>
+      </div>
+    </div>`;
 }
 function deleteCustomFood(id) {
   showConfirm('Delete this custom food? Any saved meals using it will show 0 for its macros afterward, instead of erroring.', () => {
@@ -428,7 +744,12 @@ function renderMyFoodsTab() {
   `;
 }
 function renderCustomFoodCard(f) {
-  return `<div class="panel" onclick="editCustomFood('${f.id}')" style="cursor:pointer;">
+  // A duplicate is a property of the NAME, not of one record, so both copies carry the warning and
+  // either one opens the same merge — there is no "original" to single out.
+  const key = normaliseFoodName(f.name);
+  const dupe = duplicateFoodNameKeys()[key];
+  const n = dupe ? foodMergeGroup(key).length : 0;
+  return `<div class="panel${dupe ? ' food-dupe' : ''}" onclick="editCustomFood('${f.id}')" style="cursor:pointer;">
     <div class="row" style="align-items:flex-start;">
       <div>
         <div style="font-size:14px; font-weight:700;">${escapeHtml(f.name)}</div>
@@ -436,6 +757,12 @@ function renderCustomFoodCard(f) {
       </div>
       <button class="icon-btn" style="color:var(--bad); flex-shrink:0;" onclick="event.stopPropagation(); deleteCustomFood('${f.id}')" title="Delete">${icon('close')}</button>
     </div>
+    ${dupe ? `<div class="food-dupe-warn">
+      <span>${n} foods share this name — they count as different foods everywhere.</span>
+      ${/* jsArg, not escapeHtml: this is a JS string argument, and an attribute decodes entities
+             back before JS parses it -- a food called "Chef's blend" would end the string early. */''}
+      <button class="btn btn-sm" onclick="event.stopPropagation(); openFoodMerge(${jsArg(key)})">MERGE</button>
+    </div>` : ''}
   </div>`;
 }
 
@@ -875,9 +1202,11 @@ function renderTdeeSettings() {
 // ingredient) on whichever date the person picks — from there it's just a normal to-do reminder,
 // editable/checkable on the Calendar like any other. ----
 function toggleShoppingListForm() { UI.shoppingListFormOpen = !UI.shoppingListFormOpen; render(); }
-// Grouped by (foodId, unit) rather than foodId alone — two meals measuring the same food in
-// different units (e.g. one in g, another in oz) stay as separate lines rather than risking a
-// wrong unit conversion just to merge them into one.
+// Grouped by foodId, with every convertible unit summed into the food's own base — see
+// combineShoppingItems(). (It used to group by (foodId, unit) and never convert, which left 200 g
+// and 8 oz of one thing on two lines.) Two lines with the same NAME therefore mean two different
+// food records, which is a duplicate to merge rather than a combining failure: see "ONE NAME, ONE
+// FOOD" above.
 function generateShoppingListItems(fromDate) {
   return generateShoppingRows(fromDate).rows.map(shoppingItemLabel);
 }

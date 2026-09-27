@@ -633,18 +633,14 @@ function startIngCreate(i) {
   render();
 }
 function cancelIngCreate() { if (VIEW.ingMatch) { VIEW.ingMatch.creating = null; UI.customFoodFormOpen = false; render(); } }
+// Wiring the new food to the row it was created for is afterCustomFoodSaved()'s job now, not this
+// one's. It used to detect the save by watching customFoods.length grow, which the name-collision
+// prompt breaks in both directions: USE THE ONE I ALREADY HAVE adds nothing, and OVERWRITE replaces
+// in place. Either would have left the ingredient row still unmatched next to a food that exists.
 function saveIngCreate() {
   const m = VIEW.ingMatch;
   if (!m || m.creating == null) return;
-  const before = STATE.diet.customFoods.length;
   saveCustomFood();
-  if (STATE.diet.customFoods.length > before) {
-    const added = STATE.diet.customFoods[STATE.diet.customFoods.length - 1];
-    const i = m.creating;
-    m.creating = null;
-    UI.customFoodFormOpen = false;
-    setIngRowFood(i, added.id);
-  }
 }
 function applyIngredientMatchNow() {
   const m = VIEW.ingMatch;

@@ -3454,6 +3454,51 @@ textarea.tmpl-input { line-height: 1.5; }
 /* A supplement whose slot names no anchor: shown on the builder screen so it can be re-homed. */
 .supp-slot-orphan { border-left: 3px solid var(--warn); padding-left: 10px; }
 
+/* ---- One name, one food ----
+   The collision prompt, and the merge picker for duplicates already saved. */
+.food-clash-intro { font-size: 12px; line-height: 1.5; color: var(--text-dim); margin-bottom: 12px; }
+.food-clash-intro b { color: var(--text); }
+/* Side by side, because the decision IS the comparison — which of these two do you want. Stacked,
+   you are choosing between a thing on screen and a thing you have to remember. */
+.food-clash-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+.food-clash-side {
+  border: 1px solid var(--border-soft); border-radius: var(--radius);
+  padding: 8px 10px; background: var(--surface2); min-width: 0;
+}
+.food-clash-tag {
+  font-size: 9px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--text-faint);
+}
+.food-clash-name { font-size: 13px; font-weight: 700; margin-top: 3px; overflow-wrap: anywhere; }
+.food-clash-macro { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+.food-clash-refs { font-size: 10px; color: var(--text-faint); margin-top: 3px; }
+.food-clash-note { font-size: 10px; line-height: 1.45; color: var(--text-faint); margin: -2px 0 12px; }
+.food-clash-rename { border-top: 1px solid var(--border-soft); padding-top: 12px; margin-top: 4px; }
+.food-clash-error { font-size: 11px; color: var(--bad); font-weight: 600; margin: -4px 0 8px; }
+
+.food-merge-opt {
+  display: flex; align-items: flex-start; gap: 10px; width: 100%; text-align: left;
+  background: var(--surface2); border: 1px solid var(--border-soft); border-radius: var(--radius);
+  padding: 10px; margin-bottom: 8px; color: inherit; font: inherit; cursor: pointer;
+}
+.food-merge-opt.is-on { border-color: var(--accent); background: var(--surface); }
+.food-merge-mark {
+  flex: none; width: 1.1rem; height: 1.1rem; margin-top: 2px; border-radius: 4px;
+  border: 1.5px solid var(--border); display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; color: var(--bg);
+}
+.food-merge-opt.is-on .food-merge-mark { background: var(--accent); border-color: var(--accent); }
+.food-merge-main { flex: 1; min-width: 0; }
+
+/* The warning on a duplicated food's card. Deliberately on BOTH copies — neither is the original. */
+.panel.food-dupe { border-left: 3px solid var(--warn); }
+.food-dupe-warn {
+  display: flex; align-items: center; gap: 8px; margin-top: 8px;
+  padding-top: 8px; border-top: 1px solid var(--border-soft);
+  font-size: 10.5px; line-height: 1.4; color: var(--warn);
+}
+.food-dupe-warn span { flex: 1; min-width: 0; }
+
 /* The weekly weight table. Four fixed columns so the numbers line up down the page -- the whole
    value of a table over the chart above it is that you can compare two weeks by looking straight
    down, which a proportional column would break. */

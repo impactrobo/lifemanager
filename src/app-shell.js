@@ -87,6 +87,10 @@ function defaultTransientUi() {
     // it, the same rule every other open overlay follows. Shifting the clock itself only calls
     // render(), not resetTransientUi(), so the popup survives its own buttons.
     debugClockOpen: false,
+    // The name-collision prompt and the merge picker. Transient like every other overlay: navigating
+    // away abandons the half-saved food rather than having it reappear over an unrelated screen.
+    foodCollision: null,
+    foodMerge: null,
     // The recurring-charge form re-renders when its frequency changes (the yearly controls appear
     // and disappear), so what is half-typed has to be carried across it.
     recurringChargeDraft: null,
@@ -1148,7 +1152,8 @@ function _doRender() {
   }
   // The link picker is an overlay, appended after the screen's own markup so it sits above it.
   app.innerHTML += renderLinkPicker() + renderRecipeCustomFoodOverlay() + renderLogPopup()
-    + renderSectionSheet() + renderSectionHoldMenu() + renderDebugClockPopup();
+    + renderSectionSheet() + renderSectionHoldMenu() + renderDebugClockPopup()
+    + renderFoodCollisionModal() + renderFoodMergeModal();
   // ...and then every overlay leaves #app entirely. Must come before the focus call below: moving a
   // node after focusing something inside it drops the focus.
   _hoistOverlays();

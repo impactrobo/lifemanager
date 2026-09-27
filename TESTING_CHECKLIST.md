@@ -889,4 +889,30 @@ get a number; a week with none is bridged (a 2-week gap with 2 lb lost reads as 
       your PLANNED rate and now gets a real bridged one. If it fires on a run you don't recognise,
       tell me which weeks.
 
+## One name, one food (2026-09-27)
+Your flag — *"the same food twice doesn't combine"* — turned out not to be a shopping-list bug at
+all. The combining was right; the app was letting you save **two food records with the same name**,
+and two ids are two of everything: two shopping lines, two sets of macros in the diet log, and a coin
+toss over which one a recipe matches to. Prevention plus a merge tool for the ones already there.
+- [ ] **BUILDER → DIET → MY FOODS.** Any name you have twice is flagged on **both** cards with a
+      **MERGE** button. Do you actually have duplicates in your real data? That's the thing I can't
+      check from here.
+- [ ] **MERGE** names how many references it will move before you press it — meals, diet log, recipe
+      ingredients, remembered matches. Check that count looks right, then merge and confirm the
+      shopping list now shows **one** line with the amounts added.
+- [ ] Merging **can't be undone**. Is the warning strong enough, or does this want an UNDO toast like
+      deleting a note has?
+- [ ] **Add a custom food using a name you already have.** You should get a prompt, not a silent
+      second copy. Case and punctuation count as the same name — "onion" collides with "Onion".
+- [ ] **USE THE ONE I ALREADY HAVE** — throws away what you typed. From a recipe's CREATE button it
+      should wire the ingredient straight to the food that was already there.
+- [ ] **OVERWRITE** — keeps the same food, so everything already using it picks up the new numbers.
+      Worth testing on a food that's in a saved meal: the meal's calories should change, and the meal
+      should not break.
+- [ ] **SAVE AS NEW** forces a distinct name, as you asked. It opens seeded with "Onion (2)" — is
+      that the right suggestion, or would you rather it opened empty?
+- [ ] A **built-in** food can be merged into but never deleted or overwritten. Try saving a custom
+      food named after one that ships with the app (e.g. "Chicken breast") and see if that reads
+      sensibly.
+
 ## Add future items below as new features ship
