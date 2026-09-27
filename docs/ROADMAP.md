@@ -56,9 +56,16 @@ These are **not** requested features — they're natural extensions given the cu
 app, logged here so they're not lost, not so they get built unprompted. Confirm with the person
 before starting any of these.
 
-- **A count vocabulary with per-ingredient sizes — raised 2026-09-27, noted only.** *"There are some
-  conversions for 'stick of butter' and 'small / medium / large onion' for example that may allow for
-  conversion to weight based on an ingredient-dependent input."*
+- **A count vocabulary with per-ingredient sizes — raised 2026-09-27, scoped in
+  [`docs/COUNT_UNITS.md`](COUNT_UNITS.md).** *"There are some conversions for 'stick of butter' and
+  'small / medium / large onion' for example that may allow for conversion to weight based on an
+  ingredient-dependent input."* That doc carries the candidate food list, the USDA FoodData Central
+  extraction plan, the proposed data shape, and the finding below.
+  - **The prerequisite is bigger than the feature: there is no butter in FOOD_DB.** Nor bread, lemon,
+    lime, apple, shallot, ginger, scallion or tortilla — so the very example that prompted this
+    can't be matched at all, before the unit question is even reached. Roughly 10–20 new food
+    records, each needing a full macro and micronutrient profile, come first. That work is useful on
+    its own and should be decided on its own merits rather than smuggled in as "part of the parser".
   - Today the parser handles amounts and units, so *"2 sticks butter"*, *"3 cloves garlic"* and
     *"1 large onion"* all fail the same way: no recognised unit, so the row comes back wanting one.
   - Two different things are bundled in that sentence and they should be built in that order:
