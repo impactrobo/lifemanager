@@ -822,6 +822,57 @@ function emptyState(msg) {
   return `<div class="empty-state"><div class="big">${icon('clipboard')}</div>${msg}</div>`;
 }
 
+// ---------------- The weekly average, as a table ----------------
+//
+// The screen the weekly method exists for: "that way, the user always has some weight number per
+// week". The chart above plots every reading and a smoothed line through them, which answers "where
+// am I trending" and does NOT answer "what did I weigh in week 3" -- you cannot read a number off a
+// curve. This does, one row per week, the same numbers the plan walk and the long-cut flag are using.
+//
+// Newest first, because the weeks you care about are the recent ones and a log that reads downward
+// into the past needs no scrolling to be useful.
+const WEEKLY_WEIGHT_ROWS = 14;
+function renderWeeklyWeightTable() {
+  const origin = weightWeekGridOrigin();
+  const today = todayStr();
+  // Only weeks that have started. A grid week containing today is shown -- it is in progress, and a
+  // partial average is the whole idea -- but nothing beyond it.
+  const all = weeklyWeightRates(origin).filter(w => w.start <= today);
+  if (!all.length) return '';
+  const rows = all.slice(-WEEKLY_WEIGHT_ROWS).reverse();
+  const u = weightUnitLabel();
+  const anyThin = rows.some(w => w.thin);
+  return `
+    <div class="divider"></div>
+    <div class="subtle-label" style="margin-bottom:8px;">WEEKLY AVERAGE</div>
+    <div class="wk-weight">
+      ${rows.map(w => {
+        // A week still running is labelled rather than left to look like a finished week that went
+        // badly -- three days of weigh-ins is not a week's average yet.
+        const running = w.end > today;
+        const cls = w.missed ? 'wk-weight-row is-missed' : 'wk-weight-row';
+        return `<div class="${cls}">
+          <span class="wk-weight-when">${fmtGoalDate(w.start)}${running ? ' <i>so far</i>' : ''}</span>
+          <span class="wk-weight-avg mono">${w.avgLb == null ? '—'
+            : fmt(Number(lbToDisplay(w.avgLb)), 1) + ' ' + u}</span>
+          <span class="wk-weight-n mono">${w.count ? w.count + '&times;' : ''}${w.thin ? '<b>*</b>' : ''}</span>
+          <span class="wk-weight-rate mono">${w.lbPerWeek == null ? ''
+            : (w.lbPerWeek < 0 ? '&minus;' : '+') + fmt(Math.abs(Number(lbToDisplay(w.lbPerWeek))), 2)
+              + (w.bridgedWeeks > 1 ? ' <i title="spread across weeks with no weigh-ins">~</i>' : '')}</span>
+          ${/* The flag gets its own line rather than a cell, because it applies to the WEEK and not
+                to one figure -- and because it has to coexist with the bridged rate beside it. A
+                bridged week shows a perfectly healthy number; the line under it is what stops that
+                number from passing for a week you actually stood on the scale. */''}
+          ${w.missed ? `<span class="wk-weight-flag">MISSED WEIGH-INS</span>` : ''}
+        </div>`;
+      }).join('')}
+    </div>
+    <div class="wk-weight-key">
+      A week's weight is the average of every weigh-in in it, so one weigh-in is already a number and
+      it sharpens as the week fills${anyThin ? `. <b>*</b> means fewer than ${WEIGHT_WEEK_FULL_COUNT} weigh-ins` : ''}${rows.some(w => w.bridgedWeeks > 1) ? `. <b>~</b> is a rate spread across a week with none` : ''}.
+    </div>`;
+}
+
 // ---------------- PROGRESS: COMPARE (small-multiples: body weight + lift history) ----------------
 // Every (categoryId, tierKey) combo actually assigned to an enabled T1/T2 slot on some "weights"
 // workout, deduped — the picker list for the COMPARE view below. T3 accessories are deliberately

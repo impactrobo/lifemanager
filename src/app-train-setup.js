@@ -1494,7 +1494,11 @@ function renderBody() {
   else if (NAV.bodySubtab === 'volume') body = renderVolume();
   // Anything else -- including the retired 'weight' and 'measurements' riding in on a saved nav
   // snapshot -- lands on the tab that absorbed them.
-  else body = renderBodyWeightChart() + `<div class="divider"></div>
+  // The weekly table belongs to WEIGHT specifically -- it is the one metric with a planned rate to
+  // read against, and "weekly average sleep quality" is a different question nobody asked.
+  else body = renderBodyWeightChart()
+    + (VIEW.selectedWeightMetric === 'weight' || !VIEW.selectedWeightMetric ? renderWeeklyWeightTable() : '')
+    + `<div class="divider"></div>
     <div class="subtle-label" style="margin-bottom:8px;">LOG</div>` + renderBodyLog();
   return `<div class="screen">
     <div class="section-title">Health &amp; Wellness</div>

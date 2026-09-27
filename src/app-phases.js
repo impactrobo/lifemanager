@@ -229,13 +229,17 @@ function phasePlanSummary() {
   };
 }
 
-// How a phase that has already started is actually going, read off the same 7-day trend line as
-// everything else. Null until there's enough of it logged to be honest -- a phase in its first
-// fortnight has no rate, and printing 0 would read as "you've stalled".
+// How a phase that has already started is actually going, as the mean of its weeks' rates -- the same
+// weekly averaging the plan walk and the tracking table use, on the same grid, so a phase's Actual is
+// the arithmetic of the week rows rather than a second opinion beside them.
+//
+// It used to read the 7-day trend line over the phase's whole span, which needed 14 days between the
+// first and last weigh-in before it would say anything. Weekly averaging answers in the phase's
+// second week, since one week's mean against the next is a rate.
 function phaseActualRate(entry) {
   if (entry.state === 'future') return null;
   const until = entry.state === 'current' ? todayStr() : entry.endDate;
-  return weightTrendRateBetween(entry.startDate, until);
+  return weeklyWeightRateBetween(weightWeekGridOrigin(), entry.startDate, until);
 }
 
 // ---- The exercise plan in effect ----
@@ -1785,9 +1789,9 @@ function renderWeightPhaseBody(entry) {
           <span class="goal-row-k">Actual</span>
           ${actual
             ? `<span class="goal-row-v mono">${signedLb(actual.lbPerWeek)} ${u}/wk</span>
-               <span class="goal-row-x">over ${actual.spanDays} days logged</span>`
+               <span class="goal-row-x">${weeklyRateBasisText(actual)}</span>`
             : `<span class="goal-row-v" style="color:var(--text-faint);">not yet</span>
-               <span class="goal-row-x">needs ${GOAL_RATE_MIN_DAYS} days of weights inside this phase</span>`}
+               <span class="goal-row-x">needs two weeks with a weigh-in inside this phase</span>`}
         </div>`}
       </div>
       ${renderBandNote(entry, g)}

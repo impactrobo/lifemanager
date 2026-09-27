@@ -190,16 +190,22 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (!lookup.defaultsToWeight) throw new Error('phaseForDate should default to the weight kind');
 
   // ---- 8. Actual rate: only where there's enough logged inside the phase ----
+  // Read as the mean of the phase's WEEKLY averages (2026-09-27), which is why the middle case
+  // matters more than it used to. A phase that started today sits inside a week whose rate is
+  // measured against the week before — almost all of which preceded the phase — so counting it
+  // would credit this morning's block with last week's loss. Only COMPLETE weeks inside the phase
+  // count, and a phase one day old has none.
   const actual = await page.evaluate(() => {
     const s = phaseTimeline();
     return s.map(x => {
       const r = phaseActualRate(x);
-      return { state: x.state, rate: r && Math.round(r.lbPerWeek * 100) / 100, span: r && r.spanDays };
+      return { state: x.state, rate: r && Math.round(r.lbPerWeek * 100) / 100, weeks: r && r.rated };
     });
   });
   console.log('actual rates:', actual);
   if (actual[0].rate === null) throw new Error('A finished phase with 10 weeks of weights should have an actual rate');
   if (Math.abs(actual[0].rate - (-1.6)) > 0.25) throw new Error(`Expected about -1.6 lb/wk from the seeded drift, got ${actual[0].rate}`);
+  if (!(actual[0].weeks > 1)) throw new Error('A ten-week phase should rest on more than one weekly average');
   if (actual[1].rate !== null) throw new Error('A phase that started today has nothing to read yet');
   if (actual[2].rate !== null) throw new Error('A future phase can never have an actual rate');
 

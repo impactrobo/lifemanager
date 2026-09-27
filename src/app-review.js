@@ -24,8 +24,10 @@
 //   3. A DAY OFF IS NOT A MISS. dayModel().isDayOff already knows about schedule exceptions, and
 //      nothing is planned on one, so those days are excluded from the denominator entirely.
 //   4. WEIGHT IS A RATE, NOT A NUMBER. The one outcome metric allowed in, and only as "-0.7%/wk,
-//      inside your Standard Cut band" -- read through the same actualPctPerWeekAt() the long-cut
-//      flag uses, so the review and the flag can never tell you two different stories.
+//      inside your Standard Cut band" -- read through the same weekly averaging the long-cut flag
+//      walks, so the review and the flag can never tell you two different stories. The one thing it
+//      reports as a bare fact is a week with NO weigh-ins, because that is a gap in the record rather
+//      than a bad outcome, and an averaging method that silently bridges it would hide it.
 //   5. NO LABS, NO MEASUREMENTS, NO BUDGET. Labs and measurements move monthly; weekly they are
 //      noise. Budget runs on its own cycle, and stacking "you overspent" on top of "you missed two
 //      sessions" is how a review becomes a place you don't go.
@@ -280,15 +282,20 @@ function _reviewOver(dates) {
   });
 
   // ---- Weight, as a rate ----
-  // Read at the week's end (or today, mid-week) through the same function the long-cut flag uses.
-  // Null whenever there isn't enough logged weight to say anything honest -- an absent section is
-  // better than a made-up number.
+  // The mean of the weekly averages' rates across the range, on a grid anchored to the range's OWN
+  // start -- a review of Mon-Sun measures Mon-Sun weeks, so the number it prints is the number those
+  // dates describe rather than a phase-aligned week overlapping them.
+  //
+  // Null whenever no week in the range carried a rate -- an absent section is better than a made-up
+  // number. But a range with weeks that were simply never weighed in is NOT absent: `missed` is
+  // reported even when the rate is, which is the one thing the old 28-day reading could never say.
   const asOf = endDate > today ? today : endDate;
-  const rawPct = actualPctPerWeekAt(asOf);
+  const rate = weeklyWeightRateBetween(mondayStr, mondayStr, asOf, true);
   const phaseEntry = phaseForDate(asOf);
   const goal = phaseEntry ? phaseWeightGoal(phaseEntry.phase) : null;
   let weight = null;
-  if (rawPct != null) {
+  if (rate) {
+    const rawPct = rate.pctPerWeek;
     const direction = rawPct < -0.05 ? 'deficit' : rawPct > 0.05 ? 'surplus' : 'maintain';
     weight = {
       pct: rawPct,
@@ -297,8 +304,20 @@ function _reviewOver(dates) {
       goalDirection: goal ? goal.direction : null,
       // Same rate, same band table, same flag the weight plan screen shows.
       flagged: !!(longCutState() || {}).flagged,
+      basis: weeklyRateBasisText(rate),
+      missed: rate.missed, thin: rate.thin, weeks: rate.weeks,
     };
   }
+  // A range with nothing weighed in at all still has something to report, and it is the finding
+  // rather than the gap: "you did not step on the scale". It rides beside `weight` instead of inside
+  // it so the section renders on either -- a flag with no rate is the whole point of flagging it.
+  const missedWeighIns = (() => {
+    const rows = weeklyWeightSeries(mondayStr).filter(w => w.start >= mondayStr && w.end <= asOf);
+    // Whole weeks only -- and `missed` on a row already excludes a week still running.
+    const elapsed = Math.floor((daysBetween(mondayStr, asOf) + 1) / 7);
+    // No rows at all means the log doesn't reach these dates -- every elapsed week was missed.
+    return rows.length ? rows.filter(w => w.missed).length : elapsed;
+  })();
 
   // ---- Skills practice ----
   let practiceSessions = 0, practiceMinutes = 0;
@@ -316,7 +335,7 @@ function _reviewOver(dates) {
     training: { planned, done, extra, modded, offDays, days, sessions: logged.length },
     habits: { kept, broken, unmarked, marked: kept + broken, perHabit },
     targets,
-    weight,
+    weight, missedWeighIns,
     prs: prsSetBetween(mondayStr, endDate),
     practice: { planned: practicePlanned, sessions: practiceSessions, minutes: practiceMinutes },
   };
@@ -432,7 +451,7 @@ function renderReviewDetail(r) {
       ${r.prs.length ? renderReviewPrs(r) : ''}
       ${r.habits.perHabit.length ? renderReviewHabits(r) : ''}
       ${r.targets.some(t => t.logged) ? renderReviewTargets(r) : ''}
-      ${r.weight ? renderReviewWeight(r) : ''}
+      ${r.weight || r.missedWeighIns ? renderReviewWeight(r) : ''}
       ${(r.practice.sessions || r.practice.planned) ? renderReviewPractice(r) : ''}
       ${renderReviewWeekRecord(r)}
     </div>`;
@@ -500,8 +519,23 @@ function renderReviewTargets(r) {
   return reviewSection('DAILY TARGETS', rows);
 }
 
+// The flag the weekly method makes possible: a week you never stepped on the scale in. The old
+// 28-day trend read straight through such a week without comment, because a window that wide always
+// found weights somewhere inside it. A weekly average cannot, so the gap has to be said out loud --
+// and it is said even when there IS a rate, since bridging across a blank week gives you a number
+// without giving you the week.
+function renderMissedWeighIns(n) {
+  if (!n) return '';
+  return `<div style="font-size:11px; color:var(--bad); font-weight:700; margin-top:4px; letter-spacing:.04em;">
+    MISSED WEIGH-INS${n > 1 ? ` · ${n} weeks` : ''}</div>`;
+}
+
 function renderReviewWeight(r) {
   const w = r.weight;
+  // A range with no rate at all still renders, carrying only the flag -- that's the finding.
+  if (!w) return reviewSection('WEIGHT', `
+    <div style="font-size:11px; color:var(--text-faint);">No weigh-ins to average.</div>
+    ${renderMissedWeighIns(r.missedWeighIns)}`);
   const sign = w.pct > 0 ? '+' : '';
   const bandLabel = w.band ? w.band.label : 'Maintenance';
   // Whether the rate matches what the phase actually asked for. Stated, not judged -- "faster than
@@ -512,10 +546,12 @@ function renderReviewWeight(r) {
   }
   return reviewSection('WEIGHT', `
     <div class="row" style="font-size:12px;">
-      <span>Rate <span style="color:var(--text-faint); font-size:10px;">14-day trend</span></span>
+      <span>Rate <span style="color:var(--text-faint); font-size:10px;">weekly average${w.thin ? ' *' : ''}</span></span>
       <span class="mono" style="font-weight:700;">${sign}${fmt(w.pct, 2)}%/wk</span>
     </div>
     <div style="font-size:11px; color:var(--text-faint); margin-top:2px;">${escapeHtml(bandLabel + against)}</div>
+    <div style="font-size:10px; color:var(--text-faint); margin-top:2px;">${escapeHtml(w.basis)}</div>
+    ${renderMissedWeighIns(r.missedWeighIns)}
     ${w.flagged ? `<div style="font-size:11px; color:var(--accent); font-weight:600; margin-top:4px;">Long-cut flag is up — see PHASES.</div>` : ''}`);
 }
 

@@ -173,39 +173,33 @@ function updateWeightGoalRate(id, value) {
 
 // ---- What you're ACTUALLY doing, week by week ----
 //
-// The rate over the 14 days ending on a date, as a percent of bodyweight. 14 because that is already
-// this app's floor for an honest rate (GOAL_RATE_MIN_DAYS) -- a single week of scale weight is
-// mostly water, and reading one would manufacture "hard" weeks out of a big Sunday dinner.
+// A week's actual rate used to come from actualPctPerWeekAt(): the 7-day trend line read over a
+// 28-day sliding window ending on the week. It is gone, and the two bug fixes it accumulated are why.
+// Both were off-by-ones between "days of data" and "days between the first and last weigh-in", and
+// both failed the same invisible way -- a null that looked exactly like not having weighed in enough,
+// while weightPlanWeeks() quietly fell back to the PLANNED rate, so the long-cut flag walked the plan
+// it was built to second-guess. The second fix landed after a real-device report: "don't see anything
+// in Actual, but I didn't log a weight every day -- is daily weighing required?" It effectively was.
 //
-// Consecutive weeks therefore share seven days of data. That overlap is a feature here: the flag is
-// about sustained behaviour, and one brutal week inside an otherwise moderate month shouldn't trip
-// a six-week counter.
-// The window is GOAL_RATE_MIN_DAYS of SPAN, which is that many days plus one of data. It used to
-// ask for `-(GOAL_RATE_MIN_DAYS - 1)`, and that off-by-one made this function return null for every
-// input it was ever given: weightTrendRateBetween() rejects a span under GOAL_RATE_MIN_DAYS, and
-// the widest span inside a 14-DAY window is 13. The two constants meant different things -- "days
-// of data" here, "days between first and last" there -- and the gap was invisible because the
-// failure looked exactly like not having weighed in enough.
+// A sliding window was never the right shape for a per-week number. Consecutive weeks shared three
+// weeks of data, so how week 4 reads depended on weeks 1-3, and a single hard week was diluted by the
+// three around it. Weekly averaging (weeklyWeightRates()) is what the user had been doing by hand in
+// a spreadsheet all along: a week's weight is the mean of its weigh-ins, its rate is how far that
+// mean moved from the previous week's. Every week gets a number, the numbers are independent of each
+// other, and a week with nothing logged is REPORTED rather than swapped for what you intended.
 //
-// It mattered more than a dead section: weightPlanWeeks() falls back to a week's PLANNED rate when
-// the actual is null, so every elapsed week read as planned, and longCutState() -- whose whole
-// premise is "a real walk over what you actually did, rather than a guess" -- was walking the guess.
+// The overlap the old window defended as protection against one big Sunday dinner is handled properly
+// by the flag's own hysteresis below: a soft week PAUSES the run rather than resetting it.
+
+// The grid every weekly weight number on the plan side is measured on. The phase timeline's origin,
+// so a week in the walk below, a week in a phase's Actual row, and a week in the tracking table are
+// the same seven days -- three screens disagreeing about where a week starts is how a rate that reads
+// fine in one place reads wrong in another.
 //
-// SECOND FIX (2026-09-17), reported from a real device: "don't see anything in Actual, but I didn't
-// log a weight every day -- is daily weighing required?" It effectively was, and that was never the
-// intent. The lookback was GOAL_RATE_MIN_DAYS, the same 14 as the minimum SPAN, so the only way to
-// reach a 14-day span inside a 14-day window is to have weighed on both exact endpoints. Miss
-// either and the week fell back to planned -- silently, looking just like not enough data.
-//
-// The lookback is GOAL_RATE_WINDOW_DAYS now, which is what weightTrendRate() has always used for
-// the goal-screen rate: look back 28 days, still require 14 days of span between the first and last
-// weigh-in found. Sparse logging is fine -- two weigh-ins three weeks apart are enough, and
-// trailingAverage() was already smoothing the gaps. A window and a floor are different questions,
-// and one constant cannot answer both.
-function actualPctPerWeekAt(dateStr) {
-  const r = weightTrendRateBetween(shiftDate(dateStr, -GOAL_RATE_WINDOW_DAYS), dateStr);
-  if (!r || !r.currentTrendLb) return null;
-  return (r.lbPerWeek / r.currentTrendLb) * 100;
+// Falls back to today only when there is no phase origin at all, in which case there is no plan to
+// walk either.
+function weightWeekGridOrigin() {
+  return STATE.phaseOrigin || todayStr();
 }
 
 // How far back the walk looks. A six-week run plus a six-week clear is twelve, so a year is ample
@@ -219,11 +213,15 @@ const WEIGHT_WALK_MAX_WEEKS = 52;
 // flag warns you when you're ABOUT to schedule a seventh hard week, rather than only after.
 //
 // A week with no usable weight data falls back to its planned rate, which is the right default --
-// with nothing logged, what you intended is the only evidence there is.
+// with nothing logged, what you intended is the only evidence there is. That is rarer than it was:
+// weekly bridging gives a week inside a logged stretch a real rate even with nothing weighed in it,
+// so the fallback is now reserved for weeks outside the log entirely.
 function weightPlanWeeks() {
   const tl = phaseTimeline();
   if (!tl.length) return [];
   const today = todayStr();
+  // One pass over the weight log for the whole walk, on the phase grid the cursor below steps along.
+  const weekly = weeklyWeightByStart(weightWeekGridOrigin());
   const last = tl[tl.length - 1];
   // A perpetual tail has no planned end, so there is nothing scheduled past today to look at. A
   // finite one is capped a year out: the flag needs about twelve weeks of lookahead, not a plan
@@ -248,7 +246,8 @@ function weightPlanWeeks() {
     // Which week of its own phase this is, so a per-week schedule lines up with the right slot.
     const idx = entry ? Math.floor(daysBetween(entry.startDate, cursor) / 7) : 0;
     const planned = entry ? phaseRateForWeek(entry.phase, idx) : 0;
-    const actual = elapsed ? actualPctPerWeekAt(weekEnd) : null;
+    const row = weekly[cursor] || null;
+    const actual = elapsed && row ? row.pctPerWeek : null;
     out.push({
       startDate: cursor, endDate: weekEnd,
       phase: entry ? entry.phase : null,
@@ -256,6 +255,14 @@ function weightPlanWeeks() {
       planned,
       pct: actual == null ? planned : actual,
       source: actual == null ? 'planned' : 'actual',
+      // The week's own weight, and how much of one it is. Carried on the row so the tracking table
+      // reads the same numbers the flag walked rather than recomputing them beside it.
+      avgLb: row ? row.avgLb : null,
+      weighIns: row ? row.count : 0,
+      thin: !!(row && row.thin),
+      // A week outside the log was never tracked at all; `missed` already excludes a week in progress.
+      missed: !!(row && row.missed),
+      bridgedWeeks: row ? row.bridgedWeeks : 0,
     });
     cursor = shiftDate(cursor, 7);
   }

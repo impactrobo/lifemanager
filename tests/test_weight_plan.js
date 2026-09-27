@@ -292,16 +292,13 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (drift.driftingNoGoal) throw new Error('No weight goal means nothing is watched — that is the difference between the two states');
   if (drift.driftingCut) throw new Error('Drift is only for an explicit maintain; a cut that is cutting is working as asked');
 
-  // ---- 7. actualPctPerWeekAt() actually returns a rate ----
-  // A regression guard for an off-by-one that made it return null for EVERY input: it asked for a
-  // window of `GOAL_RATE_MIN_DAYS - 1` days, while weightTrendRateBetween() rejects any span under
-  // GOAL_RATE_MIN_DAYS — and the widest span inside a 14-day window is 13. The two constants meant
-  // different things ("days of data" vs "days between first and last"), and the failure was
-  // invisible because a null here is indistinguishable from not having weighed in enough.
-  //
-  // The damage was not a blank readout. weightPlanWeeks() falls back to a week's PLANNED rate when
-  // the actual is null, so every elapsed week read as planned, and the long-cut flag — whose stated
-  // premise is "a real walk over what you actually did, rather than a guess" — walked the guess.
+  // ---- 7. The walk reads ACTUAL from the weekly averages ----
+  // This used to guard an off-by-one in actualPctPerWeekAt(), a 28-day sliding window that returned
+  // null for EVERY input it was ever given. That function is gone — weekly averaging replaced it —
+  // but the damage it did is still the reason this section exists: weightPlanWeeks() falls back to a
+  // week's PLANNED rate when the actual is null, so a silent null meant every elapsed week read as
+  // planned and the long-cut flag walked the plan it was built to second-guess. A null here is
+  // indistinguishable from not having weighed in enough, which is why it has to be asserted.
   const actualRate = await page.evaluate(() => {
     const t = todayStr();
     STATE.weightLog = [];
@@ -309,35 +306,48 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     for (let i = 40; i >= 0; i--) {
       STATE.weightLog.push({ id: 'r' + i, date: shiftDate(t, -i), weightLb: 215 - (40 - i) * 0.2, calories: null, cardioCalories: null });
     }
-    const pct = actualPctPerWeekAt(t);
-    // And the week walk must now SEE it as actual rather than falling back to the plan.
     const weeks = weightPlanWeeks().filter(w => w.source === 'actual');
-    return { pct, actualWeeks: weeks.length };
+    return {
+      pct: weeks.length ? weeks[weeks.length - 1].pct : null,
+      actualWeeks: weeks.length,
+      // Every one of them a full week of weigh-ins, so none should be marked thin or missed.
+      thin: weeks.filter(w => w.thin).length,
+      missed: weeks.filter(w => w.missed).length,
+    };
   });
   console.log('7. actual rate:', JSON.stringify(actualRate));
-  if (actualRate.pct == null) throw new Error('actualPctPerWeekAt() returned null on a dense 40-day log — the window is off by one again');
+  if (actualRate.pct == null) throw new Error('a dense 40-day log produced no actual rate at all');
   if (!(actualRate.pct < -0.4 && actualRate.pct > -0.9)) {
     throw new Error(`Expected roughly -0.67%/wk from a 0.2 lb/day drop, got ${actualRate.pct}`);
   }
   if (!actualRate.actualWeeks) throw new Error('With real weight data, elapsed weeks must read as actual, not planned');
+  if (actualRate.thin || actualRate.missed) {
+    throw new Error(`Seven weigh-ins a week is neither thin nor missed: ${JSON.stringify(actualRate)}`);
+  }
 
-  // ---- 8. SPARSE weigh-ins are enough ----
+  // ---- 8. SPARSE weigh-ins are enough, and say so ----
   // Reported from a real device: "don't see anything in Actual, but I didn't log a weight every
-  // day — is daily weighing required?" It effectively was. The lookback was GOAL_RATE_MIN_DAYS,
-  // the same 14 as the minimum SPAN, so the only way to reach a 14-day span inside a 14-day window
-  // was to have weighed on both exact endpoints. Miss either and the week fell back to planned.
+  // day — is daily weighing required?" It effectively was, under the old window. Weekly averaging
+  // makes one weigh-in a week a mean of one, so sparse logging produces a rate BY CONSTRUCTION
+  // rather than by widening a window — but it is marked thin, because a week resting on two readings
+  // is not the same evidence as a week resting on seven.
   //
-  // Note that the check above could never have caught this: it logs a weight EVERY day, so the
-  // endpoints are always present. That is the whole lesson — a dense fixture hid a bug that only
-  // shows up in the way people actually weigh themselves.
+  // Note that the dense check above could never have caught the original bug: logging every day means
+  // the endpoints are always present. That is the lesson worth keeping — a dense fixture hid a bug
+  // that only appears in the way people actually weigh themselves.
   const sparse = await page.evaluate(() => {
     const t = todayStr();
     STATE.weightLog = [];
-    // Nine weigh-ins over five weeks, none on today and none on any exact window boundary.
+    // Nine weigh-ins over five weeks, none on today, one or two a week.
     [34, 30, 27, 21, 18, 13, 9, 5, 2].forEach((ago, n) => {
       STATE.weightLog.push({ id: 's' + n, date: shiftDate(t, -ago), weightLb: 215 - (34 - ago) * 0.2, calories: null, cardioCalories: null });
     });
-    return { pct: actualPctPerWeekAt(t), actualWeeks: weightPlanWeeks().filter(w => w.source === 'actual').length };
+    const weeks = weightPlanWeeks().filter(w => w.source === 'actual');
+    return {
+      pct: weeks.length ? weeks[weeks.length - 1].pct : null,
+      actualWeeks: weeks.length,
+      thin: weeks.filter(w => w.thin).length,
+    };
   });
   console.log('8. sparse log:', JSON.stringify(sparse));
   if (sparse.pct == null) {
@@ -345,18 +355,27 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   }
   if (!(sparse.pct < -0.2 && sparse.pct > -1.2)) throw new Error(`Expected a plausible loss rate from the sparse log, got ${sparse.pct}`);
   if (!sparse.actualWeeks) throw new Error('...and the week walk must read those weeks as actual rather than falling back to the plan');
+  if (!sparse.thin) throw new Error('One or two weigh-ins a week is a THIN week and has to be marked as one');
 
-  // The floor still holds: two weigh-ins a few days apart is not a rate, however tempting.
-  const tooShort = await page.evaluate(() => {
+  // A single week on its own is an average with nothing to compare it to. Weekly averaging lowered
+  // the bar from 14 days of span to one previous week — it did not remove it.
+  const oneWeekOnly = await page.evaluate(() => {
     const t = todayStr();
-    STATE.weightLog = [
-      { id: 'a', date: shiftDate(t, -4), weightLb: 215, calories: null, cardioCalories: null },
-      { id: 'b', date: shiftDate(t, -1), weightLb: 213, calories: null, cardioCalories: null },
-    ];
-    return actualPctPerWeekAt(t);
+    // Inside ONE grid week, so there is no previous week's average to measure against. The grid runs
+    // from STATE.phaseOrigin, so the week is found rather than assumed.
+    const origin = weightWeekGridOrigin();
+    const weekStart = shiftDate(origin, weightWeekIndexOf(origin, shiftDate(t, -7)) * 7);
+    STATE.weightLog = [0, 2, 4].map((d, n) =>
+      ({ id: 'o' + n, date: shiftDate(weekStart, d), weightLb: 215 - d, calories: null, cardioCalories: null }));
+    // Weeks with readings in them. The series also runs on to the week we are in, which has none.
+    const rows = weeklyWeightRates(origin).filter(w => w.count);
+    return { rows: rows.length, rated: rows.filter(w => w.lbPerWeek != null).length,
+             avg: rows.length ? Math.round(rows[0].avgLb * 100) / 100 : null };
   });
-  console.log('8. below the floor:', tooShort);
-  if (tooShort != null) throw new Error('Under 14 days of span there is no honest rate to report — widening the window must not have lowered the floor');
+  console.log('8. one week only:', JSON.stringify(oneWeekOnly));
+  if (oneWeekOnly.rows !== 1) throw new Error('Three weigh-ins in one week are one week: ' + JSON.stringify(oneWeekOnly));
+  if (oneWeekOnly.rated !== 0) throw new Error('One week has an average but no rate — there is nothing behind it to subtract');
+  if (oneWeekOnly.avg !== 213) throw new Error(`215, 213 and 211 average to 213, got ${oneWeekOnly.avg}`);
 
   if (errors.length) throw new Error(errors.join('\n'));
   console.log('test_weight_plan.js: PASS');

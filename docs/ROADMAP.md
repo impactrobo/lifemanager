@@ -357,6 +357,49 @@ Newest first. Keep this reasonably current so a fresh session can see what alrea
 without re-reading the whole diff history. Roughly grouped: this project spent early Sept 2026
 on an architecture split + a large wave of Maximalist aesthetics.
 
+- **A week's weight is the average of its weigh-ins (2026-09-27).** Asked for as the method the user
+  had been running by hand for years: *"the weight sum from any and all weigh-ins within a week over
+  the total number of weigh-ins for that week… so it only adjusts the average as you go for an
+  imperfect to perfect number. That way, the user always has some weight number per week. Unless they
+  do zero weigh-ins… then that should be flagged in tracking as MISSED WEIGH-INS."*
+  - **What it replaced, and why it kept breaking.** A week's actual rate came from a 7-day trend line
+    read over a 28-day sliding window. That function accumulated two bug fixes, both off-by-ones
+    between "days of data" and "days between the first and last weigh-in", and both failed the same
+    invisible way: a null indistinguishable from not having weighed in enough, while the plan walk
+    quietly substituted the PLANNED rate — so the long-cut flag walked the plan it exists to
+    second-guess. The second fix followed a real-device report: *"don't see anything in Actual, but I
+    didn't log a weight every day — is daily weighing required?"* It effectively was.
+  - **A sliding window was never the right shape for a per-week number.** Consecutive weeks shared
+    three weeks of data, so how week 4 read depended on weeks 1–3 and a single hard week was diluted
+    by the three around it. Weekly averages are independent of each other, which is the property that
+    makes "how did that week go" answerable at all. The overlap the old window defended as protection
+    against one big Sunday dinner is handled properly by the flag's own hysteresis — a soft week
+    PAUSES the run rather than resetting it.
+  - **One weigh-in is a mean of one**, not a special case and not a reason to withhold a number. The
+    average sharpens as the week fills instead of switching on at a threshold. Under five weigh-ins
+    is MARKED (`*`) rather than withheld, per *"can have an asterisk if less than 5 weigh ins a
+    week."*
+  - **A missed week is bridged AND flagged**, chosen over leaving the gap blank or carrying the last
+    rate forward: compare the last week with data to the next week with data, divide by the weeks
+    between — 2 lb over a 2-week gap reads as 1 lb/wk for both. You always get a rate, and the gap is
+    still reported. The pairing is the point: bridging gives a perfectly healthy-looking number, and
+    without the flag nothing on any screen would say you skipped a week. The test that matters most
+    asserts both on the same row.
+  - Spreading the change **evenly** is what makes a range's rate the plain mean of its weeks' rates —
+    so there is no second formula for a multi-week span, and the phase's Actual is the arithmetic of
+    the week rows rather than a second opinion beside them.
+  - **The grid belongs to the caller.** `weeklyWeightSeries(origin)` takes the weekday a week begins
+    on: a review counts from its own Monday, the weight plan from the phase origin. One function, two
+    origins — the alternative is two screens quietly disagreeing about what a week is.
+  - `missed` means *the week is over and nothing was logged*, decided in the series rather than at
+    each call site. Four screens read it; one of them would eventually forget to check whether the
+    week had ended, and tell you off for a Monday morning.
+  - The series runs **to the week you are in**, not to your last weigh-in — otherwise quitting the
+    scale entirely is the one way to avoid being told you had. It does not run back before your first
+    weigh-in: weeks before you started tracking were not missed.
+  - New **WEEKLY AVERAGE table** on PROGRESS → BODY. The chart above it plots readings and a smoothed
+    line, which answers "where am I trending" and cannot answer "what did I weigh in week 3" — you
+    can't read a number off a curve. 14/14 mutations caught.
 - **Recipes: a star rating, Tasting notes, and a named Description (2026-09-27).** From the field
   log: *"didn't see an area for the leading text box which we didn't really give a name…
   Description? And maybe add a Tasting Notes section? … maybe shrink the big description box to

@@ -864,4 +864,29 @@ stars elsewhere — set by one CSS declaration per aesthetic.
 - [ ] The rating shows **without needing "+ Add"** — empty glyphs are the invitation. Fields that
       are still text (Source) stay collapsed.
 
+## Weight is a weekly average now (2026-09-27)
+Built to the method you described from your old spreadsheet: **a week's weight is the sum of every
+weigh-in in that week over the number of weigh-ins that week.** It replaces a 28-day sliding trend
+window whose answer for week 4 depended on weeks 1–3. One weigh-in is a mean of one, so you always
+get a number; a week with none is bridged (a 2-week gap with 2 lb lost reads as 1 lb/wk for both)
+**and still flagged MISSED WEIGH-INS**, which is the pairing you asked for.
+- [ ] **PROGRESS → BODY → Weight** has a new **WEEKLY AVERAGE** table under the chart. Check your
+      real weeks against what you'd have worked out yourself — this is the one thing the sandbox
+      can't verify, because it has never seen your log.
+- [ ] A week you **skipped entirely** shows a red **MISSED WEIGH-INS** line, with the bridged rate
+      still beside it. Is showing both right, or should a missed week show no rate at all?
+- [ ] A week with **fewer than 5 weigh-ins** carries a `*`. Is 5 the right line, or should it be 4?
+- [ ] `~` marks a rate that was spread across a week with no weigh-ins.
+- [ ] The **week you're in** reads *"so far"* with no rate — it's in progress, not missed. Confirm
+      it never gets flagged.
+- [ ] **14 weeks** are shown. Too many, too few?
+- [ ] **PHASES → a weight phase → Actual** now reads the same weekly averages, and says what it
+      rests on ("over 6 weeks of averages · 1 missed"). A phase that started today says *"not yet"*
+      — it needs one complete week, which is a much shorter wait than the old 14 days.
+- [ ] **Home → YOUR WEEK → WEIGHT** shows the weekly rate and the missed flag. Review a week you
+      know you skipped and confirm it says so.
+- [ ] **The long-cut flag reads this now.** It may move, because a missed week used to fall back to
+      your PLANNED rate and now gets a real bridged one. If it fires on a run you don't recognise,
+      tell me which weeks.
+
 ## Add future items below as new features ship
