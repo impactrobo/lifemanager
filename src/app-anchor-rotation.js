@@ -38,8 +38,15 @@ function anchorRotationStep(anchor, dateStr) {
 // falls straight through, which is why callers can use this unconditionally.
 function anchorTextFor(anchor, dateStr) {
   const r = anchorRotationStep(anchor, dateStr);
-  if (!r) return { label: anchor.label, detail: anchor.detail || '' };
+  // Supplements ride the same display rule as a rotation, and for the same reason: what this
+  // anchor IS today is a presentation question, so every surface that renders an anchor picks it
+  // up without learning that supplements exist (2026-09-27). The list is separate from `detail`
+  // rather than appended to it because it is data with a shape -- name and dose -- and the row
+  // renders it as chips.
+  const supplements = supplementsOnAnchor(anchor.id);
+  if (!r) return { label: anchor.label, detail: anchor.detail || '', supplements };
   return {
+    supplements,
     // The anchor's own label stays the subject -- "PM skin routine" is still what this block IS,
     // and the step qualifies it. Dropping the label for the step would make the timeline read as a
     // different block every night.

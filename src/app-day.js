@@ -64,6 +64,11 @@ function renderDayTimelineRow(b, ctx) {
           <div style="font-size:13px; font-weight:600;">${escapeHtml(b.label)}${badge}${nowBadge}${clashBadge}
             <span style="color:var(--text-faint); font-weight:500; font-size:11px;">${fmtBlockTime(b)}${d ? ` &middot; ${fmtDuration(d)}` : ''}</span></div>
           ${b.detail ? `<div style="font-size:11px; color:var(--text-dim); margin-top:2px;">${escapeHtml(b.detail)}</div>` : ''}
+          ${/* What to take at this anchor. Chips rather than a sentence: a dose is a number you
+                read off, and running them into prose makes you parse a list to find one. */ ''}
+          ${(b.supplements && b.supplements.length) ? `<div class="day-supps">${b.supplements.map(s =>
+            `<span class="day-supp ${s.kind === 'medicine' ? 'is-rx' : ''}">${escapeHtml(s.name || 'Untitled')}${
+              s.dose ? ` <b>${escapeHtml(s.dose)}</b>` : ''}</span>`).join('')}</div>` : ''}
         </div>
         ${isAnchor ? `<div class="hit-mark ${done ? 'hit' : ''}" style="flex-shrink:0; align-self:center;">${done ? icon('check') : ''}</div>` : ''}
       </div>`;

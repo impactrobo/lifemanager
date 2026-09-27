@@ -3439,3 +3439,17 @@ textarea.tmpl-input { line-height: 1.5; }
 /* An area with nothing to judge is deliberately the quietest row on the screen. It is not a
    failure, and it must not read as one. */
 .perf-none .perf-mark, .perf-none .perf-label, .perf-none .perf-value { color: var(--text-faint); font-weight: 400; }
+
+/* Supplements riding a day-timeline anchor. The anchor's tick is the tick; these are what it
+   covers, so they read as contents of the row rather than as separate things to act on — no hit
+   targets, and deliberately quieter than the anchor's own label. */
+.day-supps { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+.day-supp {
+  font-size: 10px; line-height: 1.5; padding: 1px 6px; border-radius: 999px;
+  background: var(--surface2); border: 1px solid var(--border-soft); color: var(--text-dim);
+}
+.day-supp b { color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
+/* Medicine reads differently from a supplement at a glance — same row, different weight of thing. */
+.day-supp.is-rx { border-color: var(--accent); color: var(--accent); }
+/* A supplement whose slot names no anchor: shown on the builder screen so it can be re-homed. */
+.supp-slot-orphan { border-left: 3px solid var(--warn); padding-left: 10px; }

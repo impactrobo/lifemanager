@@ -24,18 +24,54 @@
 // "Vitamin D3" to "D3 + K2" would have silently orphaned every tick you'd ever made of it. Keyed by
 // id, a rename is just a rename. migrateSupplementLog() carries the old name-keyed days across.
 
-const SUPP_SLOTS = [
-  { key: 'wake', label: 'On waking' },
-  { key: 'breakfast', label: 'With breakfast' },
-  { key: 'midday', label: 'Midday' },
-  { key: 'dinner', label: 'With dinner' },
-  { key: 'bed', label: 'Before bed' },
-];
+// ---- A slot IS an anchor (2026-09-27) ----
+// `slot` used to be one of five fixed keys. It now holds an ANCHOR ID, and the picker offers the
+// anchors actually on your schedule.
+//
+// This needed no migration, which is the tell that the two halves were always the same idea: four
+// of the five old keys -- `wake`, `breakfast`, `dinner`, `bed` -- were ALREADY ids in
+// DEFAULT_DAILY_ANCHORS, so the value sitting on disk is the value the new code wants. The
+// `breakfast` anchor's own detail even reads "vitamin D / omega-3 here if supplementing". They were
+// written to fit and never connected.
+//
+// `midday` is the exception: it never had an anchor. Rather than invent one on somebody's schedule,
+// a supplement whose slot matches no anchor is shown as an orphan on the builder screen with a
+// picker to re-home it. It keeps its data and says so, instead of vanishing from the timeline with
+// no explanation.
+const SUPP_LEGACY_SLOT_LABELS = {
+  wake: 'On waking', breakfast: 'With breakfast', midday: 'Midday',
+  dinner: 'With dinner', bed: 'Before bed',
+};
+function supplementAnchors() { return (STATE.life && Array.isArray(STATE.life.anchors)) ? STATE.life.anchors : []; }
+function supplementAnchorById(id) { return supplementAnchors().find(a => a.id === id) || null; }
+function supplementAnchorLabel(id) {
+  const a = supplementAnchorById(id);
+  if (a) return a.label;
+  return SUPP_LEGACY_SLOT_LABELS[id] || 'Unscheduled';
+}
+// The default for something new: the anchor the old code defaulted to if it still exists, else
+// whatever the day starts with. Never an id that isn't on the schedule.
+function defaultSupplementAnchorId() {
+  if (supplementAnchorById('breakfast')) return 'breakfast';
+  const first = supplementAnchors()[0];
+  return first ? first.id : 'breakfast';
+}
+// <option>s for a "when" picker. A `selected` value that names no anchor is offered anyway, at the
+// bottom and labelled, so opening the row shows where the item actually is instead of silently
+// snapping it onto whatever happened to be first in the list.
+function supplementAnchorOptions(selected) {
+  const anchors = supplementAnchors();
+  const opts = anchors.map(a =>
+    `<option value="${escapeHtml(a.id)}" ${a.id === selected ? 'selected' : ''}>${escapeHtml(a.label)}${a.start ? ` &middot; ${escapeHtml(a.start)}` : ''}</option>`);
+  if (selected && !supplementAnchorById(selected)) {
+    opts.push(`<option value="${escapeHtml(selected)}" selected>${escapeHtml(SUPP_LEGACY_SLOT_LABELS[selected] || selected)} — not on your schedule</option>`);
+  }
+  return opts.join('');
+}
 const SUPP_KINDS = [
   { key: 'supplement', label: 'Supplement' },
   { key: 'medicine', label: 'Medicine' },
 ];
-function suppSlot(key) { return SUPP_SLOTS.find(s => s.key === key) || SUPP_SLOTS[0]; }
 
 // ---- The regimen ----
 function allSupplements() { return Array.isArray(STATE.supplements) ? STATE.supplements : []; }
@@ -51,52 +87,55 @@ function supplementSlotOf(item) {
   return stack ? stack.slot : item.slot;
 }
 
-// Everything to show for a slot, stacks first, then the loose items. Stacks lead because they are
-// the deliberate groupings; a loose item is one you haven't decided belongs with anything.
-function supplementsForSlot(slotKey) {
-  const items = allSupplements().filter(s => s.active !== false && supplementSlotOf(s) === slotKey);
+// Everything on one anchor, stacks first, then the loose items. Stacks lead because they are the
+// deliberate groupings; a loose item is one you haven't decided belongs with anything.
+function supplementsForAnchor(anchorId) {
+  const items = allSupplements().filter(s => s.active !== false && supplementSlotOf(s) === anchorId);
   const stacks = allSupplementStacks()
-    .filter(st => st.slot === slotKey)
+    .filter(st => st.slot === anchorId)
     .map(st => ({ stack: st, items: items.filter(i => i.stackId === st.id) }))
     .filter(g => g.items.length);
   return { stacks, loose: items.filter(i => !i.stackId || !supplementStackById(i.stackId)) };
 }
+// Flattened, for the day timeline. A stack is a grouping for EDITING -- one decision, one row to
+// drag around on the builder screen -- and the timeline has neither the room nor the need for it:
+// what you want at 7am is the list of what to take.
+function supplementsOnAnchor(anchorId) {
+  const { stacks, loose } = supplementsForAnchor(anchorId);
+  const out = [];
+  stacks.forEach(g => g.items.forEach(i => out.push(i)));
+  loose.forEach(i => out.push(i));
+  return out;
+}
+// Supplements whose slot names no anchor on the schedule. They are not lost -- they are listed on
+// the builder screen under their own heading with a picker, because a regimen quietly missing an
+// item is worse than one that says which item needs re-homing.
+function orphanedSupplementAnchorIds() {
+  const ids = {};
+  allSupplements().filter(s => s.active !== false).forEach(s => {
+    const slot = supplementSlotOf(s);
+    if (!supplementAnchorById(slot)) ids[slot] = true;
+  });
+  return Object.keys(ids);
+}
 
-// ---- Today's ticks ----
-function supplementLogFor(dateStr) {
-  if (!STATE.life.supplementLog) STATE.life.supplementLog = {};
-  if (!STATE.life.supplementLog[dateStr]) STATE.life.supplementLog[dateStr] = {};
-  return STATE.life.supplementLog[dateStr];
-}
-function supplementTaken(id, dateStr) { return !!supplementLogFor(dateStr || todayStr())[id]; }
-function toggleSupplementTaken(id, dateStr) {
-  const log = supplementLogFor(dateStr || todayStr());
-  if (log[id]) delete log[id]; else log[id] = true;
-  saveState(); render();
-}
-// Ticking a stack ticks everything in it -- that is what makes it a stack rather than a label.
-// Mixed state resolves to "take them all", because the gesture on a partly-done group reads as
-// finishing it, never as undoing the ones already done.
-function toggleSupplementStack(stackId, dateStr) {
-  const d = dateStr || todayStr();
-  const members = allSupplements().filter(s => s.stackId === stackId && s.active !== false);
-  if (!members.length) return;
-  const log = supplementLogFor(d);
-  const allDone = members.every(m => log[m.id]);
-  members.forEach(m => { if (allDone) delete log[m.id]; else log[m.id] = true; });
-  saveState(); render();
-}
-function supplementDayCount(dateStr) {
-  const d = dateStr || todayStr();
-  const items = allSupplements().filter(s => s.active !== false);
-  return { done: items.filter(s => supplementTaken(s.id, d)).length, total: items.length };
-}
+// ---- The tick lives on the anchor ----
+// There is no per-supplement log any more (2026-09-27). Ticking "Shower + breakfast" on Home's day
+// timeline IS taking the stack: `STATE.life.dailyLog[date][anchorId]`, the same store and the same
+// gesture every other anchor already used.
+//
+// One tick per anchor rather than per item, asked for as: "Should just be one… if you're on
+// multiple supplements / skin care products etc it would be a huge pain." Four taps for a morning
+// stack is exactly the friction that stops a regimen being logged at all.
+//
+// `STATE.life.supplementLog` is left on disk, unread. Nothing writes it now; deleting somebody's
+// history to tidy a field is not a trade this app makes.
 
 // ---- Editing ----
 function addSupplement(kind) {
   if (!Array.isArray(STATE.supplements)) STATE.supplements = [];
   const item = {
-    id: uid(), name: '', dose: '', slot: 'breakfast', stackId: null,
+    id: uid(), name: '', dose: '', slot: defaultSupplementAnchorId(), stackId: null,
     kind: kind === 'medicine' ? 'medicine' : 'supplement',
     // Designed in, not yet wired -- a base64 photo per item rides to localStorage and on to
     // Firestore through Cloud Sync, so capture is its own deliberate step rather than a freebie.
@@ -134,7 +173,7 @@ function toggleSupplementEditing(id) {
 }
 function addSupplementStack() {
   if (!Array.isArray(STATE.supplementStacks)) STATE.supplementStacks = [];
-  STATE.supplementStacks.push({ id: uid(), name: 'New stack', slot: 'breakfast' });
+  STATE.supplementStacks.push({ id: uid(), name: 'New stack', slot: defaultSupplementAnchorId() });
   saveState(); render();
 }
 function updateSupplementStackField(id, field, value) {
@@ -219,22 +258,14 @@ function migrateSupplements() {
   // Nothing was ever ticked, so there is no history to keep and no regimen to assume -- an empty
   // list with the preset on offer is the honest starting point.
   if (!Object.keys(everTicked).length) return true;
+  // The old log is now only EVIDENCE — that this person used the hardcoded screen and so should
+  // get a regimen to edit rather than an empty list. It used to be re-keyed from names onto ids as
+  // well, which stopped mattering on 2026-09-27 when the tick moved onto the anchor: there is no
+  // per-supplement log left to carry anything into. The days themselves are left untouched on
+  // disk rather than deleted.
   const built = SUPPLEMENT_PRESETS[0].build();
   STATE.supplementStacks = built.stacks;
   STATE.supplements = built.items;
-  const byName = {};
-  built.items.forEach(i => { byName[i.name] = i.id; });
-  Object.keys(log).forEach(d => {
-    const day = log[d] || {};
-    const rekeyed = {};
-    Object.keys(day).forEach(name => {
-      const id = byName[name];
-      // A tick whose name no longer resolves is dropped rather than kept under a key nothing reads:
-      // it can only have come from a build of the list that no longer exists.
-      if (id && day[name]) rekeyed[id] = true;
-    });
-    log[d] = rekeyed;
-  });
   return true;
 }
 
@@ -244,25 +275,37 @@ function migrateSupplements() {
 // occasions. Defining it is the same act as building a meal, so it sits with the other builders,
 // and the daily tick stays on Home where the day is.
 function renderSupplements() {
-  const count = supplementDayCount();
   const items = allSupplements();
   if (!items.length) return `${renderSupplementEmpty()}`;
-  const slots = SUPP_SLOTS.map(slot => {
-    const { stacks, loose } = supplementsForSlot(slot.key);
+  // In schedule order, because that is the order you take them in. The old screen used a fixed
+  // five-slot list; the anchors already sort themselves by time of day.
+  const byAnchor = supplementAnchors().map(a => {
+    const { stacks, loose } = supplementsForAnchor(a.id);
     if (!stacks.length && !loose.length) return '';
     return `
       <div class="supp-slot">
-        <div class="subtle-label">${slot.label.toUpperCase()}</div>
+        <div class="subtle-label">${escapeHtml(a.label).toUpperCase()} <span style="color:var(--text-faint); font-weight:400;">&middot; ${escapeHtml(a.start || '')}</span></div>
+        ${stacks.map(g => renderSupplementStack(g)).join('')}
+        ${loose.map(i => renderSupplementRow(i)).join('')}
+      </div>`;
+  }).join('');
+  const orphans = orphanedSupplementAnchorIds().map(slot => {
+    const { stacks, loose } = supplementsForAnchor(slot);
+    return `
+      <div class="supp-slot supp-slot-orphan">
+        <div class="subtle-label" style="color:var(--warn);">${escapeHtml(SUPP_LEGACY_SLOT_LABELS[slot] || slot).toUpperCase()} &middot; NOT ON YOUR SCHEDULE</div>
+        <div class="supp-hint">Nothing on your day is called this, so these won't appear on the timeline. Open one and pick when you take it.</div>
         ${stacks.map(g => renderSupplementStack(g)).join('')}
         ${loose.map(i => renderSupplementRow(i)).join('')}
       </div>`;
   }).join('');
   return `
-    <div class="row" style="margin-bottom:10px;">
-      <div class="subtle-label" style="margin-bottom:0;">TODAY</div>
-      <span class="mono" style="font-weight:700; font-size:13px;">${count.done} / ${count.total}</span>
-    </div>
-    ${slots}
+    ${/* No tick here any more. This screen DEFINES the regimen; the day screen is where a day
+          gets logged, and having both meant two places disagreeing about whether you'd taken
+          something. */ ''}
+    <div class="supp-hint" style="margin-bottom:12px;">Tick these off on <b>Home</b> — each one rides
+      the anchor it's attached to, so the whole group is one tap when that part of the day comes round.</div>
+    ${byAnchor}${orphans}
     <div class="row" style="gap:8px; margin-top:14px;">
       <button class="btn btn-sm" style="flex:1;" onclick="addSupplement('supplement')">+ SUPPLEMENT</button>
       <button class="btn btn-sm" style="flex:1;" onclick="addSupplement('medicine')">+ MEDICINE</button>
@@ -291,30 +334,26 @@ function renderSupplementPresetOffer() {
       <button class="btn btn-sm" onclick="installSupplementPreset('${p.key}')">ADD</button>
     </div>`).join('');
 }
-// A stack ticks as one unit from its header. Members keep their own tick as well, deliberately:
-// the bundle is there to make the common case one tap, not to stop you recording that you skipped
-// one of them today.
+// A stack is a named grouping WITHIN an anchor, kept because "my morning four" and "gut stuff"
+// can both sit on breakfast and you want to see which is which while editing. It carries no tick
+// of its own now: the anchor is the tick, and a stack that also ticked would be a second answer to
+// the same question.
 function renderSupplementStack(group) {
   const { stack, items } = group;
-  const done = items.filter(i => supplementTaken(i.id)).length;
-  const all = done === items.length;
   return `
-    <div class="supp-stack ${all ? 'supp-stack-done' : ''}">
-      <div class="supp-stack-head" onclick="toggleSupplementStack('${stack.id}')">
-        <div class="hit-mark ${all ? 'hit' : ''}">${all ? icon('check') : ''}</div>
+    <div class="supp-stack">
+      <div class="supp-stack-head">
         <span class="supp-stack-name">${escapeHtml(stack.name)}</span>
-        <span class="supp-stack-count mono">${done}/${items.length}</span>
+        <span class="supp-stack-count mono">${items.length}</span>
       </div>
       ${items.map(i => renderSupplementRow(i, true)).join('')}
     </div>`;
 }
 function renderSupplementRow(item, inStack) {
-  const done = supplementTaken(item.id);
   const editing = VIEW.supplementEditing === item.id;
   return `
-    <div class="supp-row ${inStack ? 'supp-row-member' : ''} ${done ? 'supp-row-done' : ''}">
+    <div class="supp-row ${inStack ? 'supp-row-member' : ''}">
       <div class="supp-row-main">
-        <div class="hit-mark ${done ? 'hit' : ''}" onclick="toggleSupplementTaken('${item.id}')">${done ? icon('check') : ''}</div>
         <div class="supp-row-text" onclick="toggleSupplementEditing('${item.id}')">
           <div class="supp-name">${escapeHtml(item.name || 'Untitled')}${item.kind === 'medicine' ? '<span class="supp-kind">RX</span>' : ''}</div>
           ${item.dose ? `<div class="supp-dose">${escapeHtml(item.dose)}</div>` : ''}
@@ -339,15 +378,18 @@ function renderSupplementEditor(item) {
           <select onchange="updateSupplementField('${item.id}','kind',this.value)">
             ${SUPP_KINDS.map(k => `<option value="${k.key}" ${item.kind === k.key ? 'selected' : ''}>${k.label}</option>`).join('')}
           </select></label>
+        ${/* The anchors on the schedule, not a fixed five. A slot that no longer names one is
+              still offered as the current value so opening the row doesn't silently re-home it --
+              you re-home it by choosing, not by looking. */ ''}
         <label class="field"><span class="lbl">When</span>
           <select ${item.stackId ? 'disabled' : ''} onchange="updateSupplementField('${item.id}','slot',this.value)">
-            ${SUPP_SLOTS.map(s => `<option value="${s.key}" ${supplementSlotOf(item) === s.key ? 'selected' : ''}>${s.label}</option>`).join('')}
+            ${supplementAnchorOptions(supplementSlotOf(item))}
           </select></label>
       </div>
       <label class="field"><span class="lbl">Stack</span>
         <select onchange="updateSupplementField('${item.id}','stackId',this.value)">
           <option value="">On its own</option>
-          ${stacks.map(s => `<option value="${s.id}" ${item.stackId === s.id ? 'selected' : ''}>${escapeHtml(s.name)} &middot; ${suppSlot(s.slot).label}</option>`).join('')}
+          ${stacks.map(s => `<option value="${s.id}" ${item.stackId === s.id ? 'selected' : ''}>${escapeHtml(s.name)} &middot; ${escapeHtml(supplementAnchorLabel(s.slot))}</option>`).join('')}
         </select></label>
       ${item.stackId ? `<div class="supp-hint">Its stack sets when this is taken.</div>` : ''}
       <button class="btn btn-sm btn-danger btn-block" onclick="deleteSupplement('${item.id}')">REMOVE</button>

@@ -411,7 +411,7 @@ function scheduleBlocksForDate(dateObj) {
   const anchorDateStr = dateKey(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate());
   const blocks = (ex && ex.skipAnchors) ? [] : STATE.life.anchors.map(a => {
     const t = anchorTextFor(a, anchorDateStr);
-    return { id: 'anchor:' + a.id, start: a.start, end: a.end, label: t.label, detail: t.detail, kind: 'anchor', anchorId: a.id, open: !!a.open, category: a.category || null };
+    return { id: 'anchor:' + a.id, start: a.start, end: a.end, label: t.label, detail: t.detail, supplements: t.supplements, kind: 'anchor', anchorId: a.id, open: !!a.open, category: a.category || null };
   });
   if (sched) {
     if (sched.wakeStart && sched.wakeEnd) blocks.push({ id: 'wake:' + sched.id, start: sched.wakeStart, end: sched.wakeEnd, label: 'Wake-Up', detail: '', kind: 'wake', category: sched.wakeCategory || null });

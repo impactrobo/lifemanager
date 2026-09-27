@@ -804,4 +804,27 @@ this screen read the same function.
 - [ ] A very long range (YTD) — does it stay fast, and do the numbers look sane?
 - [ ] Anything you expected to see on this screen that isn't here.
 
+## Supplements fold into anchors (2026-09-27)
+A supplement's "when" is now an **anchor on your schedule**, and the tick is that anchor's own —
+`dailyLog[date][anchorId]`, one tap for the whole group. This closes the gap where supplements had
+no daily surface at all: the only tick was four taps deep in BUILDER. No migration was needed —
+`wake`, `breakfast`, `dinner` and `bed` were already anchor ids.
+- [ ] **Home → YOUR DAY.** Your supplements appear as chips under the anchor they're attached to,
+      with their doses. Medicine shows in the accent colour.
+- [ ] **Tap the anchor row** — one tick covers the whole group. This is the ask ("should just be
+      one… if you're on multiple supplements it would be a huge pain").
+- [ ] **Your regimen is intact**: same items, doses, stacks. Check names and doses against what you
+      had. This is the one thing a sandbox can't verify.
+- [ ] **BUILDER → SUPPLEMENTS** now groups by anchor in schedule order with times, and has **no
+      ticks** — it defines the regimen, Home logs it. Does that division read right?
+- [ ] **Anything on "Midday"** appears under an amber *NOT ON YOUR SCHEDULE* heading, because no
+      anchor is called that. Open one and pick a real anchor — does the picker show your actual
+      day? (If you have no midday supplements you won't see this section at all.)
+- [ ] The **"When"** picker lists your anchors with their times, not the old fixed five.
+- [ ] Move a **stack** to a different anchor — every member should move with it.
+- [ ] Do the chips make the day timeline **too busy**? They're deliberately the quietest thing on
+      the row, but you're the one reading it at 6am.
+- [ ] `breakfast`'s stock detail still says "vitamin D / omega-3 here if supplementing", which now
+      sits right above the real chips. Worth editing that anchor's detail, or does it still read?
+
 ## Add future items below as new features ship

@@ -357,6 +357,36 @@ Newest first. Keep this reasonably current so a fresh session can see what alrea
 without re-reading the whole diff history. Roughly grouped: this project spent early Sept 2026
 on an architecture split + a large wave of Maximalist aesthetics.
 
+- **Supplements fold into anchors (2026-09-27).** *"I think supplements will be built into anchors
+  in a way."* Scoped 2026-09-19, built now.
+  - **The two halves were always the same idea.** Four of the five `SUPP_SLOTS` keys — `wake`,
+    `breakfast`, `dinner`, `bed` — were *already* ids in `DEFAULT_DAILY_ANCHORS`, and the
+    `breakfast` anchor's own detail reads "vitamin D / omega-3 here if supplementing". They were
+    written to fit and never connected. That is why this needed **no migration**: the value sitting
+    on disk is the value the new code wants.
+  - **The tick is the anchor's.** `dailyLog[date][anchorId]`, the same store every other anchor
+    used. One tick per anchor, not per item — asked for as *"should just be one… if you're on
+    multiple supplements / skin care products etc it would be a huge pain."* `supplementLog` and
+    its whole API (`supplementTaken`, `toggleSupplementTaken`, `toggleSupplementStack`,
+    `supplementDayCount`) are retired; the test asserts they are **gone**, not merely unused, since
+    a surviving toggle is a second way to record a dose that nothing reads back. The stored days are
+    left on disk untouched rather than deleted.
+  - **This closes a confirmed bug**: supplements had no daily surface at all. The only tick was
+    four taps into a setup screen, and `CLAUDE.md` claimed "the daily tick stays on Home", which had
+    never been true.
+  - **The join is `anchorTextFor()`** — the single display rule every surface reads, which already
+    existed for rotations. Supplements ride it for the same reason: what an anchor *is* today is a
+    presentation question. A later screen that renders anchors gets supplements without being
+    taught they exist.
+  - **`midday` had no anchor**, and rather than invent one on somebody's schedule, a slot naming no
+    anchor is surfaced on the builder under an amber heading with a picker. A regimen quietly
+    missing an item is worse than one that says which item needs re-homing.
+  - A stack is now a grouping for **editing** only — it owns the scheduling, not a second tick.
+  - 6/6 mutations caught, after one needed a better fixture: both write paths copy a stack's slot
+    down onto its members, so no gesture in the app can produce a member that disagrees with its
+    stack — meaning the rule in `supplementSlotOf()` went unexercised until the test built that
+    state directly. The suite then caught a second one of mine: the probe row leaked into the next
+    assertion.
 - **PERFORMANCE: done vs targets over any range (2026-09-26).** *"We can create a PERFORMANCE tab
   that documents what was done vs. targets, and the user can select a date range that sums the
   user's total performance in that range."* Scoped in conversation to everything rather than only
