@@ -130,26 +130,52 @@ function renderAnchorEditRow(a) {
     ${renderAnchorRotationRow(a)}
   </div>`;
 }
-// An anchor's rotation is shown but not built here: the steps come from a preset, and a general
-// step editor is a whole screen for something only skin cycling uses so far. What this does give
-// you is the two things you actually need once it is running -- where you are, and a way to stop.
+// A rotation is now AUTHORED here, not only shown (2026-09-27). This used to read "the steps come
+// from a preset, and a general step editor is a whole screen for something only skin cycling uses
+// so far" -- which stopped being true when the general case was asked for: an anchor that is always
+// at the same time but cycles day to day, on any length of cycle.
+//
+// The cycle length is steps.length. There is deliberately no separate "every N days" field: it
+// would be the same number in two places, free to disagree.
 function renderAnchorRotationRow(a) {
-  if (!a.rotation) return '';
+  if (!a.rotation) {
+    return `<button class="btn btn-sm btn-block" style="margin-top:8px;" onclick="startAnchorRotation('${a.id}')">
+      &#8635; MAKE THIS CYCLE</button>`;
+  }
   const r = anchorRotationStep(a, todayStr());
+  const n = a.rotation.steps.length;
   return `
     <div class="anchor-rot">
       <div class="anchor-rot-head">
-        <span class="subtle-label" style="margin:0;">ROTATES &middot; ${a.rotation.steps.length} DAYS</span>
+        <span class="subtle-label" style="margin:0;">ROTATES &middot; ${n} DAY${n === 1 ? '' : 'S'}</span>
         <button class="btn btn-sm" onclick="clearAnchorRotation('${a.id}')">STOP</button>
       </div>
       <div class="anchor-rot-now">${r
-        ? `Today: ${escapeHtml(r.step.title)} <span class="mono anchor-rot-n">${r.index + 1}/${r.total}</span>`
+        ? `Today: ${escapeHtml(r.step.title || 'Untitled')} <span class="mono anchor-rot-n">${r.index + 1}/${r.total}</span>`
         : 'Starts on the date below.'}</div>
-      <div class="anchor-rot-steps">
-        ${a.rotation.steps.map((s, i) => `<span class="anchor-rot-step ${r && r.index === i ? 'on' : ''}">${escapeHtml(s.title)}</span>`).join('')}
-      </div>
+      ${a.rotation.steps.map((s, i) => `
+        <div class="anchor-rot-edit ${r && r.index === i ? 'on' : ''}">
+          <div class="anchor-rot-edit-head">
+            <span class="mono anchor-rot-n">${i + 1}</span>
+            <input type="text" class="anchor-rot-title" value="${escapeHtml(s.title || '')}" placeholder="What this day is"
+              onchange="updateAnchorRotationStep('${a.id}',${i},'title',this.value)">
+            <button class="icon-btn" ${i === 0 ? 'disabled' : ''} title="Move up"
+              onclick="moveAnchorRotationStep('${a.id}',${i},-1)">${icon('up')}</button>
+            <button class="icon-btn" ${i === n - 1 ? 'disabled' : ''} title="Move down"
+              onclick="moveAnchorRotationStep('${a.id}',${i},1)">${icon('down')}</button>
+            <button class="icon-btn" style="color:var(--bad);" title="Remove this day"
+              onclick="deleteAnchorRotationStep('${a.id}',${i})">${icon('close')}</button>
+          </div>
+          <textarea class="anchor-rot-detail" rows="2" placeholder="Detail (optional)"
+            onchange="updateAnchorRotationStep('${a.id}',${i},'detail',this.value)">${escapeHtml(s.detail || '')}</textarea>
+        </div>`).join('')}
+      <button class="btn btn-sm btn-block" style="margin-top:6px;" onclick="addAnchorRotationStep('${a.id}')">+ ADD A DAY</button>
+      ${/* Adding and removing re-anchor the start so TODAY doesn't move; this field is for the
+            other case -- you know the cycle really began on a particular date. */ ''}
       <label class="field" style="margin:8px 0 0;"><span class="lbl">Cycle started</span>
         <input type="date" value="${a.rotation.start}" onchange="updateAnchorRotationStart('${a.id}', this.value)"></label>
+      <div class="supp-hint">Editing the list won't change what tonight says — the cycle re-anchors
+        so you keep your place, and the change takes effect going forward.</div>
     </div>`;
 }
 function addAnchor() {

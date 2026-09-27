@@ -357,6 +357,30 @@ Newest first. Keep this reasonably current so a fresh session can see what alrea
 without re-reading the whole diff history. Roughly grouped: this project spent early Sept 2026
 on an architecture split + a large wave of Maximalist aesthetics.
 
+- **Cycling anchors are editable (2026-09-27).** *"Anchors I feel also need a modular property like
+  skin care. It's always 'anchored' to the same time BUT cycles each day and not necessarily on a
+  week cycle."* The shape and the modulo already existed; what didn't was any way to WRITE the
+  steps. The editor said so in as many words — *"a general step editor is a whole screen for
+  something only skin cycling uses so far"* — and that stopped being true the moment the general
+  case was asked for.
+  - **Editing the list must not move tonight.** The index is `daysSince(start) % steps.length`, so
+    adding a fourth step to a three-step cycle silently changes what tonight says — a bad surprise
+    for a thing whose only job is telling you what tonight is. Add and remove re-anchor `start` to
+    `today - desiredIndex`, so your place is kept and the edit takes effect going forward. Removal
+    also accounts for WHERE the step was: dropping one before today's shifts every later index back
+    by one.
+  - **Reordering deliberately does NOT re-anchor.** Today's position is unchanged and what sits
+    there is what you moved — pinning the old step would undo the edit you just asked for.
+  - **The cycle length is `steps.length`**, with no separate "every N days" field; the test asserts
+    no such field appears, since it would be one number written twice. Dropping below two steps
+    offers to stop rotating rather than leaving a one-step "cycle".
+  - 6/6 mutations caught, but only after two corrections worth recording. **A real gap:** the
+    fixture started the cycle two days ago, so it had never WRAPPED — `2 % 4` and `2 % 5` are both
+    2, so adding a step left today alone whether or not the code re-anchored, and that mutation
+    survived. At fourteen days (also the realistic case — a rotation you have run for weeks is the
+    one you edit) `14 % 4` is 2 but `14 % 5` is 4. **And an equivalent mutant:** re-anchoring
+    reorder to the same index moves `start` without changing the resulting index, so it could never
+    fail; the meaningful version is today FOLLOWING the moved step, which the test does catch.
 - **Supplements fold into anchors (2026-09-27).** *"I think supplements will be built into anchors
   in a way."* Scoped 2026-09-19, built now.
   - **The two halves were always the same idea.** Four of the five `SUPP_SLOTS` keys — `wake`,

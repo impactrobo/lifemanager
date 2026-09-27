@@ -3453,3 +3453,24 @@ textarea.tmpl-input { line-height: 1.5; }
 .day-supp.is-rx { border-color: var(--accent); color: var(--accent); }
 /* A supplement whose slot names no anchor: shown on the builder screen so it can be re-homed. */
 .supp-slot-orphan { border-left: 3px solid var(--warn); padding-left: 10px; }
+
+/* Authoring a rotation's steps. The day currently showing is marked, because the first question
+   when you open this is "where am I in the cycle" and the second is "what comes next". */
+.anchor-rot-edit {
+  border: 1px solid var(--border-soft); border-radius: var(--radius);
+  padding: 8px; margin-top: 6px; background: var(--surface);
+}
+.anchor-rot-edit.on { border-color: var(--accent); }
+.anchor-rot-edit-head { display: flex; align-items: center; gap: 6px; }
+.anchor-rot-edit-head .anchor-rot-n { flex: none; width: 1.3rem; text-align: center; color: var(--text-faint); }
+.anchor-rot-edit.on .anchor-rot-edit-head .anchor-rot-n { color: var(--accent); font-weight: 700; }
+.anchor-rot-title {
+  flex: 1; min-width: 0; background: transparent; border: 0; padding: 2px 0;
+  font-family: inherit; font-size: 13px; font-weight: 600; color: var(--text);
+}
+.anchor-rot-title:focus { outline: none; }
+.anchor-rot-detail {
+  width: 100%; margin-top: 4px; background: transparent; border: 0; resize: vertical;
+  font-family: inherit; font-size: 12px; line-height: 1.45; color: var(--text-dim);
+}
+.anchor-rot-detail:focus { outline: none; }

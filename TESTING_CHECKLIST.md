@@ -827,4 +827,23 @@ no daily surface at all: the only tick was four taps deep in BUILDER. No migrati
 - [ ] `breakfast`'s stock detail still says "vitamin D / omega-3 here if supplementing", which now
       sits right above the real chips. Worth editing that anchor's detail, or does it still read?
 
+## Cycling anchors are editable (2026-09-27)
+An anchor could already rotate — skin cycling did — but the steps only ever came from a preset.
+Now any anchor can be made to cycle, on any length, with steps you write. The cycle length **is**
+the number of steps; there's no separate "every N days" field to disagree with it.
+- [ ] **PROD → SCHEDULE → Setup → an anchor → ↻ MAKE THIS CYCLE.** It starts as a 2-day cycle.
+      Add days, name them, write details.
+- [ ] **The key one: editing must not move tonight.** Note what today says, add a day, and check
+      today is unchanged. Then remove a day — still unchanged. The cycle re-anchors so the edit
+      takes effect going forward.
+- [ ] **Reordering DOES change tonight** — today's position in the cycle stays and what you moved
+      there is what shows. Is that what you'd expect, or would you rather it followed the step?
+- [ ] Remove days until only one is left: it should offer to **stop rotating** rather than leave a
+      one-step "cycle" repeating forever.
+- [ ] Your **skin cycling** anchor should be untouched, still on the right night.
+- [ ] Try a non-skin cycle — a 3-day lift split, alternating drills — and check it reads sensibly
+      on Home's day timeline as *"Anchor — step title"*.
+- [ ] **Cycle started** date: use it when a cycle really began on a specific day (the add/remove
+      buttons handle keeping your place; this is for correcting the anchor point itself).
+
 ## Add future items below as new features ship

@@ -56,6 +56,90 @@ function anchorTextFor(anchor, dateStr) {
   };
 }
 
+// ---- Authoring a rotation (2026-09-27) ----
+// Until now the steps could only come from a preset, and the editor said so: "a general step editor
+// is a whole screen for something only skin cycling uses so far." It stopped being only skin
+// cycling the moment the point was made that an anchor needs a modular property in general -- "it's
+// always anchored to the same time BUT cycles each day and not necessarily on a week cycle."
+//
+// The cycle LENGTH is just steps.length. There is no separate "every N days" field to keep in sync
+// with the list, because it would be the same number written twice.
+
+// Editing the list must not move tonight.
+//
+// The index is `daysSince(start) % steps.length`, so changing the length changes which step today
+// lands on -- add a fourth step to a three-step cycle and tonight silently becomes a different
+// routine. That is a bad surprise for a thing whose whole job is telling you what tonight is.
+// Re-anchoring the start date to `today - desiredIndex` pins today and lets the edit take effect
+// going forward, which is what "keep today where it is" means.
+function reanchorAnchorRotation(anchor, desiredIndex) {
+  const rot = anchor && anchor.rotation;
+  if (!rot || !Array.isArray(rot.steps) || !rot.steps.length) return;
+  const n = rot.steps.length;
+  const idx = ((Math.round(desiredIndex) % n) + n) % n;
+  rot.start = shiftDate(todayStr(), -idx);
+}
+// Which step is showing today, or 0 when the rotation hasn't started yet (a future start date):
+// there is no "current" step to preserve in that case, and anchoring to the first is the only
+// answer that doesn't invent one.
+function currentRotationIndex(anchor) {
+  const r = anchorRotationStep(anchor, todayStr());
+  return r ? r.index : 0;
+}
+function anchorById(id) { return STATE.life.anchors.find(x => x.id === id) || null; }
+
+// Turn an ordinary anchor into a rotating one. Two steps rather than one, because a one-step
+// rotation is an anchor with extra words -- the shortest thing that actually cycles is two.
+function startAnchorRotation(id) {
+  const a = anchorById(id);
+  if (!a || a.rotation) return;
+  a.rotation = {
+    start: todayStr(),
+    steps: [{ title: 'Day 1', detail: '' }, { title: 'Day 2', detail: '' }],
+  };
+  saveState(); render();
+}
+function addAnchorRotationStep(id) {
+  const a = anchorById(id);
+  if (!a || !a.rotation) return;
+  const keep = currentRotationIndex(a);
+  a.rotation.steps.push({ title: `Day ${a.rotation.steps.length + 1}`, detail: '' });
+  reanchorAnchorRotation(a, keep);   // appending leaves earlier steps in place, so the index holds
+  saveState(); render();
+}
+function updateAnchorRotationStep(id, index, field, value) {
+  const a = anchorById(id);
+  if (!a || !a.rotation || !a.rotation.steps[index]) return;
+  a.rotation.steps[index][field] = value;
+  saveState(); render();
+}
+function deleteAnchorRotationStep(id, index) {
+  const a = anchorById(id);
+  if (!a || !a.rotation || !a.rotation.steps[index]) return;
+  // Below two steps it stops being a cycle. Rather than leave a one-step "rotation" that repeats
+  // the same thing forever, removing the second-to-last offers to stop rotating altogether.
+  if (a.rotation.steps.length <= 2) { clearAnchorRotation(id); return; }
+  const showing = currentRotationIndex(a);
+  a.rotation.steps.splice(index, 1);
+  // Where the step that WAS showing has ended up. Removing one before it shifts it back by one;
+  // removing the showing step itself leaves that position to its successor, which is what the
+  // list now reads as today.
+  const keep = index < showing ? showing - 1 : showing;
+  reanchorAnchorRotation(a, keep);
+  saveState(); render();
+}
+// Reorder deliberately does NOT re-anchor. Today's POSITION in the cycle is unchanged; what sits at
+// that position is what you just moved there, which is the whole point of reordering — pinning the
+// old step would undo the edit you asked for.
+function moveAnchorRotationStep(id, index, dir) {
+  const a = anchorById(id);
+  if (!a || !a.rotation) return;
+  const steps = a.rotation.steps;
+  const to = index + dir;
+  if (to < 0 || to >= steps.length) return;
+  const tmp = steps[index]; steps[index] = steps[to]; steps[to] = tmp;
+  saveState(); render();
+}
 function clearAnchorRotation(id) {
   const a = STATE.life.anchors.find(x => x.id === id);
   if (!a || !a.rotation) return;
