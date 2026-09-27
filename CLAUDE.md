@@ -5,10 +5,10 @@ Local-first via localStorage. No bundler / no build step to deploy. Read this be
 any change.
 
 The app ships as `index.html` (a ~100-line shell), `styles.css` (base + component styles + the
-twelve inline aesthetics), and **`src/app-*.js` — 33 ordered classic `<script>`s** holding all
-application logic (~12.5k lines). They are NOT modules: top-level `function`s stay global so the
-inline `onclick=` handlers keep working. There is still no compile step — everything is served
-as-is.
+inline aesthetics), and **`src/app-*.js` — an ordered list of classic `<script>`s, enumerated in
+`index.html`** — holding all application logic. They are NOT modules: top-level `function`s stay
+global so the inline `onclick=` handlers keep working. There is still no compile step — everything
+is served as-is.
 
 **What load order does and doesn't constrain.** A function in any file may call a function in any
 other, in either direction: `function` declarations are hoisted and global, and every call happens
@@ -30,10 +30,11 @@ document — so any such path inside `src/` needs `new URL(..., document.baseURI
 in `src/app-aesthetics.js` does. DOM `href`/`src` attributes, `fetch()` and
 `serviceWorker.register()` are all document-relative and need no such care.
 
-Adding or renaming a file here means updating **four** places: the `<script>` list in `index.html`,
-`APP_SHELL` in `sw.js` (plus a `CACHE_NAME` bump, since `addAll()` rejects wholesale on a single
-404 and would silently stop the offline cache from ever installing), and nothing else — `tsconfig`
-globs `src/*.js`, and the tests read the script list out of `index.html` via `appSource()`.
+Adding or renaming a file here means updating **two** places: the `<script>` list in `index.html`
+and `APP_SHELL` in `sw.js` — and nothing else. `tsconfig` globs `src/*.js`, and the tests read the
+script list out of `index.html` via `appSource()`. Bump `CACHE_NAME` when you REMOVE a file, since
+`addAll()` rejects wholesale on a single 404 and would silently stop the offline cache from ever
+installing.
 
 Maximalist aesthetics additionally get their own lazily-loaded `aesthetics/<key>/theme.css`
 (see "Aesthetic file layout" below).
@@ -79,7 +80,7 @@ real signal, not noise to suppress.
 ## Aesthetic file layout
 Two kinds of aesthetic, chosen by the `external` flag on the `AESTHETICS` entry:
 
-- **Inline** (the original twelve) — token block lives in `styles.css`, ships to everyone.
+- **Inline** (the original set) — token block lives in `styles.css`, ships to everyone.
 - **External** (`external: true`, e.g. `frutigeraero`) — CSS lives in
   `aesthetics/<key>/theme.css`, fetched **only when selected**, via the single
   `<link id="aestheticCss">` slot that `applyAestheticStylesheet()` re-points. With 8+
@@ -203,7 +204,7 @@ that merely looks plausible. That's why the same bug kept recurring in four shap
 2. **A component's layout was scoped to one parent.** `.entry-card .ehead` meant `.ehead` alone
    got nothing; six components redeclared flex, two more never did and were silently broken.
 3. **A theme rule outranked a component.** `[data-aesthetic="x"] input` at (0,1,1) repainted
-   `.lab-filled` under all eleven external themes.
+   `.lab-filled` under every external theme.
 4. **A descendant selector for classes on the same element.** `.lab-move-toward .mono` matches
    nothing when both classes sit on one `<span>`.
 
@@ -227,14 +228,13 @@ have **identical specificity** (0,2,0), and `.btn-primary` also carries `.btn` �
 decides. Write the neutral `.btn` rule **first**, coloured variants after. And a theme's own
 `.btn` outranks `styles.css`'s `.btn-danger`/`.btn-good`, so if you style `.btn` restate those.
 
-## Known issues (fixed)
-- ~~`exportData()` was broken outside the Claude Artifact runtime~~ — **fixed.** It used to
-  depend on `window.claude.use('downloads')`, an Artifact-runtime-only capability absent on
-  real hosting (GitHub Pages, etc.), so "EXPORT BACKUP" silently did nothing anywhere except
-  inside a Claude Artifact preview. It now falls back to the Web Share API (nice on iOS — opens
-  the native share sheet so a backup can go straight to Files/AirDrop/email) and, failing that,
-  a plain `Blob` + temporary `<a download>` link, which works in effectively every modern
-  browser. Verified in `test_export.js` via a real captured Playwright download event.
+## Export
+`exportData()` tries the Web Share API first (on iOS this opens the native share sheet, so a backup
+can go straight to Files/AirDrop/email) and falls back to a `Blob` + temporary `<a download>` link,
+which works in effectively every modern browser. Don't reintroduce a dependency on
+`window.claude.*` — those capabilities exist only inside a Claude Artifact and are absent on real
+hosting, which silently made "EXPORT BACKUP" do nothing everywhere else. `test_export.js` covers
+this with a real captured Playwright download event.
 
 ## Cloud Sync (opt-in, added post-launch)
 Optional cross-device sync via Firebase — completely inert until someone taps "Enable Cloud
@@ -344,13 +344,10 @@ Added alongside the app.js split: `test_smoke.js` (boots clean + every section r
 narrow-viewport tabbar guard) and `test_state_persistence.js` (the `loadState()` migration
 contract — old saves gain new defaults, keep their data).
 
-Canonical tests didn't exist as committed files before this repo — they only ever lived inside
-temporary chat sandboxes and were lost between sessions, so building this suite out was genuinely
-new work, not a restore. `npm test` is currently **105/105 test files passing** (`run_all.js`
-auto-discovers every `test_*.js` in `tests/`, so this number moves — trust its own summary line
-over any count written here). Run the full suite before any publish, and add a new `test_*.js`
-whenever a new feature area is added, so this stays complete rather than drifting back toward the
-gap it started in.
+`run_all.js` auto-discovers every `test_*.js` in `tests/` and reports the count in its own summary
+line — trust that over any number written here. Run the full suite before any publish, and add a
+new `test_*.js` whenever a new feature area is added, so coverage stays complete rather than
+drifting.
 
 Run the full canonical suite before every publish, screenshot-verify anything visual, and
 do a freshness check against whatever's currently live before overwriting a hosted version.
