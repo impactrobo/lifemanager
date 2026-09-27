@@ -150,10 +150,16 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // A 1-serving recipe offers no choice, because there isn't one to make.
   const singleServingUi = await page.evaluate(() => {
     const e = liveEntryById('rec1');
+    // Cleared first: since 2026-09-27 a scale you ALREADY have is not offered again, and the steps
+    // above imported both. What is being asked here is what a recipe offers from a standing start —
+    // so the meals are put back afterwards, because section 7 checks they survive a reload.
+    const keep = STATE.diet.meals;
+    STATE.diet.meals = [];
     const four = recipeAddToMealsHtml(e);
     e.fields.servings = '1';
     const one = recipeAddToMealsHtml(e);
     e.fields.servings = '4';
+    STATE.diet.meals = keep;
     return { fourOffersBoth: /ADD 1 SERVING/.test(four) && /WHOLE BATCH/.test(four),
              oneOffersSingle: /ADD TO MEALS/.test(one) && !/WHOLE BATCH/.test(one) };
   });

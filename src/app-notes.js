@@ -702,7 +702,7 @@ function renderIngredientMatchSheet() {
         ${m.rows.length ? m.rows.map((r, i) => renderIngRow(r, i)).join('')
           : '<div class="entry-empty-line">No written ingredients on this recipe yet.</div>'}
       </div>
-      <div style="font-size:11px; color:${open ? 'var(--amber)' : 'var(--text-faint)'}; margin-top:8px;">
+      <div style="font-size:11px; color:${open ? 'var(--warn)' : 'var(--text-faint)'}; margin-top:8px;">
         ${open ? `${open} still need${open === 1 ? 's' : ''} an answer — anything left unresolved is skipped and marked “not counted” on the meal.`
                : 'Everything resolved. Confirmed names are remembered, so the next import is quiet.'}
       </div>
@@ -858,7 +858,7 @@ function renderConvertReviewStep(e) {
     <div class="convert-review">
       ${empty ? '<div class="entry-empty-line">This note has no text to sort. Converting just changes its type.</div>' : rows + unsorted}
     </div>
-    ${plan.unsorted.length ? `<div style="font-size:11px; color:var(--amber); margin-top:8px;">
+    ${plan.unsorted.length ? `<div style="font-size:11px; color:var(--warn); margin-top:8px;">
       Unsorted text is kept and shown on the entry — it is never dropped.</div>` : ''}
     <div class="row" style="gap:8px; margin-top:12px;">
       <button class="btn btn-sm" onclick="backToConvertType()">BACK</button>
@@ -1747,7 +1747,8 @@ function renderRecipeEditor(e) {
       <div id="entryIngredientResults">${q.trim() ? renderFoodSearchResults(q, 'addEntryIngredient') : ''}</div>
       <button class="btn btn-ghost btn-sm" style="margin-bottom:10px;" onclick="openRecipeCustomFood()">+ NEW INGREDIENT</button>
       <div id="entryIngredientRows"></div>
-    </div>`;
+    </div>
+    ${renderRecipeMealsBlock(e)}`;
 }
 function setRecipeField(key, val) {
   const e = openEntryRecord();
@@ -1863,18 +1864,45 @@ function renderRecipeCustomFoodOverlay() {
       <button class="btn btn-primary btn-block" style="margin-top:10px;" onclick="saveRecipeCustomFood()">SAVE &amp; ADD TO RECIPE</button>
     </div>`;
 }
+// A recipe imports at one of two SCALES, and the scale is a property of the meal, not of its name.
+// It used to be read back out of the name with /1 serving/, which meant renaming a meal silently
+// changed how it re-imported — a meal you called "Tuesday curry" would come back 4x too big.
+function recipeMealScale(m) {
+  if (m && typeof m.perServing === 'boolean') return m.perServing ? 'serving' : 'batch';
+  // Pre-2026-09-27 meals carry it only in the name. Read once here rather than everywhere.
+  return /\(1 serving\)\s*$/.test((m && m.name) || '') ? 'serving' : 'batch';
+}
+function recipeMealAtScale(e, scale) {
+  return mealsFromRecipe(e).find(m => recipeMealScale(m) === scale) || null;
+}
+
 // The choice is offered every time rather than assumed, but only shown when there IS one: a
 // 4-serving tray bake and a single-serving bowl both exist, and silently guessing wrong produces a
 // Meal whose macros are 4x off everywhere they're displayed or planned against.
+//
+// A scale you ALREADY have is not offered again (2026-09-27). Reported from the field: "it is not
+// an overwrite but an addition… so MEALS now has 2 x 2 identically named recipes (2x full and 2x
+// batch). And the number chips will keep growing each time there is an edit."
+//
+// The diagnosis in that note was the one thing about it that was wrong, and it is worth writing down
+// because it sent me looking in the wrong place: reimportRecipeMeal() always did update in place.
+// What duplicated was pressing ADD again, which the screen kept inviting — the buttons never knew a
+// meal already existed. So each press was a new meal, correctly, in answer to the wrong question.
+//
+// Each job now has exactly one surface: the ADD buttons create what you don't have, and the chips
+// below open or re-import what you do.
 function recipeAddToMealsHtml(e) {
   if (!recipeIngredients(e).length) return '';
-  if (recipeServings(e) > 1) {
-    return `<div class="recipe-actions">
-      <button class="btn btn-sm btn-primary" onclick="addRecipeToMeals('${e.id}', true)">ADD 1 SERVING</button>
-      <button class="btn btn-sm" onclick="addRecipeToMeals('${e.id}', false)">ADD WHOLE BATCH</button>
-    </div>`;
-  }
-  return `<div class="recipe-actions"><button class="btn btn-sm btn-primary" onclick="addRecipeToMeals('${e.id}', false)">ADD TO MEALS</button></div>`;
+  const multi = recipeServings(e) > 1;
+  const wanted = multi
+    ? [{ scale: 'serving', perServing: true, label: 'ADD 1 SERVING' },
+       { scale: 'batch', perServing: false, label: 'ADD WHOLE BATCH' }]
+    : [{ scale: 'batch', perServing: false, label: 'ADD TO MEALS' }];
+  const missing = wanted.filter(w => !recipeMealAtScale(e, w.scale));
+  if (!missing.length) return '';
+  return `<div class="recipe-actions">${missing.map((w, i) =>
+    `<button class="btn btn-sm ${i === 0 ? 'btn-primary' : ''}" onclick="addRecipeToMeals('${e.id}', ${w.perServing})">${w.label}</button>`
+  ).join('')}</div>`;
 }
 function addRecipeToMeals(entryId, perServing) {
   const e = liveEntryById(entryId);
@@ -1883,6 +1911,17 @@ function addRecipeToMeals(entryId, perServing) {
   if (!items.length) { showToast('Add some ingredients first'); return; }
   const servings = recipeServings(e);
   const divisor = (perServing && servings > 1) ? servings : 1;
+  const scale = divisor > 1 ? 'serving' : 'batch';
+  // Enforced here as well as hidden above. The button not being on screen is presentation; two
+  // meals with one name is the thing that must not happen, so the function that would create it is
+  // where that gets decided.
+  const already = recipeMealAtScale(e, scale);
+  if (already) {
+    showToast(recipeMealStale(e, already)
+      ? 'Already in Meals — use RE-IMPORT to update it'
+      : 'Already in Meals');
+    return;
+  }
   const meal = {
     id: uid(),
     name: entryTitleOf(e) + (divisor > 1 ? ' (1 serving)' : ''),
@@ -1893,6 +1932,8 @@ function addRecipeToMeals(entryId, perServing) {
     // must never reach back and rewrite the recipe, which is somebody's actual writing.
     recipeId: e.id,
     recipeAt: e.updatedAt || Date.now(),
+    // The scale, stored. See recipeMealScale().
+    perServing: divisor > 1,
     notCounted: entryFieldValue(e, 'ingredientsSkipped') || '',
     createdAt: Date.now(), updatedAt: Date.now(),
   };
@@ -1916,14 +1957,41 @@ function mealsFromRecipe(e) {
 // says nothing useful at all if a clock ever runs backwards — an imported save, a device whose
 // time was wrong. "Different" is the fact being asked about; "later" was only ever a proxy.
 function recipeMealStale(e, m) { return (e.updatedAt || 0) !== (m.recipeAt || 0); }
+// Whether anything taken from this recipe has fallen behind it.
+function recipeHasStaleMeal(e) { return mealsFromRecipe(e).some(m => recipeMealStale(e, m)); }
+
+// What this recipe has produced, and whether it is current — shown INSIDE the open recipe, which is
+// the thing that was actually missing (2026-09-27). renderRecipeMealChips() was written and never
+// called, so RE-IMPORT had no surface anywhere in the app: the only meal control that ever rendered
+// was ADD, on the card in the list. That is the other half of why pressing ADD again looked like the
+// only thing available to do.
+//
+// The card keeps ADD for reach; the detail goes here, where there is room for a row of chips.
+function renderRecipeMealsBlock(e) {
+  const meals = mealsFromRecipe(e);
+  if (!meals.length && !recipeIngredients(e).length) return '';
+  return `
+    <div class="subtle-label" style="margin:16px 0 8px;">IN MEALS</div>
+    ${meals.length ? renderRecipeMealChips(e)
+      : `<div class="recipe-meals-empty">Nothing taken from this recipe yet. Adding it makes a Meal
+           you can plan a week around — it carries the macros, this note keeps the method.</div>`}
+    ${recipeAddToMealsHtml(e)}`;
+}
+
+// A stale chip has to READ as broken, not merely be labelled. Asked for as "having the chip become
+// an exclamation point or broken chain or grey would be a good first pass to show 'broken link'" —
+// the amber border alone was too quiet to notice on the way past, and what it means is that this
+// meal's macros no longer describe the recipe above it.
 function renderRecipeMealChips(e) {
   const meals = mealsFromRecipe(e);
   if (!meals.length) return '';
-  return `<div class="entry-link-row" style="margin-top:8px;">${meals.map(m => {
+  return `<div class="entry-link-row">${meals.map(m => {
     const stale = recipeMealStale(e, m);
     return `<span class="entry-textlink ${stale ? 'is-stale' : ''}" style="--tc:var(--note-recipe)">
+      ${stale ? '<span class="link-broken" aria-hidden="true">!</span>' : ''}
       <button class="ing-chip-open" onclick="navigateToEntity('meal','${m.id}')">${escapeHtml(m.name)}</button>
-      ${stale ? `<b>recipe updated</b><button class="ing-chip-open" onclick="reimportRecipeMeal('${e.id}','${m.id}')">RE-IMPORT</button>` : '<b>meal</b>'}
+      ${stale ? `<b>out of date</b><button class="ing-chip-open" onclick="reimportRecipeMeal('${e.id}','${m.id}')">RE-IMPORT</button>`
+              : `<b>${recipeMealScale(m) === 'serving' ? '1 serving' : 'meal'}</b>`}
     </span>`;
   }).join('')}</div>`;
 }
@@ -1935,8 +2003,12 @@ function reimportRecipeMeal(entryId, mealId) {
   if (!e || !meal) return;
   const items = recipeIngredients(e);
   if (!items.length) { showToast('Match some ingredients first'); return; }
-  const divisor = /1 serving/.test(meal.name) && recipeServings(e) > 1 ? recipeServings(e) : 1;
+  // The scale comes off the MEAL, not out of its name — see recipeMealScale(). Reading /1 serving/
+  // out of the title meant renaming a meal to "Tuesday curry" made it re-import 4x too big, which
+  // nothing on screen would have said.
+  const divisor = recipeMealScale(meal) === 'serving' && recipeServings(e) > 1 ? recipeServings(e) : 1;
   meal.items = items.map(it => ({ id: uid(), foodId: it.foodId, qty: Math.round((it.qty / divisor) * 100) / 100, unit: it.unit }));
+  meal.perServing = divisor > 1;   // stamped on the way past, so a legacy meal stops relying on its name
   meal.recipeAt = e.updatedAt || Date.now();
   meal.notCounted = entryFieldValue(e, 'ingredientsSkipped') || '';
   meal.updatedAt = Date.now();
@@ -1957,6 +2029,11 @@ function renderRecipeCardBody(e) {
       const f = foodById(it.foodId);
       return f ? `<span class="recipe-ing-pill">${escapeHtml(f.name)} <b>${it.qty}${f.unit === 'count' ? '' : escapeHtml(it.unit)}</b></span>` : '';
     }).join('')}</div>` : ''}
+    ${/* The card's ADD buttons retire once both scales are imported, so without this a recipe whose
+          meals have fallen behind says nothing at all from the list. One mark, no action: opening
+          the note is where RE-IMPORT lives, and a card in a list is not the place to act on it. */''}
+    ${recipeHasStaleMeal(e) ? `<div class="recipe-stale-note">
+      <span class="link-broken" aria-hidden="true">!</span> Its meals are out of date &mdash; open to re-import</div>` : ''}
     ${recipeAddToMealsHtml(e)}`;
 }
 

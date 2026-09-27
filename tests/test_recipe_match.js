@@ -195,7 +195,9 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     const nowStale = recipeMealStale(e, m);
     reimportRecipeMeal('rec', m.id);
     const after = STATE.diet.meals.find(x => x.id === m.id);
-    return { before, nowStale, saysSo: /recipe updated/i.test(html),
+    // "out of date" plus the broken mark, since 2026-09-27 — the amber label alone was too quiet to
+    // notice, and its colour came from a `--amber` token that was defined nowhere.
+    return { before, nowStale, saysSo: /out of date/i.test(html) && /link-broken/.test(html),
              sameId: after.id === m.id, items: after.items.length,
              stillStale: recipeMealStale(liveEntryById('rec'), after) };
   });

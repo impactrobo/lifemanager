@@ -382,6 +382,13 @@ function migrateState() {
   if (STATE.diet.fatG === undefined) STATE.diet.fatG = null;
   if (STATE.diet.carbG === undefined) STATE.diet.carbG = null;
   if (!Array.isArray(STATE.diet.meals)) STATE.diet.meals = [];
+  // A recipe-imported meal records the SCALE it was taken at (2026-09-27). It used to be readable
+  // only out of the name, so renaming the meal changed how it re-imported. Stamped once here for
+  // meals that predate the field; recipeMealScale() still falls back to the name for anything that
+  // arrives later through an old export.
+  STATE.diet.meals.forEach(m => {
+    if (m.recipeId && typeof m.perServing !== 'boolean') m.perServing = /\(1 serving\)\s*$/.test(m.name || '');
+  });
   // No STATE.diet.mealPlan guard: the global meal plan is retired. ensurePerpetualPhase() folds a
   // legacy one into the first phase and deletes it, and re-creating it here would resurrect it on
   // every load. Phase plans are normalised below instead.

@@ -3275,8 +3275,8 @@ button.brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 4
 }
 /* Unsorted is amber, the app's "needs your attention" colour — it is not an error, but it is the
    one group you should not scroll past. */
-.convert-group.is-unsorted .convert-group-head { color: var(--amber); }
-.convert-group.is-unsorted .convert-line { border-color: var(--amber); }
+.convert-group.is-unsorted .convert-group-head { color: var(--warn); }
+.convert-group.is-unsorted .convert-line { border-color: var(--warn); }
 .convert-line {
   display: flex; align-items: center; gap: 8px;
   background: var(--surface); border: 1px solid var(--border-soft);
@@ -3299,12 +3299,12 @@ button.brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 4
   background: var(--surface); border: 1px solid var(--border-soft);
   border-radius: var(--radius); padding: 8px 10px;
 }
-.tmpl-field.is-unsorted { border-color: var(--amber); }
+.tmpl-field.is-unsorted { border-color: var(--warn); }
 .tmpl-label {
   font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: 0.06em;
   text-transform: uppercase; color: var(--text-faint); margin-bottom: 5px;
 }
-.tmpl-field.is-unsorted .tmpl-label { color: var(--amber); }
+.tmpl-field.is-unsorted .tmpl-label { color: var(--warn); }
 .tmpl-input {
   width: 100%; background: transparent; border: 0; padding: 2px 0;
   font-family: inherit; font-size: 13px; color: var(--text); resize: vertical;
@@ -3340,7 +3340,7 @@ textarea.tmpl-input { line-height: 1.5; }
 .ing-row.is-matched  { border-left-color: var(--good); }
 .ing-row.is-close,
 .ing-row.is-unit,
-.ing-row.is-noamount { border-left-color: var(--amber); }
+.ing-row.is-noamount { border-left-color: var(--warn); }
 .ing-row.is-notfound { border-left-color: var(--bad); }
 .ing-row.is-skip     { border-left-color: var(--border); opacity: 0.6; }
 .ing-row-head { display: flex; align-items: center; gap: 8px; }
@@ -3354,16 +3354,38 @@ textarea.tmpl-input { line-height: 1.5; }
   background: none; border: 0; padding: 0; margin: 0; cursor: pointer;
   font: inherit; color: inherit; text-decoration: none;
 }
-.entry-textlink.is-stale { border-style: solid; border-color: var(--amber); color: var(--amber); }
-.entry-textlink.is-stale b { color: var(--amber); }
+/* A meal whose recipe has moved on. It has to read as BROKEN on the way past, not just carry a
+   label — its macros no longer describe the recipe it sits under. Asked for as "an exclamation
+   point or broken chain or grey to show 'broken link'". */
+.entry-textlink.is-stale {
+  border-style: solid; border-color: var(--warn); color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 10%, transparent);
+}
+.entry-textlink.is-stale b { color: var(--warn); }
+/* The name is struck through: what the chip points at is no longer what it says it is. */
+.entry-textlink.is-stale .ing-chip-open:first-of-type { text-decoration: line-through; opacity: .8; }
+.entry-textlink.is-stale .ing-chip-open:last-of-type { text-decoration: none; opacity: 1; font-weight: 700; }
+.link-broken {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: 13px; height: 13px; border-radius: 50%;
+  background: var(--warn); color: var(--bg);
+  font-size: 10px; font-weight: 800; line-height: 1;
+  align-self: center;
+}
+/* Said on the card in the list, where there is no room to act on it. */
+.recipe-stale-note {
+  display: flex; align-items: center; gap: 6px; margin-top: 8px;
+  font-size: 10.5px; font-weight: 600; color: var(--warn);
+}
+.recipe-meals-empty { font-size: 11px; line-height: 1.5; color: var(--text-faint); margin-bottom: 10px; }
 /* Skipped ingredients, said out loud on the recipe — totals that quietly exclude something are
    worse than totals that say what they are missing. */
 .ing-skipped {
   margin-top: 10px; padding: 9px 11px; font-size: 12px; line-height: 1.5;
   color: var(--text-dim); background: var(--surface);
-  border: 1px solid var(--amber); border-radius: var(--radius);
+  border: 1px solid var(--warn); border-radius: var(--radius);
 }
-.ing-skipped b { color: var(--amber); }
+.ing-skipped b { color: var(--warn); }
 .ing-skipped div { margin-top: 4px; color: var(--text); }
 
 /* ---- The bathroom sheet (BODY) ----

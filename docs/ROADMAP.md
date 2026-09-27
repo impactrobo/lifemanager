@@ -56,6 +56,27 @@ These are **not** requested features — they're natural extensions given the cu
 app, logged here so they're not lost, not so they get built unprompted. Confirm with the person
 before starting any of these.
 
+- **A count vocabulary with per-ingredient sizes — raised 2026-09-27, noted only.** *"There are some
+  conversions for 'stick of butter' and 'small / medium / large onion' for example that may allow for
+  conversion to weight based on an ingredient-dependent input."*
+  - Today the parser handles amounts and units, so *"2 sticks butter"*, *"3 cloves garlic"* and
+    *"1 large onion"* all fail the same way: no recognised unit, so the row comes back wanting one.
+  - Two different things are bundled in that sentence and they should be built in that order:
+    1. **A fixed count unit per ingredient** — a stick of butter is 113 g, a clove of garlic ~3 g, an
+       egg ~50 g. This is just data on the food record, and the `count` food kind already models it
+       (`itemAmount` + `itemLabel`). What is missing is the parser knowing the WORD, and a food being
+       allowed more than one count word.
+    2. **Size-qualified counts** — small / medium / large onion. That is a second axis, and the
+       honest version is a per-ingredient table (`{small: 70, medium: 150, large: 285}`) rather than
+       a global multiplier, because the ratios are not the same across foods.
+  - **The interesting design question is where the numbers come from**, and it is the reason this is
+    noted rather than started: shipping a table of sizes for every food is a lot of invented
+    precision, and asking the user each time is the friction the matcher exists to remove. The likely
+    answer is a small built-in table for the two dozen ingredients people actually write this way,
+    plus "ask once and remember" for the rest — the same shape `ingredientMap` already uses for
+    names, which is the piece that makes this cheap.
+  - Mark the result **approximate** wherever it reaches a macro total. A medium onion is a range, and
+    a recipe that silently reports 150 g is claiming more than it knows.
 - **Let a weight food be measured by volume — surfaced 2026-09-27 while fixing duplicate foods.**
   Not requested; it came out of a reachability sweep and is logged so the finding isn't lost.
   - A **volume** food that declares a `density` can already be weighed — that shipped 2026-09-24, and
@@ -374,6 +395,42 @@ Newest first. Keep this reasonably current so a fresh session can see what alrea
 without re-reading the whole diff history. Roughly grouped: this project spent early Sept 2026
 on an architecture split + a large wave of Maximalist aesthetics.
 
+- **One recipe, one meal per scale (2026-09-27).** The last open field-log flag: *"it is not an
+  overwrite but an addition… So MEALS now has 2 x 2 identically named recipes (2x full and 2x batch).
+  And the number chips will keep growing each time there is an edit."*
+  - **The diagnosis in that note was the one part of it that was wrong**, and it is worth recording
+    because it sent me looking in the wrong place for a while. `reimportRecipeMeal()` always did
+    update in place, keeping the meal's id — a test has asserted it since the feature shipped. What
+    duplicated was pressing **ADD** again, which the screen kept inviting: the buttons never knew a
+    meal already existed, so every press made a new one, correctly, in answer to the wrong question.
+  - **And RE-IMPORT was unreachable.** `renderRecipeMealChips()` was written, correct, and **never
+    called anywhere**. So the only meal control that ever rendered was ADD, on the card in the list —
+    which is the other half of why pressing it again looked like the only thing available to do. A
+    function that returns the right HTML into nothing passes every unit-style test there is; the
+    mutation that deletes its one call site is what now catches this.
+  - Each job has exactly one surface now: the ADD buttons create what you don't have and retire when
+    you do, and the chips in the open recipe open or re-import what you do. The card keeps a single
+    "its meals are out of date" mark, because a card in a list is not the place to act on it.
+  - **The scale moved out of the meal's NAME onto the meal.** `reimportRecipeMeal()` read
+    `/1 serving/` out of the title, so renaming a meal to "Tuesday curry" made it re-import four
+    times too big, with nothing on screen to say so. Migrated from the name once on load.
+  - Refusing a duplicate is enforced in `addRecipeToMeals()`, not only by hiding the button — the
+    button not being on screen is presentation; two meals with one name is the thing that must not
+    happen, so the function that would create it is where that gets decided.
+  - **`--amber` was defined nowhere.** The stale chip's colour, Convert's unsorted marker, the
+    matcher's "no amount" row and the skipped-ingredients box all read a token that exists in no
+    stylesheet and no theme — 14 uses, all rendering with no colour, for as long as they had existed.
+    A `var()` with no fallback and no definition resolves to nothing and fails silently, which is the
+    exact shape `test_css_contract.js` exists to catch, so it catches this now too. The guard reads
+    the CSS off **disk**: a `file://` stylesheet is an opaque origin, so `cssRules` throws and the
+    first version of the check passed against a deliberately reintroduced `--amber`. A guard that
+    cannot fail is worse than no guard — it is verified by reintroducing the bug. 12/12 mutations
+    caught.
+  - **Not built:** archiving old recipe versions, which the note also proposed (*"instead of
+    overwriting, do we instead archive the old recipe versions?"*). That proposal followed from
+    believing re-import overwrote history — it never did: re-import rewrites the MEAL, never the
+    recipe, and a past phase's numbers are frozen in its own log. Archiving belongs with recipe
+    variants, where there really are several versions to keep apart.
 - **One name, one food (2026-09-27).** Reported from the field as a shopping-list bug — *"Happens
   yes, but the same food twice doesn't combine. Think that would be useful"* — and it was never about
   shopping.

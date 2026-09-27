@@ -22,6 +22,7 @@
 const { chromium } = require('playwright');
 const { settle } = require('./helpers');
 const path = require('path');
+const fs = require('fs');
 
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
 
@@ -201,6 +202,53 @@ const CONTRACTS = [
            assertSrc: c.assert ? c.assert.toString() : null });
       if (result) failures.push(`[${aes}] ${c.name}: ${result}`);
     }
+  }
+
+  // ---- Every custom property a rule READS must be one something DEFINES ----
+  //
+  // `--amber` was read in 14 places across Convert's unsorted marker, the ingredient matcher's
+  // "no amount" row, the skipped-ingredients box and the stale-meal chip — and defined nowhere, in
+  // styles.css or in any of the 23 themes. Every one of those warnings rendered with no colour at
+  // all, for as long as they had existed. Nothing failed; a `var()` with no fallback and no
+  // definition simply resolves to nothing, which is exactly the silent-loss shape this whole file
+  // exists to catch.
+  //
+  // Read off DISK, not out of the DOM. A file:// stylesheet is an opaque origin in Chromium, so
+  // document.styleSheets[].cssRules throws and the scan silently sees nothing — which is how the
+  // first version of this very check passed against a deliberately reintroduced `--amber`. A guard
+  // that cannot fail is worse than no guard, so it is verified by reintroducing the bug.
+  //
+  // Only a BARE `var(--x)` counts. `var(--x, fallback)` is a deliberate optional token.
+  const undefinedTokens = (() => {
+    const root = path.resolve(__dirname, '..');
+    const cssFiles = [path.join(root, 'styles.css')].concat(
+      fs.readdirSync(path.join(root, 'aesthetics'), { withFileTypes: true })
+        .filter(d => d.isDirectory())
+        .map(d => path.join(root, 'aesthetics', d.name, 'theme.css'))
+        .filter(p => fs.existsSync(p)));
+    // Inline styles in the JS read tokens too, and that is exactly where two of the dead `--amber`
+    // uses were hiding.
+    const jsFiles = fs.readdirSync(path.join(root, 'src'))
+      .filter(f => f.endsWith('.js')).map(f => path.join(root, 'src', f));
+    // Definitions accumulate across every file: a token defined only inside one aesthetic's theme
+    // still counts, because it resolves whenever that theme is on — and so does one set inline from
+    // JS (`style="--lc:${...}"`), which is how --lc, --navi, --sc and --sw are supplied. Scanning
+    // the JS for definitions as well as uses is a deliberate loosening: it means a token "defined"
+    // only in a comment would pass. The case worth catching is the one that is defined NOWHERE.
+    const defined = new Set(), used = new Set();
+    cssFiles.concat(jsFiles).forEach(p => {
+      (fs.readFileSync(p, 'utf8').match(/--[a-zA-Z0-9_-]+\s*:/g) || [])
+        .forEach(m => defined.add(m.replace(/\s*:$/, '')));
+    });
+    cssFiles.concat(jsFiles).forEach(p => {
+      (fs.readFileSync(p, 'utf8').match(/var\(\s*--[a-zA-Z0-9_-]+\s*\)/g) || [])
+        .forEach(m => used.add(m.replace(/var\(\s*/, '').replace(/\s*\)$/, '')));
+    });
+    return Array.from(used).filter(t => !defined.has(t)).sort();
+  })();
+  if (undefinedTokens.length) {
+    failures.push(`[all] undefined custom properties: ${undefinedTokens.join(', ')} — ` +
+      'read by a rule but defined in no stylesheet or theme, so those declarations do nothing');
   }
 
   await page.evaluate(k => setAesthetic(k), original);

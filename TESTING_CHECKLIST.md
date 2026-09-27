@@ -915,4 +915,29 @@ toss over which one a recipe matches to. Prevention plus a merge tool for the on
       food named after one that ships with the app (e.g. "Chicken breast") and see if that reads
       sensibly.
 
+## Recipes → Meals: one per scale, and RE-IMPORT you can actually find (2026-09-27)
+Your flag — *"it is not an overwrite but an addition… 2x full and 2x batch… the number chips will
+keep growing"*. Two things were wrong, and neither was the one in the note: **RE-IMPORT always did
+update in place**, but it was rendered by a function nobody ever called, so it was unreachable — and
+the ADD buttons never knew a meal already existed, so every press made another one.
+- [ ] **Delete the duplicate meals you already have** (BUILDER → DIET → ALL MEALS). Nothing migrates
+      them; the fix stops new ones.
+- [ ] **Open a recipe.** There's a new **IN MEALS** block at the bottom of the recipe fields, with a
+      chip per meal and the ADD buttons. Does it belong there, or higher up?
+- [ ] **ADD 1 SERVING / ADD WHOLE BATCH** disappear once you have that scale. Delete the meal and the
+      button comes back.
+- [ ] **Edit the recipe**, then look at the chip: struck-through name, a **!** mark, **OUT OF DATE**,
+      and **RE-IMPORT** right there. Is that clear enough, or still too quiet?
+- [ ] **RE-IMPORT** updates the meal in place — same meal, new numbers. Anything that planned it
+      keeps working. Check a meal you've actually put in a week's plan.
+- [ ] **Rename a meal** (e.g. "Weeknight curry (1 serving)" → "Tuesday curry"), edit the recipe, then
+      RE-IMPORT. It must still come back as **one serving** — this was broken: the scale was read out
+      of the name.
+- [ ] From **VIEW ALL**, a recipe whose meals are behind says *"Its meals are out of date"* on the
+      card. Enough, or do you want the fix on the card too?
+- [ ] **Colour check, everywhere amber is used:** skipped-ingredient boxes, Convert's UNSORTED
+      marker, the matcher's "needs an amount" rows. Those were all painted with a colour token that
+      didn't exist, so they've been rendering colourless the whole time. They should now be visibly
+      amber on every aesthetic — worth a look on a few themes.
+
 ## Add future items below as new features ship
