@@ -116,10 +116,12 @@ function convertTargets(toType) {
   out.push('unsorted');
   return out;
 }
-function convertTargetLabel(key) {
+function convertTargetLabel(key, toType) {
   // "Body / intro" tried to name it for both a Quick note and a Hub at once and read as neither.
-  // "Body" is what it is everywhere. (2026-09-20, from the field log.)
-  if (key === 'body') return 'Body';
+  // "Body" is what it is nearly everywhere (2026-09-20) — except on a recipe, where the leading
+  // text IS the description and had no name at all until 2026-09-27: "didn't see an area for the
+  // leading text box which we didn't really give a name".
+  if (key === 'body') return toType === 'recipe' ? 'Description' : 'Body';
   if (key === 'entries') return 'Hub members';
   return entryFieldMeta(key).label;
 }

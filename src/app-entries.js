@@ -36,7 +36,7 @@ const ENTRY_TYPES = {
   // prose. `fields.ingredients` beside it is the STRUCTURED {foodId, qty, unit} rows that carry
   // exact macros and drive add-to-Meals. Two fields on purpose, not an oversight: text is what you
   // can type, rows are what the app can compute with, and Phase 5's Match button is the bridge.
-  recipe:  { label: 'Recipe',     short: 'RECIPE',  token: '--note-recipe',  dot: 'round',  fields: ['servings', 'time', 'ingredientText', 'steps', 'source', 'rating'] },
+  recipe:  { label: 'Recipe',     short: 'RECIPE',  token: '--note-recipe',  dot: 'round',  fields: ['servings', 'time', 'ingredientText', 'steps', 'source', 'rating', 'tastingNotes'] },
   // A hub is an entry too -- that's what lets a hub sit inside another hub, be tagged, be
   // searched and be linked like anything else. Its square dot is the one place type is signalled
   // without relying on colour, since a hub behaves differently from everything else in the list.
@@ -68,7 +68,8 @@ const ENTRY_FIELD_META = {
   ingredientText:{ label: 'Ingredients, as written', kind: 'lines', list: 'bullet' },
   steps:         { label: 'Steps',       kind: 'lines', list: 'ordered' },
   source:        { label: 'Source',      kind: 'text' },
-  rating:        { label: 'Rating',      kind: 'text' },
+  rating:        { label: 'Rating',      kind: 'stars' },
+  tastingNotes:  { label: 'Tasting notes', kind: 'lines' },
   // Deliberately no list: unsorted is "nothing claimed this", and dressing it up as a tidy list
   // works against the one thing it is for — looking wrong until you move the lines somewhere.
   unsorted:      { label: 'Unsorted',    kind: 'lines' },

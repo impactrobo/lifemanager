@@ -510,7 +510,7 @@ function renderEntryEditor(e) {
       ${editing ? renderEntryToolbar() : ''}
       ${editing
         ? `<div class="entry-editor-wrap">
-             <textarea id="entryBody" class="entry-editor" rows="14" placeholder="Write it down…  Type [[ to link another note."
+             <textarea id="entryBody" class="entry-editor" rows="${isRecipeEntry(e) ? 6 : 14}" placeholder="${isRecipeEntry(e) ? 'A line about the dish — where it came from, when you make it.' : 'Write it down…  Type [[ to link another note.'}"
                oninput="onEntryBodyInput()" onkeydown="onEntryBodyKeydown(event)"
                onblur="closeEntryAutocompleteSoon()">${escapeHtml(editVal)}</textarea>
              <div id="entryAutocomplete">${renderEntryAutocomplete(e)}</div>
@@ -849,7 +849,7 @@ function renderConvertReviewStep(e) {
     const lines = plan.buckets[f] || [];
     if (!lines.length) return '';
     return `<div class="convert-group">
-      <div class="convert-group-head">${escapeHtml(convertTargetLabel(f))}</div>
+      <div class="convert-group-head">${escapeHtml(convertTargetLabel(f, c.toType))}</div>
       ${lines.map((l, i) => convertLineRow(f, i, l)).join('')}
     </div>`;
   }).join('');
@@ -885,7 +885,7 @@ function renderConvertMovePicker() {
     <div class="convert-types">
       ${convertTargets(c.plan.toType).map(f => `
         <button class="convert-type" onclick="finishConvertMove('${f}')">
-          <span class="convert-type-label">${escapeHtml(convertTargetLabel(f))}</span>
+          <span class="convert-type-label">${escapeHtml(convertTargetLabel(f, c.toType))}</span>
         </button>`).join('')}
     </div>
     <button class="btn btn-sm btn-block" style="margin-top:10px;" onclick="cancelConvertMove()">CANCEL</button>`;
@@ -926,7 +926,9 @@ function renderEntryFieldRead(e, key) {
   const val = entryFieldValue(e, key);
   if (!val) return '';
   const unsorted = key === 'unsorted';
-  const body = (meta.kind === 'text' || meta.kind === 'select')
+  const body = meta.kind === 'stars'
+    ? renderRatingStars(e, key, true)
+    : (meta.kind === 'text' || meta.kind === 'select')
     ? `<div class="tmpl-read-text">${renderEntryInline(escapeHtml(val))}</div>`
     : `<div class="tmpl-read rich-text">${
          renderEntryMarkdown(markEntryFieldLines(val, meta.list), `entryFieldCheckHandler(${jsArg(key)})`)
@@ -959,15 +961,85 @@ function onIngredientTextInput(ta) {
   const btn = document.getElementById('ingMatchBtn');
   if (btn) btn.hidden = !String(ta.value || '').trim();
 }
+// ---- The star rating ----
+// Five glyphs, set by tapping or dragging across them, in half-glyph steps (2026-09-27). The
+// stored value is a NUMBER 0-5; `rating` used to be free text and was reset outright, since
+// nothing had ever been typed into one.
+//
+// THE GLYPH IS A THEME TOKEN, not a hardcoded star: `--rating-glyph` defaults to a star in
+// styles.css and any aesthetic can restate it in one line -- Hedge uses rings, Terminal a block,
+// Sakura a blossom. Asked for as "maybe this can be something that changes per theme as well
+// (i.e. rings for Hedge)". Doing it as a custom property rather than markup means a new theme
+// opts in with one declaration and nothing in JS has to learn the theme exists.
+//
+// Two layers: five empty glyphs, with five filled ones clipped over them to a percentage width.
+// That is what makes a HALF possible at all -- you cannot half-fill a text glyph, but you can
+// show half of one.
+const RATING_MAX = 5;
+function ratingValueOf(e, key) {
+  const raw = e && e.fields ? e.fields[key] : null;
+  const n = Number(raw);
+  return isFinite(n) ? Math.max(0, Math.min(RATING_MAX, n)) : 0;
+}
+function renderRatingStars(e, key, readOnly) {
+  const val = ratingValueOf(e, key);
+  const glyphs = new Array(RATING_MAX).fill('<span class="rating-glyph"></span>').join('');
+  return `<div class="rating ${readOnly ? 'is-read' : ''}" ${readOnly ? '' :
+      `onpointerdown="onRatingPointer(event, '${e.id}', '${key}', true)"
+       onpointermove="onRatingPointer(event, '${e.id}', '${key}', false)"`}
+      role="slider" aria-label="${escapeHtml(entryFieldMeta(key).label)}"
+      aria-valuemin="0" aria-valuemax="${RATING_MAX}" aria-valuenow="${val}">
+    <div class="rating-track">
+      <div class="rating-empty">${glyphs}</div>
+      <div class="rating-fill" style="width:${(val / RATING_MAX) * 100}%">${glyphs}</div>
+    </div>
+    <span class="rating-value mono">${val ? (Math.round(val * 2) / 2).toFixed(1) : '—'}</span>
+    ${readOnly || !val ? '' : `<button class="rating-clear" title="Clear"
+      onclick="setEntryField('${key}', ''); render();">&#10005;</button>`}
+  </div>`;
+}
+// One handler for tap and drag. `down` distinguishes the first contact (always sets) from a move
+// (only sets while the finger is still down) -- without that, sliding a finger across the screen
+// would rewrite a rating you were only passing over.
+function onRatingPointer(evt, entryId, key, down) {
+  if (!down && !(evt.buttons & 1)) return;
+  const track = evt.currentTarget.querySelector('.rating-track');
+  if (!track) return;
+  const r = track.getBoundingClientRect();
+  if (!r.width) return;
+  const pct = Math.max(0, Math.min(1, (evt.clientX - r.left) / r.width));
+  // Rounded UP to the nearest half, so the glyph under your finger is at least half filled --
+  // landing on the left edge of the third star means 2.5, not 2, which is what the gesture reads
+  // as. Snapping down would make the first glyph unreachable at anything but zero.
+  const value = Math.max(0.5, Math.ceil(pct * RATING_MAX * 2) / 2);
+  const entry = liveEntryById(entryId);
+  if (!entry) return;
+  if (!entry.fields) entry.fields = {};
+  // Stored as a STRING like every other field. entryFieldValue() returns '' for anything that
+  // isn't a string, so a numeric rating read as empty everywhere — the row vanished from the
+  // screen entirely while the value sat in STATE. ratingValueOf() does the Number() on the way
+  // back out.
+  const next = String(value);
+  if (entry.fields[key] === next) return;     // a drag fires constantly; only write on a change
+  entry.fields[key] = next;
+  touchEntry(entry);
+  saveState();
+  render();
+}
 function renderEntryField(e, key) {
   const meta = entryFieldMeta(key);
   const val = entryFieldValue(e, key);
-  const open = (VIEW.entryFieldOpen || {})[key] || !!val;
+  // A stars field is never collapsed behind "+ Add": five empty glyphs ARE the invitation to rate,
+  // and putting them behind a button costs a tap to reveal a control that was already self-
+  // explanatory. Text fields stay collapsed — an empty box invites nothing.
+  const open = meta.kind === 'stars' || (VIEW.entryFieldOpen || {})[key] || !!val;
   const unsorted = key === 'unsorted';
   if (!open) {
     return `<button class="tmpl-add" onclick="openEntryField('${key}')">+ Add ${escapeHtml(meta.label.toLowerCase())}</button>`;
   }
-  const body = meta.kind === 'select'
+  const body = meta.kind === 'stars'
+    ? renderRatingStars(e, key)
+    : meta.kind === 'select'
     ? `<select class="tmpl-input" onchange="setEntryField('${key}', this.value)">
          <option value="" ${val ? '' : 'selected'}>—</option>
          ${meta.options.map(o => `<option value="${o}" ${val === o ? 'selected' : ''}>${o}</option>`).join('')}

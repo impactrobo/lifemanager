@@ -357,6 +357,36 @@ Newest first. Keep this reasonably current so a fresh session can see what alrea
 without re-reading the whole diff history. Roughly grouped: this project spent early Sept 2026
 on an architecture split + a large wave of Maximalist aesthetics.
 
+- **Recipes: a star rating, Tasting notes, and a named Description (2026-09-27).** From the field
+  log: *"didn't see an area for the leading text box which we didn't really give a name…
+  Description? And maybe add a Tasting Notes section? … maybe shrink the big description box to
+  half size"*, plus *"can the rating potentially have a 5 star system built-in? The user can click
+  and drag within a bar to highlight stars by 1/2 star."*
+  - `rating` was free text **nobody had ever typed into** (*"nothing is in any RATING yet — feel
+    free to destroy that field and reset with stars"*), so it was replaced outright rather than
+    migrated: a new `stars` field kind holding a 0–5 value in half steps.
+  - **The glyph is a theme token.** `--rating-glyph` defaults to a star in `styles.css` and any
+    aesthetic restates it in one declaration — rings on Hedge, a block on Terminal (a star is out
+    of place on a CLI), a blossom on Sakura. Asked for as *"maybe this can be something that
+    changes per theme as well (i.e. rings for Hedge)"*. Keeping it in CSS is the property worth
+    protecting: the moment a theme→glyph map appears in JS, adding an aesthetic means editing two
+    files, and the test asserts the widget never branches on the theme.
+  - Halves work by stacking **two layers of the same five glyphs** and clipping the filled layer to
+    a percentage. You cannot half-fill a text glyph, but you can show half of one. Tap position
+    rounds UP to the nearest half, so the glyph under your thumb is at least half filled and 0.5 is
+    reachable at the left edge.
+  - A stars field is **never collapsed behind "+ Add"** — five empty glyphs are the invitation to
+    rate, and hiding them costs a tap to reveal a self-explanatory control.
+  - **Stored as a STRING, like every other field.** `entryFieldValue()` returns `''` for anything
+    non-string, so a numeric rating read as empty and the entire row vanished from the screen while
+    the value sat in STATE — caught by looking at a screenshot, not by the types.
+  - `convertTargetLabel()` now takes the destination type: a recipe's body is its **Description**,
+    everything else keeps **Body**. The recipe body box drops from 14 rows to 6, since a recipe's
+    substance is its ingredients and steps.
+  - 7/7 mutations caught, after two fixes. One was a **masked check**: the hover-must-not-write
+    test seeded the rating to the same value an unguarded hover would write, so the no-op guard
+    swallowed the difference and the test passed on a bug. Seeding a different value first exposed
+    it.
 - **Cycling anchors are editable (2026-09-27).** *"Anchors I feel also need a modular property like
   skin care. It's always 'anchored' to the same time BUT cycles each day and not necessarily on a
   week cycle."* The shape and the modulo already existed; what didn't was any way to WRITE the

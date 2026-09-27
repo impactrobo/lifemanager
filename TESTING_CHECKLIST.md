@@ -846,4 +846,22 @@ the number of steps; there's no separate "every N days" field to disagree with i
 - [ ] **Cycle started** date: use it when a cycle really began on a specific day (the add/remove
       buttons handle keeping your place; this is for correcting the anchor point itself).
 
+## Recipes: star rating, Tasting notes, Description (2026-09-27)
+`rating` was free text nobody had used, so it was replaced outright with a five-glyph widget you
+tap or drag in half-steps. The glyph is a **theme token** — rings on Hedge, a block on Terminal,
+stars elsewhere — set by one CSS declaration per aesthetic.
+- [ ] **Open a recipe and rate it.** Tap anywhere across the glyphs; drag to adjust. Halves should
+      feel natural — the glyph under your thumb fills at least half.
+- [ ] Does **drag** work well on a real screen, or does the page try to scroll under it? That's the
+      one thing I can't judge from here.
+- [ ] The **✕** clears a rating back to nothing.
+- [ ] **Switch aesthetics** — Hedge gives rings, Terminal a block, Sakura a blossom, Draconic and
+      C.R.E.A.M diamonds, Spooky a skull. Everything else keeps stars. Any theme you'd want its own
+      shape for is one line.
+- [ ] **Tasting notes** sits right under the rating, as asked.
+- [ ] On a recipe, the leading text box is now **half height and called Description** (in Convert
+      too). Everywhere else it's still Body at full height. Is 6 rows right?
+- [ ] The rating shows **without needing "+ Add"** — empty glyphs are the invitation. Fields that
+      are still text (Source) stay collapsed.
+
 ## Add future items below as new features ship

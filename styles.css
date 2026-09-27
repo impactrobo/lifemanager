@@ -3474,3 +3474,37 @@ textarea.tmpl-input { line-height: 1.5; }
   font-family: inherit; font-size: 12px; line-height: 1.45; color: var(--text-dim);
 }
 .anchor-rot-detail:focus { outline: none; }
+
+/* ---------- Star rating ---------- */
+/* THE GLYPH IS A TOKEN. A theme restates one custom property and the whole widget changes shape —
+   no markup per aesthetic, and nothing in JS knows which theme is running. Asked for 2026-09-27
+   as "maybe this can be something that changes per theme as well (i.e. rings for Hedge)".
+   Halves work because two layers of the SAME five glyphs are stacked and the filled layer is
+   clipped to a percentage: you can't half-fill a text glyph, but you can show half of one. */
+:root { --rating-glyph: "\2605"; }          /* ★ */
+.rating { display: flex; align-items: center; gap: 8px; padding: 2px 0; touch-action: none; }
+.rating:not(.is-read) { cursor: pointer; }
+.rating-track { position: relative; display: inline-block; line-height: 1; }
+.rating-empty, .rating-fill { display: flex; gap: 2px; white-space: nowrap; }
+.rating-empty { color: var(--border); }
+.rating-fill {
+  position: absolute; inset: 0 auto 0 0; overflow: hidden;
+  color: var(--accent); pointer-events: none;
+}
+.rating-glyph { font-size: 20px; line-height: 1; }
+.rating-glyph::before { content: var(--rating-glyph); }
+.rating-value { font-size: 12px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.rating-clear {
+  background: none; border: 0; padding: 0 2px; cursor: pointer;
+  font-size: 12px; color: var(--text-faint); line-height: 1;
+}
+.rating-clear:hover { color: var(--bad); }
+
+/* Per-theme glyphs. One line each — the pattern, not an exhaustive list; any aesthetic that wants
+   its own shape adds a declaration here or in its own theme.css. */
+[data-aesthetic="hedge"]       { --rating-glyph: "\25CE"; }   /* ◎ rings, to match the gold ring */
+[data-aesthetic="terminal"]    { --rating-glyph: "\25AE"; }   /* ▮ a filled block — a star is out of place on a CLI */
+[data-aesthetic="sakura"]      { --rating-glyph: "\273F"; }   /* ❀ blossom */
+[data-aesthetic="draconic"]    { --rating-glyph: "\25C6"; }   /* ◆ scale */
+[data-aesthetic="cream"]       { --rating-glyph: "\2666"; }   /* ♦ gem */
+[data-aesthetic="spookyscary"] { --rating-glyph: "\2620"; }   /* ☠ */
