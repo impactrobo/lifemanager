@@ -148,10 +148,22 @@ function matchIngredientName(name) {
   if (exact) return { status: 'matched', food: exact, options: [] };
   const partial = allFoods().filter(f => foodMatchesQuery(f, key));
   if (!partial.length) return { status: 'notfound', food: null, options: [] };
-  // A single word-match is a strong guess but still a guess — it asks. Several are offered in
-  // order of how close the name is, shortest first, since a shorter name containing every typed
-  // word is usually the plain version of the thing ("Spinach" over "Spinach and feta pie").
-  const options = partial.slice().sort((a, b) => a.name.length - b.name.length).slice(0, 6);
+  // A single word-match is a strong guess but still a guess — it asks. Several are offered, best
+  // first, and "best" is two rules in order:
+  //
+  //   1. A name that STARTS with what you typed wins. A food named FOR the thing is more likely
+  //      what you meant than one that merely mentions it.
+  //   2. Then shortest, since a shorter name containing every typed word is usually the plain
+  //      version of the thing ("Spinach" over "Spinach and feta pie").
+  //
+  // Rule 1 was added 2026-09-28, when adding the recipe staples broke rule 1's absence: length
+  // alone offered "Tortilla, flour" for `flour` and "Peanut butter" for `butter`, because each is
+  // a shorter string than the food actually named after that word. The typed word is the head noun
+  // of one name and a modifier in the other, and only position can tell those apart.
+  const startsWith = (f) => normaliseFoodName(f.name).startsWith(key) ? 0 : 1;
+  const options = partial.slice()
+    .sort((a, b) => (startsWith(a) - startsWith(b)) || (a.name.length - b.name.length))
+    .slice(0, 6);
   return { status: 'close', food: options[0], options };
 }
 // The units a food can actually be stored in, ignoring the metric/imperial display toggle — the

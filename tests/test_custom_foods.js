@@ -24,19 +24,41 @@ const NUTRIENT_KEYS = ['cal', 'protein', 'carb', 'fat', 'fiber', 'sodium', 'pota
   await page.goto(APP_PATH);
   await settle(page);
 
-  // 1. FOOD_DB: every food has every micronutrient field, the new "sauces" category exists, and
-  //    the total count grew as expected (83 original + 39 new = 122).
+  // 1. FOOD_DB's invariants — every food complete and distinct, and the named ones present.
+  //
+  // The exact total used to be asserted (`!== 122`), which made every addition to the table a test
+  // failure and taught nothing when it fired: a count says a number changed, not what is wrong. The
+  // things actually worth protecting are that no food is missing a nutrient field, that no two share
+  // an id or a name, and that specific foods exist.
   const dbCheck = await page.evaluate((keys) => {
     const missing = FOOD_DB.filter(f => keys.some(k => f.per100[k] === undefined)).map(f => f.id);
-    const hasKetchup = !!FOOD_DB.find(f => f.id === 'ketchup');
-    const hasCheddar = !!FOOD_DB.find(f => f.id === 'cheddar_cheese');
-    const saucesCategoryLabeled = !!MEAL_CATEGORIES.find(c => c.id === 'sauces');
-    return { total: FOOD_DB.length, missing, hasKetchup, hasCheddar, saucesCategoryLabeled };
+    const ids = FOOD_DB.map(f => f.id);
+    const dupeIds = ids.filter((id, i) => ids.indexOf(id) !== i);
+    // Two foods with one name is the bug "one name, one food" exists to prevent; a built-in pair
+    // would be one nobody can merge away, since FOOD_DB is a constant.
+    const names = FOOD_DB.map(f => normaliseFoodName(f.name));
+    const dupeNames = names.filter((n, i) => names.indexOf(n) !== i);
+    const need = ['ketchup', 'cheddar_cheese',
+      // The recipe staples (2026-09-28). Named rather than counted, so this fails with the id of
+      // whatever went missing.
+      'butter', 'butter_unsalted', 'flour_ap', 'bread_white', 'tortilla_flour', 'sugar_white',
+      'honey', 'shallot', 'scallion', 'ginger_fresh', 'tomatoes_canned', 'apple', 'lemon', 'lime', 'salt',
+      'pork_sausage'];
+    return {
+      total: FOOD_DB.length, missing, dupeIds, dupeNames,
+      absent: need.filter(id => !FOOD_DB.find(f => f.id === id)),
+      saucesCategoryLabeled: !!MEAL_CATEGORIES.find(c => c.id === 'sauces'),
+      // Every food's category must be a real one, or it is unreachable in the picker.
+      strayCategory: FOOD_DB.filter(f => !MEAL_CATEGORIES.find(c => c.id === f.category)).map(f => f.id),
+    };
   }, NUTRIENT_KEYS);
-  console.log('FOOD_DB check:', dbCheck);
-  if (dbCheck.total !== 122) throw new Error(`Expected 122 foods in FOOD_DB, got ${dbCheck.total}`);
+  console.log('FOOD_DB check:', JSON.stringify({ total: dbCheck.total, missing: dbCheck.missing.length,
+    dupeIds: dbCheck.dupeIds, dupeNames: dbCheck.dupeNames, absent: dbCheck.absent, stray: dbCheck.strayCategory }));
   if (dbCheck.missing.length > 0) throw new Error(`Foods missing a micronutrient field: ${dbCheck.missing.join(', ')}`);
-  if (!dbCheck.hasKetchup || !dbCheck.hasCheddar) throw new Error('Expected the new sauces/cheese items to exist');
+  if (dbCheck.dupeIds.length) throw new Error(`Duplicate food ids — foodById() returns the first and the other is unreachable: ${dbCheck.dupeIds.join(', ')}`);
+  if (dbCheck.dupeNames.length) throw new Error(`Two built-in foods share a name, which nothing can merge away: ${dbCheck.dupeNames.join(', ')}`);
+  if (dbCheck.absent.length) throw new Error(`Expected these foods to exist: ${dbCheck.absent.join(', ')}`);
+  if (dbCheck.strayCategory.length) throw new Error(`Foods in a category that isn't in MEAL_CATEGORIES, so unreachable in the picker: ${dbCheck.strayCategory.join(', ')}`);
   if (!dbCheck.saucesCategoryLabeled) throw new Error('Expected MEAL_CATEGORIES to include a "sauces" entry');
 
   // 2. computeMealTotals() sums micronutrients too, not just the original 5 macros

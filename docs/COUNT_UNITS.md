@@ -110,9 +110,20 @@ matches what the food record measures, not what you carry home.
 
 ---
 
-## Tier B — foods that don't exist yet
+## Tier B — ~~foods that don't exist yet~~ DONE (2026-09-28)
 
-**The headline finding: there is no butter in FOOD_DB.** 122 foods, and the very example that
+> **All sixteen shipped.** `FOOD_DB` went 122 → 138. The prerequisite is cleared: every food in the
+> table below now exists, with a full macro and micronutrient profile, all flagged `approx: true`.
+> What remains for this feature is the count words and size tiers themselves.
+>
+> One addition was not on the list. Adding **"Butter, salted"** made a written line of `Salt`
+> partial-match it — `foodMatchesQuery()` is a plain substring test, so `salt` is inside `salted`.
+> An exact name outranks a partial, so the fix was that **salt is a food now**, and it is one worth
+> having: the app tracks sodium, a teaspoon is 2,300 mg of it, and until now that was invisible.
+>
+> Two ranking bugs surfaced the same way and were fixed with it — see *Matching notes* below.
+
+**The original finding: there was no butter in FOOD_DB.** 122 foods, and the very example that
 prompted this can't be matched at all — "stick of butter" fails before it reaches the unit question.
 Searching the DB for the obvious count-written ingredients:
 
@@ -158,6 +169,35 @@ Proposed additions, in rough order of how often they appear in written recipes:
 because the app already made a deliberate choice to speak US units.
 
 ---
+
+### Matching notes (found while adding the foods, 2026-09-28)
+
+Adding sixteen foods changed what the ingredient matcher suggests, and two of the changes were
+regressions worth writing down.
+
+- **A name that STARTS with the typed word now wins.** Close matches were ordered shortest-first, on
+  the reasonable theory that a shorter name containing every typed word is the plain version of the
+  thing. That broke the moment a specific food shared a word with an existing compound name: `flour`
+  offered **Tortilla, flour** and `butter` offered **Peanut butter**, because each is a shorter
+  string than the food actually named after that word. The typed word is the head noun of one name
+  and a modifier in the other, and only position can tell those apart. It is a ranking rule, not a
+  filter — the other matches are still offered.
+- **`foodMatchesQuery()` is a plain substring test, with no word boundary.** So `ice` matches
+  *"Bread, white, sl**ice**d"* and *"Tomatoes, canned, d**ice**d"*. Left alone deliberately: the same
+  function powers the food SEARCH box, where generosity is right (typing `nut` should find walnuts
+  mid-word), and the matcher only ever *asks*. If it becomes a nuisance, the fix is two predicates —
+  a generous one for search, a word-boundary one for the matcher — not one stricter rule for both.
+
+### What the new foods still can't do
+
+Both gaps are the ones this document already describes, now demonstrated on real data:
+
+| Written | Result today | Needs |
+|---|---|---|
+| `2 sticks butter` | `notfound` — "sticks butter" is read as the name | **Count words** (this doc) |
+| `3 cloves garlic` | `notfound` | **Count words** (this doc) |
+| `2 tsp salt` | `unit` — salt is a weight food, tsp is volume | **Weight foods by volume** (ROADMAP Ideas) |
+| `1 cup flour` | `unit` after you pick the flour | **Weight foods by volume** |
 
 ## Deliberately out of scope
 

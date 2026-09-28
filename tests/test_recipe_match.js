@@ -103,6 +103,31 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     throw new Error(`A partial word match should be a close match or an exact one, got ${close.status}`);
   }
 
+  // 4b. Which close match is offered FIRST. A name that STARTS with the typed word beats a shorter
+  // name that merely contains it — the typed word is the head noun of one and a modifier in the
+  // other, and only position tells them apart. Found when adding the recipe staples (2026-09-28)
+  // broke it: sorting by length alone offered "Tortilla, flour" for `flour` and "Peanut butter"
+  // for `butter`, both because they are shorter strings than the food named after the word.
+  const ordering = await page.evaluate(() => {
+    const first = (line) => {
+      const r = resolveIngredientRow(parseIngredientLine(line));
+      return { status: r.status, first: r.food && r.food.name, options: r.options.map(o => o.name) };
+    };
+    return { flour: first('1 cup flour'), butter: first('200 g butter') };
+  });
+  console.log('4b. first offer:', JSON.stringify(ordering));
+  if (!/^Flour/.test(ordering.flour.first || '')) {
+    throw new Error(`"flour" should offer the flour first, got "${ordering.flour.first}" from ${JSON.stringify(ordering.flour.options)}`);
+  }
+  if (!/^Butter/.test(ordering.butter.first || '')) {
+    throw new Error(`"butter" should offer the butter first, not a food that merely contains the word: got "${ordering.butter.first}"`);
+  }
+  // Both alternatives are still OFFERED — the rule reorders, it does not filter. Someone writing
+  // "flour" who did mean tortillas can still pick them.
+  if (!ordering.flour.options.some(n => /Tortilla/.test(n))) {
+    throw new Error('the other matches must still be offered — this is a ranking rule, not a filter');
+  }
+
   // ---- 5, 6, 7. A real recipe: missing food, close match, unit mismatch ----
   const setup = await page.evaluate(() => {
     STATE.entries = [];

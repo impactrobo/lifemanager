@@ -959,4 +959,27 @@ All four were things you flagged on items you'd already passed. Nothing was brok
 - [ ] Add an ingredient **by hand** with nothing in the written list. That's a perfectly good recipe
       and must not be flagged.
 
+## Sixteen recipe staples (2026-09-28)
+The food database went **122 → 138**. These are the things that were missing from the middle of a
+recipe: butter (salted and unsalted), flour, bread, tortilla, sugar, honey, salt, shallot, scallion,
+fresh ginger, canned tomatoes, apple, lemon, lime, pork sausage. All are standard reference values,
+same basis as the rest of the table — **check anything you use often against the packet.**
+- [ ] **Search for each one** in a meal (BUILDER → DIET → MEAL) and sanity-check the calories per
+      100 g against a label you have in the kitchen. Butter should be ~717, flour ~364, honey ~304.
+- [ ] **A stick of butter is 113 g → 810 cal.** Log it and confirm.
+- [ ] **1 tsp salt (6 g) = 2,325 mg sodium.** Worth seeing once — that's most of a day's allowance,
+      and it was invisible before.
+- [ ] Write `200 g butter` in a recipe and MATCH: it should offer **Butter, salted** first, not
+      Peanut butter. Same for `flour` → the flour, not the tortilla. That ordering was a real bug.
+- [ ] **Salted vs unsalted butter** are separate foods (632 mg sodium apart). Is having both useful,
+      or noise in the picker?
+- [ ] Sugar and honey live under **Grains & Carbs** — it's literally "carbs" and they're nothing
+      else, but if the pantry list grows, a *Baking & Pantry* category might be the better home.
+      Does it read oddly to you?
+- [ ] **Still doesn't work** (both known, both on the list): `2 sticks butter` and `3 cloves garlic`
+      aren't understood — that's the count-words feature. `2 tsp salt` and `1 cup flour` ask for a
+      unit, because a weight food can't be measured by volume yet.
+- [ ] Anything you cook regularly that's **still missing**? Tell me and I'll add it — this batch was
+      picked on general recipe frequency, not on what's actually in your kitchen.
+
 ## Add future items below as new features ship

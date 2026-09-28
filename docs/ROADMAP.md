@@ -402,6 +402,35 @@ Newest first. Keep this reasonably current so a fresh session can see what alrea
 without re-reading the whole diff history. Roughly grouped: this project spent early Sept 2026
 on an architecture split + a large wave of Maximalist aesthetics.
 
+- **Sixteen recipe staples, and the matching bugs they exposed (2026-09-28).** `FOOD_DB` 122 → 138.
+  The prerequisite from [`docs/COUNT_UNITS.md`](COUNT_UNITS.md) is cleared: **there was no butter**,
+  nor bread, lemon, lime, apple, shallot, ginger, scallion, tortilla or sausage — a table strong on
+  whole proteins and vegetables and empty of what people write in the middle of a recipe. Flour,
+  sugar, honey and canned tomatoes came out of the same survey. All flagged `approx: true`, the same
+  standard-reference basis as the rest of the table.
+  - **This is not the count-units feature**, it is what that feature was blocked on. A count
+    vocabulary is worthless against foods that aren't there, and these are useful the moment they
+    exist. `2 sticks butter` still reads as `notfound`; what changed is that `200 g butter` now works.
+  - **Salt was added by side effect, and earned it.** Adding "Butter, salted" made a written line of
+    `Salt` partial-match it — `foodMatchesQuery()` is a plain substring test, so `salt` is inside
+    `salted`. An exact name outranks a partial, so the fix was for salt to be a food. It is one worth
+    having: this app tracks sodium, a teaspoon is 2,300 mg of it, and that was invisible until now.
+  - **A close match that STARTS with the typed word now ranks first.** Options were sorted
+    shortest-first, which broke the moment a specific food shared a word with a compound name:
+    `flour` offered **Tortilla, flour**, `butter` offered **Peanut butter**. Each is a shorter string
+    than the food actually named after that word — the typed word is the head noun of one and a
+    modifier in the other, and only position tells them apart. A ranking rule, not a filter.
+  - **Butter is a WEIGHT food, deliberately.** A stick is defined as 113 g by the wrapper; offering
+    cups instead of grams would lose the one exact number butter has. That makes it the headline
+    beneficiary of "let a weight food be measured by volume" — `2 tbsp butter` still needs a manual
+    unit fix, as does `2 tsp salt`.
+  - Salted and unsalted butter are two records because they differ by **632 mg of sodium per 100 g**,
+    most of a third of a day's allowance in one batch of cookies.
+  - **`test_custom_foods.js` stopped asserting an exact food count.** `total !== 122` failed on every
+    addition and taught nothing when it fired — a count says a number changed, not what is wrong. It
+    now checks the invariants that matter: no food missing a nutrient field, no duplicate ids, **no
+    two foods sharing a name** (a built-in pair would be one nobody could merge away), no food in a
+    category that isn't in the picker, and the named foods present by id.
 - **Four papercuts from the field log (2026-09-28).** All four were notes left on items the user
   PASSED — nothing was broken, they read wrong. Done together because they share nothing but size.
   16/16 mutations caught.

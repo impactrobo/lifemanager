@@ -168,6 +168,21 @@ const VOLUME_TO_ML = { mL: 1, cup: 236.588, tbsp: 14.7868, tsp: 4.92892, floz: 2
 // data for any specific brand or cut. Treat every per100 micronutrient value here as approximate,
 // independent of whether that food's own top-level `approx` flag (which is about the macros
 // specifically) is set. See docs/ROADMAP.md "Diet: expanded food database + micronutrients".
+//
+// ---- Recipe staples (2026-09-28) ----
+// Fifteen foods added in one pass, all flagged `approx: true`, all standard reference values of the
+// same kind as the rest of this table -- not lab data.
+//
+// They exist because of a gap found while scoping count units (docs/COUNT_UNITS.md): the ingredient
+// matcher could not match "2 sticks butter" for a reason far more basic than the missing unit word.
+// THERE WAS NO BUTTER. Nor bread, lemon, lime, apple, shallot, ginger, scallion, tortilla or
+// sausage -- a database strong on whole proteins and vegetables and empty of the things people
+// actually write in the middle of a recipe. Flour, sugar, honey and canned tomatoes came out of the
+// same survey.
+//
+// This is the PREREQUISITE for count words and size tiers, not those features themselves: a count
+// vocabulary is worthless against foods that aren't there, and these foods are useful on their own
+// the moment they exist. See COUNT_UNITS.md for the list of count words each of them will want.
 const FOOD_DB = [
   // ---- Meat/Fish/Poultry ----
   { id: 'chicken_breast', name: 'Chicken breast, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 165, protein: 31, carb: 0, fat: 3.6, fiber: 0, sodium: 74, potassium: 256, calcium: 15, iron: 1, magnesium: 29, vitaminC: 0, vitaminD: 0.1, vitaminB12: 0.3 } },
@@ -203,6 +218,8 @@ const FOOD_DB = [
   { id: 'tilapia', name: 'Tilapia, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 128, protein: 26, carb: 0, fat: 2.7, fiber: 0, sodium: 56, potassium: 380, calcium: 14, iron: 0.7, magnesium: 34, vitaminC: 0, vitaminD: 0, vitaminB12: 1.9 } },
   { id: 'halibut', name: 'Halibut, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 111, protein: 22, carb: 0, fat: 2.3, fiber: 0, sodium: 66, potassium: 490, calcium: 13, iron: 0.9, magnesium: 33, vitaminC: 0, vitaminD: 0.5, vitaminB12: 1 } },
   { id: 'scallops', name: 'Scallops, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 111, protein: 21, carb: 5, fat: 0.8, fiber: 0, sodium: 667, potassium: 314, calcium: 24, iron: 0.6, magnesium: 45, vitaminC: 0, vitaminD: 0, vitaminB12: 1.4 } },
+  // Recipe staples, 2026-09-28. See the "Recipe staples" note below FOOD_DB for why these are here.
+  { id: 'pork_sausage', name: 'Sausage, pork, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 339, protein: 19, carb: 1.5, fat: 29, fiber: 0, sodium: 749, potassium: 291, calcium: 12, iron: 1.2, magnesium: 17, vitaminC: 1, vitaminD: 0.6, vitaminB12: 1 }, approx: true },
   // ---- Eggs & Dairy ----
   { id: 'eggs_whole', name: 'Eggs, whole, cooked', category: 'dairy', unit: 'count', base: 'g', itemAmount: 50, itemLabel: 'egg', per100: { cal: 155, protein: 13, carb: 1.1, fat: 11, fiber: 0, sodium: 124, potassium: 126, calcium: 50, iron: 1.2, magnesium: 10, vitaminC: 0, vitaminD: 2, vitaminB12: 0.9 } },
   { id: 'egg_yolk', name: 'Egg yolk only', category: 'dairy', unit: 'count', base: 'g', itemAmount: 17, itemLabel: 'yolk', per100: { cal: 322, protein: 16, carb: 3.6, fat: 27, fiber: 0, sodium: 48, potassium: 109, calcium: 129, iron: 2.7, magnesium: 5, vitaminC: 0, vitaminD: 5.4, vitaminB12: 1.9 } },
@@ -232,6 +249,15 @@ const FOOD_DB = [
   { id: 'pasta', name: 'Pasta, cooked', category: 'grains', unit: 'weight', base: 'g', per100: { cal: 131, protein: 5, carb: 25, fat: 1.1, fiber: 1.8, sodium: 1, potassium: 44, calcium: 7, iron: 0.9, magnesium: 18, vitaminC: 0, vitaminD: 0, vitaminB12: 0 }, approx: true },
   { id: 'rolled_oats', name: 'Rolled oats, dry/uncooked', category: 'grains', unit: 'weight', base: 'g', per100: { cal: 389, protein: 16.9, carb: 66.3, fat: 6.9, fiber: 10.6, sodium: 2, potassium: 429, calcium: 54, iron: 4.7, magnesium: 177, vitaminC: 0, vitaminD: 0, vitaminB12: 0 } },
   { id: 'fortified_cereal', name: 'Fortified cereal (typical)', category: 'grains', unit: 'weight', base: 'g', per100: { cal: 379, protein: 8, carb: 84, fat: 2, fiber: 8, sodium: 500, potassium: 220, calcium: 200, iron: 18, magnesium: 60, vitaminC: 15, vitaminD: 2.5, vitaminB12: 2.4 } },
+  // Recipe staples, 2026-09-28. Flour's iron is high because US all-purpose flour is enriched;
+  // unenriched would be nearer 1.2 mg. Sugar and honey sit in Grains & Carbs because that category
+  // is literally "carbs" and they are nothing else -- a Baking & Pantry category would be the
+  // better home once there are enough of them to fill one.
+  { id: 'flour_ap', name: 'Flour, all-purpose (enriched)', category: 'grains', unit: 'weight', base: 'g', per100: { cal: 364, protein: 10.3, carb: 76, fat: 1, fiber: 2.7, sodium: 2, potassium: 107, calcium: 15, iron: 4.6, magnesium: 22, vitaminC: 0, vitaminD: 0, vitaminB12: 0 }, approx: true },
+  { id: 'bread_white', name: 'Bread, white, sliced', category: 'grains', unit: 'weight', base: 'g', per100: { cal: 265, protein: 9, carb: 49, fat: 3.2, fiber: 2.7, sodium: 491, potassium: 115, calcium: 144, iron: 3.6, magnesium: 23, vitaminC: 0, vitaminD: 0, vitaminB12: 0 }, approx: true },
+  { id: 'tortilla_flour', name: 'Tortilla, flour', category: 'grains', unit: 'weight', base: 'g', per100: { cal: 306, protein: 8.2, carb: 51, fat: 7.4, fiber: 3, sodium: 594, potassium: 130, calcium: 145, iron: 3.2, magnesium: 20, vitaminC: 0, vitaminD: 0, vitaminB12: 0 }, approx: true },
+  { id: 'sugar_white', name: 'Sugar, granulated', category: 'grains', unit: 'weight', base: 'g', per100: { cal: 387, protein: 0, carb: 100, fat: 0, fiber: 0, sodium: 1, potassium: 2, calcium: 1, iron: 0.05, magnesium: 0, vitaminC: 0, vitaminD: 0, vitaminB12: 0 }, approx: true },
+  { id: 'honey', name: 'Honey', category: 'grains', unit: 'weight', base: 'g', per100: { cal: 304, protein: 0.3, carb: 82, fat: 0, fiber: 0.2, sodium: 4, potassium: 52, calcium: 6, iron: 0.42, magnesium: 2, vitaminC: 0.5, vitaminD: 0, vitaminB12: 0 }, approx: true },
   // ---- Veggies ----
   { id: 'sweet_potato', name: 'Sweet potato, cooked', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 90, protein: 2, carb: 21, fat: 0.1, fiber: 3.3, sodium: 36, potassium: 337, calcium: 38, iron: 0.7, magnesium: 27, vitaminC: 19.6, vitaminD: 0, vitaminB12: 0 } },
   { id: 'carrots', name: 'Carrots, raw', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 41, protein: 0.9, carb: 10, fat: 0.2, fiber: 2.8, sodium: 69, potassium: 320, calcium: 33, iron: 0.3, magnesium: 12, vitaminC: 5.9, vitaminD: 0, vitaminB12: 0 } },
@@ -257,6 +283,13 @@ const FOOD_DB = [
   { id: 'peas', name: 'Peas, cooked', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 84, protein: 5.4, carb: 15, fat: 0.4, fiber: 5.5, sodium: 3, potassium: 201, calcium: 27, iron: 1.5, magnesium: 33, vitaminC: 14, vitaminD: 0, vitaminB12: 0 } },
   { id: 'celery', name: 'Celery, raw', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 16, protein: 0.7, carb: 3, fat: 0.2, fiber: 1.6, sodium: 80, potassium: 260, calcium: 40, iron: 0.2, magnesium: 11, vitaminC: 3.1, vitaminD: 0, vitaminB12: 0 } },
   { id: 'romaine_lettuce', name: 'Romaine lettuce, raw', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 17, protein: 1.2, carb: 3.3, fat: 0.3, fiber: 2.1, sodium: 8, potassium: 247, calcium: 33, iron: 1, magnesium: 14, vitaminC: 4, vitaminD: 0, vitaminB12: 0 } },
+  // Recipe staples, 2026-09-28. Canned tomatoes carry far more sodium than the raw tomato above --
+  // 186 vs 5 mg -- which is exactly the kind of difference that makes them a separate food rather
+  // than a unit of the same one.
+  { id: 'shallot', name: 'Shallot, raw', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 72, protein: 2.5, carb: 17, fat: 0.1, fiber: 3.2, sodium: 12, potassium: 334, calcium: 37, iron: 1.2, magnesium: 21, vitaminC: 8, vitaminD: 0, vitaminB12: 0 }, approx: true },
+  { id: 'scallion', name: 'Scallion (spring onion), raw', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 32, protein: 1.8, carb: 7.3, fat: 0.2, fiber: 2.6, sodium: 16, potassium: 276, calcium: 72, iron: 1.5, magnesium: 20, vitaminC: 18.8, vitaminD: 0, vitaminB12: 0 }, approx: true },
+  { id: 'ginger_fresh', name: 'Ginger, fresh', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 80, protein: 1.8, carb: 18, fat: 0.75, fiber: 2, sodium: 13, potassium: 415, calcium: 16, iron: 0.6, magnesium: 43, vitaminC: 5, vitaminD: 0, vitaminB12: 0 }, approx: true },
+  { id: 'tomatoes_canned', name: 'Tomatoes, canned, diced', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 32, protein: 1.6, carb: 7, fat: 0.3, fiber: 1.9, sodium: 186, potassium: 293, calcium: 34, iron: 0.9, magnesium: 14, vitaminC: 9.2, vitaminD: 0, vitaminB12: 0 }, approx: true },
   // ---- Fruit (fruit and fruit juices) ----
   { id: 'orange', name: 'Orange', category: 'fruit', unit: 'weight', base: 'g', per100: { cal: 47, protein: 0.9, carb: 12, fat: 0.1, fiber: 2.4, sodium: 0, potassium: 181, calcium: 40, iron: 0.1, magnesium: 10, vitaminC: 53, vitaminD: 0, vitaminB12: 0 } },
   { id: 'strawberries', name: 'Strawberries', category: 'fruit', unit: 'weight', base: 'g', per100: { cal: 32, protein: 0.7, carb: 7.7, fat: 0.3, fiber: 2, sodium: 1, potassium: 153, calcium: 16, iron: 0.4, magnesium: 13, vitaminC: 59, vitaminD: 0, vitaminB12: 0 } },
@@ -265,8 +298,23 @@ const FOOD_DB = [
   { id: 'raspberries', name: 'Raspberries', category: 'fruit', unit: 'weight', base: 'g', per100: { cal: 52, protein: 1.2, carb: 12, fat: 0.65, fiber: 6.5, sodium: 1, potassium: 151, calcium: 25, iron: 0.7, magnesium: 22, vitaminC: 26, vitaminD: 0, vitaminB12: 0 }, approx: true },
   { id: 'orange_juice', name: 'Orange juice', category: 'fruit', unit: 'volume', base: 'mL', density: 1.05, per100: { cal: 45, protein: 0.7, carb: 10.4, fat: 0.2, fiber: 0.2, sodium: 1, potassium: 200, calcium: 11, iron: 0.2, magnesium: 11, vitaminC: 50, vitaminD: 0, vitaminB12: 0 }, approx: true },
   { id: 'apple_juice', name: 'Apple juice', category: 'fruit', unit: 'volume', base: 'mL', density: 1.05, per100: { cal: 46, protein: 0.1, carb: 11.3, fat: 0.1, fiber: 0.2, sodium: 4, potassium: 101, calcium: 8, iron: 0.1, magnesium: 5, vitaminC: 0.9, vitaminD: 0, vitaminB12: 0 }, approx: true },
+  // Recipe staples, 2026-09-28. All three are the EDIBLE part: lemon and lime without peel, apple
+  // with skin. A recipe that says "1 lemon" usually means its juice or zest, which is a portion
+  // question rather than a food one -- see docs/COUNT_UNITS.md.
+  { id: 'apple', name: 'Apple, with skin', category: 'fruit', unit: 'weight', base: 'g', per100: { cal: 52, protein: 0.26, carb: 14, fat: 0.17, fiber: 2.4, sodium: 1, potassium: 107, calcium: 6, iron: 0.12, magnesium: 5, vitaminC: 4.6, vitaminD: 0, vitaminB12: 0 }, approx: true },
+  { id: 'lemon', name: 'Lemon, without peel', category: 'fruit', unit: 'weight', base: 'g', per100: { cal: 29, protein: 1.1, carb: 9.3, fat: 0.3, fiber: 2.8, sodium: 2, potassium: 138, calcium: 26, iron: 0.6, magnesium: 8, vitaminC: 53, vitaminD: 0, vitaminB12: 0 }, approx: true },
+  { id: 'lime', name: 'Lime, without peel', category: 'fruit', unit: 'weight', base: 'g', per100: { cal: 30, protein: 0.7, carb: 10.5, fat: 0.2, fiber: 2.8, sodium: 2, potassium: 102, calcium: 33, iron: 0.6, magnesium: 6, vitaminC: 29, vitaminD: 0, vitaminB12: 0 }, approx: true },
   // ---- Fats & Oils (incl. nuts, seeds, avocado) ----
   { id: 'olive_oil', name: 'Extra virgin olive oil', category: 'fats', unit: 'volume', base: 'mL', density: 0.913, per100: { cal: 884, protein: 0, carb: 0, fat: 100, fiber: 0, sodium: 2, potassium: 1, calcium: 1, iron: 0.6, magnesium: 0, vitaminC: 0, vitaminD: 0, vitaminB12: 0 }, approx: true },
+  // Recipe staples, 2026-09-28. Butter is a WEIGHT food, not volume: a stick is defined as 113 g
+  // (1/4 lb by the wrapper), and offering cups instead of grams would lose the one exact number
+  // butter has. It is therefore the headline beneficiary of "let a weight food be measured by
+  // volume" in ROADMAP Ideas -- "2 tbsp butter" still needs a unit fix by hand today.
+  //
+  // Salted and unsalted are two records because they differ by 632 mg of sodium per 100 g, which
+  // is most of a third of a day's allowance in a batch of cookies. Everything else is identical.
+  { id: 'butter', name: 'Butter, salted', category: 'fats', unit: 'weight', base: 'g', per100: { cal: 717, protein: 0.85, carb: 0.06, fat: 81, fiber: 0, sodium: 643, potassium: 24, calcium: 24, iron: 0.02, magnesium: 2, vitaminC: 0, vitaminD: 1.5, vitaminB12: 0.17 }, approx: true },
+  { id: 'butter_unsalted', name: 'Butter, unsalted', category: 'fats', unit: 'weight', base: 'g', per100: { cal: 717, protein: 0.85, carb: 0.06, fat: 81, fiber: 0, sodium: 11, potassium: 24, calcium: 24, iron: 0.02, magnesium: 2, vitaminC: 0, vitaminD: 1.5, vitaminB12: 0.17 }, approx: true },
   { id: 'avocado_oil', name: 'Avocado oil', category: 'fats', unit: 'volume', base: 'mL', density: 0.913, per100: { cal: 884, protein: 0, carb: 0, fat: 100, fiber: 0, sodium: 0, potassium: 0, calcium: 0, iron: 0, magnesium: 0, vitaminC: 0, vitaminD: 0, vitaminB12: 0 }, approx: true },
   { id: 'avocado', name: 'Avocado', category: 'fats', unit: 'weight', base: 'g', per100: { cal: 160, protein: 2, carb: 8.5, fat: 15, fiber: 6.7, sodium: 7, potassium: 485, calcium: 12, iron: 0.6, magnesium: 29, vitaminC: 10, vitaminD: 0, vitaminB12: 0 } },
   { id: 'walnuts', name: 'Walnuts', category: 'fats', unit: 'weight', base: 'g', per100: { cal: 654, protein: 15, carb: 14, fat: 65, fiber: 6.7, sodium: 2, potassium: 441, calcium: 98, iron: 2.9, magnesium: 158, vitaminC: 1.3, vitaminD: 0, vitaminB12: 0 } },
@@ -286,6 +334,15 @@ const FOOD_DB = [
   { id: 'mayonnaise', name: 'Mayonnaise', category: 'sauces', unit: 'weight', base: 'g', per100: { cal: 680, protein: 1, carb: 0.6, fat: 75, fiber: 0, sodium: 635, potassium: 20, calcium: 8, iron: 0.2, magnesium: 2, vitaminC: 0, vitaminD: 0.3, vitaminB12: 0.1 }, approx: true },
   { id: 'mayonnaise_light', name: 'Mayonnaise, light', category: 'sauces', unit: 'weight', base: 'g', per100: { cal: 232, protein: 0.6, carb: 8, fat: 22, fiber: 0, sodium: 700, potassium: 25, calcium: 5, iron: 0.1, magnesium: 2, vitaminC: 0, vitaminD: 0, vitaminB12: 0 }, approx: true },
   { id: 'bbq_sauce', name: 'BBQ sauce', category: 'sauces', unit: 'weight', base: 'g', per100: { cal: 172, protein: 0.9, carb: 40, fat: 0.6, fiber: 0.7, sodium: 690, potassium: 170, calcium: 18, iron: 0.6, magnesium: 12, vitaminC: 2, vitaminD: 0, vitaminB12: 0 }, approx: true },
+  // Recipe staple, 2026-09-28, and the one that earned its place by a side effect. Adding "Butter,
+  // salted" made a written line of "Salt" partial-match it -- foodMatchesQuery() is a plain
+  // substring test, so `salt` is inside `salted`. An exact name outranks a partial in
+  // matchIngredientName(), so the real fix is that salt IS a food, and it is one worth having: this
+  // app tracks sodium, a teaspoon is 2,300 mg of it, and until now that was invisible.
+  //
+  // A recipe's "salt to taste" has no amount, so it still lands in `noamount` and gets skipped --
+  // which is right. This is for the lines that DO say how much.
+  { id: 'salt', name: 'Salt', category: 'sauces', unit: 'weight', base: 'g', per100: { cal: 0, protein: 0, carb: 0, fat: 0, fiber: 0, sodium: 38758, potassium: 8, calcium: 24, iron: 0.33, magnesium: 1, vitaminC: 0, vitaminD: 0, vitaminB12: 0 }, approx: true },
   { id: 'soy_sauce', name: 'Soy sauce', category: 'sauces', unit: 'volume', base: 'mL', density: 1.07, per100: { cal: 53, protein: 8, carb: 4.9, fat: 0.1, fiber: 0.8, sodium: 5493, potassium: 362, calcium: 20, iron: 1.7, magnesium: 43, vitaminC: 0, vitaminD: 0, vitaminB12: 0 }, approx: true },
   { id: 'hot_sauce', name: 'Hot sauce (Louisiana-style)', category: 'sauces', unit: 'volume', base: 'mL', density: 1.01, per100: { cal: 12, protein: 0.5, carb: 1.5, fat: 0.7, fiber: 0.3, sodium: 1846, potassium: 190, calcium: 20, iron: 1.1, magnesium: 15, vitaminC: 5, vitaminD: 0, vitaminB12: 0 }, approx: true },
   { id: 'ranch_dressing', name: 'Ranch dressing', category: 'sauces', unit: 'weight', base: 'g', per100: { cal: 430, protein: 1, carb: 6, fat: 45, fiber: 0, sodium: 700, potassium: 60, calcium: 30, iron: 0.2, magnesium: 5, vitaminC: 0, vitaminD: 0, vitaminB12: 0.1 }, approx: true },
