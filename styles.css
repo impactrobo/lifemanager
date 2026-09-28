@@ -1901,6 +1901,12 @@ body.break-shake { animation: break-shake 0.52s cubic-bezier(.36,.07,.19,.97); }
   font-style: normal; font-family: var(--font-body, inherit);
   color: var(--text-faint); margin-left: 6px;
 }
+/* Undo/redo on the Convert review. Shown greyed rather than hidden when there is nothing to undo:
+   a control you only discover after making the mistake is one you learn about too late. */
+.convert-history { display: flex; gap: 8px; margin-top: 10px; }
+.convert-history .btn { flex: 1; font-variant-numeric: tabular-nums; }
+.convert-history .btn b { color: var(--accent); font-weight: 700; }
+.convert-history .btn[disabled] { opacity: .4; }
 .ing-audit-say { margin-top: 3px; color: var(--text-faint); }
 .ing-audit.is-short .ing-audit-say { color: var(--text-dim); }
 

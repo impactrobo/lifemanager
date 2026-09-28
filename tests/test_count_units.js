@@ -267,6 +267,79 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (!dropdown.includes('g')) throw new Error('...alongside the measured ones');
   console.log('11. the dropdown offers cloves as well as grams');
 
+  // ---- 12. A weight food measured by VOLUME ----
+  // The mirror of what a volume food has been able to do since 2026-09-24. foodBaseAmount() always
+  // knew the conversion; foodAcceptsUnit() was the gate refusing it, so "1 cup flour" had to be
+  // converted by hand every single time.
+  const scooped = await read(['1 cup flour', '2 tsp salt', '2 tbsp butter', '1/2 cup sugar',
+                              '1 cup rolled oats', '1 cup chicken breast']);
+  scooped.forEach(r => console.log(`12. ${r.line.padEnd(20)} ${r.g == null ? 'refused' : Math.round(r.g) + ' g'}`));
+  const sg = (l) => scooped.find(r => r.line === l).g;
+  if (Math.round(sg('1 cup flour')) !== 125) throw new Error(`a cup of flour is ~125 g, got ${sg('1 cup flour')}`);
+  if (Math.round(sg('2 tsp salt')) !== 12) throw new Error(`2 tsp salt is ~12 g, got ${sg('2 tsp salt')}`);
+  if (Math.round(sg('2 tbsp butter')) !== 28) throw new Error(`2 tbsp butter is ~28 g, got ${sg('2 tbsp butter')}`);
+  if (Math.round(sg('1/2 cup sugar')) !== 101) throw new Error(`half a cup of sugar is ~101 g, got ${sg('1/2 cup sugar')}`);
+  // A weight food with NO density still refuses volume — the density is what makes it possible,
+  // and inventing one for every food would be exactly the guesswork this avoids.
+  if (sg('1 cup chicken breast') != null) {
+    throw new Error('a food with no density must still refuse a volume unit — there is nothing to convert with');
+  }
+  console.log('12. volume measures convert on foods that declare a density, and only those');
+
+  // ...and it is marked approximate, because a cup is a scoop. Packed against spooned flour
+  // differs by about 20% — 25 g and 90 calories on one cup.
+  const approxness = await page.evaluate(() => ({
+    scoopedFlour: foodPortionIsApprox(foodById('flour_ap'), 'cup'),
+    weighedFlour: foodPortionIsApprox(foodById('flour_ap'), 'g'),
+    countedGarlic: foodPortionIsApprox(foodById('garlic'), 'clove'),
+    weighedChicken: foodPortionIsApprox(foodById('chicken_breast'), 'g'),
+    // The picker offers the volume units too, after the scale ones — in whichever system is on,
+    // which is why both are checked rather than assuming cups.
+    metric: (() => { MEAL_UNIT_SYSTEM = 'metric'; return {
+      flour: mealUnitOptions(foodById('flour_ap')).map(o => o.value),
+      chicken: mealUnitOptions(foodById('chicken_breast')).map(o => o.value),
+      flourDefault: defaultMealUnitFor(foodById('flour_ap')),
+    }; })(),
+    imperial: (() => { MEAL_UNIT_SYSTEM = 'imperial'; return {
+      flour: mealUnitOptions(foodById('flour_ap')).map(o => o.value),
+      flourDefault: defaultMealUnitFor(foodById('flour_ap')),
+    }; })(),
+    restored: (() => { MEAL_UNIT_SYSTEM = 'metric'; return MEAL_UNIT_SYSTEM; })(),
+  }));
+  console.log('12. approx:', JSON.stringify(approxness));
+  if (!approxness.scoopedFlour) throw new Error('a cup of flour is an estimate, not a measurement');
+  if (approxness.weighedFlour) throw new Error('...but 100 g of the same flour is exact');
+  if (approxness.weighedChicken) throw new Error('...and a food with no density is never approximate');
+  if (!approxness.metric.flour.includes('mL')) throw new Error('metric should offer mL for flour: ' + approxness.metric.flour);
+  if (!approxness.imperial.flour.includes('cup')) throw new Error('imperial should offer cups: ' + approxness.imperial.flour);
+  if (approxness.metric.chicken.includes('mL')) throw new Error('...and neither offers volume for a food with no density');
+  // Weighing stays the default in BOTH systems: the volume units are appended, never first.
+  if (approxness.metric.flourDefault !== 'g') throw new Error('grams stay the metric default, got ' + approxness.metric.flourDefault);
+  if (approxness.imperial.flourDefault !== 'oz') throw new Error('ounces stay the imperial default, got ' + approxness.imperial.flourDefault);
+  console.log('12. a scooped weight food is marked approximate; weighing stays the default');
+
+  // ...and it says so ON SCREEN, in its own words. A cup of flour is not the same KIND of estimate
+  // as a medium onion: one is a scoop of a known substance, the other a guess at which onion.
+  await page.evaluate(() => {
+    const e = Object.assign(blankEntry('recipe'), { id: 'rv', title: 'V',
+      fields: { ingredientText: '1 cup flour\n200 g flour' } });
+    STATE.entries = [e]; invalidateEntryIndex(); clearEntryDraft(); saveState();
+    switchTab('notes'); setNotesSubtab('view'); openEntry('rv'); setEntryMode('view');
+    openIngredientMatch('rv');
+    setIngRowFood(0, 'flour_ap');
+    setIngRowFood(1, 'flour_ap');
+  });
+  await settle(page);
+  const scoopUi = await page.evaluate(() => Array.from(document.querySelectorAll('.ing-estimate'))
+    .map(e => e.textContent.replace(/\s+/g, ' ').trim()));
+  console.log('12. on screen:', JSON.stringify(scoopUi));
+  if (scoopUi.length !== 1) throw new Error(`only the scooped line discloses anything — 200 g does not: got ${scoopUi.length}`);
+  if (!/1 cup → 125 g/.test(scoopUi[0])) throw new Error('the cup row must show what it weighs: ' + scoopUi[0]);
+  if (!/by volume/.test(scoopUi[0])) throw new Error('...and name WHY it is approximate: ' + scoopUi[0]);
+  // "1 cups" is not English — a real unit already reads correctly and must not be pluralised.
+  if (/cups/.test(scoopUi[0])) throw new Error('a measured unit does not get an S added: ' + scoopUi[0]);
+  console.log('12. a scooped row says "by volume", and a weighed one says nothing');
+
   if (errors.length) throw new Error(errors.join('\n'));
   console.log('test_count_units.js: PASS');
   await browser.close();

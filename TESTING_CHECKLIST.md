@@ -1011,4 +1011,19 @@ and run **MATCH** — the review sheet now shows what each line weighs *before* 
       by volume yet. That's the remaining gap, and it's on the list.
 - [ ] Any count word **missing**? The table is in `docs/COUNT_UNITS.md`; adding one is a one-line change.
 
+## Volume measures and Convert undo (2026-09-28)
+- [ ] **`1 cup flour`, `2 tsp salt`, `2 tbsp butter`** now convert on their own. Check a few against
+      the packet — a cup of flour should read ~125 g, 2 tsp salt ~12 g.
+- [ ] A scooped line says **"by volume — weigh it for an exact number"**. Packed vs spooned flour
+      differs by ~20%, so the number is real but not exact. Is that caveat pitched right?
+- [ ] **Weighing is still the default** — the volume units come after grams in the picker. Right way
+      round for you?
+- [ ] Try a volume unit on something with **no density** (chicken, rice): it should still refuse,
+      because there is nothing to convert with. Anything you'd want to scoop that currently can't be?
+- [ ] **Convert a messy note, move a few lines, then UNDO.** Does the depth counter help? Is the
+      button pair in the right place, under the review and above CONVERT?
+- [ ] Undo a couple, then make a **new** move — REDO should grey out. Standard editor behaviour, but
+      worth feeling once.
+- [ ] Change the **target type** mid-review: undo history clears, because it belonged to the old plan.
+
 ## Add future items below as new features ship

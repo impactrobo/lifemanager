@@ -277,7 +277,14 @@ function foodAcceptsUnit(food, unit) {
   // every kind, since a weight food can have cloves and a count food can have sizes.
   if (foodPortionGrams(food, unit) != null) return true;
   if (food.unit === 'count') return unit === 'item';
-  if (food.unit === 'weight') return Object.prototype.hasOwnProperty.call(WEIGHT_TO_G, unit);
+  if (food.unit === 'weight') {
+    if (Object.prototype.hasOwnProperty.call(WEIGHT_TO_G, unit)) return true;
+    // ...and by VOLUME, if it declares a density (2026-09-28). The mirror of what a volume food has
+    // been able to do since 2026-09-24, and the reason "1 cup flour" had to be converted by hand
+    // every single time. foodBaseAmount() has always known how to do this conversion -- this gate
+    // was the only thing refusing it.
+    return Object.prototype.hasOwnProperty.call(VOLUME_TO_ML, unit) && !!food.density;
+  }
   return Object.prototype.hasOwnProperty.call(VOLUME_TO_ML, unit);
 }
 // One parsed line plus its match, resolved into the row the review screen shows. Status order

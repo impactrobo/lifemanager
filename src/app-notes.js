@@ -728,12 +728,17 @@ function renderIngRowEstimate(r) {
   if (grams == null) return '';
   const isSize = FOOD_SIZE_ORDER.includes(r.unit);
   const bare = !r.count && !r.size && isSize;
+  // A weight food measured by volume: the density converts it, but a cup is still a scoop.
+  const scooped = r.food.unit === 'weight' && !foodPortionGrams(r.food, r.unit);
   // A count word pluralises ("3 cloves"); a size is an adjective and does not ("2 medium", never
-  // "2 mediums").
-  const label = escapeHtml(r.unit) + (!isSize && r.qty !== 1 ? 's' : '');
+  // "2 mediums"). A real unit already reads correctly as written.
+  const label = escapeHtml(r.unit) + (!isSize && !scooped && r.qty !== 1 ? 's' : '');
+  const why = bare ? 'assumed ' + escapeHtml(r.unit) + ' — change it if not'
+            : scooped ? 'by volume — weigh it for an exact number'
+            : 'approximate';
   return `<div class="ing-estimate">
     ${r.qty} ${label} &rarr; <b>${Math.round(grams)} ${escapeHtml(r.food.base)}</b>
-    <i>${bare ? 'assumed ' + escapeHtml(r.unit) + ' — change it if not' : 'approximate'}</i>
+    <i>${why}</i>
   </div>`;
 }
 function renderIngRow(r, i) {
@@ -775,7 +780,7 @@ function openConvert(id) {
   if (!e) return;
   commitEntryDraft();
   saveState();
-  VIEW.convert = { id, step: 'type', toType: null, plan: null, moving: null };
+  VIEW.convert = { id, step: 'type', toType: null, plan: null, moving: null, history: [], future: [] };
   render();
 }
 function closeConvert() { VIEW.convert = null; render(); }
@@ -786,6 +791,10 @@ function chooseConvertType(toType) {
   c.toType = toType;
   c.plan = planEntryConvert(e, toType);
   c.moving = null;
+  // A different type is a different plan, so the moves made against the old one mean nothing. Undo
+  // has to stop at the plan it belongs to rather than restoring lines into fields that may not
+  // exist on this type.
+  c.history = []; c.future = [];
   // An empty note has nothing to review: the screen would be a column of empty headings and a
   // CONVERT button, asking you to confirm a placement of nothing. Convert on the spot and let the
   // toast's UNDO be the safety net -- which is exactly what it is for, and what it already does
@@ -808,9 +817,61 @@ function startConvertMove(field, index) {
   render();
 }
 function cancelConvertMove() { if (VIEW.convert) { VIEW.convert.moving = null; render(); } }
+
+// ---- Undo / redo inside the review (2026-09-28) ----
+//
+// Asked for on the field log: "do we need an UNDO/REDO button set in the convert screen if someone
+// messes up and forgets where they are in the process?" Yes -- a review screen whose whole purpose
+// is to let you rearrange things before committing is the one place a mis-tap costs you your place.
+// The toast's UNDO only exists AFTER converting, and undoing the whole thing to fix one line is a
+// blunt instrument.
+//
+// The plan is plain strings, so a JSON round-trip is a sound deep copy and needs no structuredClone.
+// Capped because a long enough session should not grow this without bound; 40 is far past any real
+// number of moves on a single note.
+const CONVERT_HISTORY_MAX = 40;
+function clonePlan(plan) { return JSON.parse(JSON.stringify(plan)); }
+function pushConvertHistory(c) {
+  c.history = (c.history || []).concat([clonePlan(c.plan)]).slice(-CONVERT_HISTORY_MAX);
+  // A new move abandons whatever was undone, which is what every editor does: the future you
+  // stepped back from is not the future you are in any more.
+  c.future = [];
+}
+function undoConvertMove() {
+  const c = VIEW.convert;
+  if (!c || !c.history || !c.history.length) return;
+  c.future = (c.future || []).concat([clonePlan(c.plan)]);
+  c.plan = c.history.pop();
+  c.moving = null;
+  render();
+}
+function redoConvertMove() {
+  const c = VIEW.convert;
+  if (!c || !c.future || !c.future.length) return;
+  c.history = (c.history || []).concat([clonePlan(c.plan)]);
+  c.plan = c.future.pop();
+  c.moving = null;
+  render();
+}
+function renderConvertHistoryControls() {
+  const c = VIEW.convert;
+  if (!c) return '';
+  const undo = c.history && c.history.length;
+  const redo = c.future && c.future.length;
+  // Shown even when both are empty, greyed: a control that appears only once you have made a
+  // mistake is one you do not know exists until you need it, which is the wrong moment to learn.
+  return `<div class="convert-history">
+    <button class="btn btn-sm btn-ghost" ${undo ? '' : 'disabled'} onclick="undoConvertMove()"
+            title="Undo the last move">&#8630; UNDO${undo ? ` <b>${undo}</b>` : ''}</button>
+    <button class="btn btn-sm btn-ghost" ${redo ? '' : 'disabled'} onclick="redoConvertMove()"
+            title="Redo">&#8631; REDO${redo ? ` <b>${redo}</b>` : ''}</button>
+  </div>`;
+}
+
 function finishConvertMove(toField) {
   const c = VIEW.convert;
   if (!c || !c.moving) return;
+  pushConvertHistory(c);
   moveConvertLine(c.plan, c.moving.field, c.moving.index, toField);
   c.moving = null;
   render();
@@ -887,6 +948,7 @@ function renderConvertReviewStep(e) {
     </div>
     ${plan.unsorted.length ? `<div style="font-size:11px; color:var(--warn); margin-top:8px;">
       Unsorted text is kept and shown on the entry — it is never dropped.</div>` : ''}
+    ${empty ? '' : renderConvertHistoryControls()}
     <div class="row" style="gap:8px; margin-top:12px;">
       <button class="btn btn-sm" onclick="backToConvertType()">BACK</button>
       <button class="btn btn-sm btn-primary" style="flex:1;" onclick="applyConvert()">CONVERT</button>

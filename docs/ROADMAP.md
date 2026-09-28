@@ -402,6 +402,33 @@ Newest first. Keep this reasonably current so a fresh session can see what alrea
 without re-reading the whole diff history. Roughly grouped: this project spent early Sept 2026
 on an architecture split + a large wave of Maximalist aesthetics.
 
+- **Weight foods by volume, and undo in Convert (2026-09-28).** Two backlog items, cleared together.
+  13/13 mutations caught.
+  - **`1 cup flour` works.** A weight food that declares a `density` can now be measured by volume —
+    the mirror of what a volume food has been able to do since 2026-09-24. `foodBaseAmount()` always
+    knew the conversion; `foodAcceptsUnit()` was the only thing refusing it. 19 densities added, for
+    the foods people genuinely scoop: flour, sugar, salt, honey, oats, butter, the thick dairy, the
+    condiments. A weight food with **no** density still refuses volume — a density is what makes the
+    conversion possible, and inventing one per food is the guesswork this avoids.
+  - **Weighing stays the default** in both unit systems: the volume units are appended to the picker,
+    never first. And a scooped amount is marked approximate with its own words — *"1 cup → 125 g · by
+    volume — weigh it for an exact number"* — because packed against spooned flour differs by about
+    20%, which is 25 g and 90 calories on one cup. A cup of flour and a medium onion are both
+    estimates, but not the same kind of estimate, and the screen says which.
+  - **UNDO / REDO on the Convert review.** From the field log: *"do we need an UNDO/REDO button set in
+    the convert screen if someone messes up and forgets where they are in the process?"* The review
+    exists to let you rearrange lines before committing, so it is the one screen where a mis-tap
+    costs you your place — and the toast's UNDO only appears afterwards, undoing the whole conversion
+    to fix one line.
+    - The history holds **deep copies**. A stack of references to the live plan would "undo" to
+      whatever the present is, which looks exactly like undo being broken.
+    - A new move **abandons the redo stack**, as every editor does: the future you stepped back from
+      is not the future you are in.
+    - Changing the target type **clears both stacks** — a plan for a Recipe cannot be undone into a
+      Travel note's fields.
+    - The buttons are shown **greyed rather than hidden** when there is nothing to undo. A control you
+      only discover after making the mistake is one you learn about too late. UNDO carries its depth,
+      so you can see how far back it reaches without pressing it to find out.
 - **Count units and size tiers (2026-09-28).** *"There are some conversions for 'stick of butter' and
   'small / medium / large onion' for example that may allow for conversion to weight based on an
   ingredient-dependent input."* Built to [`docs/COUNT_UNITS.md`](COUNT_UNITS.md), which is now the
