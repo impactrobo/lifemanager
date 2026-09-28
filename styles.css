@@ -1901,6 +1901,36 @@ body.break-shake { animation: break-shake 0.52s cubic-bezier(.36,.07,.19,.97); }
   font-style: normal; font-family: var(--font-body, inherit);
   color: var(--text-faint); margin-left: 6px;
 }
+/* ---- Recipe variants ----
+   Three columns so the per-serving figures line up down the page: the comparison IS the feature,
+   and a comparison you have to read across to make is not one. */
+.variant-list { border: 1px solid var(--border-soft); border-radius: var(--radius); overflow: hidden; }
+.variant-row {
+  display: grid; grid-template-columns: 1fr auto 3.2rem; gap: 10px; align-items: baseline;
+  padding: 8px 10px; border-bottom: 1px solid var(--border-soft); background: var(--surface2);
+}
+.variant-row:last-child { border-bottom: 0; }
+.variant-row.is-self { background: var(--surface); }
+.variant-name {
+  background: none; border: 0; padding: 0; text-align: left; font: inherit; cursor: pointer;
+  font-size: 12.5px; font-weight: 700; color: var(--accent);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.variant-row.is-self .variant-name { color: var(--text); cursor: default; }
+.variant-name i { font-style: normal; font-size: 10px; font-weight: 400; color: var(--text-faint); }
+.variant-cal { font-size: 12px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.variant-cal i { font-style: normal; font-size: 9px; color: var(--text-faint); }
+/* The difference against the recipe you are reading — the number you actually came for. */
+.variant-diff {
+  font-size: 12px; font-weight: 700; text-align: right; color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.variant-note { font-size: 10.5px; color: var(--text-faint); margin-top: 6px; }
+.variant-hub {
+  background: none; border: 0; padding: 0; font: inherit; font-size: 10.5px;
+  color: var(--accent); cursor: pointer; text-decoration: underline; margin-left: 4px;
+}
+
 /* Undo/redo on the Convert review. Shown greyed rather than hidden when there is nothing to undo:
    a control you only discover after making the mistake is one you learn about too late. */
 .convert-history { display: flex; gap: 8px; margin-top: 10px; }

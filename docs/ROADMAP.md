@@ -113,33 +113,7 @@ before starting any of these.
     out and returns **0** when there isn't one — so "a dozen" divides by zero. The per-serving row
     has to be absent rather than wrong in that case, exactly as `perServingCal` already handles it.
     Worth deciding whether "4-6" quietly meaning 4 is good enough or wants a range.
-- **Recipes: variants, so a recipe can become its own hub — raised 2026-09-20, noted only.**
-  *"A way to instantly generate another recipe off of a recipe, as a different 'page' within the
-  note (sort of like every recipe can become a hub) but it starts as a duplicate of the original.
-  This allows the user to adjust timings/ingredients/ratios and annotate to eventually make their
-  perfect dish."*
-  - Most of the machinery is already here. Hubs have ordering, per-member context lines and nesting
-    (`addToHub`, `moveHubItem`, `hubsContaining`), and Convert already turns a recipe into a hub and
-    back. What's missing is **duplicate-as-a-new-entry**, and the presentation.
-  - **The real fork is what a variant IS**, and the phrasing straddles it:
-    - *Sibling entries gathered by a hub.* Each variant is a real recipe, so it gets ingredient
-      matching, its own macros, its own ADD TO MEALS, and shows up in search and links for free.
-      The cost is that the Notes list fills with near-identical cards.
-    - *Pages inside one entry.* The list stays clean, but every recipe feature — matching, meals,
-      macros, linking, convert — would have to learn "which page", which is a large change to
-      the entry model for a presentation win.
-    - Recommendation if it gets built: **siblings plus a hub**, with the Notes list collapsing
-      entries that are members of a recipe-hub. That buys the "pages" feel without teaching the
-      whole app about pages.
-  - Cheap, because of how matching already works: `ingredientMap` is global and keyed by ingredient
-    NAME, so a duplicate needs no re-matching prompts even before you copy `fields.ingredients`
-    across wholesale.
-  - **The thing to get right is Meals.** Three variants imported to Meals all called "Chicken Curry"
-    makes the diet log useless — a variant needs a distinguishing name at import, or the import
-    chip needs to say which variant it came from.
-  - The payoff worth designing toward is **comparison**: two variants side by side with their macro
-    totals and your annotations. That is also the argument for variants being real entries with
-    real totals rather than free text.
+- **~~Recipes: variants~~ — SHIPPED 2026-09-28, see Recently shipped.**
 - **NetNavi / PET companions — discussed 2026-09-15, nothing built.** (The weekly review it would speak on shipped 2026-09-16; its templates are the seam.) The app is already called
   LIFEMan.EXE, which is a Mega Man Battle Network reference, and that is where the idea came from.
   - **The source material is a real spec, not a sketch.** A "PET Device — Transfer Package" artifact
@@ -402,6 +376,36 @@ Newest first. Keep this reasonably current so a fresh session can see what alrea
 without re-reading the whole diff history. Roughly grouped: this project spent early Sept 2026
 on an architecture split + a large wave of Maximalist aesthetics.
 
+- **Recipe variants (2026-09-28).** *"A way to instantly generate another recipe off of a recipe, as
+  a different 'page' within the note (sort of like every recipe can become a hub) but it starts as a
+  duplicate of the original. This allows the user to adjust timings/ingredients/ratios and annotate
+  to eventually make their perfect dish."* 13/13 mutations caught.
+  - **Siblings gathered by a hub, not pages inside one entry** — the fork this Ideas entry described,
+    resolved the way it recommended. A variant made of real entries gets ingredient matching, its own
+    macros, its own ADD TO MEALS, search and links *for free*; "pages" would have meant teaching every
+    one of those features which page it was looking at.
+  - **A family IS a hub**, because a hub already is one: ordering, a note per member, backlinks that
+    clean themselves up. Inventing a third way for entries to relate to each other — alongside links
+    and hubs — to say "these are the same dish" would have been the wrong kind of new. The hub is
+    created on the **first duplicate**, not when the recipe is written: a recipe with no variants is
+    not a family, and a hub with one member is noise in the list.
+  - **It inherits the recipe, not the record of having cooked it.** Rating, tasting notes and photos
+    stay behind — a copy claiming four stars for a dish nobody has made is worse than no copy. The
+    copied set is **derived** from the type's own field list minus that exclusion, so the two can't
+    drift: a new recipe field is inherited by default, and a new field that records having cooked it
+    is excluded in one place. (Written as two hand-maintained lists first; mutation testing showed
+    the second was doing nothing, because they happened not to overlap.)
+  - Matched ingredient rows are **copied with fresh ids**. A shared array would have made editing one
+    variant's amounts edit the other's — the exact bug the whole "one name, one food" arc was about.
+  - **Distinct names, enforced.** The name is what a Meal made from it will be called, and three
+    meals called "Chicken Curry" is the trap this Ideas entry flagged as the thing to get right.
+  - **The payoff is comparison, and it is per SERVING.** Each sibling shows its own per-serving
+    calories and the difference against the recipe you are reading (`−104`, `+165`). Per batch would
+    have said a halved recipe was a lighter dish.
+  - **Known cost, unresolved:** every variant is a real entry, so it gets its own card in the Notes
+    list. The Ideas entry predicted this and suggested the list collapse recipe-hub members. Left
+    alone deliberately — with two or three variants it is tolerable, and it is worth seeing on a real
+    device before building list machinery for it.
 - **Weight foods by volume, and undo in Convert (2026-09-28).** Two backlog items, cleared together.
   13/13 mutations caught.
   - **`1 cup flour` works.** A weight food that declares a `density` can now be measured by volume —

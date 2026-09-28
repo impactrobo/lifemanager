@@ -1880,6 +1880,7 @@ function renderRecipeEditor(e) {
       <button class="btn btn-ghost btn-sm" style="margin-bottom:10px;" onclick="openRecipeCustomFood()">+ NEW INGREDIENT</button>
       <div id="entryIngredientRows"></div>
     </div>
+    ${renderRecipeVariantsBlock(e)}
     ${renderRecipeMealsBlock(e)}`;
 }
 function setRecipeField(key, val) {
@@ -2126,6 +2127,56 @@ function recipeHasStaleMeal(e) { return mealsFromRecipe(e).some(m => recipeMealS
 // only thing available to do.
 //
 // The card keeps ADD for reach; the detail goes here, where there is room for a row of chips.
+// ---- Variants ----
+// "A way to instantly generate another recipe off of a recipe... but it starts as a duplicate of
+// the original. This allows the user to adjust timings/ingredients/ratios and annotate to
+// eventually make their perfect dish."
+//
+// The payoff is COMPARISON, which is also the argument for variants being real entries with real
+// totals rather than free text: each sibling can show what it actually works out to, and you can
+// see the difference your change made without doing arithmetic.
+function makeRecipeVariant(entryId) {
+  const v = createRecipeVariant(entryId);
+  if (!v) return;
+  saveState();
+  showToast('Variant created — adjust it from here');
+  openEntry(v.id);   // renders; you land IN the copy, which is where the work happens
+}
+function renderRecipeVariantsBlock(e) {
+  const siblings = recipeVariants(e);
+  const hub = variantHubOf(e);
+  const canCopy = recipeIngredients(e).length || entryFieldValue(e, 'ingredientText').trim();
+  if (!siblings.length && !canCopy) return '';
+  const mine = recipeTotals(e);
+  const row = (entry, isSelf) => {
+    const t = recipeTotals(entry);
+    // Compared PER SERVING, not per batch: a variant that halves the recipe is not a lighter dish,
+    // and comparing totals would say it was.
+    const diff = (mine.perServingCal && t.perServingCal)
+      ? Math.round(t.perServingCal - mine.perServingCal) : null;
+    return `<div class="variant-row${isSelf ? ' is-self' : ''}">
+      <button class="variant-name" ${isSelf ? 'disabled' : `onclick="openEntry('${entry.id}')"`}>
+        ${escapeHtml(entryTitleOf(entry))}${isSelf ? ' <i>this one</i>' : ''}</button>
+      <span class="variant-cal mono">${t.perServingCal ? Math.round(t.perServingCal) + ' cal' : '—'}
+        ${t.perServingCal ? '<i>/serving</i>' : ''}</span>
+      <span class="variant-diff mono">${isSelf || diff == null ? ''
+        : diff === 0 ? 'same' : (diff > 0 ? '+' : '&minus;') + Math.abs(diff)}</span>
+    </div>`;
+  };
+  return `
+    <div class="subtle-label" style="margin:16px 0 8px;">VARIANTS</div>
+    ${siblings.length ? `<div class="variant-list">
+        ${row(e, true)}
+        ${siblings.map(s => row(s, false)).join('')}
+      </div>
+      <div class="variant-note">Per serving, against this one.
+        ${hub ? `<button class="variant-hub" onclick="openEntry('${hub.id}')">Open the family</button>` : ''}</div>`
+      : `<div class="recipe-meals-empty">Make a copy to try a change &mdash; different ratios, a
+           different timing &mdash; without losing the version that already works.</div>`}
+    <button class="btn btn-sm btn-block" style="margin-top:8px;" onclick="makeRecipeVariant('${e.id}')">
+      + NEW VARIANT FROM THIS</button>`;
+}
+
 function renderRecipeMealsBlock(e) {
   const meals = mealsFromRecipe(e);
   if (!meals.length && !recipeIngredients(e).length) return '';

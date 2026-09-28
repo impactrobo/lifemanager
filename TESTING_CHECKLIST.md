@@ -1026,4 +1026,21 @@ and run **MATCH** — the review sheet now shows what each line weighs *before* 
       worth feeling once.
 - [ ] Change the **target type** mid-review: undo history clears, because it belonged to the old plan.
 
+## Recipe variants (2026-09-28)
+The one you asked for on the 20th: *"every recipe can become a hub… starts as a duplicate… adjust
+timings/ingredients/ratios and annotate to eventually make your perfect dish."*
+- [ ] Open a recipe → **VARIANTS** → **+ NEW VARIANT FROM THIS**. You land in the copy, named
+      "(2)". Change an amount, then go back to the original.
+- [ ] The **comparison table** shows each version's calories *per serving* and the difference against
+      the one you're reading. Is per-serving the right basis, or would you rather see per batch?
+- [ ] A variant does **not** inherit the rating, tasting notes or photos — it hasn't been made yet.
+      Right call, or would you rather start from the parent's rating?
+- [ ] Editing a variant's ingredients must **not** change the original. Worth checking directly.
+- [ ] A **family hub** appears the first time you duplicate ("<Recipe> — variants"), holding all of
+      them. Make a variant *of a variant* — it should join the same family, not start a new one.
+- [ ] **ADD TO MEALS** from two different variants: the meals should be distinctly named, which is
+      what stops three meals called "Chicken Curry".
+- [ ] **The known cost:** every variant is a real note, so it gets its own card in VIEW ALL. With a
+      few variants, is that clutter? If so I can collapse family members in the list.
+
 ## Add future items below as new features ship

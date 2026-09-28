@@ -734,6 +734,107 @@ function hubsContaining(e) {
   return entryBacklinks(e).filter(o => o.type === 'hub' && hubHasMember(o, e.id));
 }
 
+// ---- Recipe variants (2026-09-28) ----
+//
+// Asked for on 2026-09-20: "a way to instantly generate another recipe off of a recipe, as a
+// different 'page' within the note (sort of like every recipe can become a hub) but it starts as a
+// duplicate of the original. This allows the user to adjust timings/ingredients/ratios and annotate
+// to eventually make their perfect dish."
+//
+// Built as SIBLINGS GATHERED BY A HUB rather than pages inside one entry. The fork and the reasoning
+// are in ROADMAP's Ideas entry; the short version is that a variant made of real entries gets
+// ingredient matching, its own macros, its own ADD TO MEALS, search and links for free, where
+// "pages" would mean teaching every one of those features which page it is looking at.
+//
+// A variant family IS a hub, because a hub already is one: ordering, a note per member, backlinks
+// that clean themselves up. Inventing a third way for entries to relate to each other, alongside
+// links and hubs, to express "these are the same dish" would have been the wrong kind of new.
+const VARIANT_HUB_SUFFIX = ' — variants';
+
+// The fields a variant does NOT inherit: a rating and tasting notes are a record of having MADE the
+// thing, and the variant has not been made yet. Copying them would have the new entry claim four
+// stars for a dish nobody has cooked. (Photos are handled the same way, on the entry rather than in
+// its fields.)
+const VARIANT_FRESH_FIELDS = ['rating', 'tastingNotes'];
+// ...and everything else comes across. DERIVED from the type's own field list rather than written
+// out beside it, so the two can't drift: a new recipe field is inherited by default, which is right
+// for anything describing how to cook the dish, and a new field that records having cooked it is
+// excluded by adding it to the list above and nowhere else.
+//
+// `ingredients` and `ingredientsSkipped` are appended because they live in `fields` without being
+// template fields -- they are the matcher's output, not something the editor shows a box for.
+function variantCopiedFields() {
+  return entryTypeMeta('recipe').fields
+    .filter(f => !VARIANT_FRESH_FIELDS.includes(f))
+    .concat(['ingredients', 'ingredientsSkipped']);
+}
+
+// The hub gathering this recipe's family, if there is one. A recipe is in at most one variant
+// family: the first hub found that holds it and is named for variants.
+function variantHubOf(e) {
+  return hubsContaining(e).find(h => String(h.title || '').endsWith(VARIANT_HUB_SUFFIX)) || null;
+}
+// The other recipes in this one's family, in hub order, excluding itself.
+function recipeVariants(e) {
+  const hub = variantHubOf(e);
+  if (!hub) return [];
+  return hubMembers(hub).map(m => m.entry).filter(x => x.id !== e.id && isRecipeEntry(x));
+}
+// "Curry" -> "Curry (2)" -> "Curry (3)", skipping names already taken in the family. The same
+// shape as suggestDistinctFoodName(): a variant you cannot tell from its parent is the bug, not
+// the feature -- and the name is what a Meal made from it will be called.
+function nextVariantTitle(base, taken) {
+  const root = String(base || 'Recipe').replace(/\s*\(\d+\)\s*$/, '').trim() || 'Recipe';
+  const used = new Set(taken.map(t => String(t || '').trim().toLowerCase()));
+  for (let n = 2; n < 100; n++) {
+    const candidate = `${root} (${n})`;
+    if (!used.has(candidate.toLowerCase())) return candidate;
+  }
+  return root + ' ' + uid().slice(0, 4);
+}
+
+// Duplicates a recipe into a new sibling and makes sure both are in one family hub.
+// Returns the new entry, or null if the source isn't a recipe.
+function createRecipeVariant(entryId) {
+  const src = liveEntryById(entryId);
+  if (!src || !isRecipeEntry(src)) return null;
+
+  let hub = variantHubOf(src);
+  const family = hub ? hubMembers(hub).map(m => m.entry) : [src];
+  const variant = Object.assign(blankEntry('recipe'), {
+    title: nextVariantTitle(entryTitleOf(src), family.map(entryTitleOf)),
+    body: src.body || '',
+    tags: (src.tags || []).slice(),
+  });
+  variantCopiedFields().forEach(k => {
+    const v = src.fields ? src.fields[k] : undefined;
+    if (v == null) return;
+    // Matched ingredients are objects with their own ids; a shared reference would make editing
+    // one variant's amounts edit the other's.
+    variant.fields[k] = Array.isArray(v)
+      ? v.map(it => Object.assign({}, it, { id: uid() }))
+      : v;
+  });
+  allEntries().push(variant);
+  invalidateEntryIndex();
+
+  // The family hub is created on the FIRST duplicate, not when the recipe is written: a recipe with
+  // no variants is not a family, and a hub with one member is noise in the list.
+  if (!hub) {
+    hub = Object.assign(blankEntry('hub'), {
+      title: String(entryTitleOf(src) || 'Recipe').replace(/\s*\(\d+\)\s*$/, '').trim() + VARIANT_HUB_SUFFIX,
+      body: 'Versions of the same dish, kept side by side.',
+      tags: (src.tags || []).slice(),
+    });
+    allEntries().push(hub);
+    invalidateEntryIndex();
+    addToHub(hub.id, src.id);
+  }
+  addToHub(hub.id, variant.id);
+  touchEntry(variant);
+  return variant;
+}
+
 // ---- Sentences ----
 // A backlink is far more useful with the sentence it sits in than as a bare title: "why does this
 // link here" is the question being answered, and the title alone never answers it.
