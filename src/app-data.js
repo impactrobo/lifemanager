@@ -290,6 +290,11 @@ const FOOD_DB = [
   { id: 'scallion', name: 'Scallion (spring onion), raw', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 32, protein: 1.8, carb: 7.3, fat: 0.2, fiber: 2.6, sodium: 16, potassium: 276, calcium: 72, iron: 1.5, magnesium: 20, vitaminC: 18.8, vitaminD: 0, vitaminB12: 0 }, approx: true },
   { id: 'ginger_fresh', name: 'Ginger, fresh', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 80, protein: 1.8, carb: 18, fat: 0.75, fiber: 2, sodium: 13, potassium: 415, calcium: 16, iron: 0.6, magnesium: 43, vitaminC: 5, vitaminD: 0, vitaminB12: 0 }, approx: true },
   { id: 'tomatoes_canned', name: 'Tomatoes, canned, diced', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 32, protein: 1.6, carb: 7, fat: 0.3, fiber: 1.9, sodium: 186, potassium: 293, calcium: 34, iron: 0.9, magnesium: 14, vitaminC: 9.2, vitaminD: 0, vitaminB12: 0 }, approx: true },
+  // Asked for by name, 2026-09-28 — fërgesë. A GREEN bell pepper is not a red one at a different
+  // stage of the picker's list: unripened, it is about a third fewer calories and roughly 60% of
+  // the vitamin C. Worth its own record for a dish built on them.
+  { id: 'green_bell_pepper', name: 'Green bell pepper, raw', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 20, protein: 0.86, carb: 4.6, fat: 0.17, fiber: 1.7, sodium: 3, potassium: 175, calcium: 10, iron: 0.34, magnesium: 10, vitaminC: 80.4, vitaminD: 0, vitaminB12: 0 }, approx: true },
+  { id: 'chili_pepper', name: 'Chili pepper, fresh', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 40, protein: 2, carb: 9.5, fat: 0.2, fiber: 1.5, sodium: 7, potassium: 340, calcium: 18, iron: 1.2, magnesium: 25, vitaminC: 242, vitaminD: 0, vitaminB12: 0 }, approx: true },
   // ---- Fruit (fruit and fruit juices) ----
   { id: 'orange', name: 'Orange', category: 'fruit', unit: 'weight', base: 'g', per100: { cal: 47, protein: 0.9, carb: 12, fat: 0.1, fiber: 2.4, sodium: 0, potassium: 181, calcium: 40, iron: 0.1, magnesium: 10, vitaminC: 53, vitaminD: 0, vitaminB12: 0 } },
   { id: 'strawberries', name: 'Strawberries', category: 'fruit', unit: 'weight', base: 'g', per100: { cal: 32, protein: 0.7, carb: 7.7, fat: 0.3, fiber: 2, sodium: 1, potassium: 153, calcium: 16, iron: 0.4, magnesium: 13, vitaminC: 59, vitaminD: 0, vitaminB12: 0 } },

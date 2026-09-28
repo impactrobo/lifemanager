@@ -43,7 +43,7 @@ const NUTRIENT_KEYS = ['cal', 'protein', 'carb', 'fat', 'fiber', 'sodium', 'pota
       // whatever went missing.
       'butter', 'butter_unsalted', 'flour_ap', 'bread_white', 'tortilla_flour', 'sugar_white',
       'honey', 'shallot', 'scallion', 'ginger_fresh', 'tomatoes_canned', 'apple', 'lemon', 'lime', 'salt',
-      'pork_sausage'];
+      'pork_sausage', 'green_bell_pepper', 'chili_pepper'];
     return {
       total: FOOD_DB.length, missing, dupeIds, dupeNames,
       absent: need.filter(id => !FOOD_DB.find(f => f.id === id)),

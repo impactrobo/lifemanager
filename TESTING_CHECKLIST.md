@@ -981,5 +981,11 @@ same basis as the rest of the table — **check anything you use often against t
       unit, because a weight food can't be measured by volume yet.
 - [ ] Anything you cook regularly that's **still missing**? Tell me and I'll add it — this batch was
       picked on general recipe frequency, not on what's actually in your kitchen.
+- [ ] **Fërgesë check (added on request).** Green bell pepper and fresh chili pepper are in now, so
+      the whole dish matches: peppers, tomato, garlic, cottage cheese, butter, salt — and liver too
+      if you ever make it *me mëlçi*. Build it as a recipe and see whether the macros look right.
+      **Green** bell pepper is its own food, not the red one relabelled: about a third fewer calories
+      and roughly 60% of the vitamin C.
+- [ ] Would **gjizë** be useful as its own food, or does cottage cheese cover it for you?
 
 ## Add future items below as new features ship
