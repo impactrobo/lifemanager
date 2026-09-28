@@ -246,11 +246,16 @@ function renderCategoryFoodList(catId, addFn) {
 // "chicken breast" both land, and "rolled oats" finds "Oats, rolled, dry" which a strict substring
 // match missed entirely. No fuzzy/edit-distance matching on purpose: it surfaces confidently wrong
 // suggestions, and "+ NEW INGREDIENT" is the honest escape hatch for anything genuinely absent.
+// A written word matches in the plural it was typed in OR its singular (2026-09-28), because
+// recipes say "2 onions" and this table says "Onion, raw". Before that, the canonical example of
+// the whole count-units feature failed on an S: `name.includes('onions')` is false for every food
+// in the database. See singulariseWord() in app-recipe-match.js -- deliberately crude, and it only
+// ever WIDENS matching, which the matcher then asks about rather than assuming.
 function foodMatchesQuery(food, q) {
   const words = q.split(/\s+/).filter(Boolean);
   if (!words.length) return true;
   const name = food.name.toLowerCase();
-  return words.every(w => name.includes(w));
+  return words.every(w => name.includes(w) || name.includes(singulariseWord(w)));
 }
 function renderFoodSearchResults(query, addFn) {
   addFn = addFn || 'addFoodToMeal';

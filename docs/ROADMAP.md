@@ -402,6 +402,42 @@ Newest first. Keep this reasonably current so a fresh session can see what alrea
 without re-reading the whole diff history. Roughly grouped: this project spent early Sept 2026
 on an architecture split + a large wave of Maximalist aesthetics.
 
+- **Count units and size tiers (2026-09-28).** *"There are some conversions for 'stick of butter' and
+  'small / medium / large onion' for example that may allow for conversion to weight based on an
+  ingredient-dependent input."* Built to [`docs/COUNT_UNITS.md`](COUNT_UNITS.md), which is now the
+  record rather than the plan. 20/21 mutations caught, the survivor equivalent.
+  - **Two mechanisms, deliberately separate.** `counts` is a word that means one fixed thing — a
+    clove is 3 g of garlic, a stick 113 g of butter. `sizes` is small/medium/large for a bare count.
+    They are separate because a size *modifies* a count and a count word *replaces* it, and because
+    the ratios are per-ingredient: **a large onion is 2.1× a small one and a large egg only 1.3×**, so
+    one global multiplier would have been wrong for both. The test asserts that gap directly.
+  - **Resolved by the same `foodBaseAmount()` as grams and mL.** A counted unit is just a unit with a
+    known conversion, so macros, the shopping list and the meal builder learned nothing new. That is
+    what stopped this becoming a third kind of amount for every caller to handle.
+  - **THE BUG IT FIXES IS NOT THE ONE IT WAS FOR.** "2 onions" did not fail — it *matched*, confidently,
+    as two **grams** of onion, because a bare count fell through to the food's default unit. Off by
+    fifty-five times, silently, in the macro totals. A bare count of a sized food is now a medium one.
+  - **Plurals.** "2 onions" found nothing at all before, because `foodMatchesQuery()` tests
+    `name.includes(word)` and no food name contains that S. The canonical example of the whole
+    feature failed on a letter. `singulariseWord()` is deliberately crude and only ever *widens*
+    matching, which the matcher then asks about rather than assuming.
+  - **Ranking got a third tier, and the useful one is the head of the name.** This table names foods
+    `<what it is>, <qualifiers>`, so the part before the first comma is the thing itself. A food
+    whose head IS what you typed beats one that merely begins with it: `egg` → *Eggs, whole, cooked*
+    over *Egg yolk only*; `tomatoes` → *Tomato, raw* over *Canned tomatoes, diced*; `butter` →
+    *Butter, salted* over *Peanut butter*. A qualifier narrows a thing; a different head is a
+    different thing.
+  - **"Approximate" is shown as a NUMBER, not a badge.** The review sheet says *"3 cloves → 9 g"* and,
+    for a bare count, *"2 medium → 220 g · assumed medium — change it if not"*. A number can be
+    disagreed with; an asterisk cannot. Measured amounts show nothing, because 250 g has nothing to
+    disclose.
+  - **One function decides what a line means**, whether the matcher resolved the food or you picked
+    it afterwards. `setIngRowFood()` used to work it out separately and would have turned a confirmed
+    "3 cloves garlic" into three grams on the way past.
+  - A count word only works on a food that declares it: **"3 cloves chicken" is a unit mismatch**, and
+    the row keeps the failed word so the screen can name it. Guessing would be worse than asking.
+  - A food already counted by nature keeps its own item: **"2 eggs" is two of the app's eggs**, since
+    `itemAmount` holds a large one and that is what a recipe means. Sizes stay for "3 medium eggs".
 - **Sixteen recipe staples, and the matching bugs they exposed (2026-09-28).** `FOOD_DB` 122 → 138.
   The prerequisite from [`docs/COUNT_UNITS.md`](COUNT_UNITS.md) is cleared: **there was no butter**,
   nor bread, lemon, lime, apple, shallot, ginger, scallion, tortilla or sausage — a table strong on

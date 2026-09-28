@@ -1,12 +1,25 @@
 # Count units and size tiers
 
-**Status: scoped, not started.** Raised 2026-09-27: *"There are some conversions for 'stick of
-butter' and 'small / medium / large onion' for example that may allow for conversion to weight based
-on an ingredient-dependent input."*
+**Status: SHIPPED 2026-09-28.** Raised 2026-09-27: *"There are some conversions for 'stick of butter'
+and 'small / medium / large onion' for example that may allow for conversion to weight based on an
+ingredient-dependent input."*
 
-This is the candidate list and the sourcing plan. It is a build spec, not a shipped feature — every
-gram figure below is **indicative and must be verified against a source before it goes in the code**
-(see [Sourcing](#sourcing)).
+This was the build spec and is now the record of what was built. The tables below are the data that
+shipped; every gram figure remains **indicative** and is marked approximate wherever it reaches a
+macro total (see [Sourcing](#sourcing) for where they came from and what still wants verifying).
+
+**What shipped, in one line each:**
+
+- `counts` and `sizes` on a food record, resolved by the same `foodBaseAmount()` as grams and mL —
+  so macros, the shopping list and the meal builder all learned nothing new.
+- The parser reads count words and size words; `ingredientUnitFor()` decides what a line means once
+  a food is known, and is the *same* function whether the matcher resolved it or you picked it.
+- **Plurals match.** "2 onions" found nothing at all before — no food name contains that S.
+- A bare count of a sized food is a **medium** one. It used to be two *grams* of onion.
+- The review sheet shows **what it assumed in grams** before you agree to it.
+- Count words are offered in the unit dropdown, and never become the default.
+
+Still unbuilt: weight foods measured by volume (`1 cup flour`), and any count word not in the table.
 
 ---
 

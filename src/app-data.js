@@ -212,16 +212,16 @@ const FOOD_DB = [
   { id: 'chicken_drumstick', name: 'Chicken drumstick, skinless, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 172, protein: 28, carb: 0, fat: 6, fiber: 0, sodium: 90, potassium: 240, calcium: 13, iron: 1.1, magnesium: 21, vitaminC: 0, vitaminD: 0.1, vitaminB12: 0.5 } },
   { id: 'ground_beef_85', name: 'Ground beef, 85/15, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 250, protein: 26, carb: 0, fat: 17, fiber: 0, sodium: 72, potassium: 270, calcium: 18, iron: 2.3, magnesium: 19, vitaminC: 0, vitaminD: 0.1, vitaminB12: 2.4 } },
   { id: 'lamb', name: 'Lamb, leg, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 258, protein: 26, carb: 0, fat: 17, fiber: 0, sodium: 65, potassium: 310, calcium: 15, iron: 1.9, magnesium: 21, vitaminC: 0, vitaminD: 0.1, vitaminB12: 2.6 } },
-  { id: 'bacon', name: 'Bacon, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 541, protein: 37, carb: 1.4, fat: 42, fiber: 0, sodium: 1717, potassium: 289, calcium: 8, iron: 1, magnesium: 20, vitaminC: 0, vitaminD: 0.5, vitaminB12: 0.6 }, approx: true },
+  { id: 'bacon', name: 'Bacon, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 541, protein: 37, carb: 1.4, fat: 42, fiber: 0, sodium: 1717, potassium: 289, calcium: 8, iron: 1, magnesium: 20, vitaminC: 0, vitaminD: 0.5, vitaminB12: 0.6 }, counts: { slice: 8, rasher: 8, strip: 8 }, approx: true },
   { id: 'ham', name: 'Ham, deli-sliced', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 145, protein: 21, carb: 1.5, fat: 5.5, fiber: 0, sodium: 1200, potassium: 260, calcium: 6, iron: 0.7, magnesium: 15, vitaminC: 0, vitaminD: 0.4, vitaminB12: 0.5 }, approx: true },
   { id: 'shrimp', name: 'Shrimp, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 99, protein: 24, carb: 0.2, fat: 0.3, fiber: 0, sodium: 190, potassium: 220, calcium: 70, iron: 0.5, magnesium: 39, vitaminC: 0, vitaminD: 0, vitaminB12: 1.2 } },
   { id: 'tilapia', name: 'Tilapia, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 128, protein: 26, carb: 0, fat: 2.7, fiber: 0, sodium: 56, potassium: 380, calcium: 14, iron: 0.7, magnesium: 34, vitaminC: 0, vitaminD: 0, vitaminB12: 1.9 } },
   { id: 'halibut', name: 'Halibut, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 111, protein: 22, carb: 0, fat: 2.3, fiber: 0, sodium: 66, potassium: 490, calcium: 13, iron: 0.9, magnesium: 33, vitaminC: 0, vitaminD: 0.5, vitaminB12: 1 } },
   { id: 'scallops', name: 'Scallops, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 111, protein: 21, carb: 5, fat: 0.8, fiber: 0, sodium: 667, potassium: 314, calcium: 24, iron: 0.6, magnesium: 45, vitaminC: 0, vitaminD: 0, vitaminB12: 1.4 } },
   // Recipe staples, 2026-09-28. See the "Recipe staples" note below FOOD_DB for why these are here.
-  { id: 'pork_sausage', name: 'Sausage, pork, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 339, protein: 19, carb: 1.5, fat: 29, fiber: 0, sodium: 749, potassium: 291, calcium: 12, iron: 1.2, magnesium: 17, vitaminC: 1, vitaminD: 0.6, vitaminB12: 1 }, approx: true },
+  { id: 'pork_sausage', name: 'Sausage, pork, cooked', category: 'meat', unit: 'weight', base: 'g', per100: { cal: 339, protein: 19, carb: 1.5, fat: 29, fiber: 0, sodium: 749, potassium: 291, calcium: 12, iron: 1.2, magnesium: 17, vitaminC: 1, vitaminD: 0.6, vitaminB12: 1 }, counts: { link: 75, sausage: 75 }, approx: true },
   // ---- Eggs & Dairy ----
-  { id: 'eggs_whole', name: 'Eggs, whole, cooked', category: 'dairy', unit: 'count', base: 'g', itemAmount: 50, itemLabel: 'egg', per100: { cal: 155, protein: 13, carb: 1.1, fat: 11, fiber: 0, sodium: 124, potassium: 126, calcium: 50, iron: 1.2, magnesium: 10, vitaminC: 0, vitaminD: 2, vitaminB12: 0.9 } },
+  { id: 'eggs_whole', name: 'Eggs, whole, cooked', category: 'dairy', unit: 'count', base: 'g', itemAmount: 50, itemLabel: 'egg', per100: { cal: 155, protein: 13, carb: 1.1, fat: 11, fiber: 0, sodium: 124, potassium: 126, calcium: 50, iron: 1.2, magnesium: 10, vitaminC: 0, vitaminD: 2, vitaminB12: 0.9 }, sizes: { small: 38, medium: 44, large: 50 } },
   { id: 'egg_yolk', name: 'Egg yolk only', category: 'dairy', unit: 'count', base: 'g', itemAmount: 17, itemLabel: 'yolk', per100: { cal: 322, protein: 16, carb: 3.6, fat: 27, fiber: 0, sodium: 48, potassium: 109, calcium: 129, iron: 2.7, magnesium: 5, vitaminC: 0, vitaminD: 5.4, vitaminB12: 1.9 } },
   { id: 'greek_yogurt', name: 'Greek yogurt, plain, nonfat', category: 'dairy', unit: 'weight', base: 'g', per100: { cal: 59, protein: 10, carb: 3.6, fat: 0.4, fiber: 0, sodium: 36, potassium: 141, calcium: 110, iron: 0.1, magnesium: 11, vitaminC: 0, vitaminD: 0, vitaminB12: 0.5 } },
   { id: 'cottage_cheese', name: 'Cottage cheese, low-fat', category: 'dairy', unit: 'weight', base: 'g', per100: { cal: 81, protein: 11, carb: 3.4, fat: 2.3, fiber: 0, sodium: 364, potassium: 104, calcium: 83, iron: 0.1, magnesium: 5, vitaminC: 0, vitaminD: 0, vitaminB12: 0.4 } },
@@ -254,61 +254,61 @@ const FOOD_DB = [
   // is literally "carbs" and they are nothing else -- a Baking & Pantry category would be the
   // better home once there are enough of them to fill one.
   { id: 'flour_ap', name: 'Flour, all-purpose (enriched)', category: 'grains', unit: 'weight', base: 'g', per100: { cal: 364, protein: 10.3, carb: 76, fat: 1, fiber: 2.7, sodium: 2, potassium: 107, calcium: 15, iron: 4.6, magnesium: 22, vitaminC: 0, vitaminD: 0, vitaminB12: 0 }, approx: true },
-  { id: 'bread_white', name: 'Bread, white, sliced', category: 'grains', unit: 'weight', base: 'g', per100: { cal: 265, protein: 9, carb: 49, fat: 3.2, fiber: 2.7, sodium: 491, potassium: 115, calcium: 144, iron: 3.6, magnesium: 23, vitaminC: 0, vitaminD: 0, vitaminB12: 0 }, approx: true },
-  { id: 'tortilla_flour', name: 'Tortilla, flour', category: 'grains', unit: 'weight', base: 'g', per100: { cal: 306, protein: 8.2, carb: 51, fat: 7.4, fiber: 3, sodium: 594, potassium: 130, calcium: 145, iron: 3.2, magnesium: 20, vitaminC: 0, vitaminD: 0, vitaminB12: 0 }, approx: true },
+  { id: 'bread_white', name: 'Bread, white, sliced', category: 'grains', unit: 'weight', base: 'g', per100: { cal: 265, protein: 9, carb: 49, fat: 3.2, fiber: 2.7, sodium: 491, potassium: 115, calcium: 144, iron: 3.6, magnesium: 23, vitaminC: 0, vitaminD: 0, vitaminB12: 0 }, counts: { slice: 28 }, approx: true },
+  { id: 'tortilla_flour', name: 'Tortilla, flour', category: 'grains', unit: 'weight', base: 'g', per100: { cal: 306, protein: 8.2, carb: 51, fat: 7.4, fiber: 3, sodium: 594, potassium: 130, calcium: 145, iron: 3.2, magnesium: 20, vitaminC: 0, vitaminD: 0, vitaminB12: 0 }, counts: { tortilla: 45 }, approx: true },
   { id: 'sugar_white', name: 'Sugar, granulated', category: 'grains', unit: 'weight', base: 'g', per100: { cal: 387, protein: 0, carb: 100, fat: 0, fiber: 0, sodium: 1, potassium: 2, calcium: 1, iron: 0.05, magnesium: 0, vitaminC: 0, vitaminD: 0, vitaminB12: 0 }, approx: true },
   { id: 'honey', name: 'Honey', category: 'grains', unit: 'weight', base: 'g', per100: { cal: 304, protein: 0.3, carb: 82, fat: 0, fiber: 0.2, sodium: 4, potassium: 52, calcium: 6, iron: 0.42, magnesium: 2, vitaminC: 0.5, vitaminD: 0, vitaminB12: 0 }, approx: true },
   // ---- Veggies ----
-  { id: 'sweet_potato', name: 'Sweet potato, cooked', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 90, protein: 2, carb: 21, fat: 0.1, fiber: 3.3, sodium: 36, potassium: 337, calcium: 38, iron: 0.7, magnesium: 27, vitaminC: 19.6, vitaminD: 0, vitaminB12: 0 } },
-  { id: 'carrots', name: 'Carrots, raw', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 41, protein: 0.9, carb: 10, fat: 0.2, fiber: 2.8, sodium: 69, potassium: 320, calcium: 33, iron: 0.3, magnesium: 12, vitaminC: 5.9, vitaminD: 0, vitaminB12: 0 } },
+  { id: 'sweet_potato', name: 'Sweet potato, cooked', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 90, protein: 2, carb: 21, fat: 0.1, fiber: 3.3, sodium: 36, potassium: 337, calcium: 38, iron: 0.7, magnesium: 27, vitaminC: 19.6, vitaminD: 0, vitaminB12: 0 }, sizes: { small: 60, medium: 114, large: 180 } },
+  { id: 'carrots', name: 'Carrots, raw', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 41, protein: 0.9, carb: 10, fat: 0.2, fiber: 2.8, sodium: 69, potassium: 320, calcium: 33, iron: 0.3, magnesium: 12, vitaminC: 5.9, vitaminD: 0, vitaminB12: 0 }, sizes: { small: 46, medium: 61, large: 72 } },
   { id: 'spinach', name: 'Spinach, cooked', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 23, protein: 3, carb: 3.6, fat: 0.3, fiber: 2.4, sodium: 70, potassium: 466, calcium: 136, iron: 3.6, magnesium: 87, vitaminC: 9.8, vitaminD: 0, vitaminB12: 0 } },
   { id: 'kale', name: 'Kale, cooked', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 28, protein: 2, carb: 6, fat: 0.4, fiber: 2, sodium: 29, potassium: 348, calcium: 254, iron: 1.5, magnesium: 23, vitaminC: 41, vitaminD: 0, vitaminB12: 0 } },
   { id: 'collard_greens', name: 'Collard greens, cooked', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 32, protein: 2.5, carb: 5.7, fat: 0.6, fiber: 4, sodium: 20, potassium: 213, calcium: 232, iron: 0.9, magnesium: 15, vitaminC: 23, vitaminD: 0, vitaminB12: 0 } },
-  { id: 'broccoli', name: 'Broccoli, cooked', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 35, protein: 2.4, carb: 7, fat: 0.4, fiber: 3.3, sodium: 33, potassium: 293, calcium: 40, iron: 0.7, magnesium: 21, vitaminC: 65, vitaminD: 0, vitaminB12: 0 } },
+  { id: 'broccoli', name: 'Broccoli, cooked', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 35, protein: 2.4, carb: 7, fat: 0.4, fiber: 3.3, sodium: 33, potassium: 293, calcium: 40, iron: 0.7, magnesium: 21, vitaminC: 65, vitaminD: 0, vitaminB12: 0 }, counts: { head: 608, crown: 608 } },
   { id: 'brussels_sprouts', name: 'Brussels sprouts, cooked', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 36, protein: 2.6, carb: 7, fat: 0.5, fiber: 3.3, sodium: 21, potassium: 317, calcium: 36, iron: 1.2, magnesium: 21, vitaminC: 62, vitaminD: 0, vitaminB12: 0 } },
-  { id: 'cabbage', name: 'Cabbage, cooked', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 23, protein: 1.3, carb: 5.5, fat: 0.1, fiber: 2.5, sodium: 12, potassium: 145, calcium: 46, iron: 0.3, magnesium: 11, vitaminC: 20, vitaminD: 0, vitaminB12: 0 } },
-  { id: 'red_bell_pepper', name: 'Red bell pepper, raw', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 31, protein: 1, carb: 6, fat: 0.3, fiber: 2.1, sodium: 4, potassium: 211, calcium: 7, iron: 0.4, magnesium: 12, vitaminC: 128, vitaminD: 0, vitaminB12: 0 } },
+  { id: 'cabbage', name: 'Cabbage, cooked', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 23, protein: 1.3, carb: 5.5, fat: 0.1, fiber: 2.5, sodium: 12, potassium: 145, calcium: 46, iron: 0.3, magnesium: 11, vitaminC: 20, vitaminD: 0, vitaminB12: 0 }, counts: { head: 908 } },
+  { id: 'red_bell_pepper', name: 'Red bell pepper, raw', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 31, protein: 1, carb: 6, fat: 0.3, fiber: 2.1, sodium: 4, potassium: 211, calcium: 7, iron: 0.4, magnesium: 12, vitaminC: 128, vitaminD: 0, vitaminB12: 0 }, sizes: { small: 78, medium: 119, large: 164 } },
   { id: 'asparagus', name: 'Asparagus, cooked', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 22, protein: 2.4, carb: 4, fat: 0.2, fiber: 2, sodium: 14, potassium: 224, calcium: 24, iron: 1.1, magnesium: 16, vitaminC: 7.7, vitaminD: 0, vitaminB12: 0 } },
-  { id: 'potato', name: 'Potato, with skin, cooked', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 87, protein: 1.9, carb: 20, fat: 0.1, fiber: 1.8, sodium: 6, potassium: 379, calcium: 8, iron: 0.3, magnesium: 22, vitaminC: 8, vitaminD: 0, vitaminB12: 0 } },
-  { id: 'cucumber', name: 'Cucumber, raw', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 15, protein: 0.7, carb: 3.6, fat: 0.1, fiber: 0.5, sodium: 2, potassium: 147, calcium: 16, iron: 0.3, magnesium: 13, vitaminC: 2.8, vitaminD: 0, vitaminB12: 0 } },
-  { id: 'tomato', name: 'Tomato, raw', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 18, protein: 0.9, carb: 3.9, fat: 0.2, fiber: 1.2, sodium: 5, potassium: 237, calcium: 10, iron: 0.3, magnesium: 11, vitaminC: 14, vitaminD: 0, vitaminB12: 0 } },
-  { id: 'seaweed_nori', name: 'Seaweed (nori), dried', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 35, protein: 6, carb: 5, fat: 0.3, fiber: 0.3, sodium: 872, potassium: 2400, calcium: 325, iron: 12, magnesium: 255, vitaminC: 39, vitaminD: 0, vitaminB12: 10 }, approx: true },
-  { id: 'onion', name: 'Onion, raw', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 40, protein: 1.1, carb: 9.3, fat: 0.1, fiber: 1.7, sodium: 4, potassium: 146, calcium: 23, iron: 0.2, magnesium: 10, vitaminC: 7.4, vitaminD: 0, vitaminB12: 0 } },
-  { id: 'garlic', name: 'Garlic, raw', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 149, protein: 6.4, carb: 33, fat: 0.5, fiber: 2.1, sodium: 17, potassium: 401, calcium: 181, iron: 1.7, magnesium: 25, vitaminC: 31, vitaminD: 0, vitaminB12: 0 } },
-  { id: 'zucchini', name: 'Zucchini, cooked', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 17, protein: 1.2, carb: 3.1, fat: 0.3, fiber: 1, sodium: 3, potassium: 261, calcium: 16, iron: 0.4, magnesium: 22, vitaminC: 4, vitaminD: 0, vitaminB12: 0 } },
-  { id: 'cauliflower', name: 'Cauliflower, cooked', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 23, protein: 1.8, carb: 4.1, fat: 0.5, fiber: 2.3, sodium: 15, potassium: 142, calcium: 16, iron: 0.4, magnesium: 9, vitaminC: 44, vitaminD: 0, vitaminB12: 0 } },
+  { id: 'potato', name: 'Potato, with skin, cooked', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 87, protein: 1.9, carb: 20, fat: 0.1, fiber: 1.8, sodium: 6, potassium: 379, calcium: 8, iron: 0.3, magnesium: 22, vitaminC: 8, vitaminD: 0, vitaminB12: 0 }, sizes: { small: 170, medium: 213, large: 369 } },
+  { id: 'cucumber', name: 'Cucumber, raw', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 15, protein: 0.7, carb: 3.6, fat: 0.1, fiber: 0.5, sodium: 2, potassium: 147, calcium: 16, iron: 0.3, magnesium: 13, vitaminC: 2.8, vitaminD: 0, vitaminB12: 0 }, sizes: { small: 158, medium: 201, large: 301 } },
+  { id: 'tomato', name: 'Tomato, raw', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 18, protein: 0.9, carb: 3.9, fat: 0.2, fiber: 1.2, sodium: 5, potassium: 237, calcium: 10, iron: 0.3, magnesium: 11, vitaminC: 14, vitaminD: 0, vitaminB12: 0 }, sizes: { small: 91, medium: 123, large: 182 } },
+  { id: 'seaweed_nori', name: 'Seaweed (nori), dried', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 35, protein: 6, carb: 5, fat: 0.3, fiber: 0.3, sodium: 872, potassium: 2400, calcium: 325, iron: 12, magnesium: 255, vitaminC: 39, vitaminD: 0, vitaminB12: 10 }, counts: { sheet: 2.5 }, approx: true },
+  { id: 'onion', name: 'Onion, raw', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 40, protein: 1.1, carb: 9.3, fat: 0.1, fiber: 1.7, sodium: 4, potassium: 146, calcium: 23, iron: 0.2, magnesium: 10, vitaminC: 7.4, vitaminD: 0, vitaminB12: 0 }, sizes: { small: 70, medium: 110, large: 150 } },
+  { id: 'garlic', name: 'Garlic, raw', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 149, protein: 6.4, carb: 33, fat: 0.5, fiber: 2.1, sodium: 17, potassium: 401, calcium: 181, iron: 1.7, magnesium: 25, vitaminC: 31, vitaminD: 0, vitaminB12: 0 }, counts: { clove: 3, head: 34 } },
+  { id: 'zucchini', name: 'Zucchini, cooked', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 17, protein: 1.2, carb: 3.1, fat: 0.3, fiber: 1, sodium: 3, potassium: 261, calcium: 16, iron: 0.4, magnesium: 22, vitaminC: 4, vitaminD: 0, vitaminB12: 0 }, sizes: { small: 118, medium: 196, large: 323 } },
+  { id: 'cauliflower', name: 'Cauliflower, cooked', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 23, protein: 1.8, carb: 4.1, fat: 0.5, fiber: 2.3, sodium: 15, potassium: 142, calcium: 16, iron: 0.4, magnesium: 9, vitaminC: 44, vitaminD: 0, vitaminB12: 0 }, counts: { head: 588 } },
   { id: 'green_beans', name: 'Green beans, cooked', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 35, protein: 1.9, carb: 8, fat: 0.3, fiber: 3.4, sodium: 3, potassium: 151, calcium: 37, iron: 0.7, magnesium: 21, vitaminC: 9.7, vitaminD: 0, vitaminB12: 0 } },
-  { id: 'mushrooms', name: 'Mushrooms, white button, cooked', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 28, protein: 2.5, carb: 5.3, fat: 0.5, fiber: 1.7, sodium: 4, potassium: 356, calcium: 4, iron: 0.9, magnesium: 11, vitaminC: 0, vitaminD: 0.2, vitaminB12: 0 } },
-  { id: 'corn', name: 'Corn, cooked', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 96, protein: 3.4, carb: 21, fat: 1.5, fiber: 2.4, sodium: 15, potassium: 270, calcium: 3, iron: 0.5, magnesium: 26, vitaminC: 6.8, vitaminD: 0, vitaminB12: 0 } },
+  { id: 'mushrooms', name: 'Mushrooms, white button, cooked', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 28, protein: 2.5, carb: 5.3, fat: 0.5, fiber: 1.7, sodium: 4, potassium: 356, calcium: 4, iron: 0.9, magnesium: 11, vitaminC: 0, vitaminD: 0.2, vitaminB12: 0 }, sizes: { small: 10, medium: 18, large: 28 } },
+  { id: 'corn', name: 'Corn, cooked', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 96, protein: 3.4, carb: 21, fat: 1.5, fiber: 2.4, sodium: 15, potassium: 270, calcium: 3, iron: 0.5, magnesium: 26, vitaminC: 6.8, vitaminD: 0, vitaminB12: 0 }, counts: { ear: 90, cob: 90 } },
   { id: 'peas', name: 'Peas, cooked', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 84, protein: 5.4, carb: 15, fat: 0.4, fiber: 5.5, sodium: 3, potassium: 201, calcium: 27, iron: 1.5, magnesium: 33, vitaminC: 14, vitaminD: 0, vitaminB12: 0 } },
-  { id: 'celery', name: 'Celery, raw', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 16, protein: 0.7, carb: 3, fat: 0.2, fiber: 1.6, sodium: 80, potassium: 260, calcium: 40, iron: 0.2, magnesium: 11, vitaminC: 3.1, vitaminD: 0, vitaminB12: 0 } },
-  { id: 'romaine_lettuce', name: 'Romaine lettuce, raw', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 17, protein: 1.2, carb: 3.3, fat: 0.3, fiber: 2.1, sodium: 8, potassium: 247, calcium: 33, iron: 1, magnesium: 14, vitaminC: 4, vitaminD: 0, vitaminB12: 0 } },
+  { id: 'celery', name: 'Celery, raw', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 16, protein: 0.7, carb: 3, fat: 0.2, fiber: 1.6, sodium: 80, potassium: 260, calcium: 40, iron: 0.2, magnesium: 11, vitaminC: 3.1, vitaminD: 0, vitaminB12: 0 }, counts: { stalk: 40, rib: 40 } },
+  { id: 'romaine_lettuce', name: 'Romaine lettuce, raw', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 17, protein: 1.2, carb: 3.3, fat: 0.3, fiber: 2.1, sodium: 8, potassium: 247, calcium: 33, iron: 1, magnesium: 14, vitaminC: 4, vitaminD: 0, vitaminB12: 0 }, counts: { head: 626 } },
   // Recipe staples, 2026-09-28. Canned tomatoes carry far more sodium than the raw tomato above --
   // 186 vs 5 mg -- which is exactly the kind of difference that makes them a separate food rather
   // than a unit of the same one.
-  { id: 'shallot', name: 'Shallot, raw', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 72, protein: 2.5, carb: 17, fat: 0.1, fiber: 3.2, sodium: 12, potassium: 334, calcium: 37, iron: 1.2, magnesium: 21, vitaminC: 8, vitaminD: 0, vitaminB12: 0 }, approx: true },
-  { id: 'scallion', name: 'Scallion (spring onion), raw', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 32, protein: 1.8, carb: 7.3, fat: 0.2, fiber: 2.6, sodium: 16, potassium: 276, calcium: 72, iron: 1.5, magnesium: 20, vitaminC: 18.8, vitaminD: 0, vitaminB12: 0 }, approx: true },
-  { id: 'ginger_fresh', name: 'Ginger, fresh', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 80, protein: 1.8, carb: 18, fat: 0.75, fiber: 2, sodium: 13, potassium: 415, calcium: 16, iron: 0.6, magnesium: 43, vitaminC: 5, vitaminD: 0, vitaminB12: 0 }, approx: true },
-  { id: 'tomatoes_canned', name: 'Tomatoes, canned, diced', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 32, protein: 1.6, carb: 7, fat: 0.3, fiber: 1.9, sodium: 186, potassium: 293, calcium: 34, iron: 0.9, magnesium: 14, vitaminC: 9.2, vitaminD: 0, vitaminB12: 0 }, approx: true },
+  { id: 'shallot', name: 'Shallot, raw', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 72, protein: 2.5, carb: 17, fat: 0.1, fiber: 3.2, sodium: 12, potassium: 334, calcium: 37, iron: 1.2, magnesium: 21, vitaminC: 8, vitaminD: 0, vitaminB12: 0 }, sizes: { small: 25, medium: 40, large: 60 }, approx: true },
+  { id: 'scallion', name: 'Scallion (spring onion), raw', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 32, protein: 1.8, carb: 7.3, fat: 0.2, fiber: 2.6, sodium: 16, potassium: 276, calcium: 72, iron: 1.5, magnesium: 20, vitaminC: 18.8, vitaminD: 0, vitaminB12: 0 }, sizes: { small: 10, medium: 15, large: 22 }, approx: true },
+  { id: 'ginger_fresh', name: 'Ginger, fresh', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 80, protein: 1.8, carb: 18, fat: 0.75, fiber: 2, sodium: 13, potassium: 415, calcium: 16, iron: 0.6, magnesium: 43, vitaminC: 5, vitaminD: 0, vitaminB12: 0 }, counts: { thumb: 15, knob: 15 }, approx: true },
+  { id: 'tomatoes_canned', name: 'Canned tomatoes, diced', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 32, protein: 1.6, carb: 7, fat: 0.3, fiber: 1.9, sodium: 186, potassium: 293, calcium: 34, iron: 0.9, magnesium: 14, vitaminC: 9.2, vitaminD: 0, vitaminB12: 0 }, approx: true },
   // Asked for by name, 2026-09-28 — fërgesë. A GREEN bell pepper is not a red one at a different
   // stage of the picker's list: unripened, it is about a third fewer calories and roughly 60% of
   // the vitamin C. Worth its own record for a dish built on them.
-  { id: 'green_bell_pepper', name: 'Green bell pepper, raw', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 20, protein: 0.86, carb: 4.6, fat: 0.17, fiber: 1.7, sodium: 3, potassium: 175, calcium: 10, iron: 0.34, magnesium: 10, vitaminC: 80.4, vitaminD: 0, vitaminB12: 0 }, approx: true },
-  { id: 'chili_pepper', name: 'Chili pepper, fresh', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 40, protein: 2, carb: 9.5, fat: 0.2, fiber: 1.5, sodium: 7, potassium: 340, calcium: 18, iron: 1.2, magnesium: 25, vitaminC: 242, vitaminD: 0, vitaminB12: 0 }, approx: true },
+  { id: 'green_bell_pepper', name: 'Green bell pepper, raw', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 20, protein: 0.86, carb: 4.6, fat: 0.17, fiber: 1.7, sodium: 3, potassium: 175, calcium: 10, iron: 0.34, magnesium: 10, vitaminC: 80.4, vitaminD: 0, vitaminB12: 0 }, sizes: { small: 78, medium: 119, large: 164 }, approx: true },
+  { id: 'chili_pepper', name: 'Chili pepper, fresh', category: 'veggies', unit: 'weight', base: 'g', per100: { cal: 40, protein: 2, carb: 9.5, fat: 0.2, fiber: 1.5, sodium: 7, potassium: 340, calcium: 18, iron: 1.2, magnesium: 25, vitaminC: 242, vitaminD: 0, vitaminB12: 0 }, sizes: { small: 10, medium: 15, large: 25 }, approx: true },
   // ---- Fruit (fruit and fruit juices) ----
-  { id: 'orange', name: 'Orange', category: 'fruit', unit: 'weight', base: 'g', per100: { cal: 47, protein: 0.9, carb: 12, fat: 0.1, fiber: 2.4, sodium: 0, potassium: 181, calcium: 40, iron: 0.1, magnesium: 10, vitaminC: 53, vitaminD: 0, vitaminB12: 0 } },
+  { id: 'orange', name: 'Orange', category: 'fruit', unit: 'weight', base: 'g', per100: { cal: 47, protein: 0.9, carb: 12, fat: 0.1, fiber: 2.4, sodium: 0, potassium: 181, calcium: 40, iron: 0.1, magnesium: 10, vitaminC: 53, vitaminD: 0, vitaminB12: 0 }, sizes: { small: 96, medium: 131, large: 184 } },
   { id: 'strawberries', name: 'Strawberries', category: 'fruit', unit: 'weight', base: 'g', per100: { cal: 32, protein: 0.7, carb: 7.7, fat: 0.3, fiber: 2, sodium: 1, potassium: 153, calcium: 16, iron: 0.4, magnesium: 13, vitaminC: 59, vitaminD: 0, vitaminB12: 0 } },
-  { id: 'kiwi', name: 'Kiwi', category: 'fruit', unit: 'weight', base: 'g', per100: { cal: 61, protein: 1.1, carb: 15, fat: 0.5, fiber: 3, sodium: 3, potassium: 312, calcium: 34, iron: 0.3, magnesium: 17, vitaminC: 93, vitaminD: 0, vitaminB12: 0 } },
-  { id: 'banana', name: 'Banana', category: 'fruit', unit: 'weight', base: 'g', per100: { cal: 89, protein: 1.1, carb: 23, fat: 0.3, fiber: 2.6, sodium: 1, potassium: 358, calcium: 5, iron: 0.3, magnesium: 27, vitaminC: 8.7, vitaminD: 0, vitaminB12: 0 } },
+  { id: 'kiwi', name: 'Kiwi', category: 'fruit', unit: 'weight', base: 'g', per100: { cal: 61, protein: 1.1, carb: 15, fat: 0.5, fiber: 3, sodium: 3, potassium: 312, calcium: 34, iron: 0.3, magnesium: 17, vitaminC: 93, vitaminD: 0, vitaminB12: 0 }, sizes: { small: 46, medium: 69, large: 91 } },
+  { id: 'banana', name: 'Banana', category: 'fruit', unit: 'weight', base: 'g', per100: { cal: 89, protein: 1.1, carb: 23, fat: 0.3, fiber: 2.6, sodium: 1, potassium: 358, calcium: 5, iron: 0.3, magnesium: 27, vitaminC: 8.7, vitaminD: 0, vitaminB12: 0 }, sizes: { small: 101, medium: 118, large: 136 } },
   { id: 'raspberries', name: 'Raspberries', category: 'fruit', unit: 'weight', base: 'g', per100: { cal: 52, protein: 1.2, carb: 12, fat: 0.65, fiber: 6.5, sodium: 1, potassium: 151, calcium: 25, iron: 0.7, magnesium: 22, vitaminC: 26, vitaminD: 0, vitaminB12: 0 }, approx: true },
   { id: 'orange_juice', name: 'Orange juice', category: 'fruit', unit: 'volume', base: 'mL', density: 1.05, per100: { cal: 45, protein: 0.7, carb: 10.4, fat: 0.2, fiber: 0.2, sodium: 1, potassium: 200, calcium: 11, iron: 0.2, magnesium: 11, vitaminC: 50, vitaminD: 0, vitaminB12: 0 }, approx: true },
   { id: 'apple_juice', name: 'Apple juice', category: 'fruit', unit: 'volume', base: 'mL', density: 1.05, per100: { cal: 46, protein: 0.1, carb: 11.3, fat: 0.1, fiber: 0.2, sodium: 4, potassium: 101, calcium: 8, iron: 0.1, magnesium: 5, vitaminC: 0.9, vitaminD: 0, vitaminB12: 0 }, approx: true },
   // Recipe staples, 2026-09-28. All three are the EDIBLE part: lemon and lime without peel, apple
   // with skin. A recipe that says "1 lemon" usually means its juice or zest, which is a portion
   // question rather than a food one -- see docs/COUNT_UNITS.md.
-  { id: 'apple', name: 'Apple, with skin', category: 'fruit', unit: 'weight', base: 'g', per100: { cal: 52, protein: 0.26, carb: 14, fat: 0.17, fiber: 2.4, sodium: 1, potassium: 107, calcium: 6, iron: 0.12, magnesium: 5, vitaminC: 4.6, vitaminD: 0, vitaminB12: 0 }, approx: true },
-  { id: 'lemon', name: 'Lemon, without peel', category: 'fruit', unit: 'weight', base: 'g', per100: { cal: 29, protein: 1.1, carb: 9.3, fat: 0.3, fiber: 2.8, sodium: 2, potassium: 138, calcium: 26, iron: 0.6, magnesium: 8, vitaminC: 53, vitaminD: 0, vitaminB12: 0 }, approx: true },
-  { id: 'lime', name: 'Lime, without peel', category: 'fruit', unit: 'weight', base: 'g', per100: { cal: 30, protein: 0.7, carb: 10.5, fat: 0.2, fiber: 2.8, sodium: 2, potassium: 102, calcium: 33, iron: 0.6, magnesium: 6, vitaminC: 29, vitaminD: 0, vitaminB12: 0 }, approx: true },
+  { id: 'apple', name: 'Apple, with skin', category: 'fruit', unit: 'weight', base: 'g', per100: { cal: 52, protein: 0.26, carb: 14, fat: 0.17, fiber: 2.4, sodium: 1, potassium: 107, calcium: 6, iron: 0.12, magnesium: 5, vitaminC: 4.6, vitaminD: 0, vitaminB12: 0 }, sizes: { small: 149, medium: 182, large: 223 }, approx: true },
+  { id: 'lemon', name: 'Lemon, without peel', category: 'fruit', unit: 'weight', base: 'g', per100: { cal: 29, protein: 1.1, carb: 9.3, fat: 0.3, fiber: 2.8, sodium: 2, potassium: 138, calcium: 26, iron: 0.6, magnesium: 8, vitaminC: 53, vitaminD: 0, vitaminB12: 0 }, sizes: { small: 58, medium: 84, large: 108 }, approx: true },
+  { id: 'lime', name: 'Lime, without peel', category: 'fruit', unit: 'weight', base: 'g', per100: { cal: 30, protein: 0.7, carb: 10.5, fat: 0.2, fiber: 2.8, sodium: 2, potassium: 102, calcium: 33, iron: 0.6, magnesium: 6, vitaminC: 29, vitaminD: 0, vitaminB12: 0 }, sizes: { small: 44, medium: 67, large: 91 }, approx: true },
   // ---- Fats & Oils (incl. nuts, seeds, avocado) ----
   { id: 'olive_oil', name: 'Extra virgin olive oil', category: 'fats', unit: 'volume', base: 'mL', density: 0.913, per100: { cal: 884, protein: 0, carb: 0, fat: 100, fiber: 0, sodium: 2, potassium: 1, calcium: 1, iron: 0.6, magnesium: 0, vitaminC: 0, vitaminD: 0, vitaminB12: 0 }, approx: true },
   // Recipe staples, 2026-09-28. Butter is a WEIGHT food, not volume: a stick is defined as 113 g
@@ -318,10 +318,10 @@ const FOOD_DB = [
   //
   // Salted and unsalted are two records because they differ by 632 mg of sodium per 100 g, which
   // is most of a third of a day's allowance in a batch of cookies. Everything else is identical.
-  { id: 'butter', name: 'Butter, salted', category: 'fats', unit: 'weight', base: 'g', per100: { cal: 717, protein: 0.85, carb: 0.06, fat: 81, fiber: 0, sodium: 643, potassium: 24, calcium: 24, iron: 0.02, magnesium: 2, vitaminC: 0, vitaminD: 1.5, vitaminB12: 0.17 }, approx: true },
-  { id: 'butter_unsalted', name: 'Butter, unsalted', category: 'fats', unit: 'weight', base: 'g', per100: { cal: 717, protein: 0.85, carb: 0.06, fat: 81, fiber: 0, sodium: 11, potassium: 24, calcium: 24, iron: 0.02, magnesium: 2, vitaminC: 0, vitaminD: 1.5, vitaminB12: 0.17 }, approx: true },
+  { id: 'butter', name: 'Butter, salted', category: 'fats', unit: 'weight', base: 'g', per100: { cal: 717, protein: 0.85, carb: 0.06, fat: 81, fiber: 0, sodium: 643, potassium: 24, calcium: 24, iron: 0.02, magnesium: 2, vitaminC: 0, vitaminD: 1.5, vitaminB12: 0.17 }, counts: { stick: 113, pat: 5 }, approx: true },
+  { id: 'butter_unsalted', name: 'Butter, unsalted', category: 'fats', unit: 'weight', base: 'g', per100: { cal: 717, protein: 0.85, carb: 0.06, fat: 81, fiber: 0, sodium: 11, potassium: 24, calcium: 24, iron: 0.02, magnesium: 2, vitaminC: 0, vitaminD: 1.5, vitaminB12: 0.17 }, counts: { stick: 113, pat: 5 }, approx: true },
   { id: 'avocado_oil', name: 'Avocado oil', category: 'fats', unit: 'volume', base: 'mL', density: 0.913, per100: { cal: 884, protein: 0, carb: 0, fat: 100, fiber: 0, sodium: 0, potassium: 0, calcium: 0, iron: 0, magnesium: 0, vitaminC: 0, vitaminD: 0, vitaminB12: 0 }, approx: true },
-  { id: 'avocado', name: 'Avocado', category: 'fats', unit: 'weight', base: 'g', per100: { cal: 160, protein: 2, carb: 8.5, fat: 15, fiber: 6.7, sodium: 7, potassium: 485, calcium: 12, iron: 0.6, magnesium: 29, vitaminC: 10, vitaminD: 0, vitaminB12: 0 } },
+  { id: 'avocado', name: 'Avocado', category: 'fats', unit: 'weight', base: 'g', per100: { cal: 160, protein: 2, carb: 8.5, fat: 15, fiber: 6.7, sodium: 7, potassium: 485, calcium: 12, iron: 0.6, magnesium: 29, vitaminC: 10, vitaminD: 0, vitaminB12: 0 }, sizes: { small: 136, medium: 201, large: 230 } },
   { id: 'walnuts', name: 'Walnuts', category: 'fats', unit: 'weight', base: 'g', per100: { cal: 654, protein: 15, carb: 14, fat: 65, fiber: 6.7, sodium: 2, potassium: 441, calcium: 98, iron: 2.9, magnesium: 158, vitaminC: 1.3, vitaminD: 0, vitaminB12: 0 } },
   { id: 'almonds', name: 'Almonds', category: 'fats', unit: 'weight', base: 'g', per100: { cal: 579, protein: 21, carb: 22, fat: 50, fiber: 12.5, sodium: 1, potassium: 733, calcium: 269, iron: 3.7, magnesium: 270, vitaminC: 0, vitaminD: 0, vitaminB12: 0 } },
   { id: 'hazelnuts', name: 'Hazelnuts', category: 'fats', unit: 'weight', base: 'g', per100: { cal: 628, protein: 15, carb: 17, fat: 61, fiber: 9.7, sodium: 0, potassium: 680, calcium: 114, iron: 4.7, magnesium: 163, vitaminC: 6.3, vitaminD: 0, vitaminB12: 0 } },
@@ -376,10 +376,16 @@ function foodById(id) { return allFoods().find(f => f.id === id) || null; }
 // weight/volume foods only) the current Metric/Imperial toggle — count-type foods always offer
 // just their one natural item label, independent of the unit system.
 function mealUnitOptions(food) {
-  if (food.unit === 'count') return [{ value: 'item', label: food.itemLabel + (food.itemLabel.endsWith('s') ? '' : 's') }];
-  if (food.unit === 'weight') return MEAL_UNIT_SYSTEM === 'imperial'
-    ? [{ value: 'oz', label: 'oz' }, { value: 'lb', label: 'lb' }]
-    : [{ value: 'g', label: 'g' }];
+  // Counted units ride along on every kind, appended so the measured unit stays the default.
+  const counted = foodPortionUnits(food).map(u => ({ value: u, label: u }));
+  if (food.unit === 'count') {
+    return [{ value: 'item', label: food.itemLabel + (food.itemLabel.endsWith('s') ? '' : 's') }].concat(counted);
+  }
+  if (food.unit === 'weight') {
+    return (MEAL_UNIT_SYSTEM === 'imperial'
+      ? [{ value: 'oz', label: 'oz' }, { value: 'lb', label: 'lb' }]
+      : [{ value: 'g', label: 'g' }]).concat(counted);
+  }
   // volume. A food that declares a density can also be WEIGHED, which is how most people actually
   // measure oil and sauce accurately — the spoon is the imprecise part. Offered last, so the
   // natural unit stays the default (defaultMealUnitFor takes [0]).
@@ -388,7 +394,7 @@ function mealUnitOptions(food) {
     : [];
   return (MEAL_UNIT_SYSTEM === 'imperial'
     ? [{ value: 'cup', label: 'cup' }, { value: 'tbsp', label: 'tbsp' }, { value: 'tsp', label: 'tsp' }, { value: 'floz', label: 'fl oz' }]
-    : [{ value: 'mL', label: 'mL' }]).concat(weighable);
+    : [{ value: 'mL', label: 'mL' }]).concat(weighable).concat(counted);
 }
 function defaultMealUnitFor(food) { return mealUnitOptions(food)[0].value; }
 // Converts a meal-item's {foodId, qty, unit} into grams-or-mL-equivalent-in-the-food's-base,
@@ -415,8 +421,45 @@ function zeroNutrients() {
 // treating a gram as a millilitre would overstate a tablespoon by 9% on a food that is 884 cal per
 // 100. Declaring the number per food is not the same as inventing one per conversion, which is
 // what the shopping-list comment rules out.
+// ---- Counting things instead of measuring them (2026-09-28) ----
+//
+// Recipes are not written in grams. `counts` is a map of count WORD -> grams of this food, for
+// words that mean one fixed thing: a clove of garlic is 3 g, a stick of butter 113 g, a slice of
+// bacon 8 g. `sizes` is small/medium/large for a BARE count -- "2 onions" -- because the ratios
+// differ per food and one global multiplier would be wrong for all of them: a large onion is 2.1x
+// a small one, a large egg only 1.3x.
+//
+// Both are on the same footing as g and mL here: a unit this food can be measured in, with a known
+// conversion. That is what lets one function answer for all of them and keeps every caller --
+// macros, the shopping list, the meal builder -- from learning a third kind of amount.
+//
+// EVERY NUMBER FROM THIS PATH IS APPROXIMATE, and more so than a weighed one. A medium onion is a
+// range, not a fact. See docs/COUNT_UNITS.md for where they came from and foodPortionIsApprox().
+function foodPortionGrams(food, unit) {
+  if (!food || !unit) return null;
+  if (food.counts && food.counts[unit] != null) return food.counts[unit];
+  if (food.sizes && food.sizes[unit] != null) return food.sizes[unit];
+  return null;
+}
+// The units a food can be counted in, natural ones first. Order matters: mealUnitOptions() appends
+// these AFTER the measured units, so defaultMealUnitFor() still lands on grams.
+const FOOD_SIZE_ORDER = ['small', 'medium', 'large'];
+function foodPortionUnits(food) {
+  if (!food) return [];
+  const counts = food.counts ? Object.keys(food.counts) : [];
+  const sizes = food.sizes ? FOOD_SIZE_ORDER.filter(s => food.sizes[s] != null) : [];
+  return counts.concat(sizes);
+}
+// Whether an amount in this unit is a counted estimate rather than a measurement. Used wherever a
+// number reaches a macro total, so "1 medium onion" can say it is approximate and 110 g cannot.
+function foodPortionIsApprox(food, unit) { return foodPortionGrams(food, unit) != null; }
+
 function foodBaseAmount(food, qty, unit) {
   if (!food) return null;
+  // Counted units first, and for every food kind: a weight food can have cloves, and a count food
+  // (eggs) can have sizes as well as its own item.
+  const portion = foodPortionGrams(food, unit);
+  if (portion != null) return qty * portion;
   if (food.unit === 'count') return unit === 'item' ? qty * (food.itemAmount || 0) : null;
   if (food.unit === 'weight') {
     if (WEIGHT_TO_G[unit] != null) return qty * WEIGHT_TO_G[unit];

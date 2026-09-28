@@ -50,6 +50,55 @@ const MATCH_UNITS = {
   qt: 'qt', quart: 'qt', quarts: 'qt',
   gal: 'gal', gallon: 'gal', gallons: 'gal',
 };
+// ---- Counting, not measuring (2026-09-28) ----
+//
+// The words that mean "one of these", mapped to the key a food's `counts` map uses. They are NOT
+// resolved here: a clove means 3 g of garlic and nothing at all of chicken, so the parser only
+// records that a count word was used and resolveIngredientRow() asks the matched food whether it
+// knows that word. A food that doesn't gets a `unit` mismatch, which is the honest answer.
+const MATCH_COUNT_WORDS = {
+  clove: 'clove', cloves: 'clove',
+  head: 'head', heads: 'head', bulb: 'head', bulbs: 'head',
+  crown: 'crown', crowns: 'crown',
+  stick: 'stick', sticks: 'stick',
+  pat: 'pat', pats: 'pat',
+  slice: 'slice', slices: 'slice',
+  rasher: 'rasher', rashers: 'rasher',
+  strip: 'strip', strips: 'strip',
+  sheet: 'sheet', sheets: 'sheet',
+  stalk: 'stalk', stalks: 'stalk',
+  rib: 'rib', ribs: 'rib',
+  ear: 'ear', ears: 'ear',
+  cob: 'cob', cobs: 'cob',
+  link: 'link', links: 'link',
+  thumb: 'thumb', thumbs: 'thumb',
+  knob: 'knob', knobs: 'knob',
+};
+// Size qualifiers on a BARE count — "1 large onion". A separate axis from the words above: a size
+// modifies a plain count, a count word replaces it. "1 large clove" is a combination worth ignoring.
+const MATCH_SIZE_WORDS = {
+  small: 'small', sm: 'small',
+  medium: 'medium', med: 'medium',
+  large: 'large', lg: 'large', big: 'large',
+};
+// The size assumed when a line just counts — "2 onions". Stated here rather than buried in the
+// resolver because it is a guess the app makes on your behalf, and the one most likely to be
+// wrong. Medium because it is the middle of the three and the only defensible default.
+const MATCH_DEFAULT_SIZE = 'medium';
+
+// Recipes write plurals; a food table writes singulars. "2 onions" found nothing at all before
+// this, because foodMatchesQuery() tests `name.includes(word)` and "onion, raw" does not contain
+// "onions" -- so the canonical example of the whole feature failed on an S.
+//
+// Deliberately crude: enough rules to cover how English pluralises food words, no dictionary. It
+// only ever WIDENS matching, and every widened match still asks before it is used.
+function singulariseWord(w) {
+  if (w.length < 4 || !/s$/.test(w) || /ss$/.test(w)) return w;
+  if (/ies$/.test(w)) return w.slice(0, -3) + 'y';        // berries -> berry
+  if (/(oes|ches|shes|xes|zes|ses)$/.test(w)) return w.slice(0, -2);  // tomatoes -> tomato
+  return w.slice(0, -1);                                   // onions -> onion
+}
+
 // Units written as two words. Tried before the single-word table, because the single-word matcher
 // takes one [a-zA-Z]+ run and would read "fl oz water" as the unit "fl" followed by "oz water".
 const MATCH_UNITS_MULTIWORD = {
@@ -103,6 +152,34 @@ function parseIngredientLine(raw) {
       if (key) { unit = key; s = s.slice(unitMatch[0].length); }
     }
   }
+  // A SIZE, then a COUNT word — "1 large onion", "3 cloves garlic", "2 large cloves garlic".
+  // Both only after the measured units above, so "1 cup flour" is still a cup.
+  //
+  // Neither is taken if it would leave nothing behind: in "2 sticks" the word IS the food, and
+  // stripping it would hand the matcher an empty name.
+  //
+  // The REGEX is what actually guarantees that -- it requires whitespace after the word, so a word
+  // at the end of the line never matches at all. (Note the difference from the unit matcher above,
+  // which deliberately also accepts a trailing word: "200 g" with nothing after it is still grams.)
+  // The `!rest` check below is therefore belt-and-braces today, and kept because the day someone
+  // adds a `$`-anchored alternative here to be consistent with the units, it becomes the only thing
+  // standing between "2 sticks" and an empty food name.
+  let size = null, count = null;
+  const takeWord = (table) => {
+    const m = s.match(/^([a-zA-Z]+)\.?\s+/);
+    if (!m) return null;
+    const key = table[m[1].toLowerCase()];
+    if (!key) return null;
+    const rest = s.slice(m[0].length).trim();
+    if (!rest) return null;
+    s = rest;
+    return key;
+  };
+  if (!unit) {
+    size = takeWord(MATCH_SIZE_WORDS);
+    count = takeWord(MATCH_COUNT_WORDS);
+  }
+
   // A unit the app doesn't store, written the way people write it.
   if (unit && MATCH_UNIT_SCALE[unit]) {
     // Rounded to 3dp: the US volume factors are not round numbers, so 3 qt came out as
@@ -113,7 +190,9 @@ function parseIngredientLine(raw) {
   }
   const name = s.replace(/\([^)]*\)/g, ' ').replace(MATCH_NOISE, ' ').replace(/[,;]/g, ' ')
                 .replace(/\s+/g, ' ').trim();
-  return { raw: line, qty, unit, name };
+  // `count` wins over `size` when both were written: "2 large cloves garlic" is still cloves, and
+  // a clove has one weight. The size is kept on the parse so nothing is silently dropped.
+  return { raw: line, qty, unit, name, size, count };
 }
 
 // ---- Remembered matches ----
@@ -146,6 +225,12 @@ function matchIngredientName(name) {
   if (remembered && foodById(remembered)) return { status: 'matched', food: foodById(remembered), options: [], remembered: true };
   const exact = allFoods().find(f => normaliseFoodName(f.name) === key);
   if (exact) return { status: 'matched', food: exact, options: [] };
+  // ...and the same name written as a plural. "Onions" IS "Onion, raw" exactly, not a guess.
+  const singular = key.split(' ').map(singulariseWord).join(' ');
+  if (singular !== key) {
+    const exactSingular = allFoods().find(f => normaliseFoodName(f.name) === singular);
+    if (exactSingular) return { status: 'matched', food: exactSingular, options: [] };
+  }
   const partial = allFoods().filter(f => foodMatchesQuery(f, key));
   if (!partial.length) return { status: 'notfound', food: null, options: [] };
   // A single word-match is a strong guess but still a guess — it asks. Several are offered, best
@@ -160,9 +245,27 @@ function matchIngredientName(name) {
   // alone offered "Tortilla, flour" for `flour` and "Peanut butter" for `butter`, because each is
   // a shorter string than the food actually named after that word. The typed word is the head noun
   // of one name and a modifier in the other, and only position can tell those apart.
-  const startsWith = (f) => normaliseFoodName(f.name).startsWith(key) ? 0 : 1;
+  // Three tiers. The top one is the useful one: this table names a food as
+  // `<what it is>, <qualifiers>`, so the part BEFORE the first comma is the thing itself. A food
+  // whose head IS what you typed beats one that merely begins with it, which beats one that only
+  // contains it somewhere.
+  //
+  // That head test is what separates the cases prefix-matching could not:
+  //   egg      -> "Eggs, whole, cooked" (head `eggs`)   over "Egg yolk only"   (head `egg yolk only`)
+  //   tomatoes -> "Tomato, raw"         (head `tomato`) over "Canned tomatoes, diced"
+  //   butter   -> "Butter, salted"      (head `butter`) over "Peanut butter"
+  //   flour    -> "Flour, all-purpose"  (head `flour`)  over "Tortilla, flour"
+  // A qualifier is a narrowing of the thing; a different head is a different thing.
+  const headName = (f) => normaliseFoodName(String(f.name).split(',')[0]);
+  const rank = (f) => {
+    const h = headName(f);
+    if (h === key || h === singular || singulariseWord(h) === singular) return 0;
+    const n = normaliseFoodName(f.name);
+    if (n.startsWith(key) || n.startsWith(singular)) return 1;
+    return 2;
+  };
   const options = partial.slice()
-    .sort((a, b) => (startsWith(a) - startsWith(b)) || (a.name.length - b.name.length))
+    .sort((a, b) => (rank(a) - rank(b)) || (a.name.length - b.name.length))
     .slice(0, 6);
   return { status: 'close', food: options[0], options };
 }
@@ -170,19 +273,48 @@ function matchIngredientName(name) {
 // question here is "can this food hold cups at all", not "which do you prefer today".
 function foodAcceptsUnit(food, unit) {
   if (!food || !unit) return false;
+  // A counted unit this food declares -- a clove, a stick, a medium one. Checked first and for
+  // every kind, since a weight food can have cloves and a count food can have sizes.
+  if (foodPortionGrams(food, unit) != null) return true;
   if (food.unit === 'count') return unit === 'item';
   if (food.unit === 'weight') return Object.prototype.hasOwnProperty.call(WEIGHT_TO_G, unit);
   return Object.prototype.hasOwnProperty.call(VOLUME_TO_ML, unit);
 }
 // One parsed line plus its match, resolved into the row the review screen shows. Status order
 // matters: a missing food is a bigger problem than a missing amount, so it wins.
+// What unit a line means once a food is known. One function, because the answer has to be the same
+// whether the matcher resolved the food itself or the user picked it afterwards -- setIngRowFood()
+// used to work this out separately, and would have turned a confirmed "3 cloves garlic" into three
+// GRAMS of garlic on the way past.
+//
+// The order is the order of evidence: a written unit beats a count word beats a size beats a guess.
+function ingredientUnitFor(food, parsed) {
+  if (parsed.unit) return parsed.unit;
+  if (!food) return null;
+  // Returned even when this food doesn't know the word -- "3 cloves chicken" should be reported as
+  // a unit mismatch, not silently reinterpreted as something chicken does understand.
+  if (parsed.count) return parsed.count;
+  if (parsed.size) return parsed.size;
+  // A bare count of a food that comes in sizes is a MEDIUM one. This is the case that used to be
+  // silently, badly WRONG rather than merely unsupported: "2 onions" fell through to the food's
+  // default unit and became two GRAMS of onion -- matched, confident, and off by fifty-five times.
+  //
+  // Except for a food already COUNTED by nature, which declares what one of them weighs: "2 eggs"
+  // means two of the app's eggs, not two medium ones. Recipes assume a large egg, and that is what
+  // `itemAmount` holds. Sizes stay available for a line that says which -- "3 large eggs".
+  if (parsed.qty != null && food.sizes && food.unit !== 'count') return MATCH_DEFAULT_SIZE;
+  return defaultMealUnitFor(food);
+}
+
 function resolveIngredientRow(parsed) {
   const m = matchIngredientName(parsed.name);
   const row = { ...parsed, food: m.food, options: m.options, remembered: !!m.remembered, status: m.status, unit: parsed.unit, skip: false };
   if (m.status === 'notfound') return row;
+  // Worked out for a CLOSE row as well, so the review sheet can show what confirming would mean --
+  // "3 cloves = 9 g" -- rather than leaving the unit blank until after you have agreed to it.
+  row.unit = ingredientUnitFor(m.food, parsed);
   if (m.status === 'close') return row;
-  if (parsed.unit && !foodAcceptsUnit(m.food, parsed.unit)) { row.status = 'unit'; return row; }
-  if (!parsed.unit) row.unit = defaultMealUnitFor(m.food);
+  if (row.unit && !foodAcceptsUnit(m.food, row.unit)) { row.status = 'unit'; return row; }
   if (parsed.qty == null) { row.status = 'noamount'; return row; }
   return row;
 }

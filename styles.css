@@ -1890,6 +1890,17 @@ body.break-shake { animation: break-shake 0.52s cubic-bezier(.36,.07,.19,.97); }
 .ing-audit b { color: var(--text); font-weight: 700; }
 .ing-audit.is-short { border-color: var(--warn); background: var(--surface); }
 .ing-audit.is-short b { color: var(--warn); }
+/* What a counted amount weighs, shown before you agree to it — "3 cloves -> 9 g". The number IS
+   the disclosure: it can be disagreed with, where a bare "approximate" badge cannot. */
+.ing-estimate {
+  margin-top: 4px; font-size: 11px; color: var(--text-dim);
+  font-family: var(--font-mono);
+}
+.ing-estimate b { color: var(--text); font-weight: 700; }
+.ing-estimate i {
+  font-style: normal; font-family: var(--font-body, inherit);
+  color: var(--text-faint); margin-left: 6px;
+}
 .ing-audit-say { margin-top: 3px; color: var(--text-faint); }
 .ing-audit.is-short .ing-audit-say { color: var(--text-dim); }
 

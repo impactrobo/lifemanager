@@ -988,4 +988,27 @@ same basis as the rest of the table — **check anything you use often against t
       and roughly 60% of the vitamin C.
 - [ ] Would **gjizë** be useful as its own food, or does cottage cheese cover it for you?
 
+## Count units: cloves, sticks, and "1 large onion" (2026-09-28)
+Recipes are written in cloves and sticks, not grams. Write ingredients the way you actually would
+and run **MATCH** — the review sheet now shows what each line weighs *before* you agree to it.
+- [ ] **Write a real recipe the way you'd write it** and MATCH. `3 cloves garlic`, `2 sticks butter`,
+      `1 large onion`, `4 slices bacon`, `1 head cauliflower`, `2 stalks celery`. Do the gram
+      figures look right to you? That's the main thing I can't check from here.
+- [ ] **"2 onions" used to be two GRAMS of onion** — matched, confident, and wrong by 55×. It's two
+      medium onions (220 g) now. Worth confirming on a real recipe.
+- [ ] A bare count says **"assumed medium — change it if not"**. Is that visible enough, or should a
+      guessed size be harder to miss?
+- [ ] **Change one** via the dropdown — a unit mismatch row now offers `clove` and `head` alongside
+      `g`. Does having them in the list help, or clutter it?
+- [ ] **"3 cloves chicken"** should be refused as a unit mismatch, not silently reinterpreted.
+- [ ] **`2 eggs`** = two of the app's eggs (100 g), because a recipe egg is a large one. **`3 medium
+      eggs`** = 132 g. Right call?
+- [ ] **Plurals now match** — `2 tomatoes`, `3 potatoes`, `2 lemons`. Check `2 tomatoes` offers the
+      *fresh* tomato, not the canned one.
+- [ ] **Sizes are per ingredient**, not one multiplier: a large onion is 2.1× a small one, a large
+      egg only 1.3×. If any tier looks off for something you cook with, tell me the food.
+- [ ] **Still needs a unit by hand:** `1 cup flour`, `2 tsp salt` — a weight food can't be measured
+      by volume yet. That's the remaining gap, and it's on the list.
+- [ ] Any count word **missing**? The table is in `docs/COUNT_UNITS.md`; adding one is a one-line change.
+
 ## Add future items below as new features ship

@@ -581,11 +581,13 @@ function setIngRowFood(i, foodId) {
   row.skip = false;
   // Re-check the two things a new food can invalidate: whether it can hold the written unit, and
   // whether there is an amount at all.
+  //
+  // The unit comes from ingredientUnitFor(), the same function the matcher used -- it reads the
+  // count and size words the line was parsed with, which `row` still carries. Falling back to
+  // defaultMealUnitFor() here instead turned a confirmed "3 cloves garlic" into three grams.
+  if (!row.unit) row.unit = ingredientUnitFor(food, row);
   if (row.unit && !foodAcceptsUnit(food, row.unit)) row.status = 'unit';
-  else {
-    if (!row.unit) row.unit = defaultMealUnitFor(food);
-    if (row.qty == null) row.status = 'noamount';
-  }
+  else if (row.qty == null) row.status = 'noamount';
   VIEW.ingMatch.picking = null;
   render();
 }
@@ -712,18 +714,43 @@ function renderIngredientMatchSheet() {
       </div>
     </div>`;
 }
+// What a counted amount actually weighs, said out loud before you agree to it.
+//
+// This is how "approximate" is marked (docs/COUNT_UNITS.md asks for it): not an asterisk, but the
+// NUMBER the app assumed. "3 cloves = 9 g" can be disagreed with; "3 cloves ⚠" cannot. It appears
+// only for counted units, because 200 g is a measurement and has nothing to disclose.
+//
+// A bare count carries the extra word: "2 onions" resolves to MEDIUM ones, and that is the single
+// guess in this feature most likely to be wrong.
+function renderIngRowEstimate(r) {
+  if (!r.food || r.qty == null || !foodPortionIsApprox(r.food, r.unit)) return '';
+  const grams = foodBaseAmount(r.food, r.qty, r.unit);
+  if (grams == null) return '';
+  const isSize = FOOD_SIZE_ORDER.includes(r.unit);
+  const bare = !r.count && !r.size && isSize;
+  // A count word pluralises ("3 cloves"); a size is an adjective and does not ("2 medium", never
+  // "2 mediums").
+  const label = escapeHtml(r.unit) + (!isSize && r.qty !== 1 ? 's' : '');
+  return `<div class="ing-estimate">
+    ${r.qty} ${label} &rarr; <b>${Math.round(grams)} ${escapeHtml(r.food.base)}</b>
+    <i>${bare ? 'assumed ' + escapeHtml(r.unit) + ' — change it if not' : 'approximate'}</i>
+  </div>`;
+}
 function renderIngRow(r, i) {
   const status = r.skip ? 'skip' : r.status;
   const text = r.skip ? 'Skipped — listed as not counted' : (ING_STATUS_TEXT[r.status] || (() => ''))(r);
-  const units = r.food && r.food.unit !== 'count'
-    ? (r.food.unit === 'weight' ? Object.keys(WEIGHT_TO_G) : Object.keys(VOLUME_TO_ML))
-    : [];
+  // The food's OWN options, through mealUnitOptions() (2026-09-28) — which now includes cloves,
+  // sticks and sizes, and which a hand-built list of WEIGHT_TO_G keys could never pick up. It also
+  // means a count food finally gets a dropdown at all: it used to be excluded outright, and with
+  // sizes it has something to offer.
+  const units = r.food ? mealUnitOptions(r.food) : [];
   return `<div class="ing-row is-${status}">
     <div class="ing-row-head">
       <span class="ing-raw">${escapeHtml(r.raw.trim())}</span>
       <button class="btn btn-sm btn-ghost" onclick="toggleIngRowSkip(${i})">${r.skip ? 'UNSKIP' : 'SKIP'}</button>
     </div>
     <div class="ing-status">${escapeHtml(text)}</div>
+    ${r.skip ? '' : renderIngRowEstimate(r)}
     ${r.skip ? '' : `
       <div class="ing-actions">
         ${r.status === 'close' ? `<button class="btn btn-sm btn-primary" onclick="setIngRowFood(${i},'${r.food.id}')">YES</button>` : ''}
@@ -731,7 +758,7 @@ function renderIngRow(r, i) {
           <input type="text" inputmode="decimal" class="ing-qty" placeholder="amount" value="${r.qty != null ? r.qty : ''}" onchange="setIngRowQty(${i}, this.value)">` : ''}
         ${r.status === 'unit' && units.length ? `
           <select class="ing-unit" onchange="setIngRowUnit(${i}, this.value)">
-            ${units.map(u => `<option value="${u}" ${u === r.unit ? 'selected' : ''}>${u}</option>`).join('')}
+            ${units.map(u => `<option value="${u.value}" ${u.value === r.unit ? 'selected' : ''}>${escapeHtml(u.label)}</option>`).join('')}
           </select>` : ''}
         <button class="btn btn-sm btn-ghost" onclick="startIngPick(${i})">${r.food ? 'ANOTHER…' : 'PICK…'}</button>
         ${r.status === 'notfound' ? `<button class="btn btn-sm btn-ghost" onclick="startIngCreate(${i})">CREATE</button>` : ''}
