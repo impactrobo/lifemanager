@@ -2,7 +2,7 @@
 //
 // WEIGHT and MEASUREMENTS were two subtabs, two buttons and two forms for one act — you step on the
 // scale and pick up the tape in the same two minutes. They are one BODY tab now. The STORES stay
-// separate (weightLog is read by TDEE, the weight plan, the rate and the long-cut flag;
+// separate (weightLog is read by TDEE, the weight plan, the rate and the extreme-cut flag;
 // measurements by COMPARE), so §3 is where the two-writes-one-form contract is pinned down.
 const { chromium } = require('playwright');
 const path = require('path');

@@ -57,15 +57,15 @@ const BULK_BANDS = [
   { max: Infinity, key: 'extreme', label: 'Extreme Bulk',
     note: 'High fat gain expected. Defensible mainly when regaining recently lost weight.' },
 ];
-// The rate a cut has to exceed, week after week, before the long-cut flag starts counting. It is
+// The rate a cut has to exceed, week after week, before the extreme-cut flag starts counting. It is
 // also exactly the Standard/Fast Cut boundary, so the band label and the flag can never tell you two
 // different stories about the same number.
-const LONG_CUT_PCT = 1.0;
+const EXTREME_CUT_PCT = 1.0;
 // Six consecutive weeks above that raises it; six weeks of maintenance-or-bulk clears it.
-const LONG_CUT_WEEKS = 6;
+const EXTREME_CUT_WEEKS = 6;
 
 // Which band a rate sits in. No `weeks` argument any more: the old signature took one so it could
-// special-case a mini-cut, and that rule is now the long-cut flag below -- a real walk over what you
+// special-case a mini-cut, and that rule is now the extreme-cut flag below -- a real walk over what you
 // actually did, rather than a guess made from one phase's length.
 function rateBand(direction, pctPerWeek) {
   const mag = Math.abs(Number(pctPerWeek) || 0);
@@ -177,7 +177,7 @@ function updateWeightGoalRate(id, value) {
 // 28-day sliding window ending on the week. It is gone, and the two bug fixes it accumulated are why.
 // Both were off-by-ones between "days of data" and "days between the first and last weigh-in", and
 // both failed the same invisible way -- a null that looked exactly like not having weighed in enough,
-// while weightPlanWeeks() quietly fell back to the PLANNED rate, so the long-cut flag walked the plan
+// while weightPlanWeeks() quietly fell back to the PLANNED rate, so the extreme-cut flag walked the plan
 // it was built to second-guess. The second fix landed after a real-device report: "don't see anything
 // in Actual, but I didn't log a weight every day -- is daily weighing required?" It effectively was.
 //
@@ -269,7 +269,7 @@ function weightPlanWeeks() {
   return out;
 }
 
-// ---- The long-cut flag ----
+// ---- The extreme-cut flag ----
 //
 // A hysteresis rule, not a threshold: it raises on a RUN and clears on a different condition
 // entirely. Three kinds of week, which is the part that makes it work:
@@ -294,7 +294,7 @@ function weightPlanWeeks() {
 // just makes you fatter: visible, self-correcting, and demanding nothing of you afterwards.
 //
 // Never blocks anything. It is a warning with a reason attached.
-function longCutState() {
+function extremeCutState() {
   const weeks = weightPlanWeeks();
   let run = 0, credit = 0, flagged = false;
   // Annotated because it's assigned inside the closure below: `let x = null` alone infers the type
@@ -304,7 +304,7 @@ function longCutState() {
   const kindOf = w => {
     if (!w.hasGoal) return 'credit';     // no weight goal IS eating at maintenance
     if (w.pct >= 0) return 'credit';
-    return Math.abs(w.pct) > LONG_CUT_PCT ? 'hard' : 'soft';
+    return Math.abs(w.pct) > EXTREME_CUT_PCT ? 'hard' : 'soft';
   };
   weeks.forEach(w => {
     const kind = kindOf(w);
@@ -313,20 +313,20 @@ function longCutState() {
       // The week it trips ON, by its START date. Using the end date would call a run "planned"
       // whenever its sixth week merely finishes in a few days -- you'd have been cutting hard for
       // five and a half weeks and been told it was a plan for the future.
-      if (run >= LONG_CUT_WEEKS && !flagged) { flagged = true; flaggedSince = w.startDate; }
+      if (run >= EXTREME_CUT_WEEKS && !flagged) { flagged = true; flaggedSince = w.startDate; }
     } else if (kind === 'credit') {
       run = 0; credit++;
-      if (flagged && credit >= LONG_CUT_WEEKS) { flagged = false; flaggedSince = null; credit = 0; }
+      if (flagged && credit >= EXTREME_CUT_WEEKS) { flagged = false; flaggedSince = null; credit = 0; }
     }
     // 'soft' deliberately touches neither counter.
   });
   return {
     flagged, flaggedSince, run, credit,
     // How many more credit weeks are needed. Only meaningful while flagged.
-    creditNeeded: flagged ? Math.max(0, LONG_CUT_WEEKS - credit) : 0,
+    creditNeeded: flagged ? Math.max(0, EXTREME_CUT_WEEKS - credit) : 0,
     // Whether a run is BUILDING but hasn't tripped yet -- what the planner warns on.
     building: !flagged && run > 0,
-    runNeeded: Math.max(0, LONG_CUT_WEEKS - run),
+    runNeeded: Math.max(0, EXTREME_CUT_WEEKS - run),
     // Whether the run that tripped it is still AHEAD of you. The walk deliberately covers planned
     // weeks as well as elapsed ones, so a block you've only sketched can raise this -- and a warning
     // about a plan reads completely differently from one about what you've already done to yourself.

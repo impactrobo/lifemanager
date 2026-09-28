@@ -1160,15 +1160,21 @@ function renderMealPlanTargets() {
   // TDEE SITS ABOVE THE TARGETS, not inside them. It is what the maintenance figure is derived
   // FROM, so burying it under the thing it produces had the dependency backwards -- and the panel
   // it was hidden in is the one you read every time you plan.
+  // .disclose-row, not the plain .disclose (2026-09-27). Its own note says why: a closed header that
+  // IS the whole panel makes a bare caret read as decoration. Reported from the field as "disclosure
+  // should be more obvious, like what we did with FINANCIAL / OVERVIEW / Incidental" -- which is the
+  // screen .disclose-row was written for, so this adopts the existing answer rather than inventing a
+  // second one. The hint beside the caret is the other half: a caret says you CAN open it, the hint
+  // says whether it is worth it.
   return `
-    <div class="panel" style="margin-bottom:10px;">
-      <button class="disclose" onclick="toggleMealTargetSettings()" aria-expanded="${open}">
-        <span class="disclose-caret">${open ? '&#9662;' : '&#9656;'}</span>
-        <span class="disclose-label">TDEE</span>
-        <span class="disclose-value mono">${STATE.diet.tdee ? STATE.diet.tdee.toLocaleString() + ' cal' : 'not set'}</span>
-      </button>
-      ${open ? renderTdeeSettings() : ''}
-    </div>
+    <button class="disclose disclose-row" style="margin-top:0; margin-bottom:10px;"
+            onclick="toggleMealTargetSettings()" aria-expanded="${open}">
+      <span class="disclose-caret">${open ? '&#9662;' : '&#9656;'}</span>
+      <span class="disclose-label">TDEE</span>
+      <span class="disclose-count">${open ? '' : 'calculator &middot; rolling estimate'}</span>
+      <span class="disclose-value mono">${STATE.diet.tdee ? STATE.diet.tdee.toLocaleString() + ' cal' : 'not set'}</span>
+    </button>
+    ${open ? `<div class="panel" style="margin-bottom:10px; margin-top:-4px;">${renderTdeeSettings()}</div>` : ''}
     <div class="panel" style="margin-bottom:14px;">
       <div class="subtle-label" style="margin-bottom:8px;">TARGETS TO MEET</div>
       ${calLine}

@@ -1387,7 +1387,7 @@ function renderPhases() {
   const done = sched.filter(e => e.state === 'past');
   const summary = phasePlanSummary();
   return `
-    ${renderLongCutNotice()}
+    ${renderExtremeCutNotice()}
     <div class="row" style="margin:22px 0 8px;">
       <div class="subtle-label" style="margin-bottom:0;">PHASES</div>
       <button class="btn btn-sm" onclick="addPhase()">+ ADD PHASE</button>
@@ -1434,30 +1434,47 @@ function renderArchivedPhasesTab() {
     ${renderPhaseEditorModal()}`;
 }
 
-// The long-cut flag, at the top of the screen rather than on a card -- it's a property of the
+// The extreme-cut flag, at the top of the screen rather than on a card -- it's a property of the
 // SEQUENCE, not of any one phase, and the run it counts crosses phase boundaries by construction.
 //
 // Silent almost always, which is the point. It speaks twice: once while a run is BUILDING (so you
 // can see the seventh hard week coming before you commit to it) and once when it has tripped. It
 // never blocks anything.
-function renderLongCutNotice() {
-  const s = longCutState();
+function renderExtremeCutNotice() {
+  const s = extremeCutState();
   if (!s.flagged && !s.building) return '';
   if (s.flagged) {
-    // A run still ahead of you is a plan to reconsider, not a thing you've done. Saying "you have
-    // been cutting hard" about a block that starts in November would be simply false.
-    const why = s.planned
-      ? `Your plan runs ${LONG_CUT_WEEKS} or more weeks in a row above ${fmt(LONG_CUT_PCT, 1)} %bw/wk from
-         <b style="color:var(--text)">${fmtGoalDate(s.flaggedSince)}</b>.`
-      : `${LONG_CUT_WEEKS} or more weeks in a row above ${fmt(LONG_CUT_PCT, 1)} %bw/wk.`;
+    // Renamed from "long cut" (2026-09-27) at the user's request: "I think we can make it clearer
+    // what is not right with the long cut. I think it should also be called 'extreme cut' at that
+    // point." Long describes the duration; EXTREME describes the problem, and the problem is what a
+    // warning should be named after. The BUILDING state below keeps the quieter wording, because a
+    // run that hasn't tripped yet genuinely isn't extreme yet.
+    //
+    // It was also "a bit small". It is a full notice now, in three parts: what you did, what that
+    // costs, and what clears it -- rather than one 12px paragraph carrying all three.
+    const what = s.planned
+      ? `Your plan schedules <b>${EXTREME_CUT_WEEKS} weeks or more in a row</b> faster than
+         ${fmt(EXTREME_CUT_PCT, 1)} %bw/wk, starting
+         <b>${fmtGoalDate(s.flaggedSince)}</b>.`
+      : `You have cut faster than ${fmt(EXTREME_CUT_PCT, 1)} %bw/wk for
+         <b>${EXTREME_CUT_WEEKS} weeks or more in a row</b>.`;
     return `
-      <div class="panel" style="margin-top:18px; border-color:var(--bad); background:var(--accent-soft);">
-        <div class="subtle-label" style="margin-bottom:6px; color:var(--bad);">${s.planned ? 'A LONG CUT AHEAD' : 'CUTTING HARD FOR A WHILE'}</div>
-        <div style="font-size:12px;">
-          ${why} Past about six weeks the usually-cited ceiling drops back toward 1%, and more of the
-          cost lands on lean mass.
-          <b style="color:var(--text)">${s.creditNeeded} more week${s.creditNeeded === 1 ? '' : 's'}</b>
-          at maintenance or in a surplus ${s.planned ? 'would clear it' : 'clears this'}.
+      <div class="panel extreme-cut">
+        <div class="extreme-cut-head">
+          <span class="extreme-cut-mark" aria-hidden="true">!</span>
+          <span>${s.planned ? 'An extreme cut ahead' : 'This is an extreme cut'}</span>
+        </div>
+        <div class="extreme-cut-what">${what}</div>
+        <div class="extreme-cut-why">
+          ${/* The part that was missing: WHAT is wrong, not just that something is. */''}
+          Past about six weeks the usually-cited ceiling drops back toward
+          ${fmt(EXTREME_CUT_PCT, 1)} %bw/wk. Beyond it, more of what you lose is lean mass rather
+          than fat, training quality falls off, and the deficit gets harder to hold &mdash; so the
+          weight keeps coming off while the body underneath gets worse.
+        </div>
+        <div class="extreme-cut-fix">
+          <b>${s.creditNeeded} week${s.creditNeeded === 1 ? '' : 's'}</b> at maintenance or in a
+          surplus ${s.planned ? 'would clear this' : 'clears this'}.
         </div>
       </div>`;
   }
@@ -1465,7 +1482,7 @@ function renderLongCutNotice() {
     <div class="panel" style="margin-top:18px; border-color:var(--accent-dim);">
       <div style="font-size:12px; color:var(--text-dim);">
         <b style="color:var(--text)">${s.run} week${s.run === 1 ? '' : 's'}</b> running above
-        ${fmt(LONG_CUT_PCT, 1)} %bw/wk. ${s.runNeeded} more makes it a long cut —
+        ${fmt(EXTREME_CUT_PCT, 1)} %bw/wk. ${s.runNeeded} more makes it an extreme cut &mdash;
         a week at maintenance resets the count.
       </div>
     </div>`;

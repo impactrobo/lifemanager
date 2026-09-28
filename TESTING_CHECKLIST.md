@@ -940,4 +940,23 @@ the ADD buttons never knew a meal already existed, so every press made another o
       didn't exist, so they've been rendering colourless the whole time. They should now be visibly
       amber on every aesthetic — worth a look on a few themes.
 
+## Four small fixes from your own notes (2026-09-28)
+All four were things you flagged on items you'd already passed. Nothing was broken — they read wrong.
+- [ ] **PHASES → the extreme-cut notice.** Renamed from "long cut", and rebuilt as three parts: what
+      you did, what it costs, what clears it. Is it big enough now, and does the middle part actually
+      explain what's wrong? That's the bit you said was missing.
+- [ ] A run that's **building but hasn't tripped** still says "cutting hard" — it only becomes an
+      *extreme cut* once it fires, which is how I read "at that point". Right call?
+- [ ] **PHASES → MEAL PLAN → the TDEE row.** Now the same style as FINANCIAL → OVERVIEW → Incidental,
+      with a hint at what's behind it. Obvious enough?
+- [ ] **A recipe's macro tabulation** has a per-serving line under the total — macros as well as
+      calories. Check it against a recipe where you know the numbers.
+- [ ] Type something non-numeric in **Servings** ("makes about a dozen"). The per-serving row should
+      *vanish*, not show a broken number. A recipe serving **1** shouldn't show it either.
+- [ ] **Write an ingredient line you don't match** (or match, then delete one from MATCHED). A note
+      should appear above the ingredient list: *"3 written · 2 matched"* with what to do. Skipping a
+      line on purpose must **not** trigger it — that's already said in the amber box.
+- [ ] Add an ingredient **by hand** with nothing in the written list. That's a perfectly good recipe
+      and must not be flagged.
+
 ## Add future items below as new features ship

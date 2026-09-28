@@ -1,7 +1,7 @@
 // test_weight_plan.js — a phase's weight goal: the three states, asymmetric bands, the rate
-// schedule, the long-cut flag, and maintenance drift.
+// schedule, the extreme-cut flag, and maintenance drift.
 //
-// The long-cut flag is the one with real logic in it. It's a hysteresis rule — it raises on a RUN
+// The extreme-cut flag is the one with real logic in it. It's a hysteresis rule — it raises on a RUN
 // and clears on a different condition entirely — so the tests below drive it as a state machine
 // rather than checking a threshold, and the cases that matter are the ones where soft weeks sit in
 // the middle of hard ones.
@@ -161,7 +161,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (between.dir !== 'deficit' || Math.abs(between.rate - 0.9) > 0.0001) throw new Error(`The rate must survive the move: ${JSON.stringify(between)}`);
   if (!between.flatGone) throw new Error('The flat field must be REPLACED, not kept alongside');
 
-  // ---- 4. The long-cut flag: a state machine, driven week by week ----
+  // ---- 4. The extreme-cut flag: a state machine, driven week by week ----
   // Built from PLANNED rates with no weight log, which is the honest default: with nothing logged,
   // what you intended is the only evidence there is. It also means the flag warns you when you're
   // about to schedule a seventh hard week rather than only after.
@@ -178,7 +178,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
             : newWeightGoal({ direction: r < 0 ? 'deficit' : 'surplus', ratePctPerWeek: Math.abs(r) }),
         }));
       });
-      const s = longCutState();
+      const s = extremeCutState();
       return { flagged: s.flagged, run: s.run, credit: s.credit, creditNeeded: s.creditNeeded, planned: s.planned };
     };
     const hard = -1.4, soft = -0.8, hold = 0, bulk = 0.4;
@@ -201,14 +201,14 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
         STATE.phaseOrigin = shiftDate(todayStr(), -11 * 7);
         for (let i = 0; i < 6; i++) STATE.phases.push(newPhase({ id: 'h' + i, weeks: 1, weightGoal: newWeightGoal({ direction: 'deficit', ratePctPerWeek: 1.4 }) }));
         for (let i = 0; i < 6; i++) STATE.phases.push(newPhase({ id: 'n' + i, weeks: 1, weightGoal: null }));
-        const s = longCutState();
+        const s = extremeCutState();
         return { flagged: s.flagged };
       })(),
     };
   });
-  console.log('4. long-cut flag:');
+  console.log('4. extreme-cut flag:');
   Object.keys(runFlag).forEach(k => console.log('   ', k, JSON.stringify(runFlag[k])));
-  if (runFlag.fiveHard.flagged) throw new Error('Five hard weeks is not yet a long cut');
+  if (runFlag.fiveHard.flagged) throw new Error('Five hard weeks is not yet an extreme cut');
   if (runFlag.fiveHard.run !== 5) throw new Error(`The run should be building at 5, got ${runFlag.fiveHard.run}`);
   if (!runFlag.sixHard.flagged) throw new Error('Six consecutive hard weeks raises the flag');
   if (runFlag.cycled.flagged) throw new Error('Cycling through a real maintenance week must NOT flag — that is the safer pattern');
@@ -232,7 +232,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     STATE.phases.push(newPhase({ id: 'now', label: 'Now', weeks: 4, weightGoal: null }));
     STATE.phases.push(newPhase({ id: 'later', label: 'Hard block', weeks: 8,
       weightGoal: newWeightGoal({ direction: 'deficit', ratePctPerWeek: 1.4 }) }));
-    const s = longCutState();
+    const s = extremeCutState();
     return { flagged: s.flagged, planned: s.planned, since: s.flaggedSince, today: todayStr() };
   });
   console.log('4b. a run still ahead:', JSON.stringify(plannedRun));
@@ -249,7 +249,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     for (let i = 0; i < 12; i++) {
       STATE.phases.push(newPhase({ id: 'b' + i, weeks: 1, weightGoal: newWeightGoal({ direction: 'surplus', ratePctPerWeek: 2.0 }) }));
     }
-    const s = longCutState();
+    const s = extremeCutState();
     return { flagged: s.flagged, run: s.run, band: rateBand('surplus', 2.0).key };
   });
   console.log('5. twelve weeks of extreme bulk:', JSON.stringify(bulkNoFlag));
@@ -297,7 +297,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // null for EVERY input it was ever given. That function is gone — weekly averaging replaced it —
   // but the damage it did is still the reason this section exists: weightPlanWeeks() falls back to a
   // week's PLANNED rate when the actual is null, so a silent null meant every elapsed week read as
-  // planned and the long-cut flag walked the plan it was built to second-guess. A null here is
+  // planned and the extreme-cut flag walked the plan it was built to second-guess. A null here is
   // indistinguishable from not having weighed in enough, which is why it has to be asserted.
   const actualRate = await page.evaluate(() => {
     const t = todayStr();

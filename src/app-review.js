@@ -24,7 +24,7 @@
 //   3. A DAY OFF IS NOT A MISS. dayModel().isDayOff already knows about schedule exceptions, and
 //      nothing is planned on one, so those days are excluded from the denominator entirely.
 //   4. WEIGHT IS A RATE, NOT A NUMBER. The one outcome metric allowed in, and only as "-0.7%/wk,
-//      inside your Standard Cut band" -- read through the same weekly averaging the long-cut flag
+//      inside your Standard Cut band" -- read through the same weekly averaging the extreme-cut flag
 //      walks, so the review and the flag can never tell you two different stories. The one thing it
 //      reports as a bare fact is a week with NO weigh-ins, because that is a gap in the record rather
 //      than a bad outcome, and an averaging method that silently bridges it would hide it.
@@ -303,7 +303,7 @@ function _reviewOver(dates) {
       direction,
       goalDirection: goal ? goal.direction : null,
       // Same rate, same band table, same flag the weight plan screen shows.
-      flagged: !!(longCutState() || {}).flagged,
+      flagged: !!(extremeCutState() || {}).flagged,
       basis: weeklyRateBasisText(rate),
       missed: rate.missed, thin: rate.thin, weeks: rate.weeks,
     };
@@ -552,7 +552,7 @@ function renderReviewWeight(r) {
     <div style="font-size:11px; color:var(--text-faint); margin-top:2px;">${escapeHtml(bandLabel + against)}</div>
     <div style="font-size:10px; color:var(--text-faint); margin-top:2px;">${escapeHtml(w.basis)}</div>
     ${renderMissedWeighIns(r.missedWeighIns)}
-    ${w.flagged ? `<div style="font-size:11px; color:var(--accent); font-weight:600; margin-top:4px;">Long-cut flag is up — see PHASES.</div>` : ''}`);
+    ${w.flagged ? `<div style="font-size:11px; color:var(--accent); font-weight:600; margin-top:4px;">Extreme-cut flag is up — see PHASES.</div>` : ''}`);
 }
 
 function renderReviewPractice(r) {

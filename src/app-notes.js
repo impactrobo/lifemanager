@@ -957,6 +957,48 @@ function onIngredientTextInput(ta) {
   const btn = document.getElementById('ingMatchBtn');
   if (btn) btn.hidden = !String(ta.value || '').trim();
 }
+
+// ---- Do the two ingredient lists still agree? ----
+//
+// A recipe holds the same ingredients twice on purpose: `ingredientText` is what you WROTE, and
+// `fields.ingredients` is what those lines were matched to. They can drift apart without anything
+// on screen saying so, which is the case the field note asked about: "if a user adds something in
+// another type… then goes BACK to recipe, there will be something missing from the matched
+// ingredient field… should we add a check for all Recipes if line items done match between 'as
+// listed' ingredients and matched?"
+//
+// Skipped lines COUNT AS ACCOUNTED FOR. They were a decision, not an omission — the recipe already
+// says so in its amber "not counted" box, and flagging them twice would train you to ignore this.
+//
+// Only compared when there IS written text. Ingredients added by hand through the search box are a
+// perfectly good recipe with nothing to compare against, and warning there would punish the simpler
+// way of building one.
+function recipeIngredientAudit(e) {
+  const lines = entryFieldValue(e, 'ingredientText').split('\n').map(l => l.trim()).filter(Boolean);
+  const skipped = entryFieldValue(e, 'ingredientsSkipped').split('\n').map(l => l.trim()).filter(Boolean);
+  const matched = recipeIngredients(e).length;
+  const accounted = matched + skipped.length;
+  return {
+    written: lines.length, matched, skipped: skipped.length, accounted,
+    agrees: !lines.length || accounted === lines.length,
+    // Which direction it drifted, since they read completely differently: lines with no food is
+    // work left to do, extra foods is something you added by hand and may well have meant.
+    short: lines.length > accounted,
+  };
+}
+function renderIngredientAudit(e) {
+  const a = recipeIngredientAudit(e);
+  if (a.agrees) return '';
+  // Stated, not scolded. Extra matched foods are a legitimate thing to have done, so the two cases
+  // get different words and only one of them suggests an action.
+  return `<div class="ing-audit${a.short ? ' is-short' : ''}">
+    <b>${a.written} written</b> &middot; <b>${a.matched} matched</b>${a.skipped ? ` &middot; ${a.skipped} not counted` : ''}
+    <div class="ing-audit-say">${a.short
+      ? `${a.written - a.accounted} written line${a.written - a.accounted === 1 ? '' : 's'} ${a.written - a.accounted === 1 ? 'has' : 'have'} no food behind
+         ${a.written - a.accounted === 1 ? 'it' : 'them'}, so ${a.written - a.accounted === 1 ? 'it is' : 'they are'} missing from the totals. Run MATCH to fix.`
+      : `${a.accounted - a.written} matched food${a.accounted - a.written === 1 ? '' : 's'} ${a.accounted - a.written === 1 ? 'is not' : 'are not'} in the written list &mdash; fine if you added ${a.accounted - a.written === 1 ? 'it' : 'them'} by hand.`}</div>
+  </div>`;
+}
 // ---- The star rating ----
 // Five glyphs, set by tapping or dragging across them, in half-glyph steps (2026-09-27). The
 // stored value is a NUMBER 0-5; `rating` used to be free text and was reset outright, since
@@ -1728,6 +1770,7 @@ function renderRecipeEditor(e) {
       <div>${escapeHtml(skipped).replace(/\n/g, '<br>')}</div>
     </div>` : ''}
     <div class="subtle-label" style="margin:16px 0 8px;">MATCHED INGREDIENTS</div>
+    ${renderIngredientAudit(e)}
     <div class="panel">
       <div class="field-row">
         ${/* TEXT, not number: Convert can write a whole sentence here ("Serves 4 generously"),
@@ -1821,7 +1864,34 @@ function renderEntryIngredientRows() {
         : `<select class="recipe-ing-unit" onchange="updateEntryIngredientUnit('${it.id}',this.value)">${opts.map(o => `<option value="${o.value}" ${it.unit === o.value ? 'selected' : ''}>${o.label}</option>`).join('')}</select>`}
       <button class="icon-btn" style="flex-shrink:0; color:var(--bad);" onclick="removeEntryIngredient('${it.id}')" title="Remove">${icon('close')}</button>
     </div>`;
-  }).join('') + `<div class="recipe-ing-total">${Math.round(totals.cal)} cal total &middot; ${Math.round(totals.protein)}p / ${Math.round(totals.carb)}c / ${Math.round(totals.fat)}f</div>`;
+  }).join('') + renderRecipeMacroTotals(e, totals);
+}
+
+// The macro tabulation under MATCHED INGREDIENTS, now with a per-serving line beside the total.
+// Asked for as "Recipe tabulation shows total cals + macronutrients. Can we do a per serving line
+// item as well?" The recipe CARD has shown per-serving calories for a while; the macros never had
+// a per-serving form anywhere, which is the half that was missing.
+//
+// ABSENT RATHER THAN WRONG when there is no serving count to divide by. `servings` is free TEXT on
+// purpose -- people write "4-6" and "makes about a dozen" -- and recipeServings() pulls the first
+// number out, returning 0 when there isn't one. Dividing by that would print Infinity, so the row
+// simply doesn't appear, exactly as perServingCal already handles it. "4-6" quietly meaning 4 is a
+// separate question and is left alone here: it is at least a number the user typed.
+function renderRecipeMacroTotals(e, totals) {
+  const servings = recipeServings(e);
+  const g = (n) => Math.round(n || 0);
+  const line = (label, t, div) =>
+    `<div class="recipe-ing-total-row">
+       <span class="recipe-ing-total-k">${label}</span>
+       <span class="recipe-ing-total-v mono">${g(t.cal / div)} cal &middot;
+         ${g(t.protein / div)}p / ${g(t.carb / div)}c / ${g(t.fat / div)}f</span>
+     </div>`;
+  return `<div class="recipe-ing-total">
+    ${line('Total', totals, 1)}
+    ${/* "÷ 4", not "÷ 4.00" — a serving count is nearly always whole, and the decimals read as
+          precision that isn't there. Halves survive for the recipe that really does serve 2.5. */''}
+    ${servings > 1 ? line(`Per serving <i>&divide; ${Number(servings.toFixed(2))}</i>`, totals, servings) : ''}
+  </div>`;
 }
 
 // ---- "+ NEW INGREDIENT" ----

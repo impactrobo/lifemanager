@@ -37,7 +37,7 @@ function measurementHasTrend(key) { return measurementSeries(key).length >= 2; }
 // instead of only stating the endpoints.
 // ================= THE MERGED BODY LOG =================
 // One form over TWO STORES, joined by date. STATE.weightLog and STATE.measurements stay separate on
-// purpose: the first is read by TDEE, the weight plan, the rate and the long-cut flag; the second by
+// purpose: the first is read by TDEE, the weight plan, the rate and the extreme-cut flag; the second by
 // COMPARE's MUSCLES group. Merging them would have meant touching all of that to fix a UI problem.
 // What was actually wrong was the surface -- two buttons and two forms for one act.
 //
@@ -827,7 +827,7 @@ function emptyState(msg) {
 // The screen the weekly method exists for: "that way, the user always has some weight number per
 // week". The chart above plots every reading and a smoothed line through them, which answers "where
 // am I trending" and does NOT answer "what did I weigh in week 3" -- you cannot read a number off a
-// curve. This does, one row per week, the same numbers the plan walk and the long-cut flag are using.
+// curve. This does, one row per week, the same numbers the plan walk and the extreme-cut flag are using.
 //
 // Newest first, because the weeks you care about are the recent ones and a log that reads downward
 // into the past needs no scrolling to be useful.

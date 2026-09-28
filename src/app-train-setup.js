@@ -1481,7 +1481,7 @@ function renderBody() {
   // WEIGHT and MEASUREMENTS merged into one BODY tab. They were two logs for one act -- you step on
   // the scale and pick up the tape in the same two minutes -- and keeping them apart meant two
   // buttons, two forms and two entries for one morning. The STORES stay separate (weightLog is read
-  // by TDEE, the weight plan, the rate and the long-cut flag; measurements by COMPARE), because
+  // by TDEE, the weight plan, the rate and the extreme-cut flag; measurements by COMPARE), because
   // what was wrong was the surface, not the data.
   const subnav = subNav(
     tab('body', 'BODY') + tab('labs', 'LABS') +

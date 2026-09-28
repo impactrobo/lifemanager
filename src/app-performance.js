@@ -143,7 +143,7 @@ function perfAreas(from, to) {
   areas.push({
     key: 'weight', label: 'Weight',
     value: r.weight ? `${fmt(r.weight.pct, 2)} %/wk` : 'not enough weigh-ins',
-    detail: r.weight ? (r.weight.flagged ? 'flagged as a long cut' : r.weight.band && r.weight.band.label ? String(r.weight.band.label) : '') : '',
+    detail: r.weight ? (r.weight.flagged ? 'flagged as an extreme cut' : r.weight.band && r.weight.band.label ? String(r.weight.band.label) : '') : '',
     ok: r.weight ? !r.weight.flagged : null,
   });
 

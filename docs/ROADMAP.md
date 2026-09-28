@@ -402,6 +402,44 @@ Newest first. Keep this reasonably current so a fresh session can see what alrea
 without re-reading the whole diff history. Roughly grouped: this project spent early Sept 2026
 on an architecture split + a large wave of Maximalist aesthetics.
 
+- **Four papercuts from the field log (2026-09-28).** All four were notes left on items the user
+  PASSED — nothing was broken, they read wrong. Done together because they share nothing but size.
+  16/16 mutations caught.
+  - **"Long cut" is an EXTREME CUT.** *"A bit small though and I think we can make it clearer what is
+    not right with the long cut. I think it should also be called 'extreme cut' at that point."*
+    - *Long* describes the duration; *extreme* describes the problem, and a warning should be named
+      after the problem. The **building** state deliberately keeps the quieter wording — a run that
+      hasn't tripped genuinely isn't extreme yet, which is what "at that point" meant.
+    - Renamed **in the code too**, not only on screen (`longCutState` → `extremeCutState`, etc). 17
+      references across 4 files: small enough that leaving two names for one thing would have been a
+      choice, not a constraint. A test asserts the old names are gone from non-comment source.
+    - The notice was one 12px paragraph carrying three ideas. It is now three parts — **what you did,
+      what it costs, what clears it** — and the middle one is the part that was missing: it now says
+      the loss shifts toward lean mass, training quality falls off, and the deficit gets harder to
+      hold, rather than only that a threshold was crossed.
+  - **TDEE's disclosure uses `.disclose-row`.** *"Disclosure should be more obvious, like what we did
+    with FINANCIAL / OVERVIEW / Incidental."* That is literally the class the Incidentals ledger uses,
+    and its own CSS note already described this case: *a closed header that IS the whole panel makes
+    a bare caret read as decoration.* So this adopted the existing answer rather than inventing a
+    second one. Closed, it also hints at what is behind it ("calculator · rolling estimate") — a
+    caret says you CAN open it; the hint says whether it is worth it.
+  - **Recipes show per-serving macros.** *"Recipe tabulation shows total cals + macronutrients. Can we
+    do a per serving line item as well?"* The card has shown per-serving *calories* for a while; the
+    macros never had a per-serving form anywhere. **Absent rather than wrong** when there is nothing
+    to divide by: `servings` is free text on purpose ("4-6", "makes about a dozen"), so the row simply
+    doesn't appear rather than printing Infinity — and a 1-serving recipe gets no second row, since
+    it would be the same number twice.
+  - **A recipe says when its two ingredient lists disagree.** *"Should we add a check for all Recipes
+    if line items done match between 'as listed' ingredients and matched?"* A recipe holds its
+    ingredients twice — what you wrote, and what those lines matched to — and they can drift apart
+    silently. **Skipped lines count as accounted for**: they were a decision, the amber "not counted"
+    box already says so, and flagging them twice trains you to ignore both. The two directions read
+    differently and only one suggests an action — lines with no food are missing from the totals;
+    extra matched foods are fine if you added them by hand.
+  - Three mutations survived the first pass, and **one was the same class of bug as yesterday's**:
+    the audit was only ever tested by calling its render function, never by checking it reached the
+    page — exactly how `renderRecipeMealChips()` stayed dead code for ten days. Every one of these now
+    has an assertion against the rendered DOM.
 - **One recipe, one meal per scale (2026-09-27).** The last open field-log flag: *"it is not an
   overwrite but an addition… So MEALS now has 2 x 2 identically named recipes (2x full and 2x batch).
   And the number chips will keep growing each time there is an edit."*

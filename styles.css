@@ -1872,6 +1872,26 @@ body.break-shake { animation: break-shake 0.52s cubic-bezier(.36,.07,.19,.97); }
 .recipe-ing-row .recipe-ing-qty { width: 68px; flex-shrink: 0; }
 .recipe-ing-row .recipe-ing-unit { width: 96px; flex-shrink: 0; font-size: 12px; color: var(--text-dim); }
 .recipe-ing-total { font-size: 11px; color: var(--text-dim); font-weight: 700; padding-top: 8px; margin-top: 4px; border-top: 1px solid var(--border-soft); }
+/* Total and per-serving, one per row so the two sets of numbers line up under each other and can
+   be compared straight down -- which is the whole reason for showing both. */
+.recipe-ing-total-row { display: flex; align-items: baseline; gap: 8px; padding: 2px 0; }
+.recipe-ing-total-k { flex: none; color: var(--text-faint); font-weight: 700; }
+.recipe-ing-total-k i { font-style: normal; font-weight: 400; opacity: .75; }
+.recipe-ing-total-v { margin-left: auto; text-align: right; color: var(--text); font-variant-numeric: tabular-nums; }
+
+/* The two ingredient lists disagreeing. Amber when lines have no food behind them (work left to
+   do, and totals that are quietly short); neutral when there are simply extra foods, because
+   adding one by hand is a perfectly good thing to have done and should not look like an error. */
+.ing-audit {
+  margin-bottom: 8px; padding: 8px 10px; border-radius: var(--radius);
+  background: var(--surface2); border: 1px solid var(--border-soft);
+  font-size: 11px; line-height: 1.5; color: var(--text-dim);
+}
+.ing-audit b { color: var(--text); font-weight: 700; }
+.ing-audit.is-short { border-color: var(--warn); background: var(--surface); }
+.ing-audit.is-short b { color: var(--warn); }
+.ing-audit-say { margin-top: 3px; color: var(--text-faint); }
+.ing-audit.is-short .ing-audit-say { color: var(--text-dim); }
 
 /* ---------- Settings: aesthetic picker ---------- */
 .aesthetic-card { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px; position: relative; color: var(--text); }
@@ -3378,6 +3398,42 @@ textarea.tmpl-input { line-height: 1.5; }
   font-size: 10.5px; font-weight: 600; color: var(--warn);
 }
 .recipe-meals-empty { font-size: 11px; line-height: 1.5; color: var(--text-faint); margin-bottom: 10px; }
+
+/* ---- The extreme-cut notice ----
+   Was a 12px paragraph inside an ordinary panel and read as a footnote: "a bit small… I think we
+   can make it clearer what is not right". Three parts now — what you did, what it costs, what
+   clears it — because the middle one is the part that was missing. */
+.panel.extreme-cut {
+  margin-top: 18px; padding: 0; overflow: hidden;
+  border-color: var(--bad);
+  border-left-width: 4px; border-left-style: solid; border-left-color: var(--bad);
+}
+.extreme-cut-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 11px 13px; background: var(--bad-soft);
+  font-size: 14px; font-weight: 800; letter-spacing: -0.01em; color: var(--bad);
+}
+.extreme-cut-mark {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: var(--bad); color: var(--bg);
+  font-size: 12px; font-weight: 800; line-height: 1;
+}
+.extreme-cut-what {
+  padding: 11px 13px 0; font-size: 13px; line-height: 1.5; color: var(--text);
+}
+.extreme-cut-what b { color: var(--bad); font-weight: 800; }
+/* The reason, set quieter than the fact above it — it is context, not the headline. */
+.extreme-cut-why {
+  padding: 7px 13px 0; font-size: 12px; line-height: 1.55; color: var(--text-dim);
+}
+/* The way out, separated so it reads as the action rather than more explanation. */
+.extreme-cut-fix {
+  margin-top: 11px; padding: 10px 13px;
+  border-top: 1px solid var(--border-soft); background: var(--surface2);
+  font-size: 12.5px; line-height: 1.5; color: var(--text-dim);
+}
+.extreme-cut-fix b { color: var(--good); font-weight: 800; }
 /* Skipped ingredients, said out loud on the recipe — totals that quietly exclude something are
    worse than totals that say what they are missing. */
 .ing-skipped {
