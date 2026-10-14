@@ -1051,4 +1051,13 @@ timings/ingredients/ratios and annotate to eventually make your perfect dish."*
 - [ ] New note with a `[[link to nothing]]`: SAVE should still ask about the missing note first,
       rather than leaving and skipping the question.
 
+## Double-tap a note to edit it (2026-10-14)
+- [ ] Open a note in read mode and **double-tap the text**: it should switch to editing with the
+      cursor at the end of that text. Does the timing feel right, or does it miss your double-taps?
+- [ ] Double-tap a **field** on a recipe (Steps, Ingredients): the cursor should land in *that*
+      field, not the main box.
+- [ ] A **single** tap must still do nothing — tapping to read shouldn't open the editor.
+- [ ] Tick a checklist box twice quickly: it should tick and untick, **not** open the editor.
+- [ ] Double-tapping shouldn't zoom the page anywhere in a note.
+
 ## Add future items below as new features ship

@@ -1032,7 +1032,7 @@ function renderEntryFieldRead(e, key) {
     : `<div class="tmpl-read rich-text">${
          renderEntryMarkdown(markEntryFieldLines(val, meta.list), `entryFieldCheckHandler(${jsArg(key)})`)
        }</div>`;
-  return `<div class="tmpl-field ${unsorted ? 'is-unsorted' : ''}">
+  return `<div class="tmpl-field ${unsorted ? 'is-unsorted' : ''}" data-field="${key}">
     <div class="tmpl-label">${escapeHtml(meta.label)}${unsorted ? ' — nothing claimed this, move it where it belongs' : ''}</div>
     ${body}
     ${key === 'ingredientText' ? renderIngredientMatchButton(e) : ''}
@@ -1181,13 +1181,13 @@ function renderEntryField(e, key) {
   const body = meta.kind === 'stars'
     ? renderRatingStars(e, key)
     : meta.kind === 'select'
-    ? `<select class="tmpl-input" onchange="setEntryField('${key}', this.value)">
+    ? `<select class="tmpl-input" data-field="${key}" onchange="setEntryField('${key}', this.value)">
          <option value="" ${val ? '' : 'selected'}>—</option>
          ${meta.options.map(o => `<option value="${o}" ${val === o ? 'selected' : ''}>${o}</option>`).join('')}
        </select>`
     : meta.kind === 'text'
-      ? `<input type="text" class="tmpl-input" value="${escapeHtml(val)}" onchange="setEntryField('${key}', this.value)">`
-      : `<textarea class="tmpl-input" rows="${Math.min(10, Math.max(2, val.split('\n').length + 1))}" onchange="setEntryField('${key}', this.value)"${
+      ? `<input type="text" class="tmpl-input" data-field="${key}" value="${escapeHtml(val)}" onchange="setEntryField('${key}', this.value)">`
+      : `<textarea class="tmpl-input" data-field="${key}" rows="${Math.min(10, Math.max(2, val.split('\n').length + 1))}" onchange="setEntryField('${key}', this.value)"${
            key === 'ingredientText' ? ' oninput="onIngredientTextInput(this)"' : ''
          }>${escapeHtml(val)}</textarea>`;
   return `<div class="tmpl-field ${unsorted ? 'is-unsorted' : ''}">
@@ -1516,6 +1516,80 @@ document.addEventListener('pointerup', (evt) => {
   const sel = window.getSelection ? String(window.getSelection()) : '';
   if (sel) return;   // they were dragging out a text selection, not asking to leave
   goBackEntry();
+});
+
+// ---- Double-tap to edit (2026-10-14) ----
+//
+// "Let's allow double tapping over any text box in the view/read mode of a note trigger edit mode
+// for convenience." The pencil stays -- this is an accelerator, not the only way in.
+//
+// DOUBLE, deliberately, and never single. A single tap on the body used to open the editor, and it
+// was removed on 2026-09-18 because ticking a checklist box did both: the box's handler fired, then
+// the event bubbled up and opened the editor. So taps that land on anything interactive -- a link,
+// a checkbox, a button, the rating stars -- never count towards a double-tap at all, and a tick
+// followed quickly by a tap on the prose beside it is not mistaken for one.
+//
+// Detected by hand from pointerup timing rather than the `dblclick` event, because iOS Safari only
+// fires dblclick on elements it considers clickable, which plain prose is not.
+//
+// Lands the caret in the box you tapped: the body if you tapped the body, that field if you tapped
+// a field. Opening the editor and leaving you to find your place again would halve the point.
+const ENTRY_DOUBLE_TAP_MS = 320;   // the usual OS double-tap window
+const ENTRY_DOUBLE_TAP_PX = 30;    // two taps further apart than this are two separate taps
+const ENTRY_READ_BOXES = '.entry-title-view, .entry-view, .tmpl-field';
+let ENTRY_LAST_TAP = null;
+function entryReadBoxKey(box) {
+  if (box.classList.contains('tmpl-field')) return 'field:' + (box.getAttribute('data-field') || '');
+  if (box.classList.contains('entry-title-view')) return 'title';
+  return 'body';
+}
+function focusEntryBoxAfterEdit(key) {
+  // After the render setEntryMode() schedules has run.
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    /** @type {any} */
+    let el = null;
+    if (key === 'body') el = document.getElementById('entryBody');
+    else if (key === 'title') el = document.getElementById('entryTitle');
+    else if (key.startsWith('field:')) {
+      el = document.querySelector('#app .tmpl-input[data-field="' + key.slice(6) + '"]');
+    }
+    if (!el) return;
+    el.focus();
+    // Caret at the END, where you'd be adding to what is already there.
+    if (typeof el.setSelectionRange === 'function' && typeof el.value === 'string') {
+      try { el.setSelectionRange(el.value.length, el.value.length); } catch (_) { /* selects */ }
+    }
+    if (el.scrollIntoView) el.scrollIntoView({ block: 'center' });
+  }));
+}
+document.addEventListener('pointerup', (evt) => {
+  if (!VIEW.entryOpenId || VIEW.entryMode !== 'view') { ENTRY_LAST_TAP = null; return; }
+  const t = /** @type {Element} */ (evt.target);
+  const app = document.getElementById('app');
+  if (!t || !t.closest || !app || !app.contains(t)) return;
+  // Interactive things are theirs, not ours -- and they RESET the count, so tick-then-tap is not a
+  // double-tap.
+  if (t.closest('a, button, input, select, textarea, label, .rating, [onclick]')) { ENTRY_LAST_TAP = null; return; }
+  const box = t.closest(ENTRY_READ_BOXES);
+  if (!box) { ENTRY_LAST_TAP = null; return; }
+  // Selecting text is reading, not asking to edit.
+  if (window.getSelection && String(window.getSelection())) { ENTRY_LAST_TAP = null; return; }
+  const key = entryReadBoxKey(box);
+  // performance.now(), not Date.now(): an interval wants a MONOTONIC clock. The wall clock can jump
+  // (a sync, the debug clock, a timezone change) and the test harness pins it outright -- under which
+  // every tap read the same instant and the time window could never fail.
+  const now = performance.now();
+  const prev = ENTRY_LAST_TAP;
+  if (prev && prev.id === VIEW.entryOpenId && prev.key === key && now - prev.at <= ENTRY_DOUBLE_TAP_MS &&
+      Math.hypot(evt.clientX - prev.x, evt.clientY - prev.y) <= ENTRY_DOUBLE_TAP_PX) {
+    ENTRY_LAST_TAP = null;
+    // A field that is collapsed in edit mode would have nowhere to put the caret.
+    if (key.startsWith('field:')) { VIEW.entryFieldOpen = VIEW.entryFieldOpen || {}; VIEW.entryFieldOpen[key.slice(6)] = true; }
+    setEntryMode('edit');
+    focusEntryBoxAfterEdit(key);
+    return;
+  }
+  ENTRY_LAST_TAP = { id: VIEW.entryOpenId, key, at: now, x: evt.clientX, y: evt.clientY };
 });
 
 // ---- [[ autocomplete ----

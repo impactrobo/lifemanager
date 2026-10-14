@@ -376,6 +376,24 @@ Newest first. Keep this reasonably current so a fresh session can see what alrea
 without re-reading the whole diff history. Roughly grouped: this project spent early Sept 2026
 on an architecture split + a large wave of Maximalist aesthetics.
 
+- **Double-tap a note to edit it (2026-10-14).** *"Let's allow double tapping over any text box in
+  the view/read mode of a note trigger edit mode for convenience."* The pencil stays; this is an
+  accelerator. 7/7 mutations caught.
+  - **Double, never single.** Single-tap-to-edit existed once and was removed on 2026-09-18 because
+    ticking a checklist box also opened the editor. So taps on anything interactive — links,
+    checkboxes, buttons, the rating stars — never count towards a double-tap and reset the count, so
+    a tick followed quickly by a tap on the prose is not mistaken for one.
+  - Detected by hand from `pointerup` rather than `dblclick`, which iOS Safari only fires on elements
+    it considers clickable — plain prose isn't. `touch-action: manipulation` on the boxes turns off
+    the browser's double-tap zoom so it can't compete.
+  - **The caret lands where you tapped**: the body, the title, or that specific field (now carrying
+    `data-field` in both modes so read and edit can find each other), at the end of the text.
+  - Timed with `performance.now()`, not `Date.now()`. An interval wants a monotonic clock — and the
+    test harness freezes the wall clock outright, under which every tap read the same instant.
+  - **The real-mouse tests lied at first.** Removing the time, box and checkbox guards left them
+    passing, because taps re-render the note in between and the clock was frozen. A deterministic
+    section now drives `pointerup` at chosen elements with the previous tap set by hand, one rule per
+    case against a positive control.
 - **A new note's SAVE saves and leaves (2026-10-14).** *"For the initial make of a note, SAVE leaves
   the user on the screen while DONE exits while also saving. Get rid of DONE for the initial make and
   let SAVE save the note and back out to the view screen."* On a first write the two buttons were one

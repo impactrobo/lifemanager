@@ -3701,3 +3701,7 @@ textarea.tmpl-input { line-height: 1.5; }
 [data-aesthetic="draconic"]    { --rating-glyph: "\25C6"; }   /* ◆ scale */
 [data-aesthetic="cream"]       { --rating-glyph: "\2666"; }   /* ♦ gem */
 [data-aesthetic="spookyscary"] { --rating-glyph: "\2620"; }   /* ☠ */
+
+/* Double-tap-to-edit on a note's read view (2026-10-14). `manipulation` turns off the browser's
+   own double-tap-to-zoom on these boxes, which would otherwise compete for the same gesture. */
+.entry-title-view, .entry-view, .tmpl-field { touch-action: manipulation; }
