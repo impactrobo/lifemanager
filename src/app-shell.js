@@ -218,6 +218,7 @@ let VIEW = {
   // a section still filtered by something you set last week is how notes go missing.
   entryOpenId: null,                 // the entry the editor is showing, or null for the list
   entryMode: 'view',                 // 'view' renders the Markdown; 'edit' shows the raw text
+  entryFreshId: null,               // a note on its FIRST writing: SAVE saves and leaves, no DONE
   entryDraftTitle: null,             // typed-but-uncommitted text, parked before any re-render
   entryDraftBody: null,
   entryFilter: 'all',                // 'all' | 'fav' | an ENTRY_TYPES key

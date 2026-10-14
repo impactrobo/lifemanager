@@ -134,6 +134,7 @@ function openBlankEntry() {
   const id = (open && entryIsBlank(open)) ? open.id : startBlankEntry();
   VIEW.entryOpenId = id;
   VIEW.entryMode = 'edit';
+  VIEW.entryFreshId = id;     // its first writing -- see renderEntrySaveRow()
   VIEW.entryBackStack = [];   // a note you started fresh isn't "behind" anything
   VIEW.entryPreview = null; VIEW.entryTagQuery = ''; VIEW.entryFieldOpen = {};
   VIEW.hubPicker = null; VIEW.convert = null; VIEW.ingMatch = null;
@@ -159,6 +160,7 @@ function newHubEntry(seedMemberId) {
   ensureTab('notes');
   VIEW.entryOpenId = e.id;
   VIEW.entryMode = 'edit';
+  VIEW.entryFreshId = e.id;
   VIEW.entryBackStack = [];
   VIEW.hubPicker = null;
   clearEntryDraft();
@@ -229,10 +231,18 @@ function promptUnresolvedEntryLinks(e) {
 function saveOpenEntry() {
   const e = commitEntryDraft();
   if (!e) return;
+  // A note's FIRST writing saves and leaves (2026-10-14): "For the initial make of a note, SAVE
+  // leaves the user on the screen while DONE exits while also saving. Get rid of DONE for the
+  // initial make and let SAVE save the note and back out." Two buttons that both save, differing
+  // only in where you land, is one decision too many for a note you have just finished. Editing an
+  // EXISTING note keeps SAVE-and-stay, where staying is the point -- you are mid-revision.
+  const fresh = VIEW.entryFreshId === e.id;
   VIEW.entryMode = 'view';
   saveState();
+  // The unresolved-[[link]] question still comes first: leaving would skip it.
   if (promptUnresolvedEntryLinks(e)) { render(); return; }
   showToast('Saved');
+  if (fresh) { VIEW.entryFreshId = null; closeEntry(); return; }
   render();
 }
 // "Create as new note": makes the target, points the current entry's token at it, and keeps you
@@ -261,6 +271,7 @@ function closeEntry() {
   // a fresh blank entry each visit, so an abandoned one can be several navigations back.
   purgeEmptyEntries();
   VIEW.entryOpenId = null;
+  VIEW.entryFreshId = null;
   VIEW.entryMode = 'view';
   VIEW.entryBackStack = [];
   VIEW.entryPreview = null;
@@ -551,9 +562,12 @@ function renderEntryEditor(e) {
     ${/* SAVE only while editing. In read mode there is nothing unsaved to commit -- ticking a
           checklist box writes through immediately -- so a SAVE button there offered to do nothing
           and implied that not pressing it might lose something. */ ''}
+    ${/* A brand-new note gets SAVE alone, and SAVE takes you back to the list. DONE beside it
+          also saved and also left, so the pair was one action offered twice. */ ''}
     <div class="row" style="gap:8px; margin-top:20px;">
       ${editing ? `<button class="btn btn-primary" style="flex:1;" onclick="saveOpenEntry()">SAVE</button>` : ''}
-      <button class="btn btn-ghost" ${editing ? '' : 'style="flex:1;"'} onclick="closeEntry()">DONE</button>
+      ${editing && VIEW.entryFreshId === e.id ? ''
+        : `<button class="btn btn-ghost" ${editing ? '' : 'style="flex:1;"'} onclick="closeEntry()">DONE</button>`}
     </div>
     <button class="btn btn-ghost btn-sm btn-block" style="margin-top:10px; color:var(--bad);" onclick="deleteEntry('${e.id}')">DELETE NOTE</button>`;
 }

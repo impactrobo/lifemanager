@@ -376,6 +376,19 @@ Newest first. Keep this reasonably current so a fresh session can see what alrea
 without re-reading the whole diff history. Roughly grouped: this project spent early Sept 2026
 on an architecture split + a large wave of Maximalist aesthetics.
 
+- **A new note's SAVE saves and leaves (2026-10-14).** *"For the initial make of a note, SAVE leaves
+  the user on the screen while DONE exits while also saving. Get rid of DONE for the initial make and
+  let SAVE save the note and back out to the view screen."* On a first write the two buttons were one
+  action offered twice, differing only in where you landed. `VIEW.entryFreshId` marks a note on its
+  first writing (set by NEW and + HUB, cleared on close); such a note shows SAVE alone, and SAVE
+  closes back to the list. Editing an existing note is unchanged — SAVE stays, because there you are
+  mid-revision. The unresolved-`[[link]]` prompt still fires before leaving.
+  - Two unrelated tests started failing the same day for no reason in the code:
+    `test_shopping_list.js` and `test_schedule_exceptions.js` hardcoded early-October 2026 dates that
+    were the future when written and had become the past on the real calendar. Pinned to the shared
+    clock. **Twelve more unpinned tests** hardcode July–December 2026 dates and pass today; some will
+    trip the same way as the calendar moves. Not touched yet — pinning can change what "today" means
+    to a test, so each wants a look rather than a blanket edit.
 - **Recipe variants (2026-09-28).** *"A way to instantly generate another recipe off of a recipe, as
   a different 'page' within the note (sort of like every recipe can become a hub) but it starts as a
   duplicate of the original. This allows the user to adjust timings/ingredients/ratios and annotate

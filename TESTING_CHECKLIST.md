@@ -1043,4 +1043,12 @@ timings/ingredients/ratios and annotate to eventually make your perfect dish."*
 - [ ] **The known cost:** every variant is a real note, so it gets its own card in VIEW ALL. With a
       few variants, is that clutter? If so I can collapse family members in the list.
 
+## New note: SAVE saves and backs out (2026-10-14)
+- [ ] Start a **new** note: only **SAVE** at the bottom, no DONE. SAVE should save it and drop you
+      back on the notes list.
+- [ ] Open an **existing** note and edit it: SAVE keeps you in the note (you're mid-revision), and
+      DONE is still there to leave.
+- [ ] New note with a `[[link to nothing]]`: SAVE should still ask about the missing note first,
+      rather than leaving and skipping the question.
+
 ## Add future items below as new features ship

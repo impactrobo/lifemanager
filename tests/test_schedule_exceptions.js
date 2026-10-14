@@ -7,7 +7,7 @@
 // differently-shaped day, and leaves the untimed band alone. Dated one-off events are never
 // suppressed by either: a dentist appointment booked for a holiday is still a real appointment.
 const { chromium } = require('playwright');
-const { settle } = require('./helpers');
+const { settle, pinClock } = require('./helpers');
 const path = require('path');
 
 const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
@@ -23,6 +23,11 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     return route.abort();
   });
 
+  // Clock pinned (2026-10-14): this file hardcodes early-October 2026 dates that were in the
+  // FUTURE when it was written and quietly became the past on the real calendar, at which point
+  // it started failing for no reason in the code. Pinned to the shared PINNED_NOW so they stay
+  // ahead of "today" for good.
+  await pinClock(page);
   await page.goto(APP_PATH);
   await settle(page);
 
