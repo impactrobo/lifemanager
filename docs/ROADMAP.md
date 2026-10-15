@@ -376,6 +376,21 @@ Newest first. Keep this reasonably current so a fresh session can see what alrea
 without re-reading the whole diff history. Roughly grouped: this project spent early Sept 2026
 on an architecture split + a large wave of Maximalist aesthetics.
 
+- **Excreta (2026-10-14).** *"Let's merge the urine and stool recordings on the home page into a
+  section called Excreta. Thus, urine color will be removed from the water intake / hydration
+  section."* Water is what goes in; colour is output, and keeping it under Water had the intake sheet
+  carrying an output reading.
+  - **One chip replaces Stool on the PM strip** — the strip stays four wide — and opens one sheet with
+    urine colour above the Bristol scale. Urine first because it is the more frequent reading.
+  - The chip shows both readings side by side, `● / 4`: the urine shade as a swatch (the colour is the
+    reading, not "3 of 8") and the latest Bristol type, each a dash until taken.
+  - The colour block moved **intact** — swatches, trend strip, note, and the water-target insight,
+    which compares colour against what you drank and so reads naturally from the output side.
+  - Nothing in storage changed: `waterColorLog` and `stoolLog` are the same logs, the per-visit
+    reading semantics are the same, and BODY's bathroom sheet is untouched. The old `stool` sheet still
+    exists for anything that opens it directly.
+  - `test_quick_logs.js` asserted the opposite of the request — that Water was *"the only way to reach
+    the hydration colour scale"*. Reversed, with a new section pinning the Excreta chip and sheet.
 - **Double-tap a note to edit it (2026-10-14).** *"Let's allow double tapping over any text box in
   the view/read mode of a note trigger edit mode for convenience."* The pencil stays; this is an
   accelerator. 7/7 mutations caught.

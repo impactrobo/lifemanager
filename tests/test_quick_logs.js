@@ -104,8 +104,42 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   });
   console.log('after tapping the water chip:', water);
   if (!water.popupOpened || water.field !== 'water') throw new Error('The water chip must open the water sheet');
-  if (!water.hasColorScale) throw new Error('...which is the only way to reach the hydration colour scale');
+  // Reversed 2026-10-14: urine colour left the Water sheet for EXCRETA -- "urine color will be
+  // removed from the water intake / hydration section". Water is what goes in; colour is output.
+  if (water.hasColorScale) throw new Error('the Water sheet must no longer carry the urine colour scale — it moved to Excreta');
   if (water.before) throw new Error('Opening the sheet must not log anything by itself');
+
+  // ---- 3-bis. EXCRETA: one chip, one sheet, urine then stool ----
+  await page.evaluate(() => closeLogPopup());
+  const excreta = await page.evaluate(async () => {
+    const chips = Array.from(document.querySelectorAll('.log-chip')).map(c => c.textContent.replace(/\s+/g, ' ').trim());
+    const chip = Array.from(document.querySelectorAll('.log-chip')).find(c => /EXCRETA/i.test(c.textContent));
+    if (!chip) return { chips };
+    chip.click();
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const popup = document.querySelector('.home-popup');
+    const html = popup ? popup.innerHTML : '';
+    return {
+      chips,
+      field: UI.logPopup && UI.logPopup.field,
+      title: popup ? popup.querySelector('.subtle-label').textContent.trim() : '',
+      hasColour: !!document.querySelector('.home-popup .log-color-scale'),
+      hasBristol: document.querySelectorAll('.home-popup .bristol-row').length,
+      // Urine first: the more frequent of the two goes on top.
+      urineFirst: html.indexOf('log-color-scale') > -1 && html.indexOf('log-color-scale') < html.indexOf('bristol-scale'),
+      noWater: !document.querySelector('.home-popup .water-scrub'),
+    };
+  });
+  console.log('excreta:', JSON.stringify(excreta));
+  if (!excreta.field) throw new Error('the PM strip must carry an EXCRETA chip: ' + JSON.stringify(excreta.chips));
+  if (excreta.chips.some(c => /^STOOL/i.test(c))) throw new Error('...replacing the separate Stool chip');
+  if (excreta.title !== 'EXCRETA') throw new Error('the sheet is titled EXCRETA, got ' + excreta.title);
+  if (!excreta.hasColour || excreta.hasBristol !== 7) throw new Error('...and holds BOTH the urine colour scale and the seven Bristol types');
+  if (!excreta.urineFirst) throw new Error('...urine above stool');
+  if (!excreta.noWater) throw new Error('...and nothing of water intake');
+  // Back to the Water sheet, which the scrubbing checks below drive.
+  await page.evaluate(() => { closeLogPopup(); openLogPopup('water'); });
+  await settle(page);
 
   // +/- adds one serving. The number between them is a DRAG HANDLE for everything in between --
   // a real pointer drag, since that's the gesture that has to work on a phone.
@@ -361,16 +395,16 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   // delete the first instead of recording the second. A tap now always means "this is my reading".
   const color = await page.evaluate(() => {
     STATE.life.waterColorLog = [];
-    openLogPopup('water');                     // a visit begins
+    openLogPopup('excreta');                   // a visit begins
     setWaterColor(3);
     const set = { value: waterColorValue(), age: waterColorAge(), logged: STATE.life.waterColorLog.length };
-    const onChip = /log-chip-dot/.test(logChip('water'));
+    const onChip = /log-chip-dot/.test(logChip('excreta'));
     setWaterColor(6);                          // same visit: corrects, does not stack
     const changed = { value: waterColorValue(), logged: STATE.life.waterColorLog.length };
     setWaterColor(6);                          // THE TRAP: tapping the same shade again
     const same = { value: waterColorValue(), logged: STATE.life.waterColorLog.length };
     closeLogPopup();
-    openLogPopup('water');                     // a NEW visit
+    openLogPopup('excreta');                   // a NEW visit
     setWaterColor(6);                          // the same colour again — a second real reading
     const second = { value: waterColorValue(), logged: STATE.life.waterColorLog.length };
     undoScaleReading('waterColor');            // undo reaches only this visit's reading
@@ -379,7 +413,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     const twice = STATE.life.waterColorLog.length;
     closeLogPopup();
     STATE.life.waterColorLog = [];
-    const blank = { value: waterColorValue(), dot: /log-chip-dot/.test(logChip('water')) };
+    const blank = { value: waterColorValue(), dot: /log-chip-dot/.test(logChip('excreta')) };
     return { set, onChip, changed, same, second, undone, twice, blank, scale: WATER_COLORS.length };
   });
   console.log('colour marker:', color);
@@ -447,7 +481,7 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     STATE.life.waterColorLog = [
       { value: 3, at: at(-1, 8) }, { value: 4, at: at(-1, 13) }, { value: 5, at: at(-1, 20) },
     ];
-    const today = { value: waterColorValue(), dot: /log-chip-dot/.test(logChip('water')) };
+    const today = { value: waterColorValue(), dot: /log-chip-dot/.test(logChip('excreta')) };
     const prior = waterColorPriorDay();
     // A gap: the most recent day WITH readings is what shows, not a blank for yesterday.
     STATE.life.waterColorLog = [{ value: 7, at: at(-4, 9) }];

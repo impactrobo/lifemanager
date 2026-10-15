@@ -3705,3 +3705,16 @@ textarea.tmpl-input { line-height: 1.5; }
 /* Double-tap-to-edit on a note's read view (2026-10-14). `manipulation` turns off the browser's
    own double-tap-to-zoom on these boxes, which would otherwise compete for the same gesture. */
 .entry-title-view, .entry-view, .tmpl-field { touch-action: manipulation; }
+
+/* ---- Excreta (2026-10-14) ----
+   One chip carrying two readings: the latest urine shade as a swatch, then the latest Bristol
+   type. The swatch LEADS here rather than trailing a number as it did on Water, because on this
+   chip it is a reading in its own right, not a decoration on one. */
+.log-chip-dot.log-chip-dot-lead { margin-left: 0; vertical-align: -1px; }
+.log-chip-sep { margin: 0 5px; color: var(--text-faint); font-weight: 400; }
+.log-chip-dash { color: inherit; }
+.log-sheet-subhead {
+  font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--text-dim); margin: 18px 0 8px; padding-top: 12px;
+  border-top: 1px solid var(--border-soft);
+}

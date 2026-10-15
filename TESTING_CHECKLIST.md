@@ -1060,4 +1060,15 @@ timings/ingredients/ratios and annotate to eventually make your perfect dish."*
 - [ ] Tick a checklist box twice quickly: it should tick and untick, **not** open the editor.
 - [ ] Double-tapping shouldn't zoom the page anywhere in a note.
 
+## Excreta (2026-10-14)
+Urine colour and stool are one chip and one sheet now, on the PM strip where Stool used to be.
+- [ ] The PM strip reads **Calories · Water · Steps · Excreta**. Excreta shows today's urine shade
+      as a dot and the latest stool type as a number — `● / 4` — each a dash until logged.
+- [ ] Tap **Excreta**: urine colour on top, then the seven stool types. Logging works exactly as
+      before (a tap is a reading; a second tap in the same visit corrects it; ↶ clears).
+- [ ] **Water** is just water now — no colour swatches, no colour dot on its chip.
+- [ ] The *"on days you hit your water target your colour averaged…"* line moved with the colour
+      into Excreta. Does it still read sensibly there?
+- [ ] PROGRESS → BODY's bathroom button is unchanged, and its readings still show up on Home.
+
 ## Add future items below as new features ship

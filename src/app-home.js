@@ -593,6 +593,14 @@ const LOG_FIELDS = {
   steps:     { group: 'pm', label: 'Steps',    unit: () => 'steps', step: '1' },
   // Bristol: a 7-point scale, not a number you type. Its sheet renders the scale itself.
   stool:     { group: 'pm', label: 'Stool',    unit: () => '1-7' },
+  // Urine colour, an 8-shade swatch. It sat inside the WATER sheet until 2026-10-14.
+  urine:     { group: 'pm', label: 'Urine',    unit: () => '1-8' },
+  // EXCRETA (2026-10-14): one chip, one sheet, both outputs. Asked for as "merge the urine and stool
+  // recordings on the home page into a section called Excreta. Thus, urine color will be removed
+  // from the water intake / hydration section." Water is what goes IN; this is what comes out, and
+  // keeping colour under Water had the intake sheet carrying an output reading. The chip has no
+  // value of its own -- it shows the two it gathers (see logFieldDisplay).
+  excreta:   { group: 'pm', label: 'Excreta',  unit: () => '' },
 };
 // Today's value for a field, or null when it hasn't been logged. One reader for the chips, the
 // sheet and the tests, so a chip can never disagree with the sheet it opens.
@@ -612,6 +620,9 @@ function logFieldValue(field) {
     // Not in dailyLog: Bristol is a dated reading log like the hydration colour, several a day,
     // resetting at midnight. logFieldValue() shows the latest one taken today.
     case 'stool':     return bristolValue();
+    case 'urine':     return waterColorValue();
+    // Logged if EITHER reading was taken today: the chip is "set" the moment there is something on it.
+    case 'excreta':   return (waterColorValue() != null || bristolValue() != null) ? true : null;
     default:          return null;
   }
 }
@@ -620,6 +631,15 @@ function logFieldValue(field) {
 function logFieldDisplay(field) {
   const v = logFieldValue(field);
   if (field === 'water') return `${fmtWater(v || 0)}/${fmtWater(waterTargetMl())}`;
+  // The latest urine shade as a swatch and the latest Bristol type as its number, side by side --
+  // each a dash until taken. A swatch, not "4 of 8": the colour IS the reading.
+  if (field === 'excreta') {
+    const c = waterColorValue();
+    const sw = c ? `<i class="log-chip-dot log-chip-dot-lead" style="background:${waterColorHex(c)};" title="Urine ${c} of 8 &middot; ${waterColorAge()}"></i>`
+                 : '<span class="log-chip-dash">&mdash;</span>';
+    const st = bristolValue() != null ? logFieldDisplay('stool') : '&mdash;';
+    return `${sw}<span class="log-chip-sep">/</span>${st}`;
+  }
   if (v == null) return '&mdash;';
   // Reads 120/80, the way a blood pressure is written and said out loud. Water's a/b chip is the
   // precedent; unlike water there's no meaningful zero, so an unlogged day is a dash, not "0/0".
@@ -942,7 +962,8 @@ function logChip(field) {
   // Water carries two extras: its unit (the numbers are meaningless without it) and a dot of the
   // current colour marker, which is the whole point of a marker that "lasts until changed" -- it
   // has to be visible without opening anything.
-  const colorVal = field === 'water' ? waterColorValue() : null;
+  // (The colour dot that sat here moved to the EXCRETA chip with the reading itself, 2026-10-14.)
+  const colorVal = null;
   const label = field === 'water'
     ? `${LOG_FIELDS[field].label} <i class="log-chip-unit">&middot; ${waterUnitLabel()}</i>`
     : LOG_FIELDS[field].label;
@@ -972,7 +993,7 @@ function renderLogStrip(group, fields) {
     <div class="log-strip">${fields.map(logChip).join('')}</div>`;
 }
 function renderHomeAmLogBox() { return renderLogStrip('am', ['weight', 'sleepLen', 'sleepQual', 'restingHR']); }
-function renderHomePmLogBox() { return renderLogStrip('pm', ['calories', 'water', 'steps', 'stool']); }
+function renderHomePmLogBox() { return renderLogStrip('pm', ['calories', 'water', 'steps', 'excreta']); }
 
 // ---- The log sheet: ONE field at a time, saved as you type ----
 //
@@ -988,7 +1009,9 @@ function renderHomePmLogBox() { return renderLogStrip('pm', ['calories', 'water'
 //   - One field per sheet, so there is never a set of pending edits to lose in the first place.
 //     Sleep and its quality are the exception: they are one observation made at one moment, and
 //     splitting them would mean opening two sheets every morning.
-const LOG_FIELD_PAIRS = { sleepLen: ['sleepLen', 'sleepQual'], sleepQual: ['sleepLen', 'sleepQual'] };
+const LOG_FIELD_PAIRS = { sleepLen: ['sleepLen', 'sleepQual'], sleepQual: ['sleepLen', 'sleepQual'],
+  // Urine before stool: it is the more frequent of the two, so the one you reach for most is on top.
+  excreta: ['urine', 'stool'] };
 function logFieldsOfSheet(field) { return LOG_FIELD_PAIRS[field] || [field]; }
 function openLogPopup(field, focus) {
   UI.logPopup = { field, focus: focus || field };
@@ -1169,7 +1192,6 @@ function renderLogPopup() {
       // Water is a counter, not a text field: the +/- add one serving, the right shape for a glass
       // you refill. The number between them is also a DRAG HANDLE for everything in between --
       // pull up or down to adjust by 50 mL (or a fluid ounce), no keyboard involved.
-      const cur = waterColorValue();
       return `
         <div class="log-sheet-row">
           <span class="log-sheet-label">Water</span>
@@ -1192,8 +1214,16 @@ function renderLogPopup() {
           <span class="log-sheet-unit">+ adds</span>
           <input type="number" class="log-water-target" min="1" step="${waterUnit() === 'cup' ? '0.25' : '10'}" value="${fmtWater(waterServingMl())}" onchange="setWaterServing(this.value)">
         </div>
+`;
+    }
+    if (f === 'urine') {
+      // Moved here from the Water sheet (2026-10-14) intact: the swatches, the trend strip, the note,
+      // and the water-vs-colour insight -- which compares this reading against the water target and
+      // so still reads naturally from here, as "what came out, against what went in".
+      const cur = waterColorValue();
+      return `
         <div class="log-sheet-row log-color-row">
-          <span class="log-sheet-label">Color</span>
+          <span class="log-sheet-label">Urine</span>
           <div class="log-color-scale">
             ${/* The clear sits at the LEFT of the scale and only once something is on it, so the
                   control that removes a reading lives beside the reading -- not as a button that
@@ -1218,7 +1248,9 @@ function renderLogPopup() {
       const cur = bristolValue();
       const today = bristolReadingsToday();
       const prior = bristolPriorDay();
-      return `
+      // Inside EXCRETA the stool scale follows the urine one, so it needs a name of its own; on its
+      // own sheet the title already says it.
+      return `${field === 'excreta' ? '<div class="log-sheet-subhead">Stool</div>' : ''}
         <div class="bristol-scale">
           ${BRISTOL_TYPES.map(t => `
             <button class="bristol-row ${cur === t.n ? 'bristol-row-on' : ''}" onclick="setBristol(${t.n})">
@@ -1258,7 +1290,8 @@ function renderLogPopup() {
         <span class="log-sheet-unit">${LOG_FIELDS[f].unit()}</span>
       </div>`;
   }).join('');
-  const title = fields.length > 1 ? 'SLEEP' : LOG_FIELDS[field].label.toUpperCase();
+  const title = field === 'excreta' ? 'EXCRETA'
+              : fields.length > 1 ? 'SLEEP' : LOG_FIELDS[field].label.toUpperCase();
   return `
     <div class="home-popup-backdrop" onclick="closeLogPopup()">
       <div class="panel home-popup" onclick="event.stopPropagation()">
