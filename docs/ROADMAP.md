@@ -376,6 +376,22 @@ Newest first. Keep this reasonably current so a fresh session can see what alrea
 without re-reading the whole diff history. Roughly grouped: this project spent early Sept 2026
 on an architecture split + a large wave of Maximalist aesthetics.
 
+- **Create exercises on the Exercises screen (2026-10-18).** *"Think we need to put new exercise
+  addition into the EXERCISE portion of the workout builder, currently a challenge and unclear how to
+  add them through workouts."* It was worse than unclear: the only create form lived inside a workout
+  slot's lift picker, this screen's own search dead-ended with *"Add it as a custom exercise in the
+  Workout Builder first"*, and because the list shows only TESTED lifts, an exercise made elsewhere
+  never appeared here at all. 7/7 mutations caught.
+  - **+ NEW EXERCISE** on BUILDER → EXERCISES opens a create form with the picker's rules: an exact
+    name already in the library is refused rather than duplicated, and near-misses are shown as you
+    type ("Bench Press" → Barbell / Dumbbell / Incline). The suggestions patch in place; a keystroke
+    never re-renders the screen.
+  - **MY EXERCISES · no max yet** lists custom lifts without a max, so a new exercise is visible the
+    moment it exists. Giving it a max (+ MAX) moves it up into TRAINING MAXES; it is never listed
+    twice.
+  - "+ ADD A LIFT" became **+ ADD A MAX** — it was always adding a max to an existing lift, and two
+    "add" buttons on one screen need to say which thing they add. Its "no match" is now a create
+    button prefilled with what you searched.
 - **Excreta (2026-10-14).** *"Let's merge the urine and stool recordings on the home page into a
   section called Excreta. Thus, urine color will be removed from the water intake / hydration
   section."* Water is what goes in; colour is output, and keeping it under Water had the intake sheet

@@ -91,6 +91,9 @@ function defaultTransientUi() {
     // away abandons the half-saved food rather than having it reappear over an unrelated screen.
     foodCollision: null,
     foodMerge: null,
+    // The new-exercise form on BUILDER -> EXERCISES: {name, muscle} while open. Transient, so leaving
+    // the screen abandons a half-typed exercise rather than reopening it somewhere unrelated.
+    newExercise: null,
     // The recurring-charge form re-renders when its frequency changes (the yearly controls appear
     // and disappear), so what is half-typed has to be carried across it.
     recurringChargeDraft: null,

@@ -1071,4 +1071,15 @@ Urine colour and stool are one chip and one sheet now, on the PM strip where Sto
       into Excreta. Does it still read sensibly there?
 - [ ] PROGRESS → BODY's bathroom button is unchanged, and its readings still show up on Home.
 
+## New exercises from the Exercises screen (2026-10-18)
+- [ ] **BUILDER → WORKOUT → EXERCISES** has **+ NEW EXERCISE** near the top. Add one you actually do
+      that isn't in the library.
+- [ ] Type a bare name like **"Bench Press"** — it should show the versions already in the library
+      (Barbell / Dumbbell / Incline…) before you add a duplicate. An exact match is refused.
+- [ ] After adding, it appears under **MY EXERCISES · no max yet** at the bottom. Give it a max with
+      **+ MAX** and it moves up into TRAINING MAXES.
+- [ ] Open a workout and an exercise slot's lift picker: the new exercise is there to pick.
+- [ ] **+ ADD A MAX** (renamed from "+ ADD A LIFT"): search for something that doesn't exist — it now
+      offers to create it right there instead of sending you to the Workout Builder.
+
 ## Add future items below as new features ship

@@ -3718,3 +3718,13 @@ textarea.tmpl-input { line-height: 1.5; }
   color: var(--text-dim); margin: 18px 0 8px; padding-top: 12px;
   border-top: 1px solid var(--border-soft);
 }
+
+/* ---- New exercise on BUILDER -> EXERCISES (2026-10-18) ---- */
+.new-ex-hint { font-size: 11px; line-height: 1.5; color: var(--text-faint); margin-bottom: 10px; }
+.new-ex-hint b { color: var(--text); }
+.new-ex-note { font-size: 11px; color: var(--text-faint); margin: -2px 0 6px; }
+.new-ex-note b { color: var(--warn); }
+.new-ex-near { font-size: 12px; color: var(--text-dim); padding: 2px 0 2px 10px; border-left: 2px solid var(--border); margin-bottom: 3px; }
+.new-ex-near span, .my-ex-name span { font-size: 10px; color: var(--text-faint); margin-left: 4px; }
+.my-ex-row { display: flex; align-items: center; gap: 8px; padding: 10px 12px; }
+.my-ex-name { flex: 1; min-width: 0; font-size: 13px; font-weight: 700; }

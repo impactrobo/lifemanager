@@ -120,14 +120,112 @@ function renderTMSetup() {
   const tested = liftsWithMaxes();
   return `
     ${renderRoundingPanel()}
+    ${renderNewExerciseBlock()}
     <div class="row" style="margin:20px 0 8px;">
       <div class="subtle-label" style="margin-bottom:0;">TRAINING MAXES</div>
-      <button class="btn btn-sm" onclick="openLiftMaxPicker()">+ ADD A LIFT</button>
+      <button class="btn btn-sm" onclick="openLiftMaxPicker()">+ ADD A MAX</button>
     </div>
     ${UI.liftMaxPickerOpen ? renderLiftMaxPicker() : ''}
     ${tested.length
       ? renderLiftMaxControls(tested) + renderLiftMaxGroups()
-      : emptyState('No training maxes yet. Add a lift to record what you tested — T1 and T2 slots in the Workout Builder then read it.')}`;
+      : emptyState('No training maxes yet. Add one to record what you tested — T1 and T2 slots in the Workout Builder then read it.')}
+    ${renderMyExercises()}`;
+}
+
+// ---- Creating an exercise HERE (2026-10-18) ----
+//
+// "Think we need to put new exercise addition into the EXERCISE portion of the workout builder,
+// currently a challenge and unclear how to add them through workouts." It was worse than unclear:
+// the only create form lived inside a workout slot's lift picker, and this screen's own search
+// dead-ended with "Add it as a custom exercise in the Workout Builder first" -- sending you away from
+// the screen named for exercises to make one. And because the list below shows only lifts with a
+// max, an exercise you DID make elsewhere never appeared here at all.
+//
+// So: a create form on this screen, the same rules as the workout picker's (exact name reuses the
+// existing lift instead of duplicating it; near-misses are offered first), and a MY EXERCISES list
+// so something you made is visible whether or not it has been tested.
+function openNewExercise(prefill) {
+  UI.newExercise = { name: String(prefill || ''), muscle: MUSCLE_GROUPS[0] };
+  UI.liftMaxPickerOpen = false;
+  render();
+}
+function closeNewExercise() { UI.newExercise = null; render(); }
+// Patches the suggestions only -- never render() from a keystroke, or the field loses focus and a
+// phone drops its keyboard after every letter.
+function onNewExerciseName(v) {
+  if (!UI.newExercise) return;
+  UI.newExercise.name = v;
+  const box = document.getElementById('newExerciseSuggest');
+  if (box) box.innerHTML = newExerciseSuggestHtml();
+}
+function newExerciseSuggestHtml() {
+  const n = UI.newExercise ? UI.newExercise.name.trim() : '';
+  if (!n) return '';
+  const exact = liftByExactName(n);
+  if (exact) {
+    return `<div class="new-ex-note">Already in the library as <b>${escapeHtml(exact.name)}</b>.</div>`;
+  }
+  const near = liftSuggestions(n, 3);
+  if (!near.length) return '';
+  return `<div class="new-ex-note">Already have one of these?</div>
+    ${near.map(l => `<div class="new-ex-near">${escapeHtml(l.name)}${l.muscle ? ` <span>${escapeHtml(l.muscle)}</span>` : ''}</div>`).join('')}`;
+}
+function createExerciseHere() {
+  const name = inputVal('newExerciseName');
+  if (!(name || '').trim()) { showToast('Give the exercise a name'); return; }
+  const existing = liftByExactName(name);
+  if (existing) { showToast(`“${existing.name}” is already in the library`); return; }
+  const lift = addCustomLift(name, inputVal('newExerciseMuscle'), inputVal('newExerciseShort'));
+  if (!lift) return;
+  UI.newExercise = null;
+  saveState();
+  showToast(`Added “${lift.name}” — it's in every workout's lift picker now`);
+  render();
+}
+function renderNewExerciseBlock() {
+  const ne = UI.newExercise;
+  if (!ne) {
+    return `<div class="row" style="margin:20px 0 8px;">
+      <div class="subtle-label" style="margin-bottom:0;">EXERCISES</div>
+      <button class="btn btn-sm btn-primary" onclick="openNewExercise()">+ NEW EXERCISE</button>
+    </div>`;
+  }
+  return `<div class="subtle-label" style="margin:20px 0 8px;">NEW EXERCISE</div>
+    <div class="panel new-ex">
+      <div class="new-ex-hint">Lead with the equipment — <b>Barbell</b> Bench Press, not Bench Press.
+        Different loads and progressions live under one bare name.</div>
+      <label class="field"><span class="lbl">Name</span>
+        <input type="text" id="newExerciseName" value="${escapeHtml(ne.name)}" placeholder="e.g. Landmine Press"
+               oninput="onNewExerciseName(this.value)"></label>
+      <div id="newExerciseSuggest">${newExerciseSuggestHtml()}</div>
+      <div class="field-row">
+        <label class="field"><span class="lbl">Short form</span>
+          <input type="text" id="newExerciseShort" placeholder="optional"></label>
+        <label class="field"><span class="lbl">Muscle</span>
+          <select id="newExerciseMuscle">
+            ${MUSCLE_GROUPS.map(m => `<option value="${m}"${m === ne.muscle ? ' selected' : ''}>${m}</option>`).join('')}
+          </select></label>
+      </div>
+      <div class="row" style="gap:8px; margin-top:6px;">
+        <button class="btn btn-sm" onclick="closeNewExercise()">CANCEL</button>
+        <button class="btn btn-sm btn-primary" style="flex:1;" onclick="createExerciseHere()">ADD EXERCISE</button>
+      </div>
+    </div>`;
+}
+// Exercises you made that have no max yet. Without this list a new exercise vanished the moment it
+// was created, because everything above shows only what has been TESTED -- and "I added it, where
+// did it go?" is worse than any amount of explanation. Tested ones are already listed above, so they
+// are not repeated here.
+function renderMyExercises() {
+  const mine = (Array.isArray(STATE.lifts) ? STATE.lifts : []).filter(l => !liftHasMax(l.id));
+  if (!mine.length) return '';
+  return `<div class="subtle-label" style="margin:22px 0 8px;">MY EXERCISES <span style="font-weight:400; color:var(--text-faint);">&middot; no max yet</span></div>
+    <div class="stack">${mine.map(l => `
+      <div class="panel my-ex-row">
+        <div class="my-ex-name">${escapeHtml(l.name)}${l.muscle ? ` <span>${escapeHtml(l.muscle)}</span>` : ''}</div>
+        <button class="btn btn-sm btn-ghost" onclick="startLiftMax('${l.id}')">+ MAX</button>
+      </div>`).join('')}</div>
+    <div class="new-ex-note" style="margin-top:6px;">Pick these from any workout's exercise slot. A max is only needed for T1/T2 slots.</div>`;
 }
 
 // ---- Grouping and filtering the list ----
@@ -233,7 +331,12 @@ function liftMaxResultsHtml() {
     .filter(l => !liftHasMax(l.id))
     .filter(l => !q || l.name.toLowerCase().includes(q) || (l.short || '').toLowerCase().includes(q))
     .slice(0, 40);
-  if (!matches.length) return `<div style="font-size:11px; color:var(--text-faint);">No match. Add it as a custom exercise in the Workout Builder first.</div>`;
+  // Not a dead end any more: it used to send you to the Workout Builder to create the exercise.
+  if (!matches.length) {
+    const q0 = (VIEW.liftMaxQuery || '').trim();
+    return `<div style="font-size:11px; color:var(--text-faint); margin-bottom:6px;">No match.</div>
+      <button class="btn btn-sm btn-block" onclick="openNewExercise(${jsArg(q0)})">+ CREATE ${q0 ? '“' + escapeHtml(q0) + '”' : 'A NEW EXERCISE'}</button>`;
+  }
   return matches.map(l => `
     <button class="btn btn-sm btn-block" style="text-align:left;" onclick="startLiftMax('${l.id}')">
       ${escapeHtml(l.name)}${l.muscle ? ` <span style="color:var(--text-faint); font-size:10px;">${escapeHtml(l.muscle)}</span>` : ''}
