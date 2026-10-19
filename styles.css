@@ -3728,3 +3728,20 @@ textarea.tmpl-input { line-height: 1.5; }
 .new-ex-near span, .my-ex-name span { font-size: 10px; color: var(--text-faint); margin-left: 4px; }
 .my-ex-row { display: flex; align-items: center; gap: 8px; padding: 10px 12px; }
 .my-ex-name { flex: 1; min-width: 0; font-size: 13px; font-weight: 700; }
+
+/* ---- Exercise search in T3 / accessory slots (2026-10-18) ---- */
+.ex-search { position: relative; }
+.ex-search-input { width: 100%; font-weight: 600; }
+.ex-search-list {
+  margin-top: 4px; border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--surface); overflow: hidden;
+}
+.ex-search-hit {
+  display: flex; align-items: baseline; gap: 8px; width: 100%; text-align: left;
+  padding: 9px 10px; background: none; border: 0; border-bottom: 1px solid var(--border-soft);
+  color: var(--text); font: inherit; font-size: 13px; cursor: pointer;
+}
+.ex-search-hit:last-child { border-bottom: 0; }
+.ex-search-hit span { flex: 1; min-width: 0; }
+.ex-search-hit i { font-style: normal; font-size: 10px; color: var(--text-faint); }
+.ex-search-new { color: var(--accent); font-weight: 700; }

@@ -168,17 +168,16 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
     VIEW.builderType = 'weights'; VIEW.builderSelected.weights = wid; render();
   }, refs.workoutId);
   await settle(page);
-  // Opening and typing have to straddle a settle(): render() defers to rAF, so the picker's input
-  // does not exist yet inside the same evaluate() that opened it.
-  await page.evaluate((wid) => openLiftPicker('ex:' + wid + ':x9', ''), refs.workoutId);
-  await settle(page);
+  // Since 2026-10-18 the row's name field IS the search (the separate LIFT link and its picker are
+  // hidden), so the create path under test is the search's "+ Add as a new exercise". It reads the
+  // field by id, so the field has to be on screen or this passes for the wrong reason.
   const dupe = await page.evaluate((wid) => {
     const before = STATE.lifts.length;
     const token = 'ex:' + wid + ':x9';
-    const el = document.getElementById('newLiftName_' + token);
-    if (!el) throw new Error('the picker did not render — this test would prove nothing');
+    const el = document.getElementById(exSearchId(token));
+    if (!el) throw new Error('the search did not render — this test would prove nothing');
     el.value = 'cable flye';
-    createLiftFromPicker(token);
+    createExerciseSearch(token);
     const w = STATE.workouts.find(x => x.id === wid);
     return { added: STATE.lifts.length - before, linkedTo: w.exercises.find(e => e.id === 'x9').liftId };
   }, refs.workoutId);
@@ -187,52 +186,50 @@ const APP_PATH = 'file://' + path.resolve(__dirname, '..', 'index.html');
   if (dupe.linkedTo !== 'cable-flye') throw new Error('And it should link to the one that already exists');
 
   // ---- 6. The picker: muscle first, and it never assigns by itself ----
-  // Its own unlinked exercise to open the picker against. This used to use a category token, which
-  // needed nothing to exist because categories were global; an exercise belongs to a workout, so
-  // one has to survive the reset below.
-  const pickerWorkoutId = await page.evaluate(() => {
+  // HIDDEN from the builder since 2026-10-18 -- the slot's search replaced it -- but kept, so it is
+  // tested as a pure render of its body rather than through a screen that no longer shows it.
+  const picker = await page.evaluate(() => {
     STATE.workouts = []; STATE.lifts = [];
-    const w = createWorkout('weights', 'Hypertrophy (RP Strength)');
-    w.exercises = [{ id: 'xp', name: 'Some Press', liftId: null, sets: 3, repMin: 8, repMax: 12,
-                     targetRIR: 2, resType: 'weight', setType: 'straight', muscle: null, adjustments: [] }];
-    switchTab('train'); NAV.fitnessSubtab = 'builder'; NAV.setupSubtab = 'builder';
-    VIEW.builderType = 'weights'; VIEW.builderSelected.weights = w.id; render();
-    return w.id;
+    const rows = () => (liftPickerBodyHtml().match(/class="lift-row[ "]/g) || []).length;
+    const chips = () => (liftPickerBodyHtml().match(/setLiftPickerMuscle\(/g) || []).length;
+    UI.liftPicker = { token: 'ex:none:x', query: '', muscle: null };
+    const beforeMuscle = { rows: rows(), chips: chips() };
+    UI.liftPicker.muscle = 'Chest';
+    const afterMuscle = rows();
+    UI.liftPicker.query = 'row'; UI.liftPicker.muscle = null;
+    const html = liftPickerBodyHtml();
+    const searched = (html.match(/class="lift-row-name">([^<]*)</g) || []).map(m => m.replace(/.*>/, '').replace(/<$/, '').trim());
+    const workoutsUntouched = STATE.workouts.length === 0;
+    closeLiftPicker();
+    return { beforeMuscle, afterMuscle, searched, closed: UI.liftPicker, workoutsUntouched };
   });
-  await settle(page);
-  // Each step needs its own settle() for the same rAF reason.
-  const TOKEN = 'ex:' + pickerWorkoutId + ':xp';
-  await page.evaluate((t) => openLiftPicker(t, ''), TOKEN);
-  await settle(page);
-  const beforeMuscle = await page.evaluate(() => ({
-    rows: document.querySelectorAll('.lift-row').length,
-    chips: document.querySelectorAll('.lift-muscles .btn').length,
-  }));
-  await page.evaluate(() => setLiftPickerMuscle('Chest'));
-  await settle(page);
-  const afterMuscle = await page.evaluate(() => document.querySelectorAll('.lift-row').length);
-  await page.evaluate(() => setLiftPickerQuery('row'));
-  await settle(page);
-  const searched = await page.evaluate(() => Array.from(document.querySelectorAll('.lift-row-name')).map(e => e.textContent.trim()));
-  await page.evaluate(() => closeLiftPicker());
-  await settle(page);
-  const picker = { beforeMuscle, afterMuscle, searched, closed: await page.evaluate(() => UI.liftPicker) };
   console.log('picker:', { ...picker, searched: picker.searched.slice(0, 3) });
   if (picker.beforeMuscle.rows !== 0) throw new Error('Before a muscle is chosen there is no list — that is the point of muscle-first');
-  if (picker.beforeMuscle.chips !== 15) throw new Error('Every muscle group should be offered as a chip');
+  if (picker.beforeMuscle.chips < 15) throw new Error('Every muscle group should be offered as a chip');
   if (picker.afterMuscle < 5) throw new Error('Choosing a muscle should show its lifts');
   if (picker.afterMuscle > 30) throw new Error('A muscle group should be a short list, or muscle-first bought nothing');
   if (!picker.searched.length || !picker.searched.every(n => /row/i.test(n))) throw new Error('Search should span muscles and narrow to matches');
   if (picker.closed !== null) throw new Error('Closing the picker clears it');
 
-  // ---- 7. The builder row asks for the link, and a nickname is the shorthand ----
-  // The LINK NAMES review screen is retired. Nothing reconciles free text after the fact any more:
-  // an unlinked exercise says so on its own row, in the one place someone is already editing it.
+  // ---- 7. The builder row is a search, and a nickname is the shorthand ----
+  // The LINK NAMES review screen is retired, and since 2026-10-18 so is the row's "not linked — tap to
+  // choose" button: the name field is a search that always ends in a library lift, so there is no
+  // unlinked state left for a row to announce.
+  await page.evaluate(() => {
+    const w = createWorkout('weights', 'Hypertrophy (RP Strength)');
+    w.exercises = [{ id: 'xs', name: '', liftId: null, sets: 3, repMin: 8, repMax: 12,
+                     targetRIR: 2, resType: 'weight', setType: 'straight', muscle: null, adjustments: [] }];
+    switchTab('train'); NAV.fitnessSubtab = 'builder'; NAV.setupSubtab = 'builder';
+    VIEW.builderType = 'weights'; VIEW.builderSelected.weights = w.id; render();
+  });
+  await settle(page);
   const ui = await page.evaluate(() => ({
-    app: document.getElementById('app').innerText,
+    search: document.querySelectorAll('#app .ex-search-input').length,
+    link: document.querySelectorAll('#app .lift-link').length,
     subnav: Array.from(document.querySelectorAll('.subnav button')).map(b => b.textContent.trim()),
   }));
-  if (!/not linked/i.test(ui.app)) throw new Error('An unlinked exercise should say so on its own builder row');
+  if (!ui.search) throw new Error('A builder row offers the exercise search');
+  if (ui.link) throw new Error('...and no separate LIFT link');
   if (ui.subnav.some(t => /LINK NAMES/i.test(t))) throw new Error('LINK NAMES is retired — the builder row is the only linking surface');
 
   // A nickname is a shorthand for an existing lift, kept in a sparse map beside the library rather

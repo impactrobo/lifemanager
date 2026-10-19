@@ -1082,4 +1082,17 @@ Urine colour and stool are one chip and one sheet now, on the PM strip where Sto
 - [ ] **+ ADD A MAX** (renamed from "+ ADD A LIFT"): search for something that doesn't exist — it now
       offers to create it right there instead of sending you to the Workout Builder.
 
+## T3 and accessory slots are a search now (2026-10-18)
+- [ ] Open a **P-Zero** workout → **Tier 3**: each slot is a search box. Type part of a name
+      ("hammer") and pick from the list. The slot fills in with the exercise and its muscle.
+- [ ] Same on a **Hypertrophy (RP)** workout's exercise list.
+- [ ] The **LIFT: not linked — tap to choose** button is gone from both. Anything still missing that
+      it used to do for you?
+- [ ] Type something that isn't in the library and tap **+ Add "…" as a new exercise**: it becomes a
+      custom exercise (it'll appear under BUILDER → EXERCISES → MY EXERCISES) using the muscle
+      already set on that slot.
+- [ ] Type half a word and tap elsewhere: **nothing should change** — no half-named exercise created.
+- [ ] Clear the box and tap away: the slot empties, the same as before.
+- [ ] **Enter** on the keyboard picks the top result. Handy, or does it fire by accident?
+
 ## Add future items below as new features ship

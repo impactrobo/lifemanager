@@ -376,6 +376,28 @@ Newest first. Keep this reasonably current so a fresh session can see what alrea
 without re-reading the whole diff history. Roughly grouped: this project spent early Sept 2026
 on an architecture split + a large wave of Maximalist aesthetics.
 
+- **T3 and accessory slots are a search; the LIFT link is hidden (2026-10-18).** *"For accessory (and
+  T3 for the P-Zero) exercises, I think the custom entry can become a search bar for finding an
+  exercise like with the maxes. Then we can just remove the LIFT LINK functionality since the choice
+  would be forced anyway, or they can add a custom one with whatever name. Just hide the LINK
+  function."* 8/8 mutations caught.
+  - The slot was a free-text name **plus** a separate "LIFT: not linked — tap to choose" button: two
+    controls for one decision, and a name typed into the first linked to nothing, so its history never
+    joined the same movement elsewhere. Now the name field IS the search, and every outcome is a real
+    library lift — one you picked, or a custom one made from what you typed with the slot's muscle.
+    No unlinked state is left to fall into, which is what made the LINK control removable.
+  - **Nothing commits without a tap.** Leaving a half-typed field creates no lift and changes nothing;
+    Enter takes the top result; clearing the field empties the slot, as it always did. Keystrokes patch
+    the results list only, and result buttons hold focus through the tap (`onmousedown`
+    preventDefault) so the field's blur can't tear the list down first.
+  - Ranking: exact name, then a name starting with the query, then shortest — the same instinct as the
+    ingredient matcher.
+  - **Hidden, not deleted**, as asked: `renderLiftLink()` and the muscle-first picker are no longer
+    rendered by the builder but still exist. `test_lift_library.js` drove that picker through the
+    builder; its sections now test it as a pure render, and its duplicate-by-name check moved to the
+    search's create path, which keeps the same rule.
+  - Picking into an empty T3 slot now switches the slot on (`enabled`), matching what typing a name
+    always did — `assignLiftRef()` set the name and lift but not the flag.
 - **Create exercises on the Exercises screen (2026-10-18).** *"Think we need to put new exercise
   addition into the EXERCISE portion of the workout builder, currently a challenge and unclear how to
   add them through workouts."* It was worse than unclear: the only create form lived inside a workout

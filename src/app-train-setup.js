@@ -1056,11 +1056,10 @@ function renderWeightWorkoutEditor(w) {
           <div style="${ti>0?'border-top:1px solid var(--border-soft); padding-top:8px; margin-top:8px;':''}">
             <div class="subtle-label">T3${String.fromCharCode(97+ti).toUpperCase()}</div>
             <div style="display:flex; align-items:center; gap:6px; margin-bottom:6px;">
-              <input type="text" placeholder="e.g. Dumbbell Hammer Curl" value="${escapeHtml(t.name)}" style="flex:1;"
-                onchange="updateT3Name('${w.id}',${ti},this.value)">
+              <div style="flex:1; min-width:0;">${renderExerciseSearch(`t3:${w.id}:${ti}`, t.name, 'Search, e.g. hammer curl')}</div>
               ${t.muscle ? `<div style="width:12px; height:12px; border-radius:50%; background:${muscleColor(t.muscle)}; border:1px solid rgba(0,0,0,0.2); flex-shrink:0;" title="${t.muscle}"></div>` : ''}
             </div>
-            ${renderLiftLink(`t3:${w.id}:${ti}`, t.liftId)}
+            ${/* LIFT link hidden: the search above always ends in a library lift. */''}
             <select onchange="updateT3Muscle('${w.id}',${ti},this.value || null)">
               <option value="" ${!t.muscle ? 'selected' : ''}>&mdash; muscle &mdash;</option>
               ${MUSCLE_GROUPS.map(m => `<option value="${m}" ${t.muscle===m?'selected':''}>${m}</option>`).join('')}
@@ -1081,15 +1080,14 @@ function renderRpWorkoutEditor(w) {
   const exRows = w.exercises.map((ex, i) => `
     <div class="panel" style="${i>0?'':''}">
       <div class="row" style="margin-bottom:8px;">
-        <input type="text" placeholder="e.g. Barbell Bench Press" value="${escapeHtml(ex.name)}" style="flex:1; font-weight:600;"
-          onchange="updateRpExField('${w.id}','${ex.id}','name',this.value)">
+        <div style="flex:1; min-width:0;">${renderExerciseSearch(`ex:${w.id}:${ex.id}`, ex.name, 'Search, e.g. bench press')}</div>
         <div style="display:flex; gap:4px; margin-left:6px;">
           <button class="icon-btn" ${i===0?'disabled style="opacity:.3"':''} onclick="moveRpEx('${w.id}','${ex.id}',-1)">${icon('up')}</button>
           <button class="icon-btn" ${i===w.exercises.length-1?'disabled style="opacity:.3"':''} onclick="moveRpEx('${w.id}','${ex.id}',1)">${icon('down')}</button>
           <button class="icon-btn" style="color:var(--bad)" onclick="removeRpEx('${w.id}','${ex.id}')">${icon('close')}</button>
         </div>
       </div>
-      ${renderLiftLink(`ex:${w.id}:${ex.id}`, ex.liftId)}
+      ${/* LIFT link hidden: the search above always ends in a library lift. */''}
       <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px; margin-bottom:6px;">
         <div>
           <div style="font-size:9px; color:var(--text-faint); margin-bottom:3px;">MUSCLE</div>

@@ -325,7 +325,9 @@ function assignLiftRef(ref, liftId) {
     if (ex) { ex.liftId = liftId; ex.name = lift.name; if (lift.muscle) ex.muscle = lift.muscle; }
   } else if (ref.kind === 't3') {
     const slot = (w.t3 || [])[Number(ref.id)];
-    if (slot) { slot.liftId = liftId; slot.name = lift.name; if (lift.muscle) slot.muscle = lift.muscle; }
+    // `enabled` follows the name, as updateT3Name() has always done: picking a lift into an empty
+    // slot is what switches that slot on.
+    if (slot) { slot.liftId = liftId; slot.name = lift.name; slot.enabled = true; if (lift.muscle) slot.muscle = lift.muscle; }
   }
 }
 
@@ -440,6 +442,122 @@ function renderLiftLink(token, liftId) {
       <span class="lift-link-v">${lift ? escapeHtml(lift.name) : 'not linked — tap to choose'}</span>
       ${lift && liftShort(lift.id) !== lift.name ? `<span class="lift-link-short">${escapeHtml(liftShort(lift.id))}</span>` : ''}
     </button>`;
+}
+
+// ---- The exercise SEARCH field (2026-10-18) ----
+//
+// "For accessory (and T3 for the P-Zero) exercises, I think the custom entry can become a search bar
+// for finding an exercise like with the maxes. Then we can just remove the LIFT LINK functionality
+// since the choice would be forced anyway, or they can add a custom one with whatever name."
+//
+// The slot used to be a FREE-TEXT name with a separate "LIFT: not linked - tap to choose" button
+// under it -- two controls for one decision, and a name typed into the first quietly linked to
+// nothing, so its history never joined up with the same movement anywhere else. Now the name field
+// IS the search: whatever you end up with is a real library lift, either one you picked or a custom
+// one created from what you typed. There is no unlinked state left to fall into, which is why the
+// LINK control can go.
+//
+// Nothing commits without a TAP. Leaving the field after typing half a word does not create a lift
+// called "Cab"; it leaves the slot as it was. Enter takes the top result. Clearing the field and
+// leaving it empties the slot, which is how a slot was always cleared.
+const EXERCISE_SEARCH_LIMIT = 6;
+function exSearchId(token) { return 'exs_' + String(token).replace(/[^a-zA-Z0-9]/g, '_'); }
+function exerciseSearchMatches(q) {
+  const query = String(q || '').trim();
+  if (!query) return [];
+  const words = liftNameWords(query);
+  const hits = allLifts().filter(l => {
+    const name = liftNameWords(l.name + ' ' + (l.short || ''));
+    return words.every(w => name.some(n => n.startsWith(w)));
+  });
+  // Exact name first, then a name STARTING with the query, then shortest -- a lift named for what
+  // you typed beats one that merely mentions it.
+  const key = words.join(' ');
+  const rank = (l) => {
+    const n = liftNameWords(l.name).join(' ');
+    return n === key ? 0 : n.startsWith(key) ? 1 : 2;
+  };
+  return hits.sort((a, b) => (rank(a) - rank(b)) || (a.name.length - b.name.length)).slice(0, EXERCISE_SEARCH_LIMIT);
+}
+function exerciseSearchResultsHtml(token, q) {
+  const query = String(q || '').trim();
+  if (!query) return '';
+  const hits = exerciseSearchMatches(query);
+  const exact = liftByExactName(query);
+  // onmousedown preventDefault keeps the input focused through the tap, so its blur cannot tear the
+  // list down before the tap lands.
+  const rows = hits.map(l => `
+    <button type="button" class="ex-search-hit" onmousedown="event.preventDefault()"
+            onclick="pickExerciseSearch(${jsArg(token)}, ${jsArg(l.id)})">
+      <span>${escapeHtml(l.name)}</span>${l.muscle ? `<i>${escapeHtml(l.muscle)}</i>` : ''}
+    </button>`).join('');
+  const custom = exact ? '' : `
+    <button type="button" class="ex-search-hit ex-search-new" onmousedown="event.preventDefault()"
+            onclick="createExerciseSearch(${jsArg(token)})">
+      <span>+ Add &ldquo;${escapeHtml(query)}&rdquo; as a new exercise</span>
+    </button>`;
+  return `<div class="ex-search-list">${rows}${custom}</div>`;
+}
+// Patches the list only -- never render() from a keystroke, or the field loses focus each letter.
+function onExerciseSearchInput(token, value) {
+  const box = document.getElementById(exSearchId(token) + '_r');
+  if (box) box.innerHTML = exerciseSearchResultsHtml(token, value);
+}
+function onExerciseSearchKey(evt, token) {
+  if (evt.key !== 'Enter') return;
+  evt.preventDefault();
+  const v = /** @type {HTMLInputElement} */ (evt.target).value;
+  const top = exerciseSearchMatches(v)[0];
+  if (top) pickExerciseSearch(token, top.id);
+  else if (String(v || '').trim()) createExerciseSearch(token);
+}
+// Leaving the field: an emptied field clears the slot; anything else is left exactly as it was and
+// the results close. Deferred a beat so a tap on a result, which blurs first on touch, still lands.
+function onExerciseSearchBlur(token, input) {
+  const v = String(input.value || '').trim();
+  setTimeout(() => {
+    if (!v) { clearExerciseSlot(token); return; }
+    const box = document.getElementById(exSearchId(token) + '_r');
+    if (box) box.innerHTML = '';
+  }, 150);
+}
+function pickExerciseSearch(token, liftId) { onPickLift(token, liftId); }
+function createExerciseSearch(token) {
+  const input = /** @type {HTMLInputElement} */ (document.getElementById(exSearchId(token)));
+  const name = input ? input.value.trim() : '';
+  if (!name) return;
+  const existing = liftByExactName(name);
+  if (existing) { onPickLift(token, existing.id); return; }
+  const lift = addCustomLift(name, exerciseSlotMuscle(token), '');
+  if (lift) { showToast(`Added \u201c${lift.name}\u201d to your exercises`); onPickLift(token, lift.id); }
+}
+// The slot a token points at, so a custom lift can take the muscle already chosen for it.
+function exerciseSlotOf(token) {
+  const [kind, wid, id] = String(token).split(':');
+  const w = (STATE.workouts || []).find(x => x.id === wid);
+  if (!w) return null;
+  if (kind === 't3') return (w.t3 || [])[Number(id)] || null;
+  if (kind === 'ex') return (w.exercises || []).find(x => x.id === id) || null;
+  return null;
+}
+function exerciseSlotMuscle(token) { const s = exerciseSlotOf(token); return (s && s.muscle) || null; }
+function clearExerciseSlot(token) {
+  const slot = exerciseSlotOf(token);
+  if (!slot || (!slot.name && !slot.liftId)) return;
+  slot.name = ''; slot.liftId = null;
+  if (String(token).startsWith('t3:')) slot.enabled = false;
+  saveState(); render();
+}
+function renderExerciseSearch(token, name, placeholder) {
+  const id = exSearchId(token);
+  return `<div class="ex-search">
+    <input type="text" enterkeyhint="search" id="${id}" class="ex-search-input" value="${escapeHtml(name || '')}"
+           placeholder="${escapeHtml(placeholder || 'Search exercises\u2026')}" autocomplete="off"
+           oninput="onExerciseSearchInput(${jsArg(token)}, this.value)"
+           onkeydown="onExerciseSearchKey(event, ${jsArg(token)})"
+           onblur="onExerciseSearchBlur(${jsArg(token)}, this)">
+    <div id="${id}_r"></div>
+  </div>`;
 }
 
 function createLiftFromPicker(token) {
